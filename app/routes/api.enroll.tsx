@@ -41,7 +41,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Parse JSON payload
     const payload = await request.json();
-    const { order_id, serial_number, photo_urls, photo_hashes, shipping_address_gps } = payload;
+    const { order_id, serial_number, photo_urls, photo_hashes, shipping_address_gps, warehouse_gps } = payload;
 
     console.log(`📦 Enrollment request for order ${order_id}, serial: ${serial_number}`);
 
@@ -224,7 +224,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       shipping_address_gps,
       customer_phone_last4: customer_phone_last4 || "1234",  // Default if not available
       merchant: "Smusic",
-      warehouse_gps: {
+      warehouse_gps: (warehouse_gps && warehouse_gps.lat && warehouse_gps.lng) ? warehouse_gps : {
         lat: 40.7580,
         lng: -73.9855
       }

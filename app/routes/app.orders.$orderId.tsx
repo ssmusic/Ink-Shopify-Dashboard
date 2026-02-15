@@ -192,6 +192,7 @@ interface OrderDetail {
         verification_updated_at: string | null;
         distance_meters: number | null;
         gps_verdict: string | null;
+        photo_urls: string[] | null;
     } | null;
 }
 
@@ -308,6 +309,7 @@ export const loader = async ({
             enrollment_status: string | null;
             nfc_uid: string | null;
             shipping_gps: string | null;
+            warehouse_gps: string | null; // Added field
             delivery_gps: string | null;
             photo_urls: string[] | null;
         } | null = null;
@@ -330,6 +332,9 @@ export const loader = async ({
                     nfc_uid: proofResponse.nfc_uid || null,
                     shipping_gps: proofResponse.enrollment?.shipping_address_gps
                         ? JSON.stringify(proofResponse.enrollment.shipping_address_gps)
+                        : null,
+                    warehouse_gps: proofResponse.enrollment?.warehouse_gps
+                        ? JSON.stringify(proofResponse.enrollment.warehouse_gps)
                         : null,
                     delivery_gps: proofResponse.delivery?.delivery_gps
                         ? JSON.stringify(proofResponse.delivery.delivery_gps)
@@ -355,7 +360,9 @@ export const loader = async ({
         // Use data from Alan's API if available, otherwise fall back to metafields
         if (alanProofData) {
             metafields.nfc_uid = metafields.nfc_uid || alanProofData.nfc_uid || undefined;
-            metafields.delivery_gps = alanProofData.delivery_gps || alanProofData.shipping_gps || metafields.delivery_gps;
+            metafields.delivery_gps = alanProofData.delivery_gps || metafields.delivery_gps;
+            // Add warehouse_gps to metafields object for easy access in UI (even though it's not a real Shopify metafield yet)
+            (metafields as any).warehouse_gps = alanProofData.warehouse_gps;
         }
 
         // Extract products
@@ -390,6 +397,7 @@ export const loader = async ({
                 verification_updated_at: alanProofData.verification_updated_at,
                 distance_meters: alanProofData.distance_meters,
                 gps_verdict: alanProofData.gps_verdict,
+                photo_urls: alanProofData.photo_urls,
             } : null,
         };
 
@@ -943,12 +951,12 @@ export default function OrderDetails() {
                                                 </BlockStack>
                                             )}
 
-                                            {order.metafields.delivery_gps && (
+                                            {(order.metafields as any).warehouse_gps && (
                                                 <BlockStack gap="100">
                                                     <Text variant="bodySm" as="span" tone="subdued">Warehouse Location</Text>
                                                     <div style={{ display: "flex", justifyContent: "flex-start" }}>
                                                         {(() => {
-                                                            const gps = formatGPS(order.metafields.delivery_gps);
+                                                            const gps = formatGPS((order.metafields as any).warehouse_gps);
                                                             return gps?.url ? (
                                                                 <Button url={gps.url} external size="slim" variant="plain" textAlign="left">
                                                                     📍 {gps.text}
@@ -961,6 +969,29 @@ export default function OrderDetails() {
                                                 </BlockStack>
                                             )}
                                         </div>
+
+                                        {/* Photos Section */}
+                                        {order.localProof?.photo_urls && order.localProof.photo_urls.length > 0 && (
+                                            <>
+                                                <Divider />
+                                                <BlockStack gap="200">
+                                                    <Text variant="headingSm" as="h3">Enrollment Photos</Text>
+                                                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                                                        {order.localProof.photo_urls.map((url, index) => (
+                                                            <div key={index} style={{ border: "1px solid #ddd", borderRadius: "8px", overflow: "hidden" }}>
+                                                                <a href={url} target="_blank" rel="noopener noreferrer">
+                                                                    <img 
+                                                                        src={url} 
+                                                                        alt={`Enrollment ${index + 1}`} 
+                                                                        style={{ width: "100px", height: "100px", objectFit: "cover", display: "block" }}
+                                                                    />
+                                                                </a>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </BlockStack>
+                                            </>
+                                        )}
                                     </BlockStack>
 
                                     {/* Delivery Confirmation Section */}
@@ -1009,6 +1040,24 @@ export default function OrderDetails() {
                                                             <Text variant="bodyMd" as="span">
                                                                 🕐 {formatDate(order.localProof.verification_updated_at)}
                                                             </Text>
+                                                        </BlockStack>
+                                                    )}
+
+                                                    {order.metafields.delivery_gps && (
+                                                        <BlockStack gap="100">
+                                                            <Text variant="bodySm" as="span" tone="subdued">Delivery Location</Text>
+                                                            <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                                                                {(() => {
+                                                                    const gps = formatGPS(order.metafields.delivery_gps as string);
+                                                                    return gps?.url ? (
+                                                                        <Button url={gps.url} external size="slim" variant="plain" textAlign="left">
+                                                                            📍 {gps.text}
+                                                                        </Button>
+                                                                    ) : (
+                                                                        <Text variant="bodyMd" as="span">📍 {gps?.text || "N/A"}</Text>
+                                                                    );
+                                                                })()}
+                                                            </div>
                                                         </BlockStack>
                                                     )}
                                                 </div>
