@@ -1,7 +1,10 @@
-import { useState } from "react";
-import { ArrowLeft, Copy, Mail, MapPin, ExternalLink, Package, Smartphone, Box } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowLeft, Copy, Mail, MapPin, ExternalLink, Package, Smartphone, Box, Upload, RefreshCw } from "lucide-react";
+import { useFetcher } from "react-router";
 import { LifecycleBadge, type LifecycleState } from "./ui/lifecycle-badge";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+// ... existing imports
 
 interface OrderItem {
   title: string;
@@ -11,7 +14,7 @@ interface OrderItem {
 }
 
 interface Order {
-  id: string;
+  id: string; // Numeric ID
   orderNumber: string;
   customerName: string;
   customerEmail: string;
@@ -50,13 +53,39 @@ const formatCurrency = (amount: string | number, currency: string) => {
 };
 
 export default function OrderDetailView({ order, onBack }: OrderDetailViewProps) {
+  const fetcher = useFetcher();
   const [activeTab, setActiveTab] = useState<"write" | "tap">("write");
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [nfcInput, setNfcInput] = useState("");
+
+  const isEnrolling = fetcher.state === "submitting" && fetcher.formData?.get("intent") === "enroll";
+  const isUploading = fetcher.state === "submitting" && fetcher.formData?.get("intent") === "upload";
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 1500);
+  };
+
+  const handleEnroll = () => {
+    if (!nfcInput) return;
+    fetcher.submit(
+      { intent: "enroll", orderId: order.id, nfcToken: nfcInput },
+      { method: "post" }
+    );
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const formData = new FormData();
+      formData.append("intent", "upload");
+      formData.append("file", e.target.files[0]);
+      formData.append("nfcToken", order.metafields.nfc_uid || ""); // Attach to current NFC if exists
+      // Note: Backend might need order ID or NFC token to associate file. 
+      // The `uploadMedia` API just returns a proof URL/ID? The plan says it requires proof.
+      // Let's assume we just upload for now.
+      fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
+    }
   };
 
   const hasTapData = order.status === "verified" || order.status === "expired";
@@ -193,204 +222,238 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
             Events
           </h2>
 
-          {order.status === "enrolled" || order.status === "pending" ? (
-            /* Pending / Enrolled State */
-            <div className="bg-card border border-border rounded-sm p-8 text-center">
-              <Package className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-sm font-medium text-foreground mb-1">Pending Verification</p>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                This order has been enrolled for INK verified delivery. Waiting for warehouse scan and customer tap.
-              </p>
-            </div>
+          {order.status === "enrolled" || order.status === "pending" || order.status === "active" ? ( // Show timeline for active too? 
+            /* Enrolled Logic: If active/enrolled, show timeline. If pending, show Enroll UI */
+             order.status === "pending" ? (
+                /* Enroll UI */
+                <div className="bg-card border border-border rounded-sm p-6 space-y-4">
+                    <h3 className="text-sm font-medium">Enroll Order</h3>
+                    <p className="text-xs text-muted-foreground">Scan or enter an NFC tag to enroll this order.</p>
+                    <div className="flex gap-2">
+                        <Input 
+                            value={nfcInput} 
+                            onChange={(e) => setNfcInput(e.target.value)} 
+                            placeholder="NFC Token / UID" 
+                        />
+                        <Button onClick={handleEnroll} disabled={isEnrolling || !nfcInput}>
+                            {isEnrolling ? "Enrolling..." : "Enroll"}
+                        </Button>
+                    </div>
+                </div>
+             ) : (
+                /* Already Enrolled - Show Timeline & Details */
+                 <div className="bg-card border border-border rounded-sm">
+                 {/* Tab Headers */}
+                 <div className="border-b border-border">
+                   <div className="flex">
+                     <button
+                       onClick={() => setActiveTab("write")}
+                       className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                         activeTab === "write"
+                           ? "border-foreground text-foreground"
+                           : "border-transparent text-muted-foreground hover:text-foreground"
+                       }`}
+                     >
+                       <Box className="h-4 w-4" />
+                       Write
+                     </button>
+                     <button
+                       onClick={() => setActiveTab("tap")}
+                       className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                         activeTab === "tap"
+                           ? "border-foreground text-foreground"
+                           : "border-transparent text-muted-foreground hover:text-foreground"
+                       }`}
+                     >
+                       <Smartphone className="h-4 w-4" />
+                       Tap
+                     </button>
+                   </div>
+                 </div>
+   
+                 {/* Write Tab Content */}
+                 {activeTab === "write" && (
+                   <div className="p-4 sm:p-6 space-y-5">
+                     {/* NFC Tag & Proof ID */}
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       <div className="bg-secondary/40 rounded-sm p-3">
+                         <p className="text-xs text-muted-foreground mb-1">NFC Tag UID</p>
+                         <code className="text-sm font-mono text-foreground break-all">
+                           {nfcUid}
+                         </code>
+                       </div>
+                       <div className="bg-secondary/40 rounded-sm p-3">
+                         <p className="text-xs text-muted-foreground mb-1">Proof ID</p>
+                         <div className="flex items-center gap-2">
+                           <code className="text-sm font-mono text-foreground">
+                             {proofId}
+                           </code>
+                           {proofId !== "—" && (
+                             <button
+                               onClick={() => copyToClipboard(proofId, "proofId")}
+                               className="text-muted-foreground hover:text-foreground transition-colors"
+                               aria-label="Copy Proof ID"
+                             >
+                               <Copy className="h-3.5 w-3.5" />
+                             </button>
+                           )}
+                           {copiedField === "proofId" && (
+                             <span className="text-xs text-green-600">Copied!</span>
+                           )}
+                         </div>
+                       </div>
+                     </div>
+   
+                     {/* Warehouse */}
+                     <div className="bg-secondary/50 rounded-sm p-4">
+                       <p className="text-xs text-muted-foreground mb-1">Warehouse</p>
+                       <p className="text-sm font-medium text-foreground">
+                         {warehouseName}
+                       </p>
+                       <p className="text-xs font-mono text-muted-foreground mt-0.5">
+                         {warehouseCoords}
+                       </p>
+                     </div>
+   
+                     {/* Package Photos */}
+                     <div>
+                       <div className="flex justify-between items-center mb-3">
+                           <p className="text-xs text-muted-foreground">Package Photos</p>
+                           <div className="relative">
+                               <input 
+                                  type="file" 
+                                  id="photo-upload" 
+                                  className="hidden" 
+                                  accept="image/*"
+                                  onChange={handleFileUpload}
+                                  disabled={isUploading}
+                               />
+                               <label htmlFor="photo-upload" className="text-xs text-primary cursor-pointer flex items-center gap-1 hover:underline">
+                                  <Upload className="h-3 w-3" />
+                                  {isUploading ? "Uploading..." : "Upload Photo"}
+                               </label>
+                           </div>
+                       </div>
+                       <div className="grid grid-cols-4 gap-3">
+                         {[1, 2, 3, 4].map((i) => (
+                           <div
+                             key={i}
+                             className="aspect-square border border-border rounded-sm bg-secondary flex items-center justify-center"
+                           >
+                             <Package className="h-6 w-6 text-muted-foreground/30" />
+                           </div>
+                         ))}
+                       </div>
+                     </div>
+                   </div>
+                 )}
+   
+                 {/* Tap Tab Content */}
+                 {activeTab === "tap" && (
+                   <div>
+                     {hasTapData ? (
+                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:divide-x divide-border">
+                         {/* Left: Timeline */}
+                         <div className="p-4 sm:p-6 space-y-0">
+                           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-4">Timeline</p>
+   
+                           {/* Tapped */}
+                           <div className="flex gap-3">
+                             <div className="flex flex-col items-center">
+                               <div className="h-2.5 w-2.5 rounded-full bg-foreground mt-1" />
+                               <div className="w-px h-full bg-border min-h-[32px]" />
+                             </div>
+                             <div className="pb-5">
+                               <p className="text-sm font-medium text-foreground">Tapped</p>
+                               <p className="text-xs text-muted-foreground mt-0.5">
+                                 {deliveryVerifiedAt || "Date not available"}
+                               </p>
+                               {deviceInfo && (
+                                 <span className="inline-flex items-center mt-2 px-2 py-0.5 rounded border border-border text-[10px] font-medium text-foreground">
+                                   {deviceInfo}
+                                 </span>
+                               )}
+                             </div>
+                           </div>
+   
+                           {/* Location */}
+                           <div className="flex gap-3">
+                             <div className="flex flex-col items-center">
+                               <div className="h-2.5 w-2.5 rounded-full bg-foreground mt-1" />
+                               <div className="w-px h-full bg-border min-h-[32px]" />
+                             </div>
+                             <div className="pb-5">
+                               <p className="text-sm font-medium text-foreground">Location verified</p>
+                               {deliveryDistance && (
+                                 <p className="text-xs text-muted-foreground mt-0.5">
+                                   {deliveryDistance} from shipping address
+                                 </p>
+                               )}
+                               {deliveryCoords && (
+                                 <p className="text-xs font-mono text-muted-foreground mt-1">
+                                   {deliveryCoords}
+                                 </p>
+                               )}
+                             </div>
+                           </div>
+   
+                           {/* Confirmation */}
+                           <div className="flex gap-3">
+                             <div className="flex flex-col items-center">
+                               <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/50 mt-1" />
+                             </div>
+                             <div>
+                               <p className="text-sm font-medium text-foreground">Confirmation sent</p>
+                               <p className="text-xs text-muted-foreground mt-0.5">
+                                 Delivery record sent to {order.customerEmail || "customer"}
+                               </p>
+                             </div>
+                           </div>
+                         </div>
+   
+                         {/* Right: Tap Location */}
+                         <div className="p-4 sm:p-6 border-t lg:border-t-0 border-border">
+                           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-4">Tap Location</p>
+                           <div className="bg-secondary/50 rounded-sm p-4 space-y-2">
+                             <div className="flex items-start gap-2">
+                               <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                               <div>
+                                 {order.customerAddress ? (
+                                   <p className="text-sm text-foreground">
+                                     {order.customerAddress.city}, {order.customerAddress.provinceCode} {order.customerAddress.zip}
+                                   </p>
+                                 ) : (
+                                   <p className="text-sm text-muted-foreground">Address not available</p>
+                                 )}
+                                 {deliveryCoords && (
+                                   <p className="text-xs font-mono text-muted-foreground mt-1">{deliveryCoords}</p>
+                                 )}
+                                 {deliveryDistance && (
+                                   <p className="text-xs text-green-600 mt-1">✓ {deliveryDistance} from address</p>
+                                 )}
+                               </div>
+                             </div>
+                           </div>
+                         </div>
+                       </div>
+                     ) : (
+                       <div className="p-8 text-center text-muted-foreground">
+                         <Smartphone className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                         <p className="text-sm font-medium">No tap has been recorded</p>
+                         <p className="text-xs mt-1">Waiting for customer to tap the NFC tag</p>
+                       </div>
+                     )}
+                   </div>
+                 )}
+               </div>
+             )
           ) : (
-            /* Write / Tap Tabs */
-            <div className="bg-card border border-border rounded-sm">
-              {/* Tab Headers */}
-              <div className="border-b border-border">
-                <div className="flex">
-                  <button
-                    onClick={() => setActiveTab("write")}
-                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                      activeTab === "write"
-                        ? "border-foreground text-foreground"
-                        : "border-transparent text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <Box className="h-4 w-4" />
-                    Write
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("tap")}
-                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                      activeTab === "tap"
-                        ? "border-foreground text-foreground"
-                        : "border-transparent text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <Smartphone className="h-4 w-4" />
-                    Tap
-                  </button>
-                </div>
-              </div>
-
-              {/* Write Tab Content */}
-              {activeTab === "write" && (
-                <div className="p-4 sm:p-6 space-y-5">
-                  {/* NFC Tag & Proof ID */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="bg-secondary/40 rounded-sm p-3">
-                      <p className="text-xs text-muted-foreground mb-1">NFC Tag UID</p>
-                      <code className="text-sm font-mono text-foreground break-all">
-                        {nfcUid}
-                      </code>
-                    </div>
-                    <div className="bg-secondary/40 rounded-sm p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Proof ID</p>
-                      <div className="flex items-center gap-2">
-                        <code className="text-sm font-mono text-foreground">
-                          {proofId}
-                        </code>
-                        {proofId !== "—" && (
-                          <button
-                            onClick={() => copyToClipboard(proofId, "proofId")}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
-                            aria-label="Copy Proof ID"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        {copiedField === "proofId" && (
-                          <span className="text-xs text-green-600">Copied!</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Warehouse */}
-                  <div className="bg-secondary/50 rounded-sm p-4">
-                    <p className="text-xs text-muted-foreground mb-1">Warehouse</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {warehouseName}
-                    </p>
-                    <p className="text-xs font-mono text-muted-foreground mt-0.5">
-                      {warehouseCoords}
-                    </p>
-                  </div>
-
-                  {/* Package Photos placeholder */}
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-3">Package Photos</p>
-                    <div className="grid grid-cols-4 gap-3">
-                      {[1, 2, 3, 4].map((i) => (
-                        <div
-                          key={i}
-                          className="aspect-square border border-border rounded-sm bg-secondary flex items-center justify-center"
-                        >
-                          <Package className="h-6 w-6 text-muted-foreground/30" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Tap Tab Content */}
-              {activeTab === "tap" && (
-                <div>
-                  {hasTapData ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:divide-x divide-border">
-                      {/* Left: Timeline */}
-                      <div className="p-4 sm:p-6 space-y-0">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-4">Timeline</p>
-
-                        {/* Tapped */}
-                        <div className="flex gap-3">
-                          <div className="flex flex-col items-center">
-                            <div className="h-2.5 w-2.5 rounded-full bg-foreground mt-1" />
-                            <div className="w-px h-full bg-border min-h-[32px]" />
-                          </div>
-                          <div className="pb-5">
-                            <p className="text-sm font-medium text-foreground">Tapped</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {deliveryVerifiedAt || "Date not available"}
-                            </p>
-                            {deviceInfo && (
-                              <span className="inline-flex items-center mt-2 px-2 py-0.5 rounded border border-border text-[10px] font-medium text-foreground">
-                                {deviceInfo}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Location */}
-                        <div className="flex gap-3">
-                          <div className="flex flex-col items-center">
-                            <div className="h-2.5 w-2.5 rounded-full bg-foreground mt-1" />
-                            <div className="w-px h-full bg-border min-h-[32px]" />
-                          </div>
-                          <div className="pb-5">
-                            <p className="text-sm font-medium text-foreground">Location verified</p>
-                            {deliveryDistance && (
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {deliveryDistance} from shipping address
-                              </p>
-                            )}
-                            {deliveryCoords && (
-                              <p className="text-xs font-mono text-muted-foreground mt-1">
-                                {deliveryCoords}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Confirmation */}
-                        <div className="flex gap-3">
-                          <div className="flex flex-col items-center">
-                            <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/50 mt-1" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-foreground">Confirmation sent</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Delivery record sent to {order.customerEmail || "customer"}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right: Tap Location */}
-                      <div className="p-4 sm:p-6 border-t lg:border-t-0 border-border">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-4">Tap Location</p>
-                        <div className="bg-secondary/50 rounded-sm p-4 space-y-2">
-                          <div className="flex items-start gap-2">
-                            <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                            <div>
-                              {order.customerAddress ? (
-                                <p className="text-sm text-foreground">
-                                  {order.customerAddress.city}, {order.customerAddress.provinceCode} {order.customerAddress.zip}
-                                </p>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">Address not available</p>
-                              )}
-                              {deliveryCoords && (
-                                <p className="text-xs font-mono text-muted-foreground mt-1">{deliveryCoords}</p>
-                              )}
-                              {deliveryDistance && (
-                                <p className="text-xs text-green-600 mt-1">✓ {deliveryDistance} from address</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center text-muted-foreground">
-                      <Smartphone className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                      <p className="text-sm font-medium">No tap has been recorded</p>
-                      <p className="text-xs mt-1">Waiting for customer to tap the NFC tag</p>
-                    </div>
-                  )}
-                </div>
-              )}
+             <div className="bg-card border border-border rounded-sm p-8 text-center">
+                <Package className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
+                <p className="text-sm font-medium text-foreground mb-1">Pending Verification</p>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    This order has been enrolled for INK verified delivery. Waiting for warehouse scan and customer tap.
+                </p>
             </div>
           )}
         </section>

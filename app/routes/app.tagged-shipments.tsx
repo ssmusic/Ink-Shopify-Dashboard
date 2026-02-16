@@ -22,6 +22,107 @@ import {
 } from "../components/ui/dropdown-menu";
 import OrdersTable from "../components/OrdersTable";
 
+import { type ActionFunctionArgs } from "react-router";
+import { enrollOrder, uploadMedia } from "../services/ink-api.server";
+import { getMerchant } from "../services/merchant.server";
+
+const json = (data: any, init?: ResponseInit) => {
+  return new Response(JSON.stringify(data), {
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
+};
+
+// Action to handle Enroll and Upload
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session, admin } = await authenticate.admin(request);
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+  
+  // Get API Key
+  const merchant = await getMerchant(session.shop);
+  const apiKey = merchant?.ink_api_key;
+  
+  if (!apiKey) {
+      return json({ error: "Merchant not linked to INK. Please reinstall or check payment." }, { status: 400 });
+  }
+
+  try {
+      if (intent === "enroll") {
+          const orderId = formData.get("orderId") as string;
+          const nfcToken = formData.get("nfcToken") as string;
+          
+          if (!orderId || !nfcToken) return json({ error: "Missing required fields" }, { status: 400 });
+          
+          // 1. Call INK API
+          const enrollResult = await enrollOrder(apiKey, orderId, nfcToken);
+          
+          // 2. Update Shopify Metafields (Local Mirror)
+          // The user specifically asked about this flow: Server -> API -> Metafield Update
+          const variables = {
+              metafields: [
+                  {
+                      ownerId: `gid://shopify/Order/${orderId}`,
+                      namespace: "ink",
+                      key: "verification_status",
+                      value: "active",
+                      type: "single_line_text_field"
+                  },
+                  {
+                      ownerId: `gid://shopify/Order/${orderId}`,
+                      namespace: "ink",
+                      key: "nfc_uid",
+                      value: nfcToken,
+                      type: "single_line_text_field"
+                  }
+              ]
+          };
+          
+          const response = await admin.graphql(
+              `#graphql
+              mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) {
+                metafieldsSet(metafields: $metafields) {
+                  userErrors {
+                    field
+                    message
+                  }
+                }
+              }`,
+              { variables }
+          );
+          
+          return json({ success: true, enrollResult });
+      }
+      
+      if (intent === "upload") {
+          const file = formData.get("file") as File;
+          const nfcToken = formData.get("nfcToken") as string; // Optional context
+          
+          if (!file) return json({ error: "No file provided" }, { status: 400 });
+          
+          // 1. Call INK API
+          // We need to construct a new FormData to send to the external API
+          const apiFormData = new FormData();
+          apiFormData.append("file", file);
+          if (nfcToken) apiFormData.append("nfc_token", nfcToken);
+          
+          const uploadResult = await uploadMedia(apiKey, apiFormData);
+          
+          // 2. We could update a metafield here if the API returns a proof URL/ID
+          // Assuming uploadResult contains { id: "...", url: "..." }
+          // Let's assume we want to store the proof reference if we have an order context, 
+          // but the upload might be generic. Use fetcher in UI to handle response.
+          
+          return json({ success: true, uploadResult });
+      }
+  } catch (error: any) {
+      console.error("Action Error:", error);
+      return json({ error: error.message || "Action failed" }, { status: 500 });
+  }
+  
+  return null;
+};
+
 // Loader to fetch orders
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);

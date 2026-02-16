@@ -10,18 +10,86 @@ import { ensureCarrierServiceRegistered } from "../services/carrier-service.serv
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
 
+import { getMerchant } from "../services/merchant.server";
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
-  
-  // Auto-register carrier service for shipping rates (idempotent)
-  const appUrl = process.env.SHOPIFY_APP_URL || "";
-  if (appUrl) {
-    ensureCarrierServiceRegistered(admin, appUrl).catch((err) => {
-      console.error("[App] Carrier service registration error (non-blocking):", err);
-    });
+  const { admin, session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const shop = session.shop;
+
+  // Public callback endpoint bypass (handled in its own route, but just in case)
+  // Also whitelist the root dashboard path so users can see the "Home" page
+  if (path === "/app/payment" || path === "/app/payment/callback" || path === "/app" || path === "/app/") {
+      return { apiKey: process.env.SHOPIFY_API_KEY || "" };
   }
   
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  // 1. Check Firestore for Merchant Data
+  const merchant = await getMerchant(shop);
+  const paymentStatus = merchant?.payment_status;
+  const inkApiKey = merchant?.ink_api_key;
+
+  // 2. If valid locally, good to go
+  if (paymentStatus === "active" && inkApiKey) {
+     // Auto-register carrier service logic remains here
+     const appUrl = process.env.SHOPIFY_APP_URL || "";
+     if (appUrl) {
+        ensureCarrierServiceRegistered(admin, appUrl).catch((err) => {
+          console.error("[App] Carrier service registration error (non-blocking):", err);
+        });
+     }
+     return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  }
+
+  // 3. If not valid in DB, check Shopify Billing API (Source of Truth)
+  const billingResponse = await admin.graphql(
+    `#graphql
+    query {
+      currentAppInstallation {
+        activeSubscriptions {
+          id
+          name
+          test
+          status
+        }
+      }
+    }`
+  );
+  
+  const billingData = await billingResponse.json();
+  const subscriptions = billingData.data?.currentAppInstallation?.activeSubscriptions || [];
+  const hasActiveSubscription = subscriptions.length > 0;
+
+  if (hasActiveSubscription) {
+    // Sync DB if needed (e.g. if payment_status was missing)
+    if (paymentStatus !== "active") {
+        // We can't update DB here easily without importing the update function, 
+        // but the callback handles the main update. 
+        // For now, allow access, maybe trigger a background sync or just let it be.
+        // Actually, let's just proceed. The callback is the primary writer.
+    }
+    
+    // If we have subscription but NO API Key, redirect to callback to restore/generate it
+    if (!inkApiKey) {
+        return Response.redirect(`${process.env.SHOPIFY_APP_URL}/app/payment/callback?charge_id=restore`);
+    }
+    
+    // Check carrier service
+    const appUrl = process.env.SHOPIFY_APP_URL || "";
+    if (appUrl) {
+       ensureCarrierServiceRegistered(admin, appUrl).catch((err) => {
+         console.error("[App] Carrier service registration error (non-blocking):", err);
+       });
+    }
+
+    return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  }
+
+  // 4. No active subscription -> Redirect to Payment
+  // Preserve query parameters (embedded, shop, host, hmac, etc.)
+  const redirectUrl = new URL(`${process.env.SHOPIFY_APP_URL}/app/payment`);
+  redirectUrl.search = url.search;
+  return Response.redirect(redirectUrl.toString());
 };
 
 export default function App() {
