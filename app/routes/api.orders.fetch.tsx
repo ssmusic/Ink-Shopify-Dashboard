@@ -15,17 +15,13 @@ export const action = async () => {
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { PrismaClient } = await import("@prisma/client");
-  const prisma = new PrismaClient();
+  const { getOfflineSession } = await import("../session-utils.server");
 
   try {
-    // Get offline session (needed for Shopify API calls)
-    const session = await prisma.session.findFirst({
-      where: { isOnline: false },
-    });
+    // Get offline session from Firestore (needed for Shopify API calls)
+    const session = await getOfflineSession();
 
     if (!session) {
-      await prisma.$disconnect();
       return new Response(
         JSON.stringify({ error: "No session available" }),
         {
@@ -116,7 +112,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     if (!data?.data?.orders) {
       console.error("❌ Failed to fetch orders:", data);
-      await prisma.$disconnect();
       return new Response(
         JSON.stringify({ error: "Failed to fetch orders", orders: [] }),
         {
@@ -230,7 +225,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     console.log(`✅ Found ${eligibleOrders.length} eligible orders (${allOrders.length} total)`);
 
-    await prisma.$disconnect();
+
 
     return new Response(
       JSON.stringify({ 
@@ -245,7 +240,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   } catch (error: any) {
     console.error("❌ Error fetching orders:", error);
-    await prisma.$disconnect();
+
     return new Response(
       JSON.stringify({ 
         error: error.message || "Failed to fetch orders",

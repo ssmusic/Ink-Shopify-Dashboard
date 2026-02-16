@@ -18,18 +18,13 @@ export const loader = async () => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  // We still need Prisma for Session table (Shopify OAuth)
-  const { PrismaClient } = await import("@prisma/client");
-  const prisma = new PrismaClient();
+  const { getOfflineSession } = await import("../session-utils.server");
 
   try {
-    // Get offline session (needed for Shopify API calls)
-    const session = await prisma.session.findFirst({
-      where: { isOnline: false },
-    });
+    // Get offline session from Firestore (needed for Shopify API calls)
+    const session = await getOfflineSession();
 
     if (!session) {
-      await prisma.$disconnect();
       return new Response(
         JSON.stringify({ error: "No session available" }),
         {
@@ -47,7 +42,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (!order_id || !serial_number || !photo_urls || !photo_hashes) {
       console.error("❌ Missing required fields");
-      await prisma.$disconnect();
       return new Response(
         JSON.stringify({ error: "Missing required fields: order_id, serial_number, photo_urls, photo_hashes" }),
         {
@@ -170,7 +164,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (!orderData?.data?.order) {
         console.error(`❌ Order not found in Shopify: ${orderGid} or by name #${numericOrderId}`);
-        await prisma.$disconnect();
         return new Response(
           JSON.stringify({ error: `Order not found: ${order_id}. Please ensure the order exists in Shopify.` }),
           {
@@ -204,7 +197,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // If we can't context Shopify for some reason (e.g. auth error), we should probably fail safest
       // But adhering to 'resilience', maybe we continue? 
       // NO, if we can't talk to Shopify, we can't update metafields later. So we should fail.
-      await prisma.$disconnect();
       return new Response(
         JSON.stringify({ error: "Failed to validate order with Shopify." }),
         { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -236,7 +228,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`✅ NFS enrollment successful: ${nfsResponse.proof_id}`);
     } catch (error: any) {
       console.error("❌ NFS enrollment failed:", error.message);
-      await prisma.$disconnect();
       return new Response(
         JSON.stringify({
           error: "Enrollment failed",
@@ -299,7 +290,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // Don't fail the request - enrollment is already saved in Alan's API
     }
 
-    await prisma.$disconnect();
+
 
     // Return success with proof_id from Alan's API and token for NFC writing
     return new Response(
@@ -317,7 +308,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   } catch (error: any) {
     console.error("❌ Enrollment Error:", error);
-    await prisma.$disconnect();
+
     return new Response(
       JSON.stringify({ error: error.message || "Enrollment failed" }),
       {

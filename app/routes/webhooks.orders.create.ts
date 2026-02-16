@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import crypto from "crypto";
-import db from "../db.server";
+import { getOfflineSession } from "../session-utils.server";
 
 // Manual webhook secret from Shopify Admin webhook settings  
 const MANUAL_WEBHOOK_SECRET = "054f24e3c411a8aa92b94aa244127309afe56a89b8f1993e996376abe8d0924b";
@@ -121,9 +121,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     // Get the session from database for this shop
-    const sessionData = await db.session.findFirst({
-      where: { shop: shopDomain },
-    });
+    const sessionData = await getOfflineSession(shopDomain || undefined);
 
     if (!sessionData || !sessionData.accessToken) {
       console.error(`[orders/create] No session/token found for shop: ${shopDomain}`);

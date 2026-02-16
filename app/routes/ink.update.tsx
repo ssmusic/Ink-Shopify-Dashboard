@@ -30,9 +30,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   console.log("🔔 Method:", request.method);
   console.log("🔔 =================================================\n");
 
-  // We still need Prisma for Session table (Shopify auth)
-  const { PrismaClient } = await import("@prisma/client");
-  const prisma = new PrismaClient();
+  // Get offline session from Firestore (for Shopify auth)
+  const { getOfflineSession } = await import("../session-utils.server");
 
   try {
     // 1. Read raw body for HMAC verification
@@ -45,7 +44,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (!HMAC_SECRET) {
       console.error("❌ NFS_HMAC_SECRET not configured");
-      await prisma.$disconnect();
       return new Response(
         JSON.stringify({ error: "Server configuration error" }),
         { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -54,7 +52,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (!signature) {
       console.error("❌ Missing X-INK-Signature header");
-      await prisma.$disconnect();
       return new Response(
         JSON.stringify({ error: "Missing signature" }),
         { status: 401, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -71,7 +68,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.error("❌ Invalid HMAC signature");
       console.error("Expected:", expectedSignature);
       console.error("Received:", signature);
-      await prisma.$disconnect();
       return new Response(
         JSON.stringify({ error: "Invalid signature" }),
         { status: 403, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -101,7 +97,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (!order_id || !status) {
       console.error("❌ Missing required fields in webhook");
-      await prisma.$disconnect();
       return new Response(
         JSON.stringify({ error: "Missing required fields" }),
         { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -116,13 +111,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log("📝 Updating Shopify order metafields...");
     try {
       // Get Shopify session from database
-      const session = await prisma.session.findFirst({
-        where: { isOnline: false },
-      });
+      const session = await getOfflineSession();
 
       if (!session) {
         console.error("❌ No offline session found");
-        await prisma.$disconnect();
         return new Response(
           JSON.stringify({ error: "No session available" }),
           { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -335,7 +327,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // Don't fail the webhook - we got the data
     }
 
-    await prisma.$disconnect();
+
 
     console.log("✅ Webhook processed successfully\n");
 
@@ -346,7 +338,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   } catch (error: any) {
     console.error("❌ Webhook processing error:", error);
-    await prisma.$disconnect();
+
     return new Response(
       JSON.stringify({ error: error.message || "Webhook processing failed" }),
       { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }

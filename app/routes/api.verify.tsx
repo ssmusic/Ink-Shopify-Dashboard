@@ -64,14 +64,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 console.log("📝 Updating Metafields as Fallback");
                 console.log("📝 =================================================");
                 
-                const { PrismaClient } = await import("@prisma/client");
-                const prisma = new PrismaClient();
+                const { getOfflineSession } = await import("../session-utils.server");
                 
-                const session = await prisma.session.findFirst({ where: { isOnline: false } });
+                const session = await getOfflineSession();
                 
                 if (!session) {
                     console.warn("⚠️ No session found for metafield update");
-                    await prisma.$disconnect();
                     return;
                 }
                 
@@ -156,7 +154,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     console.warn(`⚠️ Could not find order with proof_id: ${alanData.proof_id}`);
                 }
                 
-                await prisma.$disconnect();
+                
                 console.log("📝 Fallback metafield update completed\n");
             } catch (fallbackError) {
                 console.error("❌ Fallback metafield update failed:", fallbackError);
@@ -176,14 +174,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 console.log("📧 Sending Return Passport Email");
                 console.log("📧 =================================================");
                 
-                const { PrismaClient } = await import("@prisma/client");
-                const prisma = new PrismaClient();
+                const { getOfflineSession } = await import("../session-utils.server");
                 
-                const session = await prisma.session.findFirst({ where: { isOnline: false } });
+                const session = await getOfflineSession();
                 
                 if (!session) {
                     console.warn("⚠️ No session found for email");
-                    await prisma.$disconnect();
                     return;
                 }
                 
@@ -278,7 +274,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     console.warn(`⚠️ Could not find order #${numericOrderId}`);
                 }
                 
-                await prisma.$disconnect();
+                
                 console.log("📧 Return Passport email process completed\n");
             } catch (emailError) {
                 console.error("❌ Return Passport email failed:", emailError);

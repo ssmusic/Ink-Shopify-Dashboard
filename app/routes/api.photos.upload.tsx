@@ -21,13 +21,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     console.log("📸 Photo upload request received");
     
-    // Create a fake request with shop domain to get admin client
-    const { PrismaClient } = await import("@prisma/client");
-    const prisma = new PrismaClient();
-    
-    const session = await prisma.session.findFirst({
-      where: { isOnline: false },
-    });
+    // Get offline session from Firestore
+    const { getOfflineSession } = await import("../session-utils.server");
+    const session = await getOfflineSession();
 
     if (!session) {
       console.error("No session found");
@@ -157,7 +153,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const arrayBuffer = await photo.arrayBuffer();
     const photoHash = await generateSHA256Hash(Buffer.from(arrayBuffer));
 
-    await prisma.$disconnect();
+
 
     console.log(`✅ Photo ${photoIndex} uploaded successfully!`);
     return new Response(

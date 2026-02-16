@@ -44,13 +44,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   // 4. Get Shopify Admin Client using offline session
   try {
-    const { PrismaClient } = await import("@prisma/client");
-    const prisma = new PrismaClient();
+    const { getOfflineSession } = await import("../session-utils.server");
 
     // Find an offline session (usually one per shop)
-    const session = await prisma.session.findFirst({
-      where: { isOnline: false },
-    });
+    const session = await getOfflineSession();
 
     if (!session) {
       console.error("❌ No offline session found to process webhook");
@@ -125,7 +122,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     `;
 
     await client.request(mutation, { variables: { metafields } });
-    await prisma.$disconnect();
 
     console.log(`✅ Metafields updated for Order ${order_id}`);
     return new Response(JSON.stringify({ success: true }), {

@@ -34,7 +34,7 @@ import {
     registerUploadedFile,
 } from "../utils/shopify-files.server";
 
-// Local interface for Proof since Prisma export is failing
+// Local interface for Proof since we define the structure locally
 interface Proof {
     order_id: string;
     enrollment_status: string | null;
