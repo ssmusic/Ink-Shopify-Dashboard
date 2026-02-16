@@ -6,7 +6,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "../components/ui/table";
+} from "./ui/table";
 import { LifecycleBadge, type LifecycleState } from "./ui/lifecycle-badge";
 import { ChevronDown, ChevronUp, ExternalLink, Box, Smartphone } from "lucide-react";
 import { Button } from "./ui/button";
@@ -46,9 +46,10 @@ interface OrdersTableProps {
   searchQuery: string;
   sortBy: string;
   statusFilter: string;
+  onViewDetail?: (order: Order) => void;
 }
 
-export default function OrdersTable({ orders, searchQuery, sortBy, statusFilter }: OrdersTableProps) {
+export default function OrdersTable({ orders, searchQuery, sortBy, statusFilter, onViewDetail }: OrdersTableProps) {
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
 
   const toggleExpand = (orderId: string) => {
@@ -136,7 +137,7 @@ export default function OrdersTable({ orders, searchQuery, sortBy, statusFilter 
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h3 className="text-lg font-medium">Order Details</h3>
-                                <Button variant="outline" size="sm" className="gap-2" onClick={() => window.open(`/app/orders/${order.id}`, '_blank')}>
+                                <Button variant="outline" size="sm" className="gap-2" onClick={(e) => { e.stopPropagation(); onViewDetail?.(order); }}>
                                     <ExternalLink className="h-4 w-4" />
                                     View Full Record
                                 </Button>

@@ -6,6 +6,7 @@ import { authenticate } from "../shopify.server";
 import AppLayout from "../components/AppLayout";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
+import OrderDetailView from "../components/OrderDetailView";
 import {
   Select,
   SelectContent,
@@ -205,6 +206,7 @@ export default function Shipments() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("new");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
   const currentSortLabel = sortOptions.find(opt => opt.value === sortBy)?.label || "Sort";
 
@@ -226,6 +228,18 @@ export default function Shipments() {
     }, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // If an order is selected, show the detail view instead of the table
+  if (selectedOrder) {
+    return (
+      <AppLayout pageTitle={selectedOrder.orderNumber}>
+        <OrderDetailView
+          order={selectedOrder}
+          onBack={() => setSelectedOrder(null)}
+        />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout pageTitle="Shipments">
@@ -339,6 +353,7 @@ export default function Shipments() {
         searchQuery={searchQuery} 
         sortBy={sortBy}
         statusFilter={statusFilter}
+        onViewDetail={(order) => setSelectedOrder(order)}
       />
     </AppLayout>
   );
