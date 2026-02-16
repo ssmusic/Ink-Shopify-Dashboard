@@ -1,9 +1,10 @@
-import type { HeadersFunction, LoaderFunctionArgs, LinksFunction } from "react-router";
-import { Outlet, useLoaderData, useRouteError, useRouteLoaderData } from "react-router";
+import { Outlet, useLoaderData, useRouteError, useRouteLoaderData, Link, type HeadersFunction, type LoaderFunctionArgs, type LinksFunction } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
+import { NavMenu } from "@shopify/app-bridge-react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
+import { ShopProvider } from "../contexts/ShopContext";
 
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
@@ -19,12 +20,17 @@ export default function App() {
   return (
     <ShopifyAppProvider embedded apiKey={apiKey}>
       <PolarisAppProvider i18n={translations}>
-        <s-app-nav>
-          <s-link href="/app">Home</s-link>
-          <s-link href="/app/additional">Additional Page</s-link>
-          <s-link href="/app/test/metafields">Test Metafields</s-link>
-        </s-app-nav>
-        <Outlet />
+        <ShopProvider>
+          <NavMenu>
+            <Link to="/app" rel="home">Home</Link>
+            <Link to="/app/dashboard">Dashboard</Link>
+            <Link to="/app/tagged-shipments">Tagged Shipments</Link>
+            <Link to="/app/help">Help</Link>
+            <Link to="/app/settings">Settings</Link>
+            <Link to="/app/reorder-tags">Reorder Tags</Link>
+          </NavMenu>
+          <Outlet />
+        </ShopProvider>
       </PolarisAppProvider>
     </ShopifyAppProvider>
   );

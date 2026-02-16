@@ -32,6 +32,7 @@ export class FirestoreSessionStorage implements SessionStorage {
         }
       }
 
+      console.log(`[FirestoreSessionStorage] storeSession for ${session.id}`);
       await firestore.collection(COLLECTION).doc(session.id).set(cleanData);
       return true;
     } catch (error) {
@@ -45,8 +46,12 @@ export class FirestoreSessionStorage implements SessionStorage {
    */
   async loadSession(id: string): Promise<Session | undefined> {
     try {
+      console.log(`[FirestoreSessionStorage] loadSession called for ${id}`);
       const doc = await firestore.collection(COLLECTION).doc(id).get();
-      if (!doc.exists) return undefined;
+      if (!doc.exists) {
+        console.log(`[FirestoreSessionStorage] Session ${id} not found in Firestore`);
+        return undefined;
+      }
 
       const data = doc.data()!;
 
@@ -55,6 +60,7 @@ export class FirestoreSessionStorage implements SessionStorage {
         data.expires = new Date(data.expires);
       }
 
+      console.log(`[FirestoreSessionStorage] Session ${id} loaded successfully (shop: ${data.shop}, hasAccessToken: ${!!data.accessToken}, scope: ${data.scope}, isOnline: ${data.isOnline})`);
       return new Session(data as any);
     } catch (error) {
       console.error("[FirestoreSessionStorage] loadSession error:", error);

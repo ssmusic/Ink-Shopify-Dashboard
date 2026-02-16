@@ -12,14 +12,22 @@ const shopify = shopifyApp({
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.October25,
 
-  // ✅ Scopes for Phase 1
+  // Scopes MUST match shopify.app.smusic.toml exactly to avoid session invalidation
   scopes: [
-    "read_orders",
-    "write_orders",
+    "read_assigned_fulfillment_orders",
+    "write_assigned_fulfillment_orders",
+    "read_customers",
+    "read_files",
+    "write_files",
     "read_fulfillments",
     "write_fulfillments",
-    "read_metafields",
-    "write_metafields",
+    "read_metaobjects",
+    "write_metaobjects",
+    "read_online_store_pages",
+    "write_online_store_pages",
+    "read_orders",
+    "write_orders",
+    "write_themes",
   ],
 
   appUrl: process.env.SHOPIFY_APP_URL || "",

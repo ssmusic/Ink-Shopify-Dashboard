@@ -1139,7 +1139,9 @@ export default function OrderDetails() {
 }
 
 export function ErrorBoundary() {
-    return boundary.error(useRouteError());
+    const error = useRouteError();
+    console.error("[OrderDetails] ErrorBoundary caught error:", error);
+    return boundary.error(error);
 }
 
 export const headers: HeadersFunction = (args) => boundary.headers(args);

@@ -19,3 +19,6 @@ redirect_urls = [
   "https://shopify-app-250065525755.us-central1.run.app/auth/callback",
   "https://shopify-app-250065525755.us-central1.run.app/auth/shopify/callback"
 ]
+
+[build]
+automatically_update_urls_on_dev = true
