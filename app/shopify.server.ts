@@ -27,6 +27,7 @@ const shopify = shopifyApp({
     "write_online_store_pages",
     "read_orders",
     "write_orders",
+    "write_shipping",
     "write_themes",
   ],
 

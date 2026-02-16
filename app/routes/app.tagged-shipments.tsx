@@ -86,6 +86,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 }
               }
             }
+            shippingLine {
+              title
+            }
           }
         }
       }
@@ -124,6 +127,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const hasInkTag = order.tags?.includes("INK-Premium-Delivery") || order.tags?.includes("INK-Verified-Delivery");
     const hasDeliveryTypeMetafield = metafields.delivery_type === "premium";
     const hasInkMetafield = metafields.ink_premium_order === "true";
+    
+    // Check Shipping Method Name
+    const shippingTitle = (order.shippingLine?.title || "").toLowerCase();
+    const hasInkShipping = shippingTitle.includes("ink. verified delivery") || shippingTitle.includes("ink verified") || shippingTitle.includes("verified delivery");
+
     let hasInkLineItem = false;
     for (const lineItem of order.lineItems?.edges || []) {
       const title = (lineItem.node?.title || "").toLowerCase();
@@ -138,7 +146,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }
     }
-    const isInkOrder = hasInkTag || hasDeliveryTypeMetafield || hasInkMetafield || hasInkLineItem;
+    const isInkOrder = hasInkTag || hasDeliveryTypeMetafield || hasInkMetafield || hasInkLineItem || hasInkShipping;
     // For now, let's include all for debugging if no ink orders exist, but logically we should filter.
     // User asked for "actual data which we were earlier showing".
     

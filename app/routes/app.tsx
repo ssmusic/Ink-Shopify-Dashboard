@@ -5,12 +5,22 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { ShopProvider } from "../contexts/ShopContext";
+import { ensureCarrierServiceRegistered } from "../services/carrier-service.server";
 
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { admin } = await authenticate.admin(request);
+  
+  // Auto-register carrier service for shipping rates (idempotent)
+  const appUrl = process.env.SHOPIFY_APP_URL || "";
+  if (appUrl) {
+    ensureCarrierServiceRegistered(admin, appUrl).catch((err) => {
+      console.error("[App] Carrier service registration error (non-blocking):", err);
+    });
+  }
+  
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
@@ -28,6 +38,7 @@ export default function App() {
             <Link to="/app/help">Help</Link>
             <Link to="/app/settings">Settings</Link>
             <Link to="/app/reorder-tags">Reorder Tags</Link>
+            <Link to="/app/debug">Debug</Link>
           </NavMenu>
           <Outlet />
         </ShopProvider>
