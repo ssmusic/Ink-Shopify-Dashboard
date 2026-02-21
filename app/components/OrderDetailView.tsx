@@ -80,10 +80,7 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
       const formData = new FormData();
       formData.append("intent", "upload");
       formData.append("file", e.target.files[0]);
-      formData.append("nfcToken", order.metafields.nfc_uid || ""); // Attach to current NFC if exists
-      // Note: Backend might need order ID or NFC token to associate file. 
-      // The `uploadMedia` API just returns a proof URL/ID? The plan says it requires proof.
-      // Let's assume we just upload for now.
+      formData.append("proofId", order.metafields.proof_reference || ""); // INK API requires proof_id, not nfc_token
       fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
     }
   };

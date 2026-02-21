@@ -10,20 +10,19 @@ mutation SetFulfillmentStatus($metafields: [MetafieldsSetInput!]!) {
 `;
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { payload, shop, topic, session } = await authenticate.webhook(request);
+  const { payload, shop, topic, session, admin } = await authenticate.webhook(request);
 
   const orderGid =
     (payload?.order?.admin_graphql_api_id as string | undefined) ||
     (payload?.order_id ? `gid://shopify/Order/${payload.order_id}` : undefined);
 
-  if (!orderGid || !session) {
-    console.error("[fulfillments/*] Missing order id or session", { shop, topic });
-    return new Response("Missing order or session", { status: 400 });
+  if (!orderGid || !session || !admin) {
+    console.error("[fulfillments/*] Missing order id, session, or admin", { shop, topic });
+    return new Response("Missing required data", { status: 400 });
   }
 
   const statusValue = topic.includes("update") ? "in_fulfillment" : "fulfillment_created";
 
-  const client = new shopify.api.clients.Graphql({ session });
   const variables = {
     metafields: [
       {
@@ -36,8 +35,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     ],
   };
 
-  const result = await client.request(METAFIELD_MUTATION, { variables });
+  const response = await admin.graphql(METAFIELD_MUTATION, { variables });
+  const result = await response.json();
   const errors = result?.data?.metafieldsSet?.userErrors;
+  
   if (errors?.length) {
     console.error("[fulfillments/*] Metafield errors", errors);
     return new Response("Metafield error", { status: 500 });

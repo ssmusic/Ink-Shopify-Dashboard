@@ -54,11 +54,59 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           
           if (!orderId || !nfcToken) return json({ error: "Missing required fields" }, { status: 400 });
           
-          // 1. Call INK API
-          const enrollResult = await enrollOrder(apiKey, orderId, nfcToken);
+          // Fetch order details from Shopify to send to INK API
+          const orderResponse = await admin.graphql(
+            `#graphql
+            query OrderDetails($id: ID!) {
+              order(id: $id) {
+                totalPriceSet {
+                  shopMoney { amount currencyCode }
+                }
+                shippingAddress {
+                  address1 city provinceCode zip countryCodeV2
+                }
+                lineItems(first: 20) {
+                  edges {
+                    node {
+                      title quantity sku variant { id }
+                      originalUnitPriceSet { shopMoney { amount } }
+                    }
+                  }
+                }
+              }
+            }`,
+            { variables: { id: `gid://shopify/Order/${orderId}` } }
+          );
           
-          // 2. Update Shopify Metafields (Local Mirror)
-          // The user specifically asked about this flow: Server -> API -> Metafield Update
+          const orderData = await orderResponse.json();
+          const shopifyOrder = orderData.data?.order;
+          
+          let orderDetails = undefined;
+          let shippingAddress = undefined;
+
+          if (shopifyOrder) {
+             const line_items = shopifyOrder.lineItems.edges.map((e: any) => ({
+                 title: e.node.title,
+                 quantity: e.node.quantity,
+                 price: e.node.originalUnitPriceSet?.shopMoney?.amount,
+                 sku: e.node.sku,
+                 variant_id: e.node.variant?.id?.replace("gid://shopify/ProductVariant/", "")
+             }));
+
+             orderDetails = {
+                 line_items,
+                 total_price: shopifyOrder.totalPriceSet?.shopMoney?.amount,
+                 currency: shopifyOrder.totalPriceSet?.shopMoney?.currencyCode
+             };
+
+             if (shopifyOrder.shippingAddress) {
+                 const addr = shopifyOrder.shippingAddress;
+                 shippingAddress = `${addr.address1}, ${addr.city}, ${addr.provinceCode} ${addr.zip} ${addr.countryCodeV2}`;
+             }
+          }
+
+          // 1. Call INK API with full payload
+          const enrollResult = await enrollOrder(apiKey, orderId, nfcToken, orderDetails, shippingAddress);
           const variables = {
               metafields: [
                   {
@@ -104,7 +152,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           // We need to construct a new FormData to send to the external API
           const apiFormData = new FormData();
           apiFormData.append("file", file);
-          if (nfcToken) apiFormData.append("nfc_token", nfcToken);
+          
+          // The INK documentation explicitly requires proof_id instead of nfc_token
+          const proofId = formData.get("proofId") as string;
+          if (proofId) {
+             apiFormData.append("proof_id", proofId);
+          } else {
+             return json({ error: "Missing proof ID for upload" }, { status: 400 });
+          }
           
           const uploadResult = await uploadMedia(apiKey, apiFormData);
           
