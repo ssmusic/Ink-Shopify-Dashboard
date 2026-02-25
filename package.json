@@ -43,6 +43,8 @@
     "@shopify/app-bridge-utils": "^3.5.1",
     "@shopify/polaris": "^13.9.5",
     "@shopify/shopify-app-react-router": "^1.0.2",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "firebase-admin": "^13.0.0",

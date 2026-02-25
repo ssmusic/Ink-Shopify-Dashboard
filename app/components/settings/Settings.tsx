@@ -6,6 +6,7 @@ import TagsSettings from "./TagsSettings";
 import BrandingSettings from "./BrandingSettings";
 import CommunicationSettings from "./CommunicationSettings";
 import AdvancedSettings from "./AdvancedSettings";
+import UserManagementSettings from "./UserManagementSettings";
 import { useIsMobile } from "../../hooks/use-mobile";
 
 const tabs = [
@@ -13,6 +14,7 @@ const tabs = [
   { id: "tags", label: "Tag Inventory" },
   { id: "branding", label: "Media" },
   { id: "communication", label: "Communication" },
+  { id: "users", label: "User Management" },
   { id: "advanced", label: "Advanced" },
 ];
 
@@ -51,6 +53,8 @@ const Settings = () => {
         return <BrandingSettings />;
       case "communication":
         return <CommunicationSettings />;
+      case "users":
+        return <UserManagementSettings />;
       case "advanced":
         return <AdvancedSettings />;
       default:
