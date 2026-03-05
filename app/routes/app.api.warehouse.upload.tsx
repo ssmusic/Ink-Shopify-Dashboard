@@ -47,14 +47,52 @@ function verifyToken(token: string): { shop: string } | null {
   }
 }
 
+import { createMerchant } from "../services/ink-api.server";
+
 async function getMerchantApiKey(shopDomain: string): Promise<string | null> {
   const snapshot = await firestore
     .collection("merchants")
     .where("shopDomain", "==", shopDomain)
     .limit(1)
     .get();
-  if (snapshot.empty) return null;
-  return snapshot.docs[0].data().ink_api_key || null;
+
+  let apiKey = snapshot.empty ? null : snapshot.docs[0].data().ink_api_key;
+  let docId = snapshot.empty ? null : snapshot.docs[0].id;
+
+  if (!apiKey || apiKey === "sk_test_fallback") {
+    console.log(`[Warehouse Proxy] Key missing or fallback for ${shopDomain}. Calling INK Admin API...`);
+    try {
+      const inkRes = await createMerchant(shopDomain, shopDomain, `admin@${shopDomain}`);
+      apiKey = inkRes.api_key;
+      
+      if (docId) {
+        await firestore.collection("merchants").doc(docId).update({
+          ink_api_key: apiKey,
+          updatedAt: new Date(),
+        });
+      } else {
+        await firestore.collection("merchants").add({
+          shopDomain,
+          ink_api_key: apiKey,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+    } catch (e: any) {
+      console.error("[Warehouse Proxy] Failed to auto-create merchant:", e.message);
+      apiKey = process.env.INK_API_KEY || "sk_test_fallback";
+      if (!docId) {
+         await firestore.collection("merchants").add({
+          shopDomain,
+          ink_api_key: apiKey,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+    }
+  }
+  
+  return apiKey;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

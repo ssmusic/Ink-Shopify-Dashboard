@@ -66,11 +66,15 @@ export const enrollOrder = async (
     orderId: string, 
     nfcToken: string, 
     orderDetails?: any, 
-    shippingAddress?: string
+    shippingAddress?: string,
+    warehouseLocation?: { lat: number; lng: number },
+    nfcUid?: string
 ) => {
     const payload: any = { order_id: orderId, nfc_token: nfcToken };
     if (orderDetails) payload.order_details = orderDetails;
     if (shippingAddress) payload.shipping_address = shippingAddress;
+    if (warehouseLocation) payload.warehouse_location = warehouseLocation;
+    if (nfcUid) payload.nfc_uid = nfcUid;
 
     const response = await fetch(`${INK_API_URL}/api/enroll`, {
         method: "POST",

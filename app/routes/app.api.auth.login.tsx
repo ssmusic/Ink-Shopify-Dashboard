@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
+import { createMerchant } from "../services/ink-api.server";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -89,6 +90,49 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const isValid = await bcrypt.compare(password, userData.passwordHash);
   if (!isValid) {
     return json({ error: "Invalid email or password" }, { status: 401 });
+  }
+
+  // Ensure the merchant configuration document exists and has a real INK API key (heal from sk_test_fallback)
+  const merchantSnapshot = await firestore
+    .collection("merchants")
+    .where("shopDomain", "==", userData.shopDomain)
+    .limit(1)
+    .get();
+
+  let apiKey = merchantSnapshot.empty ? null : merchantSnapshot.docs[0].data().ink_api_key;
+  let docId = merchantSnapshot.empty ? null : merchantSnapshot.docs[0].id;
+
+  if (!apiKey || apiKey === "sk_test_fallback") {
+    console.log(`[Auth] Key missing or fallback for ${userData.shopDomain}. Calling INK Admin API...`);
+    try {
+      const inkRes = await createMerchant(userData.shopDomain, userData.shopDomain, `admin@${userData.shopDomain}`);
+      apiKey = inkRes.api_key;
+      
+      if (docId) {
+        await firestore.collection("merchants").doc(docId).update({
+          ink_api_key: apiKey,
+          updatedAt: new Date(),
+        });
+      } else {
+        await firestore.collection("merchants").add({
+          shopDomain: userData.shopDomain,
+          ink_api_key: apiKey,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+    } catch (e: any) {
+      console.error("[Auth] Failed to auto-create merchant:", e.message);
+      apiKey = process.env.INK_API_KEY || "sk_test_fallback";
+      if (!docId) {
+         await firestore.collection("merchants").add({
+          shopDomain: userData.shopDomain,
+          ink_api_key: apiKey,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+    }
   }
 
   // Issue a token valid for 8 hours

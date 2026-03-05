@@ -207,7 +207,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Alan's API is the SINGLE SOURCE OF TRUTH - no local database save
     console.log("🚀 Calling Alan's NFS API /enroll...");
 
-    const enrollPayload = {
+    const enrollPayload: any = {
       order_id,
       nfc_uid: serial_number,  // Send original serial number to Alan (e.g., "ef:8b:c4:c3")
       nfc_token: token,        // Send our deterministically generated token
@@ -215,12 +215,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       photo_hashes,
       shipping_address_gps,
       customer_phone_last4: customer_phone_last4 || "1234",  // Default if not available
-      merchant: "Smusic",
-      warehouse_gps: (warehouse_gps && warehouse_gps.lat && warehouse_gps.lng) ? warehouse_gps : {
-        lat: 40.7580,
-        lng: -73.9855
-      }
+      merchant: merchantName || session.shop,
     };
+
+    // Only add warehouse_gps if it actually exists (no NY fallback)
+    if (warehouse_gps && warehouse_gps.lat && warehouse_gps.lng) {
+        enrollPayload.warehouse_gps = warehouse_gps;
+    }
 
     let nfsResponse;
     try {
@@ -268,6 +269,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           value: serial_number,  // Store original serial for reference
         },
       ];
+
+      if (warehouse_gps && warehouse_gps.lat && warehouse_gps.lng) {
+          metafields.push({
+              ownerId: validOrderGid,
+              namespace: INK_NAMESPACE,
+              key: "warehouse_gps",
+              type: "json",
+              value: JSON.stringify({ lat: warehouse_gps.lat, lng: warehouse_gps.lng }),
+          });
+      }
+
+      if (shipping_address_gps && shipping_address_gps.lat && shipping_address_gps.lng) {
+           metafields.push({
+              ownerId: validOrderGid,
+              namespace: INK_NAMESPACE,
+              key: "shipping_address_gps",
+              type: "json",
+              value: JSON.stringify({ lat: shipping_address_gps.lat, lng: shipping_address_gps.lng }),
+          });
+      }
 
       const mutation = `
         mutation SetEnrollmentMetafields($metafields: [MetafieldsSetInput!]!) {

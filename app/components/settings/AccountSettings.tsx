@@ -3,19 +3,26 @@ import { Skeleton } from "../ui/skeleton";
 import ShopSwitcher from "../ShopSwitcher";
 import { Button } from "../ui/button";
 import { ExternalLink } from "lucide-react";
+import { useRouteLoaderData } from "react-router";
 
 const AccountSettings = () => {
   const { currentShop, loading } = useShop();
 
-  // Mock data - in production this would come from Shopify API
-  const storeEmail = "sam@in.ink";
-  const installedDate = "Jan 15, 2024";
+  // Dynamic data from the `app.settings` route loader
+  const shopData = useRouteLoaderData("routes/app.settings") as any;
+
+  const storeEmail = shopData?.contactEmail || "No email available";
+  const installedDate = shopData?.installedDate || "Not available";
+  
+  const displayDomain = shopData?.primaryDomain || shopData?.shopDomain || currentShop?.domain || "No domain available";
+  const displayName = shopData?.shopName || currentShop?.name || "Store Name";
 
   const handleUpdateInShopify = () => {
-    if (currentShop?.domain) {
+    if (shopData?.shopDomain || currentShop?.domain) {
       // Extract shop name from domain for Shopify admin URL
-      const shopName = currentShop.domain.replace(".myshopify.com", "");
-      window.open(`https://admin.shopify.com/store/${shopName}/settings/general`, "_blank");
+      const domainToUse = shopData?.shopDomain || currentShop?.domain;
+      const shopNameForUrl = domainToUse.replace(".myshopify.com", "");
+      window.open(`https://admin.shopify.com/store/${shopNameForUrl}/settings/general`, "_blank");
     }
   };
 
@@ -49,15 +56,22 @@ const AccountSettings = () => {
 
         {/* Store Info */}
         <div className="bg-card border border-border rounded-sm p-6">
-          <p className="font-semibold text-foreground truncate mb-4">
-            {currentShop?.domain || "No shop selected"}
-          </p>
+          <div className="mb-4">
+            <p className="font-semibold text-lg text-foreground truncate">
+              {displayName}
+            </p>
+            <p className="text-sm font-medium text-muted-foreground truncate">
+              {displayDomain}
+            </p>
+          </div>
 
           <div className="space-y-2 text-sm">
-            <div className="flex gap-2">
-              <span className="text-muted-foreground">Contact:</span>
-              <span className="text-foreground">{storeEmail}</span>
-            </div>
+            {storeEmail && (
+              <div className="flex gap-2">
+                <span className="text-muted-foreground">Contact:</span>
+                <span className="text-foreground">{storeEmail}</span>
+              </div>
+            )}
             <div className="flex gap-2">
               <span className="text-muted-foreground">Installed:</span>
               <span className="text-foreground">{installedDate}</span>

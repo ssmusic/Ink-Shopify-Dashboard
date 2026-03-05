@@ -51,14 +51,52 @@ function verifyToken(token: string): { shop: string } | null {
   }
 }
 
+import { createMerchant, enrollOrder } from "../services/ink-api.server";
+
 async function getMerchantApiKey(shopDomain: string): Promise<string | null> {
   const snapshot = await firestore
     .collection("merchants")
     .where("shopDomain", "==", shopDomain)
     .limit(1)
     .get();
-  if (snapshot.empty) return null;
-  return snapshot.docs[0].data().ink_api_key || null;
+
+  let apiKey = snapshot.empty ? null : snapshot.docs[0].data().ink_api_key;
+  let docId = snapshot.empty ? null : snapshot.docs[0].id;
+
+  if (!apiKey || apiKey === "sk_test_fallback") {
+    console.log(`[Warehouse Proxy] Key missing or fallback for ${shopDomain}. Calling INK Admin API...`);
+    try {
+      const inkRes = await createMerchant(shopDomain, shopDomain, `admin@${shopDomain}`);
+      apiKey = inkRes.api_key;
+      
+      if (docId) {
+        await firestore.collection("merchants").doc(docId).update({
+          ink_api_key: apiKey,
+          updatedAt: new Date(),
+        });
+      } else {
+        await firestore.collection("merchants").add({
+          shopDomain,
+          ink_api_key: apiKey,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+    } catch (e: any) {
+      console.error("[Warehouse Proxy] Failed to auto-create merchant:", e.message);
+      apiKey = process.env.INK_API_KEY || "sk_test_fallback";
+      if (!docId) {
+         await firestore.collection("merchants").add({
+          shopDomain,
+          ink_api_key: apiKey,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+    }
+  }
+  
+  return apiKey;
 }
 
 // CORS preflight
@@ -128,21 +166,135 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     enrollPayload.warehouse_location = { lat: warehouseLat, lng: warehouseLng };
   }
 
-  // 5. Call INK API enroll endpoint
-  const inkResponse = await fetch(`${INK_API_URL}/api/enroll`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(enrollPayload),
-  });
+  // 5. Call INK API enroll endpoint using the shared service
+  let inkData;
+  try {
+    inkData = await enrollOrder(
+      apiKey, 
+      orderId, 
+      nfcToken, 
+      orderDetails, 
+      shippingAddress,
+      warehouseLat && warehouseLng ? { lat: warehouseLat, lng: warehouseLng } : undefined,
+      nfcUid
+    );
+  } catch (error: any) {
+    console.error("[Warehouse Enroll] INK API error:", error.message);
+    
+    // If we get a 401 Unauthorized here, it specifically means the `apiKey` we got from Firestore 
+    // is invalid (e.g. it's the sk_test_fallback key or the merchant was deleted on INK).
+    // We can intercept this specific error to self-heal by wiping the invalid key and forcing a recreation.
+    if (error.message.includes("401") || error.message.includes("Unauthorized") || error.message.includes("Invalid API key")) {
+      console.log(`[Warehouse Proxy] INK API rejected key for ${payload.shop}. Forcing regeneration...`);
+      // Update firestore to wipe the key so it regenerates on the next try
+      const merchantDocs = await firestore.collection("merchants").where("shopDomain", "==", payload.shop).limit(1).get();
+      if (!merchantDocs.empty) {
+        await firestore.collection("merchants").doc(merchantDocs.docs[0].id).update({ ink_api_key: "sk_test_fallback" });
+      }
+      return json({ error: "API connection reset. Please press Enroll again." }, { status: 401 });
+    }
+    
+    return json({ error: error.message || "Enrollment failed" }, { status: 500 });
+  }
 
-  const inkData = await inkResponse.json();
+  // 6. Update Shopify Metafields immediately so the dashboard reflects the enrolled state + GPS
+  try {
+    const { getOfflineSession } = await import("../session-utils.server");
+    const session = await getOfflineSession(payload.shop);
+    
+    if (session) {
+        const adminGraphql = async (query: string, variables?: any) => {
+            const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Shopify-Access-Token": session.accessToken,
+                },
+                body: JSON.stringify({ query, variables }),
+            });
+            return response.json();
+        };
 
-  if (!inkResponse.ok) {
-    console.error("[Warehouse Enroll] INK API error:", inkData);
-    return json({ error: inkData.error || "Enrollment failed" }, { status: inkResponse.status });
+        const numericOrderId = orderId.replace(/\D/g, ""); // Extract numbers for safety
+        const initialGid = `gid://shopify/Order/${numericOrderId}`;
+        
+        // Find correct order GID matching across possible stores (similar to ink.update.tsx fallback logic)
+        let foundOrderGid = initialGid;
+        
+        try {
+            const nameQuery = `#graphql
+              query FindOrderByName($query: String!) {
+                orders(first: 1, query: $query) {
+                  edges { node { id } }
+                }
+              }
+            `;
+            const searchResult = await adminGraphql(nameQuery, { query: `name:${numericOrderId}` });
+            if (searchResult?.data?.orders?.edges?.length > 0) {
+              foundOrderGid = searchResult.data.orders.edges[0].node.id;
+            } else {
+              const searchResult2 = await adminGraphql(nameQuery, { query: `name:#${numericOrderId}` });
+              if (searchResult2?.data?.orders?.edges?.length > 0) {
+                foundOrderGid = searchResult2.data.orders.edges[0].node.id;
+              }
+            }
+        } catch (searchErr) {
+            console.error("[Warehouse Enroll] Order search error, using presumed GID:", searchErr);
+        }
+
+        const metafields = [
+            {
+                ownerId: foundOrderGid,
+                namespace: "ink",
+                key: "verification_status",
+                type: "single_line_text_field",
+                value: "enrolled",
+            },
+            {
+                ownerId: foundOrderGid,
+                namespace: "ink",
+                key: "nfc_uid",
+                type: "single_line_text_field",
+                value: nfcUid || nfcToken,
+            },
+            {
+                ownerId: foundOrderGid,
+                namespace: "ink",
+                key: "proof_reference",
+                type: "single_line_text_field",
+                value: inkData.proof_id,
+            }
+        ];
+
+        if (warehouseLat && warehouseLng) {
+            metafields.push({
+                ownerId: foundOrderGid,
+                namespace: "ink",
+                key: "warehouse_gps",
+                type: "json",
+                value: JSON.stringify({ lat: warehouseLat, lng: warehouseLng }),
+            });
+        }
+
+        const mutation = `
+            mutation SetEnrollmentMetafields($metafields: [MetafieldsSetInput!]!) {
+                metafieldsSet(metafields: $metafields) {
+                    userErrors { field message }
+                }
+            }
+        `;
+        
+        const mResp = await adminGraphql(mutation, { metafields });
+        if (mResp.data?.metafieldsSet?.userErrors?.length > 0) {
+            console.error("[Warehouse Enroll] Metafield update errors:", mResp.data.metafieldsSet.userErrors);
+        } else {
+            console.log(`[Warehouse Enroll] Successfully updated metafields for ${foundOrderGid} via App endpoint`);
+        }
+    } else {
+        console.warn(`[Warehouse Enroll] No offline session found to update metafields for ${payload.shop}`);
+    }
+  } catch (err: any) {
+      console.error("[Warehouse Enroll] Failed to update Shopify metafields locally:", err.message);
   }
 
   return json({

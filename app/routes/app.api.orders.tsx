@@ -79,7 +79,7 @@ async function queryShopifyOrders(shopDomain: string, accessToken: string, searc
 
   const gqlQuery = `
     query GetUnfulfilledOrders {
-      orders(first: 50, ${queryFilter}, sortKey: CREATED_AT, reverse: true) {
+      orders(first: 250, ${queryFilter}, sortKey: CREATED_AT, reverse: true) {
         edges {
           node {
             id
@@ -109,6 +109,9 @@ async function queryShopifyOrders(shopDomain: string, accessToken: string, searc
                 amount
                 currencyCode
               }
+            }
+            metafield(namespace: "ink", key: "verification_status") {
+              value
             }
             shippingAddress {
               address1
@@ -145,7 +148,13 @@ async function queryShopifyOrders(shopDomain: string, accessToken: string, searc
 
   const edges = result.data?.orders?.edges || [];
 
-  return edges.map((edge: any) => {
+  // Filter out orders that are already enrolled or verified
+  const unverifiedEdges = edges.filter((edge: any) => {
+    const status = edge.node.metafield?.value;
+    return status !== "enrolled" && status !== "verified";
+  });
+
+  return unverifiedEdges.map((edge: any) => {
     const node = edge.node;
     const lineItems = node.lineItems.edges.map((e: any) => ({
       title: e.node.title,

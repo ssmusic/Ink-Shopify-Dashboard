@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ArrowLeft, Copy, Mail, MapPin, ExternalLink, Package, Smartphone, Box, Upload, RefreshCw } from "lucide-react";
-import { useFetcher } from "react-router";
+import { useFetcher, useRouteLoaderData } from "react-router";
 import { LifecycleBadge, type LifecycleState } from "./ui/lifecycle-badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -57,6 +57,22 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
   const [activeTab, setActiveTab] = useState<"write" | "tap">("write");
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [nfcInput, setNfcInput] = useState("");
+
+  // Get activeShop from the settings loader or derive from URL
+  const settingsData = useRouteLoaderData("routes/app.settings") as any;
+  const shopUrlSlug = (() => {
+    if (settingsData?.shopDomain) {
+      return settingsData.shopDomain.replace(".myshopify.com", "");
+    }
+    // Fallback: try to parse from the current URL (Shopify embeds the shop slug in the frame URL)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const shopParam = params.get("shop") || "";
+      return shopParam.replace(".myshopify.com", "") || "admin";
+    } catch {
+      return "admin";
+    }
+  })();
 
   const isEnrolling = fetcher.state === "submitting" && fetcher.formData?.get("intent") === "enroll";
   const isUploading = fetcher.state === "submitting" && fetcher.formData?.get("intent") === "upload";
@@ -116,6 +132,8 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
 
   const deliveryVerifiedAt = order.metafields.delivery_verified_at || "";
   const deviceInfo = order.metafields.device_info || "";
+  const verifyUrl = order.metafields.verify_url || "";
+  const gpsVerdict = order.metafields.gps_verdict || "";
 
   return (
     <div>
@@ -140,7 +158,7 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
             variant="ghost"
             size="sm"
             className="ml-auto text-sm text-muted-foreground hover:text-foreground gap-1.5"
-            onClick={() => window.open(`https://admin.shopify.com/store/smusic-official/orders/${order.id}`, '_blank')}
+            onClick={() => window.open(`https://admin.shopify.com/store/${shopUrlSlug}/orders/${order.id}`, '_blank')}
           >
             <ExternalLink className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">View in Shopify</span>
@@ -219,27 +237,9 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
             Events
           </h2>
 
-          {order.status === "enrolled" || order.status === "pending" || order.status === "active" ? ( // Show timeline for active too? 
-            /* Enrolled Logic: If active/enrolled, show timeline. If pending, show Enroll UI */
-             order.status === "pending" ? (
-                /* Enroll UI */
-                <div className="bg-card border border-border rounded-sm p-6 space-y-4">
-                    <h3 className="text-sm font-medium">Enroll Order</h3>
-                    <p className="text-xs text-muted-foreground">Scan or enter an NFC tag to enroll this order.</p>
-                    <div className="flex gap-2">
-                        <Input 
-                            value={nfcInput} 
-                            onChange={(e) => setNfcInput(e.target.value)} 
-                            placeholder="NFC Token / UID" 
-                        />
-                        <Button onClick={handleEnroll} disabled={isEnrolling || !nfcInput}>
-                            {isEnrolling ? "Enrolling..." : "Enroll"}
-                        </Button>
-                    </div>
-                </div>
-             ) : (
-                /* Already Enrolled - Show Timeline & Details */
-                 <div className="bg-card border border-border rounded-sm">
+          {order.status !== "pending" && order.status !== "pending_enrollment" && proofId !== "—" ? (
+             /* Already Enrolled - Show Timeline & Details */
+             <div className="bg-card border border-border rounded-sm">
                  {/* Tab Headers */}
                  <div className="border-b border-border">
                    <div className="flex">
@@ -303,45 +303,40 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
    
                      {/* Warehouse */}
                      <div className="bg-secondary/50 rounded-sm p-4">
-                       <p className="text-xs text-muted-foreground mb-1">Warehouse</p>
+                       <p className="text-xs text-muted-foreground mb-1">Warehouse Location</p>
                        <p className="text-sm font-medium text-foreground">
                          {warehouseName}
                        </p>
-                       <p className="text-xs font-mono text-muted-foreground mt-0.5">
-                         {warehouseCoords}
-                       </p>
+                       <div className="flex items-center gap-2 mt-0.5">
+                         <p className="text-xs font-mono text-muted-foreground">
+                           {warehouseCoords}
+                         </p>
+                         {warehouseCoords !== "—" && (
+                           <a 
+                             href={`https://www.google.com/maps/search/?api=1&query=${warehouseCoords.replace(' ', '')}`} 
+                             target="_blank" 
+                             rel="noreferrer"
+                             className="text-xs text-primary hover:underline"
+                           >
+                             (View Map)
+                           </a>
+                         )}
+                       </div>
+                       {warehouseCoords !== "—" && (
+                         <div className="mt-3 w-full h-32 rounded bg-muted overflow-hidden">
+                           <iframe 
+                             width="100%" 
+                             height="100%" 
+                             frameBorder="0" 
+                             style={{border:0}} 
+                             src={`https://maps.google.com/maps?q=${warehouseCoords.replace(' ', '')}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                           ></iframe>
+                         </div>
+                       )}
                      </div>
    
                      {/* Package Photos */}
-                     <div>
-                       <div className="flex justify-between items-center mb-3">
-                           <p className="text-xs text-muted-foreground">Package Photos</p>
-                           <div className="relative">
-                               <input 
-                                  type="file" 
-                                  id="photo-upload" 
-                                  className="hidden" 
-                                  accept="image/*"
-                                  onChange={handleFileUpload}
-                                  disabled={isUploading}
-                               />
-                               <label htmlFor="photo-upload" className="text-xs text-primary cursor-pointer flex items-center gap-1 hover:underline">
-                                  <Upload className="h-3 w-3" />
-                                  {isUploading ? "Uploading..." : "Upload Photo"}
-                               </label>
-                           </div>
-                       </div>
-                       <div className="grid grid-cols-4 gap-3">
-                         {[1, 2, 3, 4].map((i) => (
-                           <div
-                             key={i}
-                             className="aspect-square border border-border rounded-sm bg-secondary flex items-center justify-center"
-                           >
-                             <Package className="h-6 w-6 text-muted-foreground/30" />
-                           </div>
-                         ))}
-                       </div>
-                     </div>
+                     <PackagePhotos proofId={proofId} nfcTagUid={nfcUid} isUploading={isUploading} handleFileUpload={handleFileUpload} />
                    </div>
                  )}
    
@@ -380,7 +375,18 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                                <div className="w-px h-full bg-border min-h-[32px]" />
                              </div>
                              <div className="pb-5">
-                               <p className="text-sm font-medium text-foreground">Location verified</p>
+                               <div className="flex items-center gap-2">
+                                 <p className="text-sm font-medium text-foreground">Location verified</p>
+                                 {gpsVerdict && (
+                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                     gpsVerdict.toLowerCase() === 'match' 
+                                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                                      : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                   }`}>
+                                     {gpsVerdict}
+                                   </span>
+                                 )}
+                               </div>
                                {deliveryDistance && (
                                  <p className="text-xs text-muted-foreground mt-0.5">
                                    {deliveryDistance} from shipping address
@@ -394,16 +400,28 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                              </div>
                            </div>
    
-                           {/* Confirmation */}
+                           {/* Confirmation & Public Proof */}
                            <div className="flex gap-3">
                              <div className="flex flex-col items-center">
                                <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/50 mt-1" />
                              </div>
                              <div>
                                <p className="text-sm font-medium text-foreground">Confirmation sent</p>
-                               <p className="text-xs text-muted-foreground mt-0.5">
+                               <p className="text-xs text-muted-foreground mt-0.5 mb-2">
                                  Delivery record sent to {order.customerEmail || "customer"}
                                </p>
+                               
+                               {verifyUrl && (
+                                 <a 
+                                   href={verifyUrl} 
+                                   target="_blank" 
+                                   rel="noreferrer"
+                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary text-secondary-foreground rounded border hover:bg-secondary/80 transition-colors"
+                                 >
+                                   <ExternalLink className="w-3.5 h-3.5" />
+                                   View Public Proof
+                                 </a>
+                               )}
                              </div>
                            </div>
                          </div>
@@ -414,7 +432,7 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                            <div className="bg-secondary/50 rounded-sm p-4 space-y-2">
                              <div className="flex items-start gap-2">
                                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                               <div>
+                               <div className="w-full">
                                  {order.customerAddress ? (
                                    <p className="text-sm text-foreground">
                                      {order.customerAddress.city}, {order.customerAddress.provinceCode} {order.customerAddress.zip}
@@ -423,10 +441,21 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                                    <p className="text-sm text-muted-foreground">Address not available</p>
                                  )}
                                  {deliveryCoords && (
-                                   <p className="text-xs font-mono text-muted-foreground mt-1">{deliveryCoords}</p>
+                                   <>
+                                     <p className="text-xs font-mono text-muted-foreground mt-1">{deliveryCoords}</p>
+                                     <div className="mt-2 w-full h-32 rounded bg-muted overflow-hidden">
+                                       <iframe 
+                                         width="100%" 
+                                         height="100%" 
+                                         frameBorder="0" 
+                                         style={{border:0}} 
+                                         src={`https://maps.google.com/maps?q=${deliveryCoords.replace(' ', '')}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                       ></iframe>
+                                     </div>
+                                   </>
                                  )}
                                  {deliveryDistance && (
-                                   <p className="text-xs text-green-600 mt-1">✓ {deliveryDistance} from address</p>
+                                   <p className="text-xs text-green-600 mt-2">✓ {deliveryDistance} from address</p>
                                  )}
                                </div>
                              </div>
@@ -443,18 +472,103 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                    </div>
                  )}
                </div>
-             )
+          ) : order.status === "pending" || order.status === "pending_enrollment" ? (
+             /* Enroll UI */
+             <div className="bg-card border border-border rounded-sm p-6 space-y-4">
+                 <h3 className="text-sm font-medium">Enroll Order</h3>
+                 <p className="text-xs text-muted-foreground">Scan or enter an NFC tag to enroll this order.</p>
+                 <div className="flex gap-2">
+                     <Input 
+                         value={nfcInput} 
+                         onChange={(e) => setNfcInput(e.target.value)} 
+                         placeholder="NFC Token / UID" 
+                     />
+                     <Button onClick={handleEnroll} disabled={isEnrolling || !nfcInput}>
+                         {isEnrolling ? "Enrolling..." : "Enroll"}
+                     </Button>
+                 </div>
+             </div>
           ) : (
              <div className="bg-card border border-border rounded-sm p-8 text-center">
                 <Package className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-                <p className="text-sm font-medium text-foreground mb-1">Pending Verification</p>
+                <p className="text-sm font-medium text-foreground mb-1">Unknown Status</p>
                 <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                    This order has been enrolled for INK verified delivery. Waiting for warehouse scan and customer tap.
+                    This order is in an unknown state: {order.status}
                 </p>
             </div>
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+// Subcomponent to handle photo loading logic smoothly without reloading the entire parent
+function PackagePhotos({ proofId, nfcTagUid, isUploading, handleFileUpload }: { proofId: string, nfcTagUid?: string, isUploading: boolean, handleFileUpload: any }) {
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // INK API uses NFC tokens to fetch proofs. If we have a valid nfcTagUid, use it. Otherwise fallback to proofId
+    const lookupId = (nfcTagUid && nfcTagUid !== "—") ? nfcTagUid : proofId;
+    
+    if (!lookupId || lookupId === "—") {
+      setLoading(false);
+      return;
+    }
+    
+    fetch(`/api/retrieve/${lookupId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.media_items && data.media_items.length > 0) {
+          setPhotos(data.media_items.map((m: any) => m.url));
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to load photos:", err);
+        setLoading(false);
+      });
+  }, [proofId, isUploading]); // Reload if an upload finishes
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-3">
+          <p className="text-xs text-muted-foreground">Package Photos</p>
+          <div className="relative">
+              <input 
+                 type="file" 
+                 id="photo-upload" 
+                 className="hidden" 
+                 accept="image/*"
+                 onChange={handleFileUpload}
+                 disabled={isUploading}
+              />
+              <label htmlFor="photo-upload" className="text-xs text-primary cursor-pointer flex items-center gap-1 hover:underline">
+                 <Upload className="h-3 w-3" />
+                 {isUploading ? "Uploading..." : "Upload Photo"}
+              </label>
+          </div>
+      </div>
+      
+      {loading ? (
+        <div className="p-8 flex justify-center text-muted-foreground">
+           <RefreshCw className="h-5 w-5 animate-spin opacity-50" />
+        </div>
+      ) : photos.length > 0 ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {photos.map((url, i) => (
+            <a href={url} target="_blank" rel="noreferrer" key={i} className="aspect-square border border-border rounded-sm bg-secondary overflow-hidden hover:opacity-90 transition-opacity">
+              <img src={url} alt={`Package Proof ${i+1}`} className="w-full h-full object-cover" />
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-secondary/50 rounded-sm p-8 text-center border border-dashed border-border">
+          <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
+          <p className="text-xs text-muted-foreground">No photos uploaded yet</p>
+        </div>
+      )}
     </div>
   );
 }

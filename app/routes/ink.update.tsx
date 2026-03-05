@@ -86,6 +86,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       proof_ref,
       timestamp,
       verify_url,
+      device_info,
     } = payload;
 
     console.log("📦 Webhook data:", {
@@ -110,74 +111,130 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // 4. Update Shopify order metafields
     console.log("📝 Updating Shopify order metafields...");
     try {
-      // Get Shopify session from database
-      const session = await getOfflineSession();
+      // Get ALL Shopify offline sessions from database since we don't know the exact shop
+      const { default: firestore } = await import("../firestore.server");
+      const sessionSnapshot = await firestore.collection("shopify_sessions").where("isOnline", "==", false).get();
 
-      if (!session) {
-        console.error("❌ No offline session found");
+      if (sessionSnapshot.empty) {
+        console.error("❌ No offline sessions found");
         return new Response(
           JSON.stringify({ error: "No session available" }),
           { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
         );
       }
 
-      // Create admin client
-      const adminGraphql = async (query: string, variables?: any) => {
-        const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Shopify-Access-Token": session.accessToken,
-          },
-          body: JSON.stringify({ query, variables }),
-        });
-        return response.json();
-      };
-
-      const numericOrderId = order_id.replace(/\D/g, "");
-      // Initial guess
-      let orderGid = `gid://shopify/Order/${numericOrderId}`;
-
-      // --- RESILIENT ORDER LOOKUP ---
-      // Check if this ID actually exists. If not, try searching by name (order number).
+      const offlineSessions = sessionSnapshot.docs.map(doc => doc.data());
       
+    // 5. Look for the order in Shopify across ALL merchants' stores
+    let foundOrderGid: string | null = null;
+    let targetSession: any = null;
+
+    const rawOrderId = order_id ? order_id.replace(/\D/g, '') : '';
+    console.log(`🔍 Attempting to locate order (Raw ID: ${rawOrderId}, Proof ID: ${proof_ref || 'None'})`);
+
+    const adminGraphqlForSession = async (session: any, query: string, variables?: any) => {
+      const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": session.accessToken,
+        },
+        body: JSON.stringify({ query, variables }),
+      });
+      return response.json();
+    };
+
+    // PASS 1: Check direct ID (Most accurate, globally unique across Shopify)
+    if (rawOrderId && rawOrderId.length > 10) { 
+      const initialGid = `gid://shopify/Order/${rawOrderId}`;
       const checkOrderQuery = `#graphql
         query CheckOrder($id: ID!) {
           order(id: $id) { id }
         }
       `;
-      
-      const checkResult = await adminGraphql(checkOrderQuery, { id: orderGid });
-      
-      if (!checkResult?.data?.order) {
-         console.warn(`⚠️ Direct ID lookup failed for ${orderGid} in webhook. Trying lookup by name #${numericOrderId}...`);
-         
-         const nameQuery = `#graphql
-           query FindOrderByName($query: String!) {
-             orders(first: 1, query: $query) {
-               edges { node { id } }
-             }
-           }
-         `;
-         
-         const searchResult = await adminGraphql(nameQuery, { query: `name:${numericOrderId}` });
-         
-         if (searchResult?.data?.orders?.edges?.length > 0) {
-           const foundId = searchResult.data.orders.edges[0].node.id;
-           console.log(`✅ Found proper GID from name: ${foundId}`);
-           orderGid = foundId;
-         } else {
-            // Try with hash prefix
-            const searchResult2 = await adminGraphql(nameQuery, { query: `name:#${numericOrderId}` });
-            if (searchResult2?.data?.orders?.edges?.length > 0) {
-               const foundId = searchResult2.data.orders.edges[0].node.id;
-               console.log(`✅ Found proper GID from name (#): ${foundId}`);
-               orderGid = foundId;
-            } else {
-               console.error(`❌ Could not find order ${order_id} by ID or Name. Metafield update will likely fail.`);
-            }
-         }
+      for (const session of offlineSessions) {
+        if (!session.accessToken) continue;
+        const checkResult = await adminGraphqlForSession(session, checkOrderQuery, { id: initialGid });
+        if (checkResult?.data?.order?.id) {
+          foundOrderGid = checkResult.data.order.id;
+          targetSession = session;
+          console.log(`✅ Found order ${foundOrderGid} via direct ID in store ${session.shop}`);
+          break;
+        }
       }
+    }
+
+    // PASS 2: Check by proof_reference (Deterministic, but could conflict in test environments)
+    if (!foundOrderGid && proof_ref) {
+      const proofQuery = `#graphql
+        query SearchOrderByProof($query: String!) {
+          orders(first: 1, query: $query) {
+            edges { node { id } }
+          }
+        }
+      `;
+      for (const session of offlineSessions) {
+        if (!session.accessToken) continue;
+        const proofResult = await adminGraphqlForSession(session, proofQuery, { query: `metafield.ink.proof_reference:${proof_ref}` });
+        if (proofResult?.data?.orders?.edges?.length > 0) {
+          foundOrderGid = proofResult.data.orders.edges[0].node.id;
+          targetSession = session;
+          console.log(`✅ Found order ${foundOrderGid} via proof_reference in store ${session.shop}`);
+          break;
+        }
+      }
+    }
+
+    // PASS 3: Fallback search by name if it resembles a name
+    if (!foundOrderGid && order_id && order_id.length <= 10) {
+      const numericPart = order_id.replace(/\D/g, '');
+      const nameQuery = `#graphql
+        query FindOrderByName($query: String!) {
+          orders(first: 2, query: $query) {
+            edges { node { id } }
+          }
+        }
+      `;
+      for (const session of offlineSessions) {
+        if (!session.accessToken) continue;
+        const searchResult = await adminGraphqlForSession(session, nameQuery, { query: `name:${numericPart}` });
+        if (searchResult?.data?.orders?.edges?.length > 0) {
+          foundOrderGid = searchResult.data.orders.edges[0].node.id;
+          targetSession = session;
+          console.log(`✅ Found order via name search '${numericPart}' in store ${session.shop}`);
+          break;
+        }
+        const searchResult2 = await adminGraphqlForSession(session, nameQuery, { query: `name:#${numericPart}` });
+        if (searchResult2?.data?.orders?.edges?.length > 0) {
+          foundOrderGid = searchResult2.data.orders.edges[0].node.id;
+          targetSession = session;
+          console.log(`✅ Found order via name search '#${numericPart}' in store ${session.shop}`);
+          break;
+        }
+      }
+    }
+      if (!foundOrderGid || !targetSession) {
+         console.error(`❌ Could not find order ${order_id} in ANY connected Shopify store.`);
+         return new Response(
+            JSON.stringify({ error: "Order not found in any connected store" }),
+            { status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+         );
+      }
+
+      let orderGid = foundOrderGid;
+
+      // Re-create the adminGraphql wrapper for the correct target session so the rest of the code works
+      const adminGraphql = async (query: string, variables?: any) => {
+        const response = await fetch(`https://${targetSession.shop}/admin/api/2024-10/graphql.json`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": targetSession.accessToken,
+          },
+          body: JSON.stringify({ query, variables }),
+        });
+        return response.json();
+      };
 
       const metafields = [
         {
@@ -227,6 +284,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           key: "delivery_gps",
           type: "json",
           value: JSON.stringify(delivery_gps),
+        });
+      }
+
+      if (device_info) {
+        metafields.push({
+          ownerId: orderGid,
+          namespace: INK_NAMESPACE,
+          key: "device_info",
+          type: "single_line_text_field",
+          value: device_info,
         });
       }
 

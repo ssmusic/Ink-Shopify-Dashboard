@@ -217,29 +217,6 @@ export default function OrdersTable({ orders, searchQuery, sortBy, statusFilter,
                                             </div>
                                         </div>
                                     </div>
-
-                                    <div>
-                                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Warehouse</h4>
-                                        <div className="bg-background/50 p-3 rounded-md border border-border/50">
-                                            <p className="font-medium text-sm">Los Angeles Distribution Center</p>
-                                            <p className="text-xs text-muted-foreground font-mono mt-1">
-                                                {order.metafields.warehouse_gps 
-                                                    ? JSON.parse(order.metafields.warehouse_gps as string).lat + ", " + JSON.parse(order.metafields.warehouse_gps as string).lng 
-                                                    : "34.0094, -118.3855"}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    
-                                    {order.status === 'verified' && (
-                                        <div>
-                                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Package Photos</h4>
-                                            <div className="grid grid-cols-4 gap-2">
-                                                {[1,2,3,4].map((i) => (
-                                                    <div key={i} className="aspect-square bg-muted rounded-sm border border-border/50"></div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </div>
