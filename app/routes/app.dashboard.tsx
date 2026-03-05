@@ -1,132 +1,93 @@
 import { useState } from "react";
-import AppLayout from "~/components/AppLayout";
+import {
+  Page,
+  Card,
+  BlockStack,
+  Text,
+  Button,
+  InlineStack,
+  EmptyState,
+  Banner,
+  Layout,
+} from "@shopify/polaris";
+import PolarisAppLayout from "~/components/PolarisAppLayout";
 import RecentActivity from "~/components/RecentActivity";
 import EngagementFunnel from "~/components/EngagementFunnel";
 import NFCTagInventory from "~/components/NFCTagInventory";
 import RevenueThisPeriod from "~/components/RevenueThisPeriod";
 import TimeToEngagement from "~/components/TimeToEngagement";
 import CurrentPlanCard from "~/components/CurrentPlanCard";
+import BillingWidget from "~/components/billing/BillingWidget";
 import CommunicationsUsage from "~/components/CommunicationsUsage";
-import { Button } from "~/components/ui/button";
-import { toast } from "~/hooks/use-toast";
-import { LiveRegion } from "~/components/ui/live-region";
-import { type LoaderFunctionArgs, type HeadersFunction, useRouteError } from "react-router";
-import { authenticate } from "../shopify.server";
-import { boundary } from "@shopify/shopify-app-react-router/server";
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return null;
-};
+import { toast } from "sonner"; // Replaced with Sonner to match previous setup
 
 const Dashboard = () => {
-  // In production, this would come from API/context
   const [hasOrders, setHasOrders] = useState(true);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [announcement, setAnnouncement] = useState("");
 
   const handleViewDemo = () => {
     setIsTransitioning(true);
-    setAnnouncement("Loading demo data...");
-    toast({
-      title: "Loading demo data",
-      description: "Showing sample orders and verification data.",
-    });
+    toast("Loading demo data", { description: "Showing sample orders and verification data." });
     setTimeout(() => {
       setHasOrders(true);
       setIsTransitioning(false);
-      setAnnouncement("Demo data loaded. Showing 52 total orders.");
     }, 1000);
   };
 
   const handleDownloadGuide = () => {
-    setAnnouncement("Downloading warehouse setup guide...");
-    toast({
-      title: "Downloading guide",
-      description: "Your warehouse setup guide is being prepared.",
-    });
+    toast("Downloading guide", { description: "Your warehouse setup guide is being prepared." });
   };
 
-  // Empty state when no orders
   if (!hasOrders) {
     return (
-      <AppLayout pageTitle="Dashboard">
-        <LiveRegion message={announcement} />
-        <div
-          className={`flex items-center justify-center min-h-[60vh] transition-opacity duration-300 ${
-            isTransitioning ? "opacity-0" : "opacity-100"
-          }`}
-          role="region"
-          aria-label="Setup complete"
-        >
-          <div className="bg-card border border-border rounded-lg p-16 text-center max-w-lg w-full animate-fade-in">
-            {/* Emoji */}
-            <div className="text-6xl mb-6" role="img" aria-label="Celebration">
-              🎉
-            </div>
-
-            {/* Heading */}
-            <h1 className="text-2xl font-light text-foreground mb-4">
-              Your setup is complete!
-            </h1>
-
-            {/* Description */}
-            <p className="text-muted-foreground mb-8 leading-relaxed">
-              Your NFC tags will arrive in 3-5 business days.
-              <br />
-              In the meantime, explore the app or read our warehouse setup guide.
-            </p>
-
-            {/* Buttons */}
-            <div className="flex items-center justify-center gap-4">
-              <Button variant="outline" onClick={handleDownloadGuide}>
-                Download Setup Guide
-              </Button>
-              <Button
-                onClick={handleViewDemo}
-                className="bg-foreground text-background hover:bg-foreground/90"
-              >
-                View Demo
-              </Button>
-            </div>
-          </div>
-        </div>
-      </AppLayout>
+      <PolarisAppLayout>
+        <Page title="Dashboard">
+          <Card>
+            <EmptyState
+              heading="Your setup is complete! 🎉"
+              action={{ content: "View Demo", onAction: handleViewDemo, loading: isTransitioning }}
+              secondaryAction={{ content: "Download Setup Guide", onAction: handleDownloadGuide }}
+              image=""
+            >
+              <p>Your NFC tags will arrive in 3-5 business days. In the meantime, explore the app or read our warehouse setup guide.</p>
+            </EmptyState>
+          </Card>
+        </Page>
+      </PolarisAppLayout>
     );
   }
 
-  // Normal dashboard with orders
   return (
-    <AppLayout pageTitle="Dashboard">
-      <LiveRegion message={announcement} />
-      
-      <div className={`space-y-6 animate-fade-in ${isTransitioning ? "opacity-0" : "opacity-100"}`}>
-        {/* Widgets - Stacked vertically as requested */}
-        <div className="space-y-6">
-          <TimeToEngagement />
-          <EngagementFunnel />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <NFCTagInventory />
-          <RevenueThisPeriod />
-        </div>
+    <PolarisAppLayout>
+      <Page title="Dashboard">
+        <BlockStack gap="400">
+          {/* Row 1: Time to Engagement + Engagement Funnel */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <TimeToEngagement />
+            <EngagementFunnel />
+          </div>
 
-        {/* Recent Activity */}
-        <RecentActivity />
+          {/* Row 2: NFC Tag Inventory + Total Value Protected */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <NFCTagInventory />
+            <RevenueThisPeriod />
+          </div>
 
-        {/* Account Overview Section */}
-        <CurrentPlanCard />
+          {/* Row 3: Recent Activity + Billing Widget */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <RecentActivity />
+            <div className="flex flex-col gap-4">
+              <BillingWidget />
+              <CurrentPlanCard />
+            </div>
+          </div>
 
-        {/* Communications Usage Section */}
-        <CommunicationsUsage />
-      </div>
-    </AppLayout>
+          {/* Row 4: Communications — full width */}
+          <CommunicationsUsage />
+        </BlockStack>
+      </Page>
+    </PolarisAppLayout>
   );
 };
 
 export default Dashboard;
-
-export const headers: HeadersFunction = (args) => boundary.headers(args);
-export const ErrorBoundary = () => {
-  return boundary.error(useRouteError());
-};

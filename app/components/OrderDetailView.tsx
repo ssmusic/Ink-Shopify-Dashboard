@@ -1,10 +1,20 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Copy, Mail, MapPin, ExternalLink, Package, Smartphone, Box, Upload, RefreshCw } from "lucide-react";
+import { Copy } from "lucide-react";
 import { useFetcher, useRouteLoaderData } from "react-router";
-import { LifecycleBadge, type LifecycleState } from "./ui/lifecycle-badge";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-// ... existing imports
+import {
+  Page,
+  Layout,
+  Card,
+  BlockStack,
+  Text,
+  InlineStack,
+  Badge,
+  Divider,
+  Thumbnail,
+  Button,
+  Modal,
+} from "@shopify/polaris";
+import type { BadgeProps } from "@shopify/polaris";
 
 interface OrderItem {
   title: string;
@@ -14,7 +24,7 @@ interface OrderItem {
 }
 
 interface Order {
-  id: string; // Numeric ID
+  id: string;
   orderNumber: string;
   customerName: string;
   customerEmail: string;
@@ -47,24 +57,30 @@ interface OrderDetailViewProps {
   onBack: () => void;
 }
 
-const formatCurrency = (amount: string | number, currency: string) => {
+const fmt = (amount: string | number, currency: string) => {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
   return num.toLocaleString("en-US", { style: "currency", currency });
+};
+
+const statusBadgeTone = (s: string): BadgeProps["tone"] => {
+  if (s === "verified") return "success";
+  if (s === "enrolled") return "warning";
+  if (s === "active") return "info";
+  return undefined;
 };
 
 export default function OrderDetailView({ order, onBack }: OrderDetailViewProps) {
   const fetcher = useFetcher();
   const [activeTab, setActiveTab] = useState<"write" | "tap">("write");
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [nfcInput, setNfcInput] = useState("");
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-  // Get activeShop from the settings loader or derive from URL
+  // Get shop slug for "View in Shopify" link
   const settingsData = useRouteLoaderData("routes/app.settings") as any;
   const shopUrlSlug = (() => {
     if (settingsData?.shopDomain) {
       return settingsData.shopDomain.replace(".myshopify.com", "");
     }
-    // Fallback: try to parse from the current URL (Shopify embeds the shop slug in the frame URL)
     try {
       const params = new URLSearchParams(window.location.search);
       const shopParam = params.get("shop") || "";
@@ -74,21 +90,14 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
     }
   })();
 
-  const isEnrolling = fetcher.state === "submitting" && fetcher.formData?.get("intent") === "enroll";
-  const isUploading = fetcher.state === "submitting" && fetcher.formData?.get("intent") === "upload";
+  const isUploading =
+    fetcher.state === "submitting" &&
+    fetcher.formData?.get("intent") === "upload";
 
   const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).catch(() => {});
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 1500);
-  };
-
-  const handleEnroll = () => {
-    if (!nfcInput) return;
-    fetcher.submit(
-      { intent: "enroll", orderId: order.id, nfcToken: nfcInput },
-      { method: "post" }
-    );
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,8 +105,11 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
       const formData = new FormData();
       formData.append("intent", "upload");
       formData.append("file", e.target.files[0]);
-      formData.append("proofId", order.metafields.proof_reference || ""); // INK API requires proof_id, not nfc_token
-      fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
+      formData.append("proofId", order.metafields.proof_reference || "");
+      fetcher.submit(formData, {
+        method: "post",
+        encType: "multipart/form-data",
+      });
     }
   };
 
@@ -106,7 +118,6 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
   const proofId = order.metafields.proof_reference || "—";
 
   // Parse warehouse GPS
-  let warehouseName = "Distribution Center";
   let warehouseCoords = "—";
   if (order.metafields.warehouse_gps) {
     try {
@@ -135,440 +146,460 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
   const verifyUrl = order.metafields.verify_url || "";
   const gpsVerdict = order.metafields.gps_verdict || "";
 
+  const statusRaw = order.status?.toLowerCase() || "pending";
+  const statusLabel = statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1);
+
+  const addressLabel = order.customerAddress
+    ? `${order.customerAddress.city}, ${order.customerAddress.provinceCode} ${order.customerAddress.zip}`
+    : "";
+
+  const tabItems = [
+    { id: "write" as const, content: "Write" },
+    { id: "tap" as const, content: "Tap" },
+  ];
+
   return (
-    <div>
-      {/* Order Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={onBack}
-            className="flex items-center justify-center w-8 h-8 -ml-1 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Back to Shipments"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <span className="text-lg font-semibold text-foreground">
-            {order.orderNumber}
-          </span>
-          <LifecycleBadge state={order.status as LifecycleState} />
-          <span className="text-sm text-muted-foreground">
-            {order.date}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto text-sm text-muted-foreground hover:text-foreground gap-1.5"
-            onClick={() => window.open(`https://admin.shopify.com/store/${shopUrlSlug}/orders/${order.id}`, '_blank')}
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">View in Shopify</span>
-          </Button>
-        </div>
-      </div>
+    <>
+      <Page
+        title={order.orderNumber}
+        titleMetadata={
+          <Badge tone={statusBadgeTone(statusRaw)}>{statusLabel}</Badge>
+        }
+        subtitle={order.date}
+        backAction={{ content: "Shipments", onAction: onBack }}
+        secondaryActions={[
+          {
+            content: "View in Shopify",
+            external: true,
+            url: `https://admin.shopify.com/store/${shopUrlSlug}/orders/${order.id}`,
+          },
+        ]}
+      >
+        <Layout>
+          {/* Left column: Customer + Products */}
+          <Layout.Section variant="oneThird">
+            <BlockStack gap="400">
+              {/* Customer */}
+              <Card>
+                <BlockStack gap="300">
+                  <Text as="h3" variant="headingSm">Customer</Text>
+                  <Text as="p" variant="bodyMd" fontWeight="medium">
+                    {order.customerName}
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    {order.customerEmail || "No email"}
+                  </Text>
+                  {order.customerAddress && (
+                    <>
+                      <Divider />
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        {order.customerAddress.address1}<br />
+                        {order.customerAddress.city},{" "}
+                        {order.customerAddress.provinceCode}{" "}
+                        {order.customerAddress.zip}
+                      </Text>
+                    </>
+                  )}
+                </BlockStack>
+              </Card>
 
-      {/* Main Content - 2-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
-        {/* Column 1: Customer + Products */}
-        <div className="space-y-6">
-          {/* Customer Section */}
-          <section>
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-              Customer
-            </h2>
-            <div className="bg-card border border-border rounded-sm p-4 space-y-3">
-              <p className="text-sm font-medium text-foreground">
-                {order.customerName}
-              </p>
-              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5" />
-                {order.customerEmail || "No email"}
-              </p>
-              {order.customerAddress && (
-                <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p>{order.customerAddress.address1}</p>
-                    <p>{order.customerAddress.city}, {order.customerAddress.provinceCode} {order.customerAddress.zip}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
+              {/* Products */}
+              <Card>
+                <BlockStack gap="300">
+                  <Text as="h3" variant="headingSm">Products</Text>
+                  {order.items.map((item, idx) => (
+                    <InlineStack key={idx} align="space-between" blockAlign="start">
+                      <BlockStack gap="0">
+                        <Text as="p" variant="bodySm" fontWeight="medium">
+                          {item.title}
+                        </Text>
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          {item.sku ? `${item.sku} × ` : ""}
+                          {item.quantity}
+                        </Text>
+                      </BlockStack>
+                      <Text as="p" variant="bodySm" fontWeight="medium">
+                        {fmt(parseFloat(item.price) * item.quantity, order.currency)}
+                      </Text>
+                    </InlineStack>
+                  ))}
+                  <Divider />
+                  <InlineStack align="space-between">
+                    <Text as="span" tone="subdued" variant="bodySm">Subtotal</Text>
+                    <Text as="span" variant="bodySm">{fmt(order.subtotal, order.currency)}</Text>
+                  </InlineStack>
+                  <InlineStack align="space-between">
+                    <Text as="span" tone="subdued" variant="bodySm">Shipping</Text>
+                    <Text as="span" variant="bodySm">Free</Text>
+                  </InlineStack>
+                  <Divider />
+                  <InlineStack align="space-between">
+                    <Text as="span" variant="bodySm" fontWeight="semibold">Total</Text>
+                    <Text as="span" variant="bodySm" fontWeight="semibold">
+                      {fmt(order.total, order.currency)}
+                    </Text>
+                  </InlineStack>
+                </BlockStack>
+              </Card>
+            </BlockStack>
+          </Layout.Section>
 
-          {/* Products Section */}
-          <section>
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-              Products
-            </h2>
-            <div className="bg-card border border-border rounded-sm divide-y divide-border">
-              {order.items.map((item, idx) => (
-                <div key={idx} className="p-4 flex justify-between items-start gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">{item.title}</p>
-                    <p className="text-xs text-muted-foreground">{item.sku ? `${item.sku} × ` : ""}{item.quantity}</p>
-                  </div>
-                  <p className="text-sm font-medium text-foreground flex-shrink-0">
-                    {formatCurrency(item.price, order.currency)}
-                  </p>
-                </div>
-              ))}
-              {/* Totals */}
-              <div className="p-4 space-y-1.5 text-sm">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Subtotal</span>
-                  <span>{formatCurrency(order.subtotal, order.currency)}</span>
-                </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Shipping</span>
-                  <span>Free</span>
-                </div>
-                <div className="flex justify-between font-semibold text-foreground pt-2 border-t border-border">
-                  <span>Total</span>
-                  <span>{formatCurrency(order.total, order.currency)}</span>
+          {/* Right column: Events (Write / Tap) */}
+          <Layout.Section>
+            <div style={{ border: "1px solid var(--p-color-border)" }}>
+              {/* Folder-style tab bar */}
+              <div style={{
+                display: "flex",
+                alignItems: "flex-end",
+                background: "var(--p-color-bg-surface-secondary)",
+                padding: "0 16px",
+              }}>
+                <div style={{ display: "flex", alignItems: "flex-end", paddingTop: "8px" }}>
+                  {tabItems.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      style={{
+                        padding: "8px 16px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        cursor: "pointer",
+                        border: "1px solid var(--p-color-border)",
+                        borderBottom:
+                          activeTab === tab.id
+                            ? "1px solid var(--p-color-bg-surface)"
+                            : "1px solid var(--p-color-border)",
+                        background:
+                          activeTab === tab.id
+                            ? "var(--p-color-bg-surface)"
+                            : "transparent",
+                        color:
+                          activeTab === tab.id
+                            ? "var(--p-color-text)"
+                            : "var(--p-color-text-secondary)",
+                        marginBottom: "-1px",
+                        borderRadius: "0",
+                        position: "relative",
+                        zIndex: activeTab === tab.id ? 2 : 1,
+                      }}
+                    >
+                      {tab.content}
+                    </button>
+                  ))}
                 </div>
               </div>
-            </div>
-          </section>
-        </div>
+              <div style={{ borderTop: "1px solid var(--p-color-border)" }} />
 
-        {/* Column 2: Events */}
-        <section>
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-            Events
-          </h2>
+              {/* Tab content */}
+              <div style={{ padding: "16px", background: "var(--p-color-bg-surface)" }}>
 
-          {order.status !== "pending" && order.status !== "pending_enrollment" && proofId !== "—" ? (
-             /* Already Enrolled - Show Timeline & Details */
-             <div className="bg-card border border-border rounded-sm">
-                 {/* Tab Headers */}
-                 <div className="border-b border-border">
-                   <div className="flex">
-                     <button
-                       onClick={() => setActiveTab("write")}
-                       className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                         activeTab === "write"
-                           ? "border-foreground text-foreground"
-                           : "border-transparent text-muted-foreground hover:text-foreground"
-                       }`}
-                     >
-                       <Box className="h-4 w-4" />
-                       Write
-                     </button>
-                     <button
-                       onClick={() => setActiveTab("tap")}
-                       className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                         activeTab === "tap"
-                           ? "border-foreground text-foreground"
-                           : "border-transparent text-muted-foreground hover:text-foreground"
-                       }`}
-                     >
-                       <Smartphone className="h-4 w-4" />
-                       Tap
-                     </button>
-                   </div>
-                 </div>
-   
-                 {/* Write Tab Content */}
-                 {activeTab === "write" && (
-                   <div className="p-4 sm:p-6 space-y-5">
-                     {/* NFC Tag & Proof ID */}
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                       <div className="bg-secondary/40 rounded-sm p-3">
-                         <p className="text-xs text-muted-foreground mb-1">NFC Tag UID</p>
-                         <code className="text-sm font-mono text-foreground break-all">
-                           {nfcUid}
-                         </code>
-                       </div>
-                       <div className="bg-secondary/40 rounded-sm p-3">
-                         <p className="text-xs text-muted-foreground mb-1">Proof ID</p>
-                         <div className="flex items-center gap-2">
-                           <code className="text-sm font-mono text-foreground">
-                             {proofId}
-                           </code>
-                           {proofId !== "—" && (
-                             <button
-                               onClick={() => copyToClipboard(proofId, "proofId")}
-                               className="text-muted-foreground hover:text-foreground transition-colors"
-                               aria-label="Copy Proof ID"
-                             >
-                               <Copy className="h-3.5 w-3.5" />
-                             </button>
-                           )}
-                           {copiedField === "proofId" && (
-                             <span className="text-xs text-green-600">Copied!</span>
-                           )}
-                         </div>
-                       </div>
-                     </div>
-   
-                     {/* Warehouse */}
-                     <div className="bg-secondary/50 rounded-sm p-4">
-                       <p className="text-xs text-muted-foreground mb-1">Warehouse Location</p>
-                       <p className="text-sm font-medium text-foreground">
-                         {warehouseName}
-                       </p>
-                       <div className="flex items-center gap-2 mt-0.5">
-                         <p className="text-xs font-mono text-muted-foreground">
-                           {warehouseCoords}
-                         </p>
-                         {warehouseCoords !== "—" && (
-                           <a 
-                             href={`https://www.google.com/maps/search/?api=1&query=${warehouseCoords.replace(' ', '')}`} 
-                             target="_blank" 
-                             rel="noreferrer"
-                             className="text-xs text-primary hover:underline"
-                           >
-                             (View Map)
-                           </a>
-                         )}
-                       </div>
-                       {warehouseCoords !== "—" && (
-                         <div className="mt-3 w-full h-32 rounded bg-muted overflow-hidden">
-                           <iframe 
-                             width="100%" 
-                             height="100%" 
-                             frameBorder="0" 
-                             style={{border:0}} 
-                             src={`https://maps.google.com/maps?q=${warehouseCoords.replace(' ', '')}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                           ></iframe>
-                         </div>
-                       )}
-                     </div>
-   
-                     {/* Package Photos */}
-                     <PackagePhotos proofId={proofId} nfcTagUid={nfcUid} isUploading={isUploading} handleFileUpload={handleFileUpload} />
-                   </div>
-                 )}
-   
-                 {/* Tap Tab Content */}
-                 {activeTab === "tap" && (
-                   <div>
-                     {hasTapData ? (
-                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:divide-x divide-border">
-                         {/* Left: Timeline */}
-                         <div className="p-4 sm:p-6 space-y-0">
-                           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-4">Timeline</p>
-   
-                           {/* Tapped */}
-                           <div className="flex gap-3">
-                             <div className="flex flex-col items-center">
-                               <div className="h-2.5 w-2.5 rounded-full bg-foreground mt-1" />
-                               <div className="w-px h-full bg-border min-h-[32px]" />
-                             </div>
-                             <div className="pb-5">
-                               <p className="text-sm font-medium text-foreground">Tapped</p>
-                               <p className="text-xs text-muted-foreground mt-0.5">
-                                 {deliveryVerifiedAt || "Date not available"}
-                               </p>
-                               {deviceInfo && (
-                                 <span className="inline-flex items-center mt-2 px-2 py-0.5 rounded border border-border text-[10px] font-medium text-foreground">
-                                   {deviceInfo}
-                                 </span>
-                               )}
-                             </div>
-                           </div>
-   
-                           {/* Location */}
-                           <div className="flex gap-3">
-                             <div className="flex flex-col items-center">
-                               <div className="h-2.5 w-2.5 rounded-full bg-foreground mt-1" />
-                               <div className="w-px h-full bg-border min-h-[32px]" />
-                             </div>
-                             <div className="pb-5">
-                               <div className="flex items-center gap-2">
-                                 <p className="text-sm font-medium text-foreground">Location verified</p>
-                                 {gpsVerdict && (
-                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                     gpsVerdict.toLowerCase() === 'match' 
-                                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
-                                      : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                                   }`}>
-                                     {gpsVerdict}
-                                   </span>
-                                 )}
-                               </div>
-                               {deliveryDistance && (
-                                 <p className="text-xs text-muted-foreground mt-0.5">
-                                   {deliveryDistance} from shipping address
-                                 </p>
-                               )}
-                               {deliveryCoords && (
-                                 <p className="text-xs font-mono text-muted-foreground mt-1">
-                                   {deliveryCoords}
-                                 </p>
-                               )}
-                             </div>
-                           </div>
-   
-                           {/* Confirmation & Public Proof */}
-                           <div className="flex gap-3">
-                             <div className="flex flex-col items-center">
-                               <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/50 mt-1" />
-                             </div>
-                             <div>
-                               <p className="text-sm font-medium text-foreground">Confirmation sent</p>
-                               <p className="text-xs text-muted-foreground mt-0.5 mb-2">
-                                 Delivery record sent to {order.customerEmail || "customer"}
-                               </p>
-                               
-                               {verifyUrl && (
-                                 <a 
-                                   href={verifyUrl} 
-                                   target="_blank" 
-                                   rel="noreferrer"
-                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary text-secondary-foreground rounded border hover:bg-secondary/80 transition-colors"
-                                 >
-                                   <ExternalLink className="w-3.5 h-3.5" />
-                                   View Public Proof
-                                 </a>
-                               )}
-                             </div>
-                           </div>
-                         </div>
-   
-                         {/* Right: Tap Location */}
-                         <div className="p-4 sm:p-6 border-t lg:border-t-0 border-border">
-                           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-4">Tap Location</p>
-                           <div className="bg-secondary/50 rounded-sm p-4 space-y-2">
-                             <div className="flex items-start gap-2">
-                               <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                               <div className="w-full">
-                                 {order.customerAddress ? (
-                                   <p className="text-sm text-foreground">
-                                     {order.customerAddress.city}, {order.customerAddress.provinceCode} {order.customerAddress.zip}
-                                   </p>
-                                 ) : (
-                                   <p className="text-sm text-muted-foreground">Address not available</p>
-                                 )}
-                                 {deliveryCoords && (
-                                   <>
-                                     <p className="text-xs font-mono text-muted-foreground mt-1">{deliveryCoords}</p>
-                                     <div className="mt-2 w-full h-32 rounded bg-muted overflow-hidden">
-                                       <iframe 
-                                         width="100%" 
-                                         height="100%" 
-                                         frameBorder="0" 
-                                         style={{border:0}} 
-                                         src={`https://maps.google.com/maps?q=${deliveryCoords.replace(' ', '')}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                                       ></iframe>
-                                     </div>
-                                   </>
-                                 )}
-                                 {deliveryDistance && (
-                                   <p className="text-xs text-green-600 mt-2">✓ {deliveryDistance} from address</p>
-                                 )}
-                               </div>
-                             </div>
-                           </div>
-                         </div>
-                       </div>
-                     ) : (
-                       <div className="p-8 text-center text-muted-foreground">
-                         <Smartphone className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                         <p className="text-sm font-medium">No tap has been recorded</p>
-                         <p className="text-xs mt-1">Waiting for customer to tap the NFC tag</p>
-                       </div>
-                     )}
-                   </div>
-                 )}
-               </div>
-          ) : order.status === "pending" || order.status === "pending_enrollment" ? (
-             /* Enroll UI */
-             <div className="bg-card border border-border rounded-sm p-6 space-y-4">
-                 <h3 className="text-sm font-medium">Enroll Order</h3>
-                 <p className="text-xs text-muted-foreground">Scan or enter an NFC tag to enroll this order.</p>
-                 <div className="flex gap-2">
-                     <Input 
-                         value={nfcInput} 
-                         onChange={(e) => setNfcInput(e.target.value)} 
-                         placeholder="NFC Token / UID" 
-                     />
-                     <Button onClick={handleEnroll} disabled={isEnrolling || !nfcInput}>
-                         {isEnrolling ? "Enrolling..." : "Enroll"}
-                     </Button>
-                 </div>
-             </div>
-          ) : (
-             <div className="bg-card border border-border rounded-sm p-8 text-center">
-                <Package className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-                <p className="text-sm font-medium text-foreground mb-1">Unknown Status</p>
-                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                    This order is in an unknown state: {order.status}
-                </p>
+                {/* ── WRITE TAB ── */}
+                {activeTab === "write" && (
+                  <BlockStack gap="400">
+                    {/* NFC UID + Proof ID */}
+                    <InlineStack gap="400" wrap={false}>
+                      <div style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", padding: "12px", borderRadius: "8px" }}>
+                        <Text as="p" tone="subdued" variant="bodySm">NFC Tag UID</Text>
+                        <Text as="p" variant="bodySm" fontWeight="medium">
+                          <code style={{ fontFamily: "monospace" }}>{nfcUid}</code>
+                        </Text>
+                      </div>
+                      <div style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", padding: "12px", borderRadius: "8px" }}>
+                        <Text as="p" tone="subdued" variant="bodySm">Proof ID</Text>
+                        <InlineStack gap="200" blockAlign="center">
+                          <Text as="p" variant="bodySm" fontWeight="medium">
+                            <code style={{ fontFamily: "monospace" }}>{proofId}</code>
+                          </Text>
+                          {proofId !== "—" && (
+                            <button
+                              onClick={() => copyToClipboard(proofId, "proofId")}
+                              style={{ background: "none", border: "none", cursor: "pointer", padding: "2px" }}
+                              aria-label="Copy Proof ID"
+                            >
+                              <Copy size={14} />
+                            </button>
+                          )}
+                          {copiedField === "proofId" && (
+                            <Text as="span" variant="bodySm" tone="success">Copied!</Text>
+                          )}
+                        </InlineStack>
+                      </div>
+                    </InlineStack>
+
+                    {/* Warehouse GPS */}
+                    {warehouseCoords !== "—" && (
+                      <div style={{ background: "var(--p-color-bg-surface-secondary)", padding: "16px", borderRadius: "8px" }}>
+                        <Text as="p" tone="subdued" variant="bodySm">Warehouse Location</Text>
+                        <Text as="p" variant="bodySm" fontWeight="medium">
+                          Distribution Center
+                        </Text>
+                        <InlineStack gap="200" blockAlign="center">
+                          <Text as="p" variant="bodySm" tone="subdued">
+                            <code style={{ fontFamily: "monospace", fontSize: "12px" }}>{warehouseCoords}</code>
+                          </Text>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(warehouseCoords)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ fontSize: "12px", color: "var(--p-color-text-interactive)" }}
+                          >
+                            View Map
+                          </a>
+                        </InlineStack>
+                      </div>
+                    )}
+
+                    {/* Package Photos */}
+                    <PackagePhotos
+                      proofId={proofId}
+                      nfcTagUid={nfcUid}
+                      currency={order.currency}
+                      isUploading={isUploading}
+                      handleFileUpload={handleFileUpload}
+                      onLightbox={setLightboxImage}
+                    />
+                  </BlockStack>
+                )}
+
+                {/* ── TAP TAB ── */}
+                {activeTab === "tap" && (
+                  hasTapData ? (
+                    <InlineStack gap="800" wrap={false} blockAlign="start">
+                      {/* Timeline */}
+                      <div style={{ flex: 1 }}>
+                        <BlockStack gap="400">
+                          <Text as="p" tone="subdued" variant="bodySm" fontWeight="medium">Timeline</Text>
+                          <BlockStack gap="300">
+                            {/* Tapped */}
+                            {deliveryVerifiedAt && (
+                              <InlineStack gap="300" blockAlign="start">
+                                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--p-color-text)", marginTop: 4, flexShrink: 0 }} />
+                                <BlockStack gap="100">
+                                  <Text as="p" variant="bodySm" fontWeight="medium">Tapped</Text>
+                                  <Text as="p" tone="subdued" variant="bodySm">{deliveryVerifiedAt}</Text>
+                                  {deviceInfo && (
+                                    <span style={{ fontSize: "10px", padding: "2px 6px", border: "1px solid var(--p-color-border)", borderRadius: "4px" }}>
+                                      {deviceInfo}
+                                    </span>
+                                  )}
+                                </BlockStack>
+                              </InlineStack>
+                            )}
+                            {/* Location */}
+                            {deliveryCoords && (
+                              <InlineStack gap="300" blockAlign="start">
+                                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--p-color-text)", marginTop: 4, flexShrink: 0 }} />
+                                <BlockStack gap="100">
+                                  <InlineStack gap="200" blockAlign="center">
+                                    <Text as="p" variant="bodySm" fontWeight="medium">Location verified</Text>
+                                    {gpsVerdict && (
+                                      <span style={{
+                                        fontSize: "10px",
+                                        fontWeight: 700,
+                                        padding: "2px 6px",
+                                        borderRadius: "4px",
+                                        background: gpsVerdict.toLowerCase() === "match" ? "#dcfce7" : "#fee2e2",
+                                        color: gpsVerdict.toLowerCase() === "match" ? "#166534" : "#991b1b",
+                                      }}>
+                                        {gpsVerdict.toUpperCase()}
+                                      </span>
+                                    )}
+                                  </InlineStack>
+                                  {deliveryDistance && (
+                                    <Text as="p" tone="subdued" variant="bodySm">{deliveryDistance} from shipping address</Text>
+                                  )}
+                                  <Text as="p" tone="subdued" variant="bodySm">
+                                    <code style={{ fontFamily: "monospace", fontSize: "12px" }}>{deliveryCoords}</code>
+                                  </Text>
+                                </BlockStack>
+                              </InlineStack>
+                            )}
+                            {/* Confirmation */}
+                            <InlineStack gap="300" blockAlign="start">
+                              <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--p-color-border)", marginTop: 4, flexShrink: 0 }} />
+                              <BlockStack gap="100">
+                                <Text as="p" variant="bodySm" fontWeight="medium">Confirmation sent</Text>
+                                <Text as="p" tone="subdued" variant="bodySm">
+                                  Delivery record sent to {order.customerEmail || "customer"}
+                                </Text>
+                                {verifyUrl && (
+                                  <a
+                                    href={verifyUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                      fontSize: "12px",
+                                      padding: "4px 10px",
+                                      border: "1px solid var(--p-color-border)",
+                                      borderRadius: "4px",
+                                      color: "var(--p-color-text)",
+                                      textDecoration: "none",
+                                    }}
+                                  >
+                                    View Public Proof
+                                  </a>
+                                )}
+                              </BlockStack>
+                            </InlineStack>
+                          </BlockStack>
+                        </BlockStack>
+                      </div>
+
+                      {/* Tap location map */}
+                      {deliveryCoords && (
+                        <div style={{ flex: 1 }}>
+                          <BlockStack gap="200">
+                            <Text as="p" tone="subdued" variant="bodySm" fontWeight="medium">Tap Location</Text>
+                            <div style={{ background: "var(--p-color-bg-surface-secondary)", padding: "16px", borderRadius: "8px" }}>
+                              {addressLabel && (
+                                <Text as="p" variant="bodySm" tone="subdued">{addressLabel}</Text>
+                              )}
+                              <Text as="p" variant="bodySm" tone="subdued">
+                                <code style={{ fontFamily: "monospace", fontSize: "12px" }}>{deliveryCoords}</code>
+                              </Text>
+                              {/* Embedded map */}
+                              <div style={{ marginTop: "8px", height: "128px", borderRadius: "4px", overflow: "hidden" }}>
+                                <iframe
+                                  width="100%"
+                                  height="100%"
+                                  style={{ border: 0 }}
+                                  src={`https://maps.google.com/maps?q=${encodeURIComponent(deliveryCoords)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                  title="Delivery location"
+                                />
+                              </div>
+                              {deliveryDistance && (
+                                <Text as="p" variant="bodySm" tone="success">✓ {deliveryDistance} from address</Text>
+                              )}
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryCoords)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ fontSize: "12px", color: "var(--p-color-text-interactive)" }}
+                              >
+                                Open in Google Maps
+                              </a>
+                            </div>
+                          </BlockStack>
+                        </div>
+                      )}
+                    </InlineStack>
+                  ) : (
+                    <BlockStack gap="200" inlineAlign="center">
+                      <Text as="p" variant="bodySm" fontWeight="medium" tone="subdued">No tap has been recorded</Text>
+                      <Text as="p" variant="bodySm" tone="subdued">Waiting for customer to tap the NFC tag</Text>
+                    </BlockStack>
+                  )
+                )}
+              </div>
             </div>
+          </Layout.Section>
+        </Layout>
+      </Page>
+
+      {/* Lightbox */}
+      <Modal open={!!lightboxImage} onClose={() => setLightboxImage(null)} title="Package Photo">
+        <Modal.Section>
+          {lightboxImage && (
+            <img
+              src={lightboxImage}
+              alt="Package photo"
+              style={{ width: "100%", maxHeight: "80vh", objectFit: "contain" }}
+            />
           )}
-        </section>
-      </div>
-    </div>
+        </Modal.Section>
+      </Modal>
+    </>
   );
 }
 
-// Subcomponent to handle photo loading logic smoothly without reloading the entire parent
-function PackagePhotos({ proofId, nfcTagUid, isUploading, handleFileUpload }: { proofId: string, nfcTagUid?: string, isUploading: boolean, handleFileUpload: any }) {
+// ─────────────────────────────────────────────
+// Package Photos sub-component
+// fetches from /api/retrieve/:id (same logic as before)
+// ─────────────────────────────────────────────
+function PackagePhotos({
+  proofId,
+  nfcTagUid,
+  currency,
+  isUploading,
+  handleFileUpload,
+  onLightbox,
+}: {
+  proofId: string;
+  nfcTagUid?: string;
+  currency: string;
+  isUploading: boolean;
+  handleFileUpload: any;
+  onLightbox: (url: string) => void;
+}) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // INK API uses NFC tokens to fetch proofs. If we have a valid nfcTagUid, use it. Otherwise fallback to proofId
-    const lookupId = (nfcTagUid && nfcTagUid !== "—") ? nfcTagUid : proofId;
-    
+    const lookupId =
+      nfcTagUid && nfcTagUid !== "—" ? nfcTagUid : proofId;
+
     if (!lookupId || lookupId === "—") {
       setLoading(false);
       return;
     }
-    
+
     fetch(`/api/retrieve/${lookupId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.media_items && data.media_items.length > 0) {
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.media_items?.length > 0) {
           setPhotos(data.media_items.map((m: any) => m.url));
         }
         setLoading(false);
       })
-      .catch(err => {
-        console.error("Failed to load photos:", err);
-        setLoading(false);
-      });
-  }, [proofId, isUploading]); // Reload if an upload finishes
+      .catch(() => setLoading(false));
+  }, [proofId, isUploading]);
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-3">
-          <p className="text-xs text-muted-foreground">Package Photos</p>
-          <div className="relative">
-              <input 
-                 type="file" 
-                 id="photo-upload" 
-                 className="hidden" 
-                 accept="image/*"
-                 onChange={handleFileUpload}
-                 disabled={isUploading}
-              />
-              <label htmlFor="photo-upload" className="text-xs text-primary cursor-pointer flex items-center gap-1 hover:underline">
-                 <Upload className="h-3 w-3" />
-                 {isUploading ? "Uploading..." : "Upload Photo"}
-              </label>
-          </div>
-      </div>
-      
+    <BlockStack gap="300">
+      <InlineStack align="space-between" blockAlign="center">
+        <Text as="p" tone="subdued" variant="bodySm">Package Photos</Text>
+        <div style={{ position: "relative" }}>
+          <input
+            type="file"
+            id="photo-upload-odv"
+            style={{ display: "none" }}
+            accept="image/*"
+            onChange={handleFileUpload}
+            disabled={isUploading}
+          />
+          <label
+            htmlFor="photo-upload-odv"
+            style={{ fontSize: "12px", cursor: "pointer", color: "var(--p-color-text-interactive)" }}
+          >
+            {isUploading ? "Uploading..." : "↑ Upload Photo"}
+          </label>
+        </div>
+      </InlineStack>
+
       {loading ? (
-        <div className="p-8 flex justify-center text-muted-foreground">
-           <RefreshCw className="h-5 w-5 animate-spin opacity-50" />
+        <div style={{ padding: "32px", textAlign: "center" }}>
+          <Text as="p" tone="subdued" variant="bodySm">Loading photos…</Text>
         </div>
       ) : photos.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <InlineStack gap="300">
           {photos.map((url, i) => (
-            <a href={url} target="_blank" rel="noreferrer" key={i} className="aspect-square border border-border rounded-sm bg-secondary overflow-hidden hover:opacity-90 transition-opacity">
-              <img src={url} alt={`Package Proof ${i+1}`} className="w-full h-full object-cover" />
-            </a>
+            <button
+              key={i}
+              onClick={() => onLightbox(url)}
+              style={{ border: "1px solid var(--p-color-border)", borderRadius: "4px", overflow: "hidden", cursor: "pointer", background: "none", padding: 0 }}
+            >
+              <Thumbnail source={url} alt={`Package Proof ${i + 1}`} size="large" />
+            </button>
           ))}
-        </div>
+        </InlineStack>
       ) : (
-        <div className="bg-secondary/50 rounded-sm p-8 text-center border border-dashed border-border">
-          <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
-          <p className="text-xs text-muted-foreground">No photos uploaded yet</p>
+        <div style={{ background: "var(--p-color-bg-surface-secondary)", borderRadius: "8px", padding: "32px", textAlign: "center", border: "2px dashed var(--p-color-border)" }}>
+          <Text as="p" tone="subdued" variant="bodySm">No photos uploaded yet</Text>
         </div>
       )}
-    </div>
+    </BlockStack>
   );
 }

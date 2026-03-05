@@ -1,39 +1,73 @@
+import { useState } from "react";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "../ui/accordion";
+  BlockStack,
+  Card,
+  Text,
+  Collapsible,
+} from "@shopify/polaris";
 import VerificationSettings from "./VerificationSettings";
 import WebhooksSettings from "./WebhooksSettings";
 
 const AdvancedSettings = () => {
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [webhooksOpen, setWebhooksOpen] = useState(false);
+
   return (
-    <div className="space-y-2">
-      <p className="text-sm text-muted-foreground mb-6">
+    <BlockStack gap="400">
+      <Text as="p" variant="bodySm" tone="subdued">
         Configure verification thresholds and integrations.
-      </p>
+      </Text>
 
-      <Accordion type="single" collapsible className="w-full">
-        <AccordionItem value="verification" className="border-border">
-          <AccordionTrigger className="text-base font-medium hover:no-underline">
-            Verification
-          </AccordionTrigger>
-          <AccordionContent className="pt-4">
+      <Card>
+        <BlockStack gap="400">
+          <button
+            onClick={() => setVerificationOpen(!verificationOpen)}
+            style={{
+              width: "100%",
+              textAlign: "left",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: 0,
+            }}
+          >
+            <Text as="h3" variant="headingSm">Verification</Text>
+            <Text as="span" tone="subdued">{verificationOpen ? "−" : "+"}</Text>
+          </button>
+          <Collapsible open={verificationOpen} id="verification-section">
             <VerificationSettings />
-          </AccordionContent>
-        </AccordionItem>
+          </Collapsible>
+        </BlockStack>
+      </Card>
 
-        <AccordionItem value="webhooks" className="border-border">
-          <AccordionTrigger className="text-base font-medium hover:no-underline">
-            Webhooks
-          </AccordionTrigger>
-          <AccordionContent className="pt-4">
+      <Card>
+        <BlockStack gap="400">
+          <button
+            onClick={() => setWebhooksOpen(!webhooksOpen)}
+            style={{
+              width: "100%",
+              textAlign: "left",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: 0,
+            }}
+          >
+            <Text as="h3" variant="headingSm">Webhooks</Text>
+            <Text as="span" tone="subdued">{webhooksOpen ? "−" : "+"}</Text>
+          </button>
+          <Collapsible open={webhooksOpen} id="webhooks-section">
             <WebhooksSettings />
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-    </div>
+          </Collapsible>
+        </BlockStack>
+      </Card>
+    </BlockStack>
   );
 };
 

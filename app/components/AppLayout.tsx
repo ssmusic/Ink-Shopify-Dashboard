@@ -2,8 +2,6 @@ import { type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { Toaster } from "./ui/toaster";
-import Header from "./Header";
-
 interface AppLayoutProps {
   children: ReactNode;
   pageTitle?: string;
@@ -43,7 +41,6 @@ const AppLayout = ({ children, pageTitle, pageSubtitle, backTo, backLabel, onBac
       {/* Skip link for keyboard users */}
 
 
-      <Header />
       <Toaster />
 
 

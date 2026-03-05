@@ -1,283 +1,638 @@
-import { useState } from "react";
-import { X, Image, Video, Upload, Play } from "lucide-react";
+import { useState, useRef } from "react";
+import {
+  Plus,
+  Play,
+  Trash2,
+  GripVertical,
+  ChevronDown,
+  Pause,
+} from "lucide-react";
+import { Layout } from "@shopify/polaris";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
+import { Switch } from "../ui/switch";
+import { Slider } from "../ui/slider";
 import { Badge } from "../ui/badge";
 import { toast } from "../../hooks/use-toast";
-import InstructionVideos from "./InstructionVideos";
-import MediaMetadataPanel from "./MediaMetadataPanel";
-import VideoGuidelines from "./VideoGuidelines";
 
-interface MediaFile {
+interface MediaItem {
+  id: string;
   url: string;
   name: string;
-  size: string;
-  format: string;
-  lastUpdated: string;
+  type: "image" | "video";
+  duration?: string;
+  size?: string;
+  dimensions?: string;
+  uploadDate?: string;
+  isMock?: boolean;
 }
 
-const BrandingSettings = () => {
-  const [loadingImage, setLoadingImage] = useState<MediaFile | null>(null);
-  const [loadingVideo, setLoadingVideo] = useState<MediaFile | null>(null);
-  const [isDraggingImage, setIsDraggingImage] = useState(false);
-  const [isDraggingVideo, setIsDraggingVideo] = useState(false);
+const createMockItems = (): MediaItem[] => [
+  {
+    id: "mock-1",
+    url: "mock:video",
+    name: "brand_intro.mp4",
+    type: "video",
+    duration: "5s",
+    size: "1.2 MB",
+    dimensions: "1080 × 1920",
+    uploadDate: "Feb 28, 2026",
+    isMock: true,
+  },
+  {
+    id: "mock-2",
+    url: "mock:video",
+    name: "unboxing_reveal.mp4",
+    type: "video",
+    duration: "4s",
+    size: "980 KB",
+    dimensions: "1080 × 1920",
+    uploadDate: "Feb 25, 2026",
+    isMock: true,
+  },
+  {
+    id: "mock-3",
+    url: "mock:video",
+    name: "tap_tutorial.mp4",
+    type: "video",
+    duration: "6s",
+    size: "1.5 MB",
+    dimensions: "1080 × 1920",
+    uploadDate: "Feb 20, 2026",
+    isMock: true,
+  },
+  {
+    id: "mock-4",
+    url: "mock:video",
+    name: "product_showcase.mp4",
+    type: "video",
+    duration: "5s",
+    size: "1.1 MB",
+    dimensions: "1080 × 1920",
+    uploadDate: "Feb 18, 2026",
+    isMock: true,
+  },
+  {
+    id: "mock-5",
+    url: "mock:video",
+    name: "thank_you.mp4",
+    type: "video",
+    duration: "3s",
+    size: "720 KB",
+    dimensions: "1080 × 1920",
+    uploadDate: "Feb 15, 2026",
+    isMock: true,
+  },
+];
 
-  const handleDrop = (e: React.DragEvent, type: "image" | "video") => {
-    e.preventDefault();
-    if (type === "image") {
-      setIsDraggingImage(false);
+const MediaRow = ({
+  item,
+  index,
+  isExpanded,
+  onToggle,
+  onDelete,
+  onSetPrimary,
+  isPrimary,
+  dragHandlers,
+  dragState,
+  loopVideo,
+  onLoopChange,
+  duration,
+  onDurationChange,
+  onDurationCommit,
+}: {
+  item: MediaItem;
+  index: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
+  onSetPrimary: () => void;
+  isPrimary: boolean;
+  dragHandlers: {
+    onDragStart: (e: React.DragEvent) => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDrop: (e: React.DragEvent) => void;
+    onDragEnd: () => void;
+  };
+  dragState: { isDragging: boolean; isDragOver: boolean };
+  loopVideo: boolean;
+  onLoopChange: (v: boolean) => void;
+  duration: number;
+  onDurationChange: (v: number) => void;
+  onDurationCommit: () => void;
+}) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const getFileExt = (name: string) =>
+    name.split(".").pop()?.toUpperCase() || "FILE";
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
     } else {
-      setIsDraggingVideo(false);
+      videoRef.current.play();
     }
-    
-    const file = e.dataTransfer.files[0];
-    if (file) {
-      handleFileUpload(file, type);
-    }
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
-  };
-
-  const handleFileUpload = (file: File, type: "image" | "video") => {
-    if (type === "image" && !file.type.startsWith("image/")) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload an image file (PNG, JPG, or WebP).",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (type === "video" && !file.type.startsWith("video/")) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload a video file (MP4 or WebM).",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const url = URL.createObjectURL(file);
-    const mediaFile: MediaFile = {
-      url,
-      name: file.name,
-      size: formatFileSize(file.size),
-      format: file.type.split("/")[1].toUpperCase(),
-      lastUpdated: new Date().toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-    };
-
-    if (type === "image") {
-      setLoadingImage(mediaFile);
-    } else {
-      setLoadingVideo(mediaFile);
-    }
-
-    toast({
-      description: "Uploaded successfully",
-      duration: 1500,
-    });
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "video") => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleFileUpload(file, type);
-    }
-  };
-
-  const removeFile = (type: "image" | "video") => {
-    if (type === "image") {
-      setLoadingImage(null);
-    } else {
-      setLoadingVideo(null);
-    }
-    toast({
-      description: "Removed",
-      duration: 1500,
-    });
+    setIsPlaying(!isPlaying);
   };
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <p className="text-sm text-muted-foreground">
-          Customize what customers see when they tap your NFC tag.
-        </p>
-      </div>
-
-      {/* Current Loading Animation Section */}
-      <section className="space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-base font-medium text-foreground">Current Loading Animation</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              This animation displays when customers tap to verify delivery.
-            </p>
-          </div>
-          <Badge variant="outline" className="text-xs shrink-0">
-            {loadingVideo ? "Video" : loadingImage ? "Image" : "Not set"}
-          </Badge>
+    <div
+      className={`border-b border-border last:border-b-0 transition-colors ${
+        dragState.isDragOver ? "bg-muted/40" : ""
+      } ${dragState.isDragging ? "opacity-40" : ""}`}
+    >
+      {/* Row */}
+      <div
+        className="group flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={onToggle}
+      >
+        {/* Drag handle */}
+        <div
+          draggable
+          onDragStart={dragHandlers.onDragStart}
+          onDragOver={dragHandlers.onDragOver}
+          onDrop={dragHandlers.onDrop}
+          onDragEnd={dragHandlers.onDragEnd}
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 opacity-40 group-hover:opacity-70 transition-opacity"
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
         </div>
 
-        {/* Preview with metadata - responsive grid */}
-        {(loadingImage || loadingVideo) ? (
-          <div className="grid grid-cols-1 lg:grid-cols-[auto,280px] gap-4 bg-card border border-border rounded-sm overflow-hidden">
-            {/* Preview area */}
-            <div className="relative aspect-[9/16] max-h-[400px] bg-muted flex items-center justify-center">
-              {loadingVideo ? (
-                <video
-                  src={loadingVideo.url}
-                  className="w-full h-full object-cover"
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                />
-              ) : loadingImage ? (
-                <img
-                  src={loadingImage.url}
-                  alt="Loading screen"
-                  className="w-full h-full object-cover"
-                />
-              ) : null}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeFile(loadingVideo ? "video" : "image")}
-                className="absolute top-3 right-3 h-8 w-8 bg-background/80 hover:bg-background"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-              {/* Play indicator for video */}
-              {loadingVideo && (
-                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-background/80 px-2 py-1 rounded-sm">
-                  <Play className="h-3 w-3 fill-current" />
-                  <span className="text-xs font-medium">Playing</span>
-                </div>
+        {/* Thumbnail */}
+        <div className="relative w-[27px] h-[48px] bg-muted rounded-sm overflow-hidden shrink-0">
+          {item.isMock && item.type === "video" ? (
+            <div
+              className="w-full h-full"
+              style={{
+                background:
+                  "linear-gradient(160deg, hsl(0 0% 30%) 0%, hsl(0 0% 5%) 100%)",
+              }}
+            />
+          ) : item.isMock && item.type === "image" ? (
+            <div className="w-full h-full bg-muted flex items-center justify-center">
+              <span className="text-[6px] font-bold text-foreground/20">
+                ink.
+              </span>
+            </div>
+          ) : item.type === "video" ? (
+            <video
+              src={item.url}
+              className="w-full h-full object-cover"
+              muted
+              playsInline
+            />
+          ) : (
+            <img
+              src={item.url}
+              alt={item.name}
+              className="w-full h-full object-cover"
+            />
+          )}
+          {item.type === "video" && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Play className="h-2.5 w-2.5 fill-background text-background drop-shadow" />
+            </div>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0 flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-foreground truncate">{item.name}</p>
+              {isPrimary && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-1.5 py-0 h-4 shrink-0"
+                >
+                  Primary
+                </Badge>
               )}
             </div>
-
-            {/* Metadata panel */}
-            <div className="p-4 border-t lg:border-t-0 lg:border-l border-border">
-              <MediaMetadataPanel
-                fileName={(loadingVideo || loadingImage)?.name}
-                format={(loadingVideo || loadingImage)?.format}
-                fileSize={(loadingVideo || loadingImage)?.size}
-                duration={loadingVideo ? "3.2 seconds (loops)" : "—"}
-                resolution="1920 × 1080"
-                lastUpdated={(loadingVideo || loadingImage)?.lastUpdated}
-                onPreview={() => toast({ description: "Preview opened" })}
-                onDownload={() => toast({ description: "Download started" })}
-              />
-            </div>
           </div>
-        ) : (
-          <div className="bg-muted/30 border border-dashed border-border rounded-sm p-8 text-center aspect-[9/16] max-h-[400px] flex flex-col items-center justify-center">
-            <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
-              <Video className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground mb-1">No loading animation set</p>
-            <p className="text-xs text-muted-foreground">Upload an image or video below</p>
-          </div>
-        )}
-      </section>
-
-      {/* Upload New Animation Section */}
-      <section className="space-y-4">
-        <div>
-          <h3 className="text-base font-medium text-foreground">Upload New Animation</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Replace the current loading animation with a new branded video or image.
-          </p>
+          <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">
+            {getFileExt(item.name)}
+          </span>
+          {item.size && (
+            <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">
+              {item.size}
+            </span>
+          )}
+          {item.type === "video" && item.duration ? (
+            <span className="text-xs text-muted-foreground shrink-0">
+              {item.duration}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">
+              —
+            </span>
+          )}
         </div>
 
-        {/* Upload areas - stacked on mobile, side by side on larger screens */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Image Upload */}
-          <label
-            className={`flex flex-col items-center justify-center aspect-[9/16] max-h-[320px] border border-dashed rounded-sm cursor-pointer transition-colors p-6 ${
-              isDraggingImage
-                ? "border-foreground bg-muted/50"
-                : "border-border hover:border-foreground/50 hover:bg-muted/20"
-            }`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDraggingImage(true);
-            }}
-            onDragLeave={() => setIsDraggingImage(false)}
-            onDrop={(e) => handleDrop(e, "image")}
-          >
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="sr-only"
-              onChange={(e) => handleFileSelect(e, "image")}
-            />
-            <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center mb-3">
-              <Image className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-foreground font-medium mb-1">Upload Image</p>
-            <p className="text-xs text-muted-foreground text-center">
-              Drag and drop or <span className="underline">browse</span>
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WebP</p>
-          </label>
+        {/* Delete */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="shrink-0 p-1 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+          aria-label="Delete"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
 
-          {/* Video Upload */}
-          <label
-            className={`flex flex-col items-center justify-center aspect-[9/16] max-h-[320px] border border-dashed rounded-sm cursor-pointer transition-colors p-6 ${
-              isDraggingVideo
-                ? "border-foreground bg-muted/50"
-                : "border-border hover:border-foreground/50 hover:bg-muted/20"
-            }`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDraggingVideo(true);
-            }}
-            onDragLeave={() => setIsDraggingVideo(false)}
-            onDrop={(e) => handleDrop(e, "video")}
-          >
-            <input
-              type="file"
-              accept="video/mp4,video/webm"
-              className="sr-only"
-              onChange={(e) => handleFileSelect(e, "video")}
-            />
-            <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center mb-3">
-              <Video className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-foreground font-medium mb-1">Upload Video</p>
-            <p className="text-xs text-muted-foreground text-center">
-              Drag and drop or <span className="underline">browse</span>
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">MP4, WebM • Replaces image</p>
-          </label>
+        {/* Chevron */}
+        <div
+          className="shrink-0 transition-transform duration-300 ease-out"
+          style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+        >
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </div>
+      </div>
 
-        {/* Video Guidelines */}
-        <VideoGuidelines />
-      </section>
+      {/* Expanded panel */}
+      <div
+        className="overflow-hidden transition-all duration-300 ease-out"
+        style={{
+          maxHeight: isExpanded ? "600px" : "0px",
+          opacity: isExpanded ? 1 : 0,
+        }}
+      >
+        <div className="px-4 pb-4 pt-1 border-t border-border bg-muted/10">
+          {/* Preview */}
+          <div className="flex justify-center py-4">
+            {item.type === "video" ? (
+              <div className="relative w-[180px] aspect-[9/16] bg-background rounded-sm overflow-hidden border border-border">
+                {item.isMock ? (
+                  <div
+                    className="w-full h-full"
+                    style={{
+                      background:
+                        "linear-gradient(160deg, hsl(0 0% 30%) 0%, hsl(0 0% 5%) 100%)",
+                    }}
+                  >
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center backdrop-blur-sm"
+                      >
+                        <Play className="h-5 w-5 fill-background text-background ml-0.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <video
+                      ref={videoRef}
+                      src={item.url}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      loop
+                      onEnded={() => setIsPlaying(false)}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePlay();
+                        }}
+                        className="w-10 h-10 rounded-full bg-background/20 flex items-center justify-center backdrop-blur-sm transition-opacity hover:bg-background/30"
+                      >
+                        {isPlaying ? (
+                          <Pause className="h-5 w-5 fill-background text-background" />
+                        ) : (
+                          <Play className="h-5 w-5 fill-background text-background ml-0.5" />
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="max-h-[400px] overflow-hidden rounded-sm border border-border">
+                {item.isMock ? (
+                  <div className="w-[180px] aspect-[9/16] bg-muted flex items-center justify-center">
+                    <span className="text-3xl font-bold text-foreground/20">
+                      ink.
+                    </span>
+                  </div>
+                ) : (
+                  <img
+                    src={item.url}
+                    alt={item.name}
+                    className="max-h-[400px] w-auto object-contain"
+                  />
+                )}
+              </div>
+            )}
+          </div>
 
-      {/* Instruction Videos Section */}
-      <section className="pt-6 border-t border-border">
-        <InstructionVideos />
-      </section>
+          {/* Metadata */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-4">
+            <div>
+              <p className="text-muted-foreground mb-0.5">Filename</p>
+              <p className="text-foreground truncate">{item.name}</p>
+            </div>
+            {item.dimensions && (
+              <div>
+                <p className="text-muted-foreground mb-0.5">Dimensions</p>
+                <p className="text-foreground">{item.dimensions}</p>
+              </div>
+            )}
+            {item.size && (
+              <div>
+                <p className="text-muted-foreground mb-0.5">File Size</p>
+                <p className="text-foreground">{item.size}</p>
+              </div>
+            )}
+            {item.type === "video" && item.duration && (
+              <div>
+                <p className="text-muted-foreground mb-0.5">Duration</p>
+                <p className="text-foreground">{item.duration}</p>
+              </div>
+            )}
+            {item.uploadDate && (
+              <div>
+                <p className="text-muted-foreground mb-0.5">Uploaded</p>
+                <p className="text-foreground">{item.uploadDate}</p>
+              </div>
+            )}
+          </div>
 
-      {/* Save */}
-      <div className="pt-6 border-t border-border">
-        <Button className="w-full sm:w-auto bg-foreground text-background hover:bg-foreground/90">
-          Save Changes
-        </Button>
+          {/* Video Controls */}
+          {item.type === "video" && (
+            <div className="space-y-4 pt-4 border-t border-border">
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor={`loop-${item.id}`}
+                  className="text-xs font-medium text-foreground"
+                >
+                  Loop playback
+                </Label>
+                <Switch
+                  id={`loop-${item.id}`}
+                  checked={loopVideo}
+                  onCheckedChange={onLoopChange}
+                />
+              </div>
+              <div
+                className={`transition-opacity ${
+                  !loopVideo ? "opacity-50 pointer-events-none" : ""
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-xs font-medium text-foreground">
+                    Duration
+                  </Label>
+                  <span className="text-xs font-medium tabular-nums bg-muted px-1.5 py-0.5 rounded">
+                    {duration}s
+                  </span>
+                </div>
+                <Slider
+                  value={[duration]}
+                  onValueChange={(v) => onDurationChange(v[0])}
+                  onValueCommit={onDurationCommit}
+                  min={3}
+                  max={15}
+                  step={1}
+                  className="w-full mb-4"
+                  disabled={!loopVideo}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Set as Primary */}
+          {!isPrimary && (
+            <div className="pt-4 border-t border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSetPrimary();
+                }}
+                className="text-xs"
+              >
+                Set as Primary
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
+  );
+};
+
+const BrandingSettings = () => {
+  const [items, setItems] = useState<MediaItem[]>(createMockItems);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loopVideo, setLoopVideo] = useState(true);
+  const [duration, setDuration] = useState(5);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [guidelinesOpen, setGuidelinesOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (file: File) => {
+    const isVideo = file.type.startsWith("video/");
+    const isImage = file.type.startsWith("image/");
+    if (!isVideo && !isImage) {
+      toast({
+        title: "Invalid file type",
+        description:
+          "Upload an image (PNG, JPG, WebP) or video (MP4, WebM).",
+        variant: "destructive",
+      });
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const sizeKB = file.size / 1024;
+    const sizeStr =
+      sizeKB >= 1024
+        ? `${(sizeKB / 1024).toFixed(1)} MB`
+        : `${Math.round(sizeKB)} KB`;
+    const now = new Date();
+    const dateStr = now.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    setItems((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        url,
+        name: file.name,
+        type: isVideo ? "video" : "image",
+        duration: isVideo ? `${duration}s` : undefined,
+        size: sizeStr,
+        uploadDate: dateStr,
+      },
+    ]);
+    toast({ description: "Media added", duration: 1500 });
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUpload(file);
+    e.target.value = "";
+  };
+
+  const removeItem = (id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    if (expandedId === id) setExpandedId(null);
+    toast({ description: "Removed", duration: 1500 });
+  };
+
+  const setAsPrimary = (id: string) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((i) => i.id === id);
+      if (idx <= 0) return prev;
+      const updated = [...prev];
+      const [moved] = updated.splice(idx, 1);
+      updated.unshift(moved);
+      return updated;
+    });
+    toast({ description: "Set as primary", duration: 1500 });
+  };
+
+  const makeDragHandlers = (i: number) => ({
+    onDragStart: (e: React.DragEvent) => {
+      setDragIndex(i);
+      e.dataTransfer.effectAllowed = "move";
+    },
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOverIndex(i);
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragIndex !== null && dragIndex !== i) {
+        setItems((prev) => {
+          const updated = [...prev];
+          const [moved] = updated.splice(dragIndex, 1);
+          updated.splice(i, 0, moved);
+          return updated;
+        });
+      }
+      setDragIndex(null);
+      setDragOverIndex(null);
+    },
+    onDragEnd: () => {
+      setDragIndex(null);
+      setDragOverIndex(null);
+    },
+  });
+
+  return (
+    <Layout>
+      <Layout.AnnotatedSection
+        title="Loading Media"
+        description="Upload the videos and images your customers see when they tap. One is selected at random per tap, so repeat customers see variety."
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,video/mp4,video/webm"
+          className="sr-only"
+          onChange={handleFileSelect}
+        />
+
+        {/* Media List */}
+        <section className="border border-border rounded-sm">
+          {items.map((item, i) => (
+            <MediaRow
+              key={item.id}
+              item={item}
+              index={i}
+              isExpanded={expandedId === item.id}
+              onToggle={() =>
+                setExpandedId(expandedId === item.id ? null : item.id)
+              }
+              onDelete={() => removeItem(item.id)}
+              onSetPrimary={() => setAsPrimary(item.id)}
+              isPrimary={i === 0}
+              dragHandlers={makeDragHandlers(i)}
+              dragState={{
+                isDragging: dragIndex === i,
+                isDragOver: dragOverIndex === i,
+              }}
+              loopVideo={loopVideo}
+              onLoopChange={(v) => {
+                setLoopVideo(v);
+                toast({
+                  description: v ? "Loop enabled" : "Loop disabled",
+                  duration: 1500,
+                });
+              }}
+              duration={duration}
+              onDurationChange={setDuration}
+              onDurationCommit={() =>
+                toast({
+                  description: `Duration set to ${duration}s`,
+                  duration: 1500,
+                })
+              }
+            />
+          ))}
+
+          {/* Add Media row */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full flex items-center gap-3 px-3 py-3 text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+          >
+            <div className="w-5 shrink-0" />
+            <div className="w-[27px] h-[48px] border border-dashed border-border rounded-sm flex items-center justify-center shrink-0">
+              <Plus className="h-3.5 w-3.5" />
+            </div>
+            <span className="text-sm">Add Media</span>
+          </button>
+        </section>
+
+        {/* Video Guidelines */}
+        <div className="border border-border rounded-sm overflow-hidden">
+          <button
+            onClick={() => setGuidelinesOpen((v) => !v)}
+            className="flex items-center justify-between w-full p-4 bg-card hover:bg-muted/30 transition-colors"
+          >
+            <span className="text-sm font-medium text-foreground">
+              Video Guidelines
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
+                guidelinesOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+          {guidelinesOpen && (
+            <div className="border-t border-border p-4 space-y-1.5">
+              {[
+                "Format: MP4 or WebM (H.264 codec recommended)",
+                "Aspect ratio: 9:16 portrait recommended",
+                "Max file size: 2MB",
+                "Duration: 2–5 seconds (will loop continuously)",
+                "Seamless loop point recommended for best experience",
+              ].map((g, i) => (
+                <p
+                  key={i}
+                  className="text-xs text-muted-foreground flex items-start gap-2"
+                >
+                  <span className="text-muted-foreground/50 mt-px">•</span>
+                  <span>{g}</span>
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      </Layout.AnnotatedSection>
+    </Layout>
   );
 };
 

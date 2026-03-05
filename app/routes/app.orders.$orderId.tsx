@@ -25,14 +25,16 @@ import {
     Banner,
     InlineStack,
     Badge,
-    Grid,
     Divider,
-    Spinner,
+    Modal,
 } from "@shopify/polaris";
 import {
     getStagedUploadTarget,
     registerUploadedFile,
 } from "../utils/shopify-files.server";
+import PolarisAppLayout from "../components/PolarisAppLayout";
+import TapLocationCard from "../components/TapLocationCard";
+import { Copy } from "lucide-react";
 
 // Local interface for Proof since we define the structure locally
 interface Proof {
@@ -574,6 +576,8 @@ export default function OrderDetails() {
         0, 0, 0, 0,
     ]);
     const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+    const [selectedTab, setSelectedTab] = useState(0);
+    const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
     // Single fetcher used for upload; server returns ActionData
     const uploadFetcher = useFetcher<ActionData>();
@@ -746,397 +750,363 @@ export default function OrderDetails() {
     const isVerified = order.metafields.verification_status?.toLowerCase() === "verified";
     const isEnrolled = order.metafields.verification_status?.toLowerCase() === "enrolled";
 
+    const eventTabs = [
+        { id: "write", content: "Write" },
+        { id: "tap", content: "Tap" },
+    ];
+
+    const verificationStatusRaw = order.metafields.verification_status?.toLowerCase() || "pending";
+    const statusBadgeTone = (s: string) => {
+        if (s === "verified") return "success" as const;
+        if (s === "enrolled") return "warning" as const;
+        if (s === "active") return "info" as const;
+        return undefined;
+    };
+    const statusLabel = verificationStatusRaw.charAt(0).toUpperCase() + verificationStatusRaw.slice(1);
+
+    const hasTapData = verificationStatusRaw === "verified" || !!order.localProof?.gps_verdict;
+
+    // Parse delivery GPS
+    const deliveryGps = order.metafields.delivery_gps;
+    let deliveryCoords: { lat: number; lng: number } | undefined;
+    if (deliveryGps) {
+        try {
+            if (deliveryGps.startsWith("{")) {
+                const parsed = JSON.parse(deliveryGps);
+                deliveryCoords = { lat: parsed.lat, lng: parsed.lng };
+            } else {
+                const parts = deliveryGps.split(",").map((s: string) => parseFloat(s.trim()));
+                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                    deliveryCoords = { lat: parts[0], lng: parts[1] };
+                }
+            }
+        } catch {}
+    }
+
+    const fullAddress = order.shippingAddress
+        ? `${order.shippingAddress.address1}, ${order.shippingAddress.city}, ${order.shippingAddress.province} ${order.shippingAddress.zip}`
+        : "";
+    const addressLabel = order.shippingAddress
+        ? `${order.shippingAddress.city}, ${order.shippingAddress.province} ${order.shippingAddress.zip}`
+        : "";
+
+    // Photo sources: prefer localProof.photo_urls, fall back to existing previews
+    const serverPhotos: (string | null)[] = order.localProof?.photo_urls
+        ? [...order.localProof.photo_urls, null, null, null, null].slice(0, 4)
+        : [null, null, null, null];
+    const displayPhotos = photoPreviews.map((p, i) => p || serverPhotos[i]);
+
+    const copyToClipboard = (text: string, label: string) => {
+        navigator.clipboard.writeText(text).catch(() => {});
+    };
+
+    const fmt = (n: number | string, currency = order.currency) =>
+        parseFloat(String(n)).toLocaleString("en-US", { style: "currency", currency });
+
+    const subtotal = order.products.reduce(
+        (sum, p) => sum + parseFloat(p.price) * p.quantity,
+        0
+    );
+
     return (
-        <div style={{ minHeight: "100vh", background: "#ffffff" }}>
-            {/* Premium Black Hero Header */}
-            <div className="ink-hero">
-                <div className="ink-container">
-                    <h1 className="ink-hero-title">
-                        {isVerified ? "Your premium delivery is confirmed" : 
-                         isEnrolled ? "Premium delivery enrolled" :
-                         "Order Details"}
-                    </h1>
-                    <p className="ink-hero-subtitle">
-                        {isVerified ? `Delivered ${order.metafields.delivery_gps ? "and verified" : ""}` :
-                         isEnrolled ? "Awaiting customer verification" :
-                         `Order ${order.name}`}
-                    </p>
-                </div>
-            </div>
-
-            {/* Polaris Page Content with Premium Spacing */}
-            <div className="ink-container" style={{ paddingTop: "48px", paddingBottom: "48px" }}>
-                <Page>
-                    <BlockStack gap="500">
-                        {/* Header Section */}
-                        <Card>
-                            <BlockStack gap="200">
-                                <InlineStack align="space-between" blockAlign="center">
-                                    <InlineStack gap="200" blockAlign="center">
-                                        <Text variant="headingLg" as="h1">
-                                            {order.name}
-                                        </Text>
-                                        <Badge tone={badgeTone(order.financialStatus)}>
-                                            {order.financialStatus}
-                                        </Badge>
-                                <Badge tone={badgeTone(order.fulfillmentStatus)}>
-                                    {order.fulfillmentStatus || "UNFULFILLED"}
-                                </Badge>
-                            </InlineStack>
-                            <Button onClick={() => navigate("/app")}>
-                                ← Back to Dashboard
-                            </Button>
-                        </InlineStack>
-                        <span suppressHydrationWarning>
-                            <Text as="p" tone="subdued">
-                                {formatDate(order.createdAt)}
-                            </Text>
-                        </span>
-                    </BlockStack>
-                </Card>
-
-                {/* Optional global action banner */}
-                {actionData && (
-                    <Banner tone={actionData.success ? "success" : "critical"}>
-                        {actionData.message}
-                    </Banner>
-                )}
-
-                {/* Main Content Grid */}
+        <PolarisAppLayout>
+            <Page
+                title={order.name}
+                titleMetadata={
+                    <Badge tone={statusBadgeTone(verificationStatusRaw)}>{statusLabel}</Badge>
+                }
+                subtitle={formatDate(order.createdAt)}
+                backAction={{ content: "Shipments", onAction: () => navigate(-1) }}
+            >
                 <Layout>
-                    {/* Left Column */}
-                    <Layout.Section>
-                        <BlockStack gap="500">
-                            {/* Products Section */}
+                    {/* Left Column: Customer + Products */}
+                    <Layout.Section variant="oneThird">
+                        <BlockStack gap="400">
+                            {/* Customer */}
                             <Card>
-                                <BlockStack gap="400">
-                                    <Text variant="headingMd" as="h2">
-                                        Products
-                                    </Text>
-                                    <BlockStack gap="300">
-                                        {order.products.map((product, index) => (
-                                            <InlineStack
-                                                key={index}
-                                                gap="400"
-                                                blockAlign="center"
-                                            >
-                                                {product.image ? (
-                                                    <Thumbnail
-                                                        source={product.image}
-                                                        alt={product.title}
-                                                    />
-                                                ) : (
-                                                    <div
-                                                        style={{
-                                                            width: 40,
-                                                            height: 40,
-                                                            background: "#eee",
-                                                            borderRadius: 4,
-                                                            display: "flex",
-                                                            alignItems: "center",
-                                                            justifyContent: "center",
-                                                        }}
-                                                    >
-                                                        📦
-                                                    </div>
-                                                )}
-                                                <BlockStack gap="100">
-                                                    <Text
-                                                        variant="bodyMd"
-                                                        as="span"
-                                                        fontWeight="bold"
-                                                    >
-                                                        {product.title}
-                                                    </Text>
-                                                    <Text
-                                                        variant="bodySm"
-                                                        as="span"
-                                                        tone="subdued"
-                                                    >
-                                                        SKU: {product.sku}
-                                                    </Text>
-                                                    <Text
-                                                        variant="bodySm"
-                                                        as="span"
-                                                        tone="subdued"
-                                                    >
-                                                        Qty: {product.quantity}
-                                                    </Text>
-                                                </BlockStack>
-                                                <div style={{ marginLeft: "auto" }}>
-                                                    <Text
-                                                        variant="bodyMd"
-                                                        as="span"
-                                                        fontWeight="bold"
-                                                    >
-                                                        {order.currency}{" "}
-                                                        {parseFloat(product.price).toFixed(2)}
-                                                    </Text>
-                                                </div>
-                                            </InlineStack>
-                                        ))}
-                                    </BlockStack>
+                                <BlockStack gap="300">
+                                    <Text as="h3" variant="headingSm">Customer</Text>
+                                    <Text as="p" variant="bodyMd" fontWeight="medium">{order.customerName}</Text>
+                                    <Text as="p" variant="bodySm" tone="subdued">{order.customerEmail}</Text>
+                                    <Divider />
+                                    {order.shippingAddress ? (
+                                        <Text as="p" variant="bodySm" tone="subdued">
+                                            {order.shippingAddress.address1}<br />
+                                            {order.shippingAddress.address2 && <>{order.shippingAddress.address2}<br /></>}
+                                            {order.shippingAddress.city}, {order.shippingAddress.province} {order.shippingAddress.zip}<br />
+                                            {order.shippingAddress.country}
+                                        </Text>
+                                    ) : (
+                                        <Text as="p" variant="bodySm" tone="subdued">No shipping address available</Text>
+                                    )}
+                                </BlockStack>
+                            </Card>
+
+                            {/* Products */}
+                            <Card>
+                                <BlockStack gap="300">
+                                    <Text as="h3" variant="headingSm">Products</Text>
+                                    {order.products.map((product, idx) => (
+                                        <InlineStack key={idx} align="space-between" blockAlign="start">
+                                            <BlockStack gap="0">
+                                                <Text as="p" variant="bodySm" fontWeight="medium">{product.title}</Text>
+                                                <Text as="p" variant="bodySm" tone="subdued">{product.sku} × {product.quantity}</Text>
+                                            </BlockStack>
+                                            <Text as="p" variant="bodySm" fontWeight="medium">
+                                                {fmt(parseFloat(product.price) * product.quantity)}
+                                            </Text>
+                                        </InlineStack>
+                                    ))}
                                     <Divider />
                                     <InlineStack align="space-between">
-                                        <Text variant="headingMd" as="span">
-                                            Total
-                                        </Text>
-                                        <Text variant="headingMd" as="span">
-                                            {order.currency}{" "}
-                                            {parseFloat(order.totalPrice).toFixed(2)}
+                                        <Text as="span" tone="subdued" variant="bodySm">Subtotal</Text>
+                                        <Text as="span" variant="bodySm">{fmt(subtotal)}</Text>
+                                    </InlineStack>
+                                    <InlineStack align="space-between">
+                                        <Text as="span" tone="subdued" variant="bodySm">Shipping</Text>
+                                        <Text as="span" variant="bodySm">Free</Text>
+                                    </InlineStack>
+                                    <Divider />
+                                    <InlineStack align="space-between">
+                                        <Text as="span" variant="bodySm" fontWeight="semibold">Total</Text>
+                                        <Text as="span" variant="bodySm" fontWeight="semibold">
+                                            {fmt(order.totalPrice)}
                                         </Text>
                                     </InlineStack>
                                 </BlockStack>
                             </Card>
-
-                            {/* ink. Delivery Verification Section */}
-                            <Card>
-                                <BlockStack gap="400">
-                                    <Text variant="headingMd" as="h2">
-                                        ink. Delivery Verification
-                                    </Text>
-
-                                    {/* Pre-Shipment Documentation Section */}
-                                    <BlockStack gap="300">
-                                        <Text variant="headingSm" as="h3">
-                                            📦 Pre-Shipment Documentation
-                                        </Text>
-                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
-                                            <BlockStack gap="100">
-                                                <Text variant="bodySm" as="span" tone="subdued">Enrollment Status</Text>
-                                                <div>
-                                                    <Badge tone={
-                                                        order.metafields.verification_status === "Verified" ? "success" :
-                                                        order.metafields.verification_status === "Enrolled" ? "info" : 
-                                                        "warning"
-                                                    }>
-                                                        {order.metafields.verification_status === "Verified" ? "✅ Enrolled" :
-                                                         order.metafields.verification_status === "Enrolled" ? "📦 Enrolled" : 
-                                                         "🕒 Pending"}
-                                                    </Badge>
-                                                </div>
-                                            </BlockStack>
-
-                                            {order.metafields.nfc_uid && (
-                                                <BlockStack gap="100">
-                                                    <Text variant="bodySm" as="span" tone="subdued">NFC Tag UID</Text>
-                                                    <Text variant="bodyMd" as="span">
-                                                        <span style={{ fontFamily: "monospace", background: "#f1f2f3", padding: "2px 4px", borderRadius: "4px" }}>
-                                                            {order.metafields.nfc_uid}
-                                                        </span>
-                                                    </Text>
-                                                </BlockStack>
-                                            )}
-
-                                            {order.metafields.proof_reference && (
-                                                <BlockStack gap="100">
-                                                    <Text variant="bodySm" as="span" tone="subdued">Proof ID</Text>
-                                                    <InlineStack gap="100">
-                                                        <Text variant="bodyMd" as="span">
-                                                            <span style={{ fontFamily: "monospace", background: "#f1f2f3", padding: "2px 4px", borderRadius: "4px" }}>
-                                                                {order.metafields.proof_reference.substring(0, 8)}...
-                                                            </span>
-                                                        </Text>
-                                                        <Button
-                                                            variant="plain"
-                                                            size="slim"
-                                                            icon="duplicate"
-                                                            onClick={() => {
-                                                                navigator.clipboard.writeText(order.metafields.proof_reference || "");
-                                                            }}
-                                                        >
-                                                            Copy
-                                                        </Button>
-                                                    </InlineStack>
-                                                </BlockStack>
-                                            )}
-
-                                            {(order.metafields as any).warehouse_gps && (
-                                                <BlockStack gap="100">
-                                                    <Text variant="bodySm" as="span" tone="subdued">Warehouse Location</Text>
-                                                    <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                                                        {(() => {
-                                                            const gps = formatGPS((order.metafields as any).warehouse_gps);
-                                                            return gps?.url ? (
-                                                                <Button url={gps.url} external size="slim" variant="plain" textAlign="left">
-                                                                    📍 {gps.text}
-                                                                </Button>
-                                                            ) : (
-                                                                <Text variant="bodyMd" as="span">📍 {gps?.text || "N/A"}</Text>
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                </BlockStack>
-                                            )}
-                                        </div>
-
-                                        {/* Photos Section */}
-                                        {order.localProof?.photo_urls && order.localProof.photo_urls.length > 0 && (
-                                            <>
-                                                <Divider />
-                                                <BlockStack gap="200">
-                                                    <Text variant="headingSm" as="h3">Enrollment Photos</Text>
-                                                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                                                        {order.localProof.photo_urls.map((url, index) => (
-                                                            <div key={index} style={{ border: "1px solid #ddd", borderRadius: "8px", overflow: "hidden" }}>
-                                                                <a href={url} target="_blank" rel="noopener noreferrer">
-                                                                    <img 
-                                                                        src={url} 
-                                                                        alt={`Enrollment ${index + 1}`} 
-                                                                        style={{ width: "100px", height: "100px", objectFit: "cover", display: "block" }}
-                                                                    />
-                                                                </a>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </BlockStack>
-                                            </>
-                                        )}
-                                    </BlockStack>
-
-                                    {/* Delivery Confirmation Section */}
-                                    {order.localProof?.verification_status && (
-                                        <>
-                                            <Divider />
-                                            <BlockStack gap="300">
-                                                <InlineStack align="space-between">
-                                                    <Text variant="headingSm" as="h3">
-                                                        👤 Delivery Confirmation
-                                                    </Text>
-                                                    {/* {order.localProof.verify_url && (
-                                                        <Button url={order.localProof.verify_url} external size="slim">
-                                                            View Authentication Record ↗
-                                                        </Button>
-                                                    )} */}
-                                                </InlineStack>
-
-                                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
-                                                    <BlockStack gap="100">
-                                                        <Text variant="bodySm" as="span" tone="subdued">Status</Text>
-                                                        <div>
-                                                            <Badge
-                                                                tone={
-                                                                    order.localProof.verification_status === "verified"
-                                                                        ? "success"
-                                                                        : order.localProof.verification_status === "flagged"
-                                                                            ? "critical"
-                                                                            : "warning"
-                                                                }
-                                                            >
-                                                                {order.localProof.verification_status === "verified" ? (
-                                                                    "✅ VERIFIED"
-                                                                ) : order.localProof.verification_status === "flagged" ? (
-                                                                    "FLAGGED"
-                                                                ) : (
-                                                                    "🕒 Pending"
-                                                                )}
-                                                            </Badge>
-                                                        </div>
-                                                    </BlockStack>
-
-                                                    {order.localProof.verification_updated_at && (
-                                                        <BlockStack gap="100">
-                                                            <Text variant="bodySm" as="span" tone="subdued">Last Verified</Text>
-                                                            <Text variant="bodyMd" as="span">
-                                                                🕐 {formatDate(order.localProof.verification_updated_at)}
-                                                            </Text>
-                                                        </BlockStack>
-                                                    )}
-
-                                                    {order.metafields.delivery_gps && (
-                                                        <BlockStack gap="100">
-                                                            <Text variant="bodySm" as="span" tone="subdued">Delivery Location</Text>
-                                                            <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                                                                {(() => {
-                                                                    const gps = formatGPS(order.metafields.delivery_gps as string);
-                                                                    return gps?.url ? (
-                                                                        <Button url={gps.url} external size="slim" variant="plain" textAlign="left">
-                                                                            📍 {gps.text}
-                                                                        </Button>
-                                                                    ) : (
-                                                                        <Text variant="bodyMd" as="span">📍 {gps?.text || "N/A"}</Text>
-                                                                    );
-                                                                })()}
-                                                            </div>
-                                                        </BlockStack>
-                                                    )}
-                                                </div>
-                                            </BlockStack>
-                                        </>
-                                    )}
-
-                                    {!order.metafields.verification_status && !order.localProof?.verification_status && (
-                                        <Banner tone="warning">
-                                            No verification data available yet. Package needs to be enrolled at warehouse.
-                                        </Banner>
-                                    )}
-                                </BlockStack>
-                            </Card>
                         </BlockStack>
                     </Layout.Section>
 
-                    {/* Right Column */}
-                    <Layout.Section variant="oneThird">
-                        <BlockStack gap="500">
-                            <Card>
-                                <BlockStack gap="400">
-                                    <Text variant="headingMd" as="h2">
-                                        Customer
-                                    </Text>
-                                    <BlockStack gap="200">
-                                        <Text variant="bodyMd" as="p" fontWeight="bold">
-                                            {order.customerName}
-                                        </Text>
-                                        <Text variant="bodyMd" as="p" tone="subdued">
-                                            {order.customerEmail}
-                                        </Text>
-                                        <Text variant="bodyMd" as="p" tone="subdued">
-                                            {order.customerPhone}
-                                        </Text>
-                                    </BlockStack>
-                                </BlockStack>
-                            </Card>
+                    {/* Right Column: Events (Write / Tap) */}
+                    <Layout.Section>
+                        <div style={{ border: "1px solid var(--p-color-border)", borderRadius: "0" }}>
+                            {/* Folder-style tabs */}
+                            <div style={{
+                                display: "flex",
+                                alignItems: "flex-end",
+                                background: "var(--p-color-bg-surface-secondary)",
+                                padding: "0 16px",
+                            }}>
+                                <div style={{ display: "flex", gap: "0", alignItems: "flex-end", paddingTop: "8px" }}>
+                                    {eventTabs.map((tab, i) => (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setSelectedTab(i)}
+                                            style={{
+                                                padding: "8px 16px",
+                                                fontSize: "13px",
+                                                fontWeight: 500,
+                                                cursor: "pointer",
+                                                border: "1px solid var(--p-color-border)",
+                                                borderBottom: selectedTab === i ? "1px solid var(--p-color-bg-surface)" : "1px solid var(--p-color-border)",
+                                                background: selectedTab === i ? "var(--p-color-bg-surface)" : "transparent",
+                                                color: selectedTab === i ? "var(--p-color-text)" : "var(--p-color-text-secondary)",
+                                                marginBottom: "-1px",
+                                                borderRadius: "0",
+                                                position: "relative",
+                                                zIndex: selectedTab === i ? 2 : 1,
+                                            }}
+                                        >
+                                            {tab.content}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div style={{ borderTop: "1px solid var(--p-color-border)" }} />
 
-                            <Card>
-                                <BlockStack gap="400">
-                                    <Text variant="headingMd" as="h2">
-                                        Shipping Address
-                                    </Text>
-                                    {order.shippingAddress ? (
-                                        <BlockStack gap="100">
-                                            <Text as="p">
-                                                {order.shippingAddress.address1}
-                                            </Text>
-                                            {order.shippingAddress.address2 && (
-                                                <Text as="p">
-                                                    {order.shippingAddress.address2}
+                            {/* Tab content */}
+                            <div style={{ padding: "16px", background: "var(--p-color-bg-surface)" }}>
+                                {/* Write Tab */}
+                                {selectedTab === 0 && (
+                                    <BlockStack gap="400">
+                                        {/* NFC Tag & Proof ID */}
+                                        <InlineStack gap="400" wrap={false}>
+                                            <div style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", padding: "12px", borderRadius: "8px" }}>
+                                                <Text as="p" tone="subdued" variant="bodySm">NFC Tag UID</Text>
+                                                <Text as="p" variant="bodySm" fontWeight="medium">
+                                                    <code style={{ fontFamily: "monospace" }}>{order.metafields.nfc_uid || "—"}</code>
                                                 </Text>
-                                            )}
-                                            <Text as="p">
-                                                {order.shippingAddress.city},{" "}
-                                                {order.shippingAddress.province}{" "}
-                                                {order.shippingAddress.zip}
-                                            </Text>
-                                            <Text as="p">
-                                                {order.shippingAddress.country}
-                                            </Text>
+                                            </div>
+                                            <div style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", padding: "12px", borderRadius: "8px" }}>
+                                                <Text as="p" tone="subdued" variant="bodySm">Proof ID</Text>
+                                                <InlineStack gap="200" blockAlign="center">
+                                                    <Text as="p" variant="bodySm" fontWeight="medium">
+                                                        <code style={{ fontFamily: "monospace" }}>{order.metafields.proof_reference || "—"}</code>
+                                                    </Text>
+                                                    {order.metafields.proof_reference && (
+                                                        <button
+                                                            onClick={() => copyToClipboard(order.metafields.proof_reference!, "Proof ID")}
+                                                            style={{ background: "none", border: "none", cursor: "pointer", padding: "2px" }}
+                                                            aria-label="Copy Proof ID"
+                                                        >
+                                                            <Copy size={14} />
+                                                        </button>
+                                                    )}
+                                                </InlineStack>
+                                            </div>
+                                        </InlineStack>
+
+                                        {/* Warehouse GPS */}
+                                        {(order.metafields as any).warehouse_gps && (
+                                            <div style={{ background: "var(--p-color-bg-surface-secondary)", padding: "16px", borderRadius: "8px" }}>
+                                                <Text as="p" tone="subdued" variant="bodySm">Warehouse GPS</Text>
+                                                <Text as="p" variant="bodySm" fontWeight="medium">
+                                                    <code style={{ fontFamily: "monospace", fontSize: "12px" }}>{(order.metafields as any).warehouse_gps}</code>
+                                                </Text>
+                                            </div>
+                                        )}
+
+                                        {/* Package Photos */}
+                                        <BlockStack gap="200">
+                                            <Text as="p" tone="subdued" variant="bodySm">Package Photos</Text>
+                                            <InlineStack gap="300">
+                                                {displayPhotos.map((photo, i) => (
+                                                    <div key={i} style={{ position: "relative" }}>
+                                                        {photo ? (
+                                                            <button
+                                                                onClick={() => setLightboxImage(photo)}
+                                                                style={{ border: "1px solid var(--p-color-border)", borderRadius: "4px", overflow: "hidden", cursor: "pointer", background: "none", padding: 0 }}
+                                                            >
+                                                                <Thumbnail source={photo} alt={`Package photo ${i + 1}`} size="large" />
+                                                            </button>
+                                                        ) : (
+                                                            <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "80px", height: "80px", border: "2px dashed var(--p-color-border)", borderRadius: "4px", cursor: "pointer", background: "var(--p-color-bg-surface-secondary)" }}>
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    style={{ display: "none" }}
+                                                                    onChange={(e) => handleFileSelect(i, e.target.files?.[0] || null)}
+                                                                />
+                                                                <Text as="p" variant="bodySm" tone="subdued">+</Text>
+                                                            </label>
+                                                        )}
+                                                        {photoPreviews[i] && uploadStatus[i] === "idle" && (
+                                                            <div style={{ marginTop: "4px" }}>
+                                                                <Button size="slim" onClick={() => handleUploadPhoto(i)}>
+                                                                    Upload
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                        {uploadingIndex === i && (
+                                                            <div style={{ marginTop: "4px" }}>
+                                                                <Button size="slim" loading disabled>
+                                                                    Uploading...
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                        {uploadStatus[i] === "success" && (
+                                                            <Text as="p" variant="bodySm" tone="success">✓</Text>
+                                                        )}
+                                                        {uploadStatus[i] === "error" && (
+                                                            <Button size="slim" onClick={() => handleRetryUpload(i)}>Retry</Button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </InlineStack>
                                         </BlockStack>
-                                    ) : (
-                                        <Text as="p" tone="subdued">
-                                            No shipping address available
-                                        </Text>
-                                    )}
-                                </BlockStack>
-                            </Card>
-                        </BlockStack>
+                                    </BlockStack>
+                                )}
+
+                                {/* Tap Tab */}
+                                {selectedTab === 1 && (
+                                    <>
+                                        {hasTapData ? (
+                                            <InlineStack gap="800" wrap={false} blockAlign="start">
+                                                {/* Timeline */}
+                                                <div style={{ flex: 1 }}>
+                                                    <BlockStack gap="400">
+                                                        <Text as="p" tone="subdued" variant="bodySm" fontWeight="medium">Timeline</Text>
+                                                        <BlockStack gap="300">
+                                                            {order.localProof?.verification_updated_at && (
+                                                                <InlineStack gap="300" blockAlign="start">
+                                                                    <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--p-color-text)", marginTop: "4px", flexShrink: 0 }} />
+                                                                    <BlockStack gap="100">
+                                                                        <Text as="p" variant="bodySm" fontWeight="medium">Tapped</Text>
+                                                                        <Text as="p" tone="subdued" variant="bodySm">{order.localProof.verification_updated_at}</Text>
+                                                                    </BlockStack>
+                                                                </InlineStack>
+                                                            )}
+                                                            {order.localProof?.distance_meters != null && (
+                                                                <InlineStack gap="300" blockAlign="start">
+                                                                    <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--p-color-text)", marginTop: "4px", flexShrink: 0 }} />
+                                                                    <BlockStack gap="100">
+                                                                        <Text as="p" variant="bodySm" fontWeight="medium">Location verified</Text>
+                                                                        <Text as="p" tone="subdued" variant="bodySm">
+                                                                            {order.localProof.distance_meters}m from shipping address
+                                                                        </Text>
+                                                                        {deliveryCoords && (
+                                                                            <Text as="p" tone="subdued" variant="bodySm">
+                                                                                <code style={{ fontFamily: "monospace", fontSize: "12px" }}>
+                                                                                    {deliveryCoords.lat.toFixed(4)}, {deliveryCoords.lng.toFixed(4)}
+                                                                                </code>
+                                                                            </Text>
+                                                                        )}
+                                                                    </BlockStack>
+                                                                </InlineStack>
+                                                            )}
+                                                            <InlineStack gap="300" blockAlign="start">
+                                                                <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--p-color-border)", marginTop: "4px", flexShrink: 0 }} />
+                                                                <BlockStack gap="100">
+                                                                    <Text as="p" variant="bodySm" fontWeight="medium">Confirmation sent</Text>
+                                                                    <Text as="p" tone="subdued" variant="bodySm">
+                                                                        Delivery record sent to {order.customerEmail}
+                                                                    </Text>
+                                                                </BlockStack>
+                                                            </InlineStack>
+                                                        </BlockStack>
+                                                    </BlockStack>
+                                                </div>
+                                                {/* Map */}
+                                                {deliveryCoords && (
+                                                    <div style={{ flex: 1 }}>
+                                                        <BlockStack gap="200">
+                                                            <Text as="p" tone="subdued" variant="bodySm" fontWeight="medium">Tap Location</Text>
+                                                            <TapLocationCard
+                                                                lat={deliveryCoords.lat}
+                                                                lng={deliveryCoords.lng}
+                                                                address={addressLabel}
+                                                                fullAddress={fullAddress}
+                                                                distanceFromAddress={order.localProof?.distance_meters != null ? `${order.localProof.distance_meters}m` : undefined}
+                                                            />
+                                                        </BlockStack>
+                                                    </div>
+                                                )}
+                                            </InlineStack>
+                                        ) : (
+                                            <BlockStack gap="200" inlineAlign="center">
+                                                <Text as="p" variant="bodySm" fontWeight="medium" tone="subdued">No tap has been recorded</Text>
+                                                <Text as="p" variant="bodySm" tone="subdued">Waiting for customer to tap the NFC tag</Text>
+                                            </BlockStack>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
                     </Layout.Section>
                 </Layout>
-                    </BlockStack>
-                </Page>
-            </div>
-        </div>
+            </Page>
+
+            {/* Lightbox */}
+            <Modal
+                open={!!lightboxImage}
+                onClose={() => setLightboxImage(null)}
+                title="Package Photo"
+            >
+                <Modal.Section>
+                    {lightboxImage && (
+                        <img
+                            src={lightboxImage}
+                            alt="Package photo"
+                            style={{ width: "100%", maxHeight: "80vh", objectFit: "contain" }}
+                        />
+                    )}
+                </Modal.Section>
+            </Modal>
+        </PolarisAppLayout>
     );
 }
+
 
 export function ErrorBoundary() {
     const error = useRouteError();

@@ -1,150 +1,221 @@
-import { useState } from "react";
-import { Checkbox } from "../ui/checkbox";
-import { Label } from "../ui/label";
+import { useState, useCallback } from "react";
+import {
+  BlockStack,
+  Card,
+  Text,
+  InlineStack,
+  Checkbox,
+  Select,
+  Divider,
+  Layout,
+} from "@shopify/polaris";
 import { toast } from "../../hooks/use-toast";
 
 const CommunicationSettings = () => {
-  const [settings, setSettings] = useState({
-    sendOnTap: true,
-    sendIfNoTap: false,
-    reminderBeforeDelivery: false,
-    reminder24h: true,
-    reminder72h: false,
-    reminder7d: false,
+  const [channels, setChannels] = useState({ email: true, sms: false });
+  const [delivery, setDelivery] = useState({
+    outForDelivery: true,
+    delivered: true,
+    deliveryConfirmed: false,
   });
+  const [reminders, setReminders] = useState({
+    hours4: true,
+    hours24: true,
+    hours48: false,
+  });
+  const [returnReminders, setReturnReminders] = useState({
+    days7: true,
+    hours48: false,
+  });
+  const [returnWindow, setReturnWindow] = useState("30");
 
-  const handleToggle = (key: keyof typeof settings) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
-    toast({
-      description: "Saved",
-      duration: 1500,
+  const toggle = <T extends Record<string, boolean>>(
+    setter: React.Dispatch<React.SetStateAction<T>>,
+    key: keyof T,
+    label: string
+  ) => {
+    setter((prev) => {
+      const newVal = !prev[key];
+      toast({
+        description: `${label} ${newVal ? "enabled" : "disabled"}`,
+        duration: 1500,
+      });
+      return { ...prev, [key]: newVal };
     });
   };
 
+  const ToggleRow = ({
+    checked,
+    onToggle,
+    title,
+    description,
+  }: {
+    checked: boolean;
+    onToggle: () => void;
+    title: string;
+    description: string;
+  }) => (
+    <InlineStack align="space-between" blockAlign="start" wrap={false}>
+      <BlockStack gap="100">
+        <Text as="p" variant="bodySm" fontWeight="medium">{title}</Text>
+        <Text as="p" tone="subdued" variant="bodySm">{description}</Text>
+      </BlockStack>
+      <Checkbox label="" checked={checked} onChange={onToggle} />
+    </InlineStack>
+  );
+
   return (
-    <div className="space-y-8">
-      {/* Delivery Record Emails */}
-      <div>
-        <h3 className="text-base font-medium text-foreground mb-1">Delivery Records</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Automatically email customers their verification record.
-        </p>
-        
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="sendOnTap"
-              checked={settings.sendOnTap}
-              onCheckedChange={() => handleToggle("sendOnTap")}
-              className="mt-0.5"
+    <Layout>
+      <Layout.AnnotatedSection
+        title="Notification Channel"
+        description="How customers receive notifications about their deliveries."
+      >
+        <Card>
+          <BlockStack gap="400">
+            <ToggleRow
+              checked={channels.email}
+              onToggle={() => toggle(setChannels, "email", "Email notifications")}
+              title="Email"
+              description="Send notifications via email."
             />
-            <div>
-              <Label htmlFor="sendOnTap" className="text-sm font-medium text-foreground cursor-pointer">
-                Send when customer taps
-              </Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Email the delivery record immediately after verification.
-              </p>
-            </div>
-          </div>
+            <Divider />
+            <ToggleRow
+              checked={channels.sms}
+              onToggle={() => toggle(setChannels, "sms", "SMS notifications")}
+              title="SMS"
+              description="Send notifications via text message."
+            />
+            <Text as="p" tone="subdued" variant="bodySm">
+              Requires customer phone number from Shopify order.
+            </Text>
+          </BlockStack>
+        </Card>
+      </Layout.AnnotatedSection>
 
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="sendIfNoTap"
-              checked={settings.sendIfNoTap}
-              onCheckedChange={() => handleToggle("sendIfNoTap")}
-              className="mt-0.5"
+      <Layout.AnnotatedSection
+        title="Delivery Notifications"
+        description="Messages sent to customers during the delivery process."
+      >
+        <Card>
+          <BlockStack gap="400">
+            <ToggleRow
+              checked={delivery.outForDelivery}
+              onToggle={() =>
+                toggle(setDelivery, "outForDelivery", "Out for delivery")
+              }
+              title="Out for delivery"
+              description="Notify when carrier scan shows package is out for delivery."
             />
-            <div>
-              <Label htmlFor="sendIfNoTap" className="text-sm font-medium text-foreground cursor-pointer">
-                Send even if not tapped
-              </Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Email the record when package is marked delivered by carrier.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+            <Divider />
+            <ToggleRow
+              checked={delivery.delivered}
+              onToggle={() =>
+                toggle(setDelivery, "delivered", "Delivered notification")
+              }
+              title="Delivered"
+              description="Notify when carrier confirms delivery. Includes tap instructions."
+            />
+            <Divider />
+            <ToggleRow
+              checked={delivery.deliveryConfirmed}
+              onToggle={() =>
+                toggle(setDelivery, "deliveryConfirmed", "Delivery confirmed")
+              }
+              title="Delivery confirmed"
+              description="Confirmation sent after customer taps."
+            />
+          </BlockStack>
+        </Card>
+      </Layout.AnnotatedSection>
 
-      {/* Tap Reminders */}
-      <div>
-        <h3 className="text-base font-medium text-foreground mb-1">Tap Reminders</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Remind customers to tap their package if they haven't yet.
-        </p>
-        
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="reminderBeforeDelivery"
-              checked={settings.reminderBeforeDelivery}
-              onCheckedChange={() => handleToggle("reminderBeforeDelivery")}
-              className="mt-0.5"
+      <Layout.AnnotatedSection
+        title="Tap Reminders"
+        description="Sent if the customer hasn't tapped. Reminders stop once the customer taps."
+      >
+        <Card>
+          <BlockStack gap="400">
+            <ToggleRow
+              checked={reminders.hours4}
+              onToggle={() => toggle(setReminders, "hours4", "4-hour reminder")}
+              title="4 hours after delivery"
+              description="First reminder."
             />
-            <div>
-              <Label htmlFor="reminderBeforeDelivery" className="text-sm font-medium text-foreground cursor-pointer">
-                Before delivery
-              </Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Notify customer when package is out for delivery.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="reminder24h"
-              checked={settings.reminder24h}
-              onCheckedChange={() => handleToggle("reminder24h")}
-              className="mt-0.5"
+            <Divider />
+            <ToggleRow
+              checked={reminders.hours24}
+              onToggle={() =>
+                toggle(setReminders, "hours24", "24-hour reminder")
+              }
+              title="24 hours after delivery"
+              description="Second reminder."
             />
-            <div>
-              <Label htmlFor="reminder24h" className="text-sm font-medium text-foreground cursor-pointer">
-                24 hours after delivery
-              </Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                First reminder if customer hasn't tapped.
-              </p>
-            </div>
-          </div>
+            <Divider />
+            <ToggleRow
+              checked={reminders.hours48}
+              onToggle={() =>
+                toggle(setReminders, "hours48", "48-hour reminder")
+              }
+              title="48 hours after delivery"
+              description="Final tap reminder."
+            />
+          </BlockStack>
+        </Card>
+      </Layout.AnnotatedSection>
 
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="reminder72h"
-              checked={settings.reminder72h}
-              onCheckedChange={() => handleToggle("reminder72h")}
-              className="mt-0.5"
+      <Layout.AnnotatedSection
+        title="Return Window Reminders"
+        description="Sent to verified customers as their return window approaches closing."
+      >
+        <Card>
+          <BlockStack gap="400">
+            <ToggleRow
+              checked={returnReminders.days7}
+              onToggle={() =>
+                toggle(setReturnReminders, "days7", "7-day return reminder")
+              }
+              title="7 days before return window closes"
+              description="Early reminder. Includes return link."
             />
-            <div>
-              <Label htmlFor="reminder72h" className="text-sm font-medium text-foreground cursor-pointer">
-                3 days after delivery
-              </Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Follow-up reminder for unverified packages.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="reminder7d"
-              checked={settings.reminder7d}
-              onCheckedChange={() => handleToggle("reminder7d")}
-              className="mt-0.5"
+            <Divider />
+            <ToggleRow
+              checked={returnReminders.hours48}
+              onToggle={() =>
+                toggle(setReturnReminders, "hours48", "48-hour return reminder")
+              }
+              title="48 hours before return window closes"
+              description='"Your return window closes in 2 days."'
             />
-            <div>
-              <Label htmlFor="reminder7d" className="text-sm font-medium text-foreground cursor-pointer">
-                7 days after delivery
-              </Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Final reminder before closing the verification window.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+          </BlockStack>
+        </Card>
+      </Layout.AnnotatedSection>
 
-    </div>
+      <Layout.AnnotatedSection
+        title="Return Window"
+        description="How long customers have to initiate a return after delivery."
+      >
+        <Card>
+          <Select
+            label=""
+            labelHidden
+            value={returnWindow}
+            onChange={(v) => {
+              setReturnWindow(v);
+              toast({
+                description: `Return window set to ${v} days`,
+                duration: 1500,
+              });
+            }}
+            options={[
+              { label: "14 days", value: "14" },
+              { label: "30 days", value: "30" },
+              { label: "45 days", value: "45" },
+              { label: "60 days", value: "60" },
+              { label: "90 days", value: "90" },
+            ]}
+          />
+        </Card>
+      </Layout.AnnotatedSection>
+    </Layout>
   );
 };
 

@@ -1,14 +1,17 @@
-import AppLayout from "../AppLayout";
+import { Page } from "@shopify/polaris";
+import PolarisAppLayout from "../PolarisAppLayout";
 import AdvancedSettings from "./AdvancedSettings";
 
 const SettingsAdvanced = () => {
   return (
-    <AppLayout pageTitle="Advanced Settings" backTo="/app/settings" backLabel="Back to Settings">
-      {/* Content */}
-      <div className="bg-card border border-border rounded-sm p-5 sm:p-8">
+    <PolarisAppLayout>
+      <Page
+        title="Advanced Settings"
+        backAction={{ content: "Settings", url: "/app/settings" }}
+      >
         <AdvancedSettings />
-      </div>
-    </AppLayout>
+      </Page>
+    </PolarisAppLayout>
   );
 };
 

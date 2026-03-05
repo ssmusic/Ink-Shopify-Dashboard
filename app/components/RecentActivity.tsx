@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
-import { LifecycleBadge, type LifecycleState } from "./ui/lifecycle-badge";
-import { useDoubleTap } from "../hooks/use-double-tap";
+import { Link, useNavigate } from "react-router-dom";
+import { LifecycleBadge, type LifecycleState } from "~/components/ui/lifecycle-badge";
+import { useDoubleTap } from "~/hooks/use-double-tap";
 
 interface ActivityItem {
   orderNumber: string;
@@ -23,10 +23,9 @@ const RecentActivity = () => {
   const navigate = useNavigate();
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
 
-  const handleDoubleTap = useDoubleTap<string>((orderNumber) => {
+  const handleDoubleTap = useDoubleTap<string>((orderNumber: string) => {
     setSelectedOrder(orderNumber);
-    // Corrected route to match our app structure
-    navigate(`/app/tagged-shipments/${orderNumber}`);
+    navigate(`/shipments/${orderNumber}`);
   }, 450); // 450ms window for double-tap
 
   const handleRowClick = (orderNumber: string) => {
@@ -102,7 +101,7 @@ const RecentActivity = () => {
       {/* View All Link */}
       <div className="flex justify-end mt-4">
         <Link
-          to="/app/tagged-shipments"
+          to="/shipments"
           className="text-sm text-foreground hover:underline focus-visible:underline"
           aria-label="View all orders"
         >

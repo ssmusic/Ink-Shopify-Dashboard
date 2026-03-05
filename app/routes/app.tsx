@@ -12,6 +12,13 @@ import translations from "@shopify/polaris/locales/en.json";
 
 import { getMerchant } from "../services/merchant.server";
 
+import { Toaster } from "../components/ui/toaster";
+import { Toaster as Sonner } from "../components/ui/sonner";
+import { TooltipProvider } from "../components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);
@@ -96,22 +103,27 @@ export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
 
   return (
-    <ShopifyAppProvider embedded apiKey={apiKey}>
-      <PolarisAppProvider i18n={translations}>
-        <ShopProvider>
-          <NavMenu>
-            <Link to="/app" rel="home">Home</Link>
-            <Link to="/app/dashboard">Dashboard</Link>
-            <Link to="/app/tagged-shipments">Tagged Shipments</Link>
-            <Link to="/app/help">Help</Link>
-            <Link to="/app/settings">Settings</Link>
-            <Link to="/app/reorder-tags">Reorder Tags</Link>
-            <Link to="/app/debug">Debug</Link>
-          </NavMenu>
-          <Outlet />
-        </ShopProvider>
-      </PolarisAppProvider>
-    </ShopifyAppProvider>
+    <QueryClientProvider client={queryClient}>
+      <ShopifyAppProvider embedded apiKey={apiKey}>
+        <PolarisAppProvider i18n={translations}>
+          <ShopProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <NavMenu>
+                <Link to="/app/dashboard">Dashboard</Link>
+                <Link to="/app/tagged-shipments">Shipments</Link>
+                <Link to="/app/settings">Settings</Link>
+                <Link to="/app/settings/advanced">Advanced Settings</Link>
+                <Link to="/app/billing">Billing</Link>
+                <Link to="/app/help">Help</Link>
+              </NavMenu>
+              <Outlet />
+            </TooltipProvider>
+          </ShopProvider>
+        </PolarisAppProvider>
+      </ShopifyAppProvider>
+    </QueryClientProvider>
   );
 }
 

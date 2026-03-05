@@ -11,10 +11,10 @@ interface EngagementFunnelProps {
 }
 
 const defaultSteps: FunnelStep[] = [
-  { label: "Enrolled", count: 1247, color: "bg-foreground" },
-  { label: "Active", count: 1089, color: "bg-foreground/80" },
-  { label: "Verified", count: 843, color: "bg-foreground/60" },
-  { label: "Expired", count: 158, color: "bg-foreground/25" },
+  { label: "Enrolled", count: 1247, color: "bg-amber-500" },
+  { label: "Active", count: 1089, color: "bg-blue-500" },
+  { label: "Verified", count: 843, color: "bg-emerald-500" },
+  { label: "Expired", count: 158, color: "bg-gray-400" },
 ];
 
 const EngagementFunnel = ({ steps = defaultSteps }: EngagementFunnelProps) => {
@@ -65,7 +65,7 @@ const EngagementFunnel = ({ steps = defaultSteps }: EngagementFunnelProps) => {
                     className={`h-8 ${step.color} rounded-sm flex items-center justify-end pr-3 transition-all`}
                     style={{ width: `${widthPercent}%` }}
                   >
-                    <span className="text-xs font-semibold text-background tabular-nums">
+                    <span className="text-xs font-semibold text-white tabular-nums">
                       {step.count.toLocaleString()}
                     </span>
                   </div>

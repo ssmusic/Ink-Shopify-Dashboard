@@ -1,5 +1,5 @@
-import { Link } from "react-router";
-import { Button } from "./ui/button";
+import { Link } from "react-router-dom";
+import { Button } from "~/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 
 interface NFCTagInventoryProps {
@@ -97,7 +97,7 @@ const NFCTagInventory = ({ remaining = 87, total = 100 }: NFCTagInventoryProps) 
             : "border-border hover:border-foreground"
         }`}
       >
-        <Link to="/app/reorder-tags">
+        <Link to="/settings?tab=tags">
           {isCriticalInventory ? "Reorder Now" : "Reorder Tags"}
         </Link>
       </Button>

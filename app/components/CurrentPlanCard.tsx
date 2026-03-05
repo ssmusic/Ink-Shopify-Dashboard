@@ -1,4 +1,4 @@
-import { Package, Smartphone, DollarSign, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 
 interface CurrentPlanCardProps {
   enrollments?: number;
@@ -29,13 +29,16 @@ const CurrentPlanCard = ({
 }: CurrentPlanCardProps) => {
   const enrollmentRevenue = enrollments * enrollmentRate;
   const tapRevenue = taps * tapRate;
-  const totalInkCharges = enrollmentRevenue + tapRevenue;
+  const totalInkCharges = enrollmentRevenue + tapRevenue + tagsCost;
   const tapPercent = enrollments > 0 ? ((taps / enrollments) * 100).toFixed(0) : "0";
+
+  const fmt = (n: number) =>
+    `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div className={`bg-card border border-border rounded-sm overflow-hidden ${className}`}>
       {/* Header */}
-      <div className="p-4 sm:p-5 border-b border-border">
+      <div className="px-5 py-4 border-b border-border">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3">
             <p className="text-sm font-medium text-foreground">Billing Summary</p>
@@ -49,63 +52,46 @@ const CurrentPlanCard = ({
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border">
-        {/* Left: Usage */}
-        <div className="p-4 sm:p-5 space-y-4">
-          {/* Enrollments */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Package className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-foreground font-medium">{enrollments.toLocaleString()} enrollments</p>
-                <p className="text-xs text-muted-foreground">@ ${enrollmentRate.toFixed(2)} each</p>
-              </div>
-            </div>
-            <span className="text-sm font-semibold text-foreground">${enrollmentRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+      {/* Body */}
+      <div className="px-5 py-4 space-y-3">
+        {/* Enrollments */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-foreground">{enrollments.toLocaleString()} enrollments</p>
+            <p className="text-xs text-muted-foreground">@ ${enrollmentRate.toFixed(2)} each</p>
           </div>
-
-          {/* Taps */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Smartphone className="h-4 w-4 text-muted-foreground" />
-              <div>
-              <p className="text-sm text-foreground font-medium">{taps.toLocaleString()} verified engagements</p>
-                <p className="text-xs text-muted-foreground">@ ${tapRate.toFixed(2)} each • {tapPercent}% engagement rate</p>
-              </div>
-            </div>
-            <span className="text-sm font-semibold text-foreground">${tapRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-
-          {/* Tags (pass-through) */}
-          <div className="flex items-center justify-between pt-3 border-t border-border">
-            <div>
-              <p className="text-xs text-muted-foreground">Tags (pass-through @ ${tagRate.toFixed(2)})</p>
-            </div>
-            <span className="text-xs text-muted-foreground">${tagsCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
+          <span className="text-sm text-foreground">{fmt(enrollmentRevenue)}</span>
         </div>
 
-        {/* Right: Billing info + total */}
-        <div className="p-4 sm:p-5 space-y-3">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Payment Method</span>
-            <span className="text-foreground font-medium">{paymentMethod}</span>
+        {/* Verified engagements */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-foreground">{taps.toLocaleString()} verified engagements</p>
+            <p className="text-xs text-muted-foreground">@ ${tapRate.toFixed(2)} each • {tapPercent}% engagement rate</p>
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Next Invoice</span>
-            <span className="text-foreground font-medium">{nextInvoice}</span>
+          <span className="text-sm text-foreground">{fmt(tapRevenue)}</span>
+        </div>
+
+        {/* Tags pass-through */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-foreground">Tags (pass-through)</p>
+            <p className="text-xs text-muted-foreground">@ ${tagRate.toFixed(2)} each</p>
           </div>
-          <div className="pt-3 border-t border-border">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Total INK Charges</span>
-              </div>
-              <span className="text-lg font-semibold text-foreground">
-                ${totalInkCharges.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
+          <span className="text-sm text-foreground">{fmt(tagsCost)}</span>
+        </div>
+
+        {/* Total */}
+        <div className="flex items-center justify-between pt-3 border-t border-border">
+          <p className="text-sm font-semibold text-foreground">Total INK Charges</p>
+          <span className="text-sm font-semibold text-foreground">{fmt(totalInkCharges)}</span>
+        </div>
+
+        {/* Payment & Invoice */}
+        <div className="flex items-center justify-between pt-3 border-t border-border">
+          <div className="flex items-center gap-4">
+            <p className="text-xs text-muted-foreground">Payment Method <span className="text-foreground font-medium">{paymentMethod}</span></p>
+            <p className="text-xs text-muted-foreground">Next Invoice <span className="text-foreground font-medium">{nextInvoice}</span></p>
           </div>
         </div>
       </div>
