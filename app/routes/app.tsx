@@ -110,14 +110,6 @@ export default function App() {
             <TooltipProvider>
               <Toaster />
               <Sonner />
-              <NavMenu>
-                <Link to="/app/dashboard">Dashboard</Link>
-                <Link to="/app/tagged-shipments">Shipments</Link>
-                <Link to="/app/settings">Settings</Link>
-                <Link to="/app/settings/advanced">Advanced Settings</Link>
-                <Link to="/app/billing">Billing</Link>
-                <Link to="/app/help">Help</Link>
-              </NavMenu>
               <Outlet />
             </TooltipProvider>
           </ShopProvider>
