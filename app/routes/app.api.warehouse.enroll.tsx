@@ -51,7 +51,7 @@ function verifyToken(token: string): { shop: string } | null {
   }
 }
 
-import { createMerchant, enrollOrder } from "../services/ink-api.server";
+import { createMerchant, enrollOrder, getShopIdByDomain, adjustMerchantInventory } from "../services/ink-api.server";
 
 async function getMerchantApiKey(shopDomain: string): Promise<string | null> {
   const snapshot = await firestore
@@ -147,36 +147,41 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { orderId, nfcToken, nfcUid, shippingAddress, warehouseLat, warehouseLng, orderDetails } = body;
+  const { 
+    order_id, 
+    nfc_token, 
+    nfc_uid, 
+    order_number, 
+    customer_email, 
+    shipping_address, 
+    product_details, 
+    warehouse_location,
+    photo_urls,
+    photo_hashes
+  } = body;
 
-  if (!orderId || !nfcToken) {
-    return json({ error: "orderId and nfcToken are required" }, { status: 400 });
+  if (!order_id || !nfc_token || !order_number || !customer_email || !shipping_address || !product_details) {
+    return json({ error: "order_id, nfc_token, order_number, customer_email, shipping_address, and product_details are required" }, { status: 400 });
   }
 
-  // 4. Build enrollment payload for INK API
-  const enrollPayload: any = {
-    order_id: orderId,
-    nfc_token: nfcToken,
-  };
-
-  if (nfcUid) enrollPayload.nfc_uid = nfcUid;
-  if (shippingAddress) enrollPayload.shipping_address = shippingAddress;
-  if (orderDetails) enrollPayload.order_details = orderDetails;
-  if (warehouseLat && warehouseLng) {
-    enrollPayload.warehouse_location = { lat: warehouseLat, lng: warehouseLng };
-  }
+  // 4. Build enrollment payload for INK API (Flat v1.2.0 format)
+  // This step is mostly handled internally by enrollOrder now, but we prepare the exact variables.
 
   // 5. Call INK API enroll endpoint using the shared service
   let inkData;
   try {
     inkData = await enrollOrder(
       apiKey, 
-      orderId, 
-      nfcToken, 
-      orderDetails, 
-      shippingAddress,
-      warehouseLat && warehouseLng ? { lat: warehouseLat, lng: warehouseLng } : undefined,
-      nfcUid
+      order_id, 
+      nfc_token, 
+      String(order_number), 
+      customer_email,
+      shipping_address,
+      Array.isArray(product_details) ? product_details : [],
+      warehouse_location && warehouse_location.lat ? { lat: warehouse_location.lat, lng: warehouse_location.lng } : undefined,
+      nfc_uid,
+      photo_urls,
+      photo_hashes
     );
   } catch (error: any) {
     console.error("[Warehouse Enroll] INK API error:", error.message);
@@ -215,7 +220,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             return response.json();
         };
 
-        const numericOrderId = orderId.replace(/\D/g, ""); // Extract numbers for safety
+        const numericOrderId = order_id.replace(/\D/g, ""); // Extract numbers for safety
         const initialGid = `gid://shopify/Order/${numericOrderId}`;
         
         // Find correct order GID matching across possible stores (similar to ink.update.tsx fallback logic)
@@ -255,7 +260,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 namespace: "ink",
                 key: "nfc_uid",
                 type: "single_line_text_field",
-                value: nfcUid || nfcToken,
+                value: nfc_uid || nfc_token,
             },
             {
                 ownerId: foundOrderGid,
@@ -266,13 +271,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }
         ];
 
-        if (warehouseLat && warehouseLng) {
+        if (warehouse_location && warehouse_location.lat && warehouse_location.lng) {
             metafields.push({
                 ownerId: foundOrderGid,
                 namespace: "ink",
                 key: "warehouse_gps",
                 type: "json",
-                value: JSON.stringify({ lat: warehouseLat, lng: warehouseLng }),
+                value: JSON.stringify({ lat: warehouse_location.lat, lng: warehouse_location.lng }),
             });
         }
 
@@ -297,11 +302,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.error("[Warehouse Enroll] Failed to update Shopify metafields locally:", err.message);
   }
 
+  // 7. Deduct 1 tag from inventory upon successful enrollment
+  try {
+      const shopId = await getShopIdByDomain(payload.shop);
+      await adjustMerchantInventory(shopId, -1, `Enrollment for Order ${order_number}`);
+      console.log(`[Warehouse Enroll] Deducted 1 tag from inventory for ${payload.shop} (${shopId})`);
+  } catch (invErr: any) {
+      console.error("[Warehouse Enroll] Failed to deduct inventory tag:", invErr.message);
+      // Non-fatal: Enrollment itself was successful on INK and Shopify
+  }
+
   return json({
     success: true,
     proof_id: inkData.proof_id,
-    nfcToken,
+    nfcToken: nfc_token,
     state: inkData.state,
     enrolled_at: inkData.enrolled_at,
   });
 };
+

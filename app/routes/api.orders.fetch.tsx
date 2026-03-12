@@ -7,25 +7,63 @@ const CORS_HEADERS = {
 };
 
 // Handle OPTIONS preflight
-export const action = async () => {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  });
+export const action = async ({ request }: any) => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: CORS_HEADERS,
+    });
+  }
+  return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   const { getOfflineSession } = await import("../session-utils.server");
 
   try {
-    // Get offline session from Firestore (needed for Shopify API calls)
-    const session = await getOfflineSession();
+    // 1. Authenticate user from JWT token
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+      });
+    }
+
+    const token = authHeader.slice(7);
+    let shopDomain = "";
+    try {
+      // Decode JWT payload (without full backend signature verification for now, 
+      // as it might be signed by INK or legacy Firestore auth)
+      const payloadBase64 = token.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payloadBase64, "base64url").toString("utf8"));
+      shopDomain = decoded.shop || decoded.shop_id || decoded.merchant_id;
+    } catch (err) {
+      return new Response(JSON.stringify({ error: "Invalid token format" }), {
+        status: 401,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+      });
+    }
+
+    if (!shopDomain) {
+      return new Response(JSON.stringify({ error: "Store context missing from token" }), {
+        status: 401,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+      });
+    }
+
+    // 2. Get offline session for this specific store
+    const session = await getOfflineSession(shopDomain);
 
     if (!session) {
       return new Response(
-        JSON.stringify({ error: "No session available" }),
+        JSON.stringify({ error: `No session available for store: ${shopDomain}` }),
         {
-          status: 500,
+          status: 404,
           headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
         }
       );
@@ -34,6 +72,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Parse query parameters
     const url = new URL(request.url);
     const searchQuery = url.searchParams.get("search") || "";
+    const mode = url.searchParams.get("mode") || "enroll"; // "enroll" (default) or "shipments"
 
     // Create admin client helper for Shopify API calls
     const admin = {
@@ -79,6 +118,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 firstName
                 lastName
                 email
+                phone
+              }
+              shippingAddress {
+                address1
+                address2
+                city
+                province
+                zip
+                country
+                phone
               }
               tags
               metafields(namespace: "ink", first: 10) {
@@ -89,11 +138,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                   }
                 }
               }
+              shippingLines(first: 5) {
+                edges {
+                  node {
+                    title
+                    code
+                  }
+                }
+              }
               lineItems(first: 20) {
                 edges {
                   node {
                     title
                     quantity
+                    variant {
+                      sku
+                      price
+                    }
                     customAttributes {
                       key
                       value
@@ -159,16 +220,39 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }
 
-      const isInkOrder = hasInkTag || hasDeliveryTypeMetafield || hasInkMetafield || hasInkLineItem;
+      // Check shipping method
+      let hasInkShippingMethod = false;
+      const shippingMethod = order.shippingLines?.edges?.[0]?.node?.title || "";
+      if (shippingMethod.toLowerCase().includes("ink")) {
+        hasInkShippingMethod = true;
+      }
 
-      // Get verification status - filter out enrolled or verified
+      const isInkOrder = hasInkTag || hasDeliveryTypeMetafield || hasInkMetafield || hasInkLineItem || hasInkShippingMethod;
+
+      // Filter by isInkOrder so that plain orders (like #1007) are hidden
+      // We no longer ignore it.
+
+
+      // Get verification status from INK metafield (or fallback to pending)
       const verificationStatus = (metafields.verification_status || "pending").toLowerCase();
-      const isEligible = isInkOrder && verificationStatus !== "enrolled" && verificationStatus !== "verified";
 
-      // Get line item details
+      // Eligibility logic depends on mode:
+      // - "shipments" mode: show orders that ARE enrolled/verified/delivered (for shipment tracking)
+      // - "enroll" mode: show orders that are NOT yet enrolled/verified (for the scan queue)
+      let isEligible: boolean;
+      if (mode === "shipments") {
+        isEligible = isInkOrder && (verificationStatus === "enrolled" || verificationStatus === "verified" || verificationStatus === "delivered");
+      } else {
+        // enroll mode: show everything that isn't done yet
+        isEligible = isInkOrder && verificationStatus !== "enrolled" && verificationStatus !== "verified" && verificationStatus !== "delivered";
+      }
+
+      // Get line item details (now includes sku and price from variant)
       const items = order.lineItems?.edges?.map((li: any) => ({
         title: li.node.title,
         quantity: li.node.quantity,
+        sku: li.node.variant?.sku || "",
+        price: parseFloat(li.node.variant?.price || "0"),
       })) || [];
 
       // Determine shipping status
@@ -177,7 +261,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       
       const fulfillmentStatus = order.displayFulfillmentStatus || "";
       if (fulfillmentStatus.includes("Unfulfilled") || fulfillmentStatus === "") {
-        // Calculate time-based shipping urgency
         const createdAt = new Date(order.createdAt);
         const now = new Date();
         const hoursOld = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
@@ -191,11 +274,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }
 
+      // Build a normalized ShippingAddress object
+      const shippingAddress = order.shippingAddress ? {
+        line1: order.shippingAddress.address1 || "",
+        line2: order.shippingAddress.address2 || "",
+        city: order.shippingAddress.city || "",
+        state: order.shippingAddress.province || "",
+        zip: order.shippingAddress.zip || "",
+        country: order.shippingAddress.country || "",
+        phone: order.shippingAddress.phone || "",
+      } : null;
+
       return {
         id: numericId,
         name: order.name,
         createdAt: order.createdAt,
-        items: items,
+        items,
         itemCount: items.reduce((sum: number, item: any) => sum + item.quantity, 0),
         totalPrice: parseFloat(order.totalPriceSet.shopMoney.amount).toFixed(2),
         currency: order.totalPriceSet.shopMoney.currencyCode,
@@ -206,6 +300,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           ? `${order.customer.firstName} ${order.customer.lastName}`
           : "Guest",
         customerEmail: order.customer?.email || "",
+        customerPhone: order.customer?.phone || order.shippingAddress?.phone || "",
+        shippingAddress,
         verificationStatus,
         isEligible,
       };

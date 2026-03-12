@@ -16,7 +16,7 @@ const tabs = [
   { id: "users", content: "Users" },
 ];
 
-const Settings = () => {
+const Settings = ({ initialData }: { initialData?: any }) => {
   const [searchParams] = useSearchParams();
   const initialTab = tabs.findIndex(
     (t) => t.id === (searchParams.get("tab") || "account")
@@ -36,7 +36,7 @@ const Settings = () => {
       case "account":
         return <AccountSettings />;
       case "tags":
-        return <TagsSettings />;
+        return <TagsSettings inventoryData={initialData?.inventoryData} />;
       case "branding":
         return <BrandingSettings />;
       case "communication":

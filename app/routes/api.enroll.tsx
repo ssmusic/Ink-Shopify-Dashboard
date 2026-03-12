@@ -37,6 +37,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Parse JSON payload
     const payload = await request.json();
     const { order_id, serial_number, photo_urls, photo_hashes, shipping_address_gps, warehouse_gps } = payload;
+    let customer_phone_last4 = "";
+    let orderData: any;
 
     console.log(`📦 Enrollment request for order ${order_id}, serial: ${serial_number}`);
 
@@ -78,7 +80,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // 1. Fetch customer phone AND Shop Name from Shopify
     console.log(`📞 Fetching customer phone and shop name for order ${order_id}...`);
-    let customer_phone_last4: string | undefined;
     let merchantName = session.shop.replace('.myshopify.com', ''); // Fallback
 
     let validOrderGid: string = "";
@@ -106,7 +107,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       `;
 
-      let orderData;
       let orderResponse;
 
       // Try fetching by ID first
@@ -207,20 +207,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Alan's API is the SINGLE SOURCE OF TRUTH - no local database save
     console.log("🚀 Calling Alan's NFS API /enroll...");
 
+    const numericOrderId = String(order_id).replace(/\D/g, "");
+
     const enrollPayload: any = {
       order_id,
-      nfc_uid: serial_number,  // Send original serial number to Alan (e.g., "ef:8b:c4:c3")
-      nfc_token: token,        // Send our deterministically generated token
-      photo_urls,
-      photo_hashes,
-      shipping_address_gps,
-      customer_phone_last4: customer_phone_last4 || "1234",  // Default if not available
-      merchant: merchantName || session.shop,
+      nfc_token: token,
+      nfc_uid: serial_number,
+      shipping_address: "Not Provided", // Extracted later if Shopify webhook includes address blocks
+      order_details: {
+        order_number: numericOrderId,
+        customer_email: orderData?.data?.order?.customer?.email || "unknown@example.com",
+        customer_phone: customer_phone_last4 || "1234",
+        product_details: [] // In a real flow, extract line items
+      }
     };
 
-    // Only add warehouse_gps if it actually exists (no NY fallback)
+    if (photo_urls && photo_urls.length > 0) {
+      enrollPayload.photo_urls = photo_urls;
+    }
+
+    if (photo_hashes && photo_hashes.length > 0) {
+      enrollPayload.photo_hashes = photo_hashes;
+    }
+
     if (warehouse_gps && warehouse_gps.lat && warehouse_gps.lng) {
-        enrollPayload.warehouse_gps = warehouse_gps;
+        enrollPayload.warehouse_location = warehouse_gps; // Renamed to warehouse_location per v1.2.0 spec
     }
 
     let nfsResponse;

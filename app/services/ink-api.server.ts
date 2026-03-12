@@ -59,22 +59,97 @@ export const getMerchants = async () => {
     return await response.json();
 };
 
+export const getShopIdByDomain = async (shopDomain: string): Promise<string> => {
+    const listRes = await fetch(`${INK_API_URL}/admin/merchants?limit=200`, {
+        headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
+    });
+    if (!listRes.ok) throw new Error("Failed to list merchants");
+    const { merchants } = await listRes.json();
+    const merchant = merchants?.find((m: any) => m.shop_domain === shopDomain);
+    if (!merchant) throw new Error(`Merchant not found for domain: ${shopDomain}`);
+    return merchant.shop_id;
+};
+
+export const adminCreateUser = async (merchantId: string, name: string, email: string, password?: string) => {
+    const payload: any = { merchant_id: merchantId, name, email };
+    if (password) payload.password = password;
+
+    const response = await fetch(`${INK_API_URL}/admin/users`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Secret": INK_ADMIN_SECRET,
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to create user: ${errorText}`);
+    }
+    return await response.json();
+};
+
+export const getMerchantUsers = async (merchantId: string) => {
+    const response = await fetch(`${INK_API_URL}/admin/users?merchant_id=${merchantId}`, {
+        headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
+    });
+    if (!response.ok) throw new Error("Failed to get merchant users");
+    return await response.json();
+};
+
+export const deleteMerchantUser = async (userId: string) => {
+    const response = await fetch(`${INK_API_URL}/admin/users/${userId}`, {
+        method: "DELETE",
+        headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
+    });
+    if (!response.ok) throw new Error("Failed to delete merchant user");
+    return true;
+};
+
+// V1.3.0 Auth Binding
+export const loginUser = async (email: string, password: string) => {
+    const response = await fetch(`${INK_API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Invalid email or password constraints");
+    }
+    
+    return await response.json();
+};
 
 // Merchant implementation - requires Bearer ink_api_key
 export const enrollOrder = async (
     apiKey: string, 
     orderId: string, 
     nfcToken: string, 
-    orderDetails?: any, 
-    shippingAddress?: string,
+    orderNumber: string,
+    customerEmail: string,
+    shippingAddress: any,
+    productDetails: any[],
     warehouseLocation?: { lat: number; lng: number },
-    nfcUid?: string
+    nfcUid?: string,
+    photoUrls?: string[],
+    photoHashes?: string[]
 ) => {
-    const payload: any = { order_id: orderId, nfc_token: nfcToken };
-    if (orderDetails) payload.order_details = orderDetails;
-    if (shippingAddress) payload.shipping_address = shippingAddress;
+    const payload: any = { 
+        order_id: orderId, 
+        nfc_token: nfcToken,
+        order_number: orderNumber,
+        customer_email: customerEmail,
+        shipping_address: shippingAddress,
+        product_details: productDetails
+    };
+    
     if (warehouseLocation) payload.warehouse_location = warehouseLocation;
     if (nfcUid) payload.nfc_uid = nfcUid;
+    if (photoUrls && photoUrls.length > 0) payload.photo_urls = photoUrls;
+    if (photoHashes && photoHashes.length > 0) payload.photo_hashes = photoHashes;
 
     const response = await fetch(`${INK_API_URL}/api/enroll`, {
         method: "POST",
@@ -102,6 +177,99 @@ export const getProof = async (apiKey: string, nfcToken: string) => {
     return await response.json();
 };
 
+export const getInventory = async (apiKey: string) => {
+    const response = await fetch(`${INK_API_URL}/api/inventory`, {
+        headers: {
+            "Authorization": `Bearer ${apiKey}`,
+        },
+    });
+    if (!response.ok) throw new Error(`Get inventory failed: ${await response.text()}`);
+    return await response.json();
+};
+
+/**
+ * Admin-level inventory lookup that doesn't require a merchant API key.
+ * Finds the shop_id from the INK merchants list, then POSTs a zero-delta 
+ * (or reads from Firestore directly). Falls back gracefully.
+ */
+export const getInventoryByShopDomain = async (shopDomain: string): Promise<{ current_count: number; used_this_month: number; recent_transactions: any[] }> => {
+    // 1. Find the shop_id for this domain
+    const listRes = await fetch(`${INK_API_URL}/admin/merchants?limit=200`, {
+        headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
+    });
+    if (!listRes.ok) throw new Error("Failed to list merchants");
+    const { merchants } = await listRes.json();
+
+    const merchant = merchants?.find((m: any) => m.shop_domain === shopDomain);
+    if (!merchant) throw new Error(`Merchant not found for domain: ${shopDomain}`);
+
+    const shopId = merchant.shop_id;
+
+    // 2. Use admin endpoint with quantity 1 and then -1 to read balance? 
+    //    No — that mutates data. Instead let's POST a replenishment of 0.
+    //    But the API rejects quantity: 0. So we'll try the merchant-level GET /api/inventory
+    //    using the merchant's api_key if available, or reconstruct from Firestore ledger.
+
+    // Actually, the simplest reliable approach: 
+    // Query sticker_inventory_ledger in Firestore directly for this shop_id,
+    // since we already have Firestore access on the server.
+    // Import is at top level, but we can dynamic-import here.
+    const firestore = (await import("../firestore.server")).default;
+
+    // Get all ledger entries for this shop, sort in memory to avoid Firestore index requirements
+    const ledgerSnap = await firestore
+        .collection("sticker_inventory_ledger")
+        .where("shop_id", "==", shopId)
+        .get();
+
+    if (ledgerSnap.empty) {
+        return { current_count: 0, used_this_month: 0, recent_transactions: [] };
+    }
+
+    // Sort descending by created_at
+    const docs = ledgerSnap.docs.map(doc => doc.data());
+    docs.sort((a, b) => {
+        const timeA = new Date(a.created_at || 0).getTime();
+        const timeB = new Date(b.created_at || 0).getTime();
+        return timeB - timeA;
+    });
+
+    // The first doc has the latest balance
+    const latestEntry = docs[0];
+    const currentCount = latestEntry.balance_after || 0;
+
+    // Calculate "Used This Month" - sum of absolute value of negative deltas in current month
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    let usedThisMonth = 0;
+    docs.forEach(d => {
+        const dDate = new Date(d.created_at || 0);
+        if (dDate.getMonth() === currentMonth && dDate.getFullYear() === currentYear) {
+            if (d.quantity_change < 0) {
+                usedThisMonth += Math.abs(d.quantity_change);
+            }
+        }
+    });
+
+    // Map the last 10 transactions
+    const recentTransactions = docs.slice(0, 10).map((d: any) => {
+        return {
+            timestamp: d.created_at,
+            delta: d.quantity_change,
+            reason: d.order_id || d.transaction_type || "unknown",
+            new_balance: d.balance_after,
+        };
+    });
+
+    return { 
+        current_count: currentCount, 
+        used_this_month: usedThisMonth,
+        recent_transactions: recentTransactions 
+    };
+};
+
 export const uploadMedia = async (apiKey: string, formData: FormData) => {
     // Note: When forwarding FormData, we let fetch handle the Content-Type header (boundary)
     const response = await fetch(`${INK_API_URL}/api/media/upload`, {
@@ -114,6 +282,27 @@ export const uploadMedia = async (apiKey: string, formData: FormData) => {
 
     if (!response.ok) {
         throw new Error(`Upload failed: ${await response.text()}`);
+    }
+    return await response.json();
+};
+
+/**
+ * Adjusts a merchant's inventory by a given delta.
+ * Used for deductions (negative delta) or replenishments (positive delta).
+ */
+export const adjustMerchantInventory = async (shopId: string, delta: number, reason: string) => {
+    const response = await fetch(`${INK_API_URL}/admin/merchants/${shopId}/inventory`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Secret": INK_ADMIN_SECRET,
+        },
+        body: JSON.stringify({ delta, reason }),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to adjust inventory: ${errorText}`);
     }
     return await response.json();
 };

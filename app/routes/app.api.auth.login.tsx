@@ -1,6 +1,6 @@
 import { type ActionFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
-import { createMerchant } from "../services/ink-api.server";
+import { createMerchant, loginUser } from "../services/ink-api.server";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -71,6 +71,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ error: "Email and password are required" }, { status: 400 });
   }
 
+  // ==========================================
+  // 1. INK v1.3.0 Primary Authentication Path
+  // ==========================================
+  try {
+    console.log(`[Auth] Attempting INK v1.3.0 login for ${email}...`);
+    const inkResponse = await loginUser(email, password);
+    
+    // If successful, INK returns `{ token, user }`. We just proxy it verbatim.
+    // The Warehouse app AuthContext directly parses `data.token` and `data.user`.
+    console.log(`[Auth] INK Login successful for ${email}`);
+    
+    // Return early, skipping all local firestore logic
+    return json({
+      token: inkResponse.token,
+      userId: inkResponse.user.user_id,
+      name: inkResponse.user.name,
+      email: inkResponse.user.email,
+      role: inkResponse.user.role || 'merchant',
+      // We pass the full user object to match INK standard
+      user: inkResponse.user 
+    });
+  } catch (error: any) {
+    console.warn(`[Auth] INK login failed: ${error.message}. Falling back to legacy Firestore auth...`);
+    // If the error is definitively "wrong password" for an INK user, we might want to fail hard here.
+    // But for a smooth rollout, we gracefully fall back to checking the legacy db.
+  }
+
+  // ==========================================
+  // 2. Legacy Firestore Auth Path
+  // ==========================================
   // Look up the user by email
   const snapshot = await firestore
     .collection(COLLECTION)

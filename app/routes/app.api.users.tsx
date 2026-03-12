@@ -1,7 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import firestore from "../firestore.server";
-import bcrypt from "bcryptjs";
+import { adminCreateUser, getShopIdByDomain, getMerchantUsers, deleteMerchantUser } from "../services/ink-api.server";
 import sgMail from "@sendgrid/mail";
 
 const json = (data: any, init?: ResponseInit) =>
@@ -10,43 +9,44 @@ const json = (data: any, init?: ResponseInit) =>
     ...init,
   });
 
-const COLLECTION = "warehouse_users";
-const SALT_ROUNDS = 12;
-
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-}
-
 // ─── GET: list all users for this shop ───────────────────────────────────────
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shopDomain = session.shop;
+  try {
+    const { session } = await authenticate.admin(request);
+    const shopDomain = session.shop;
 
-  const snapshot = await firestore
-    .collection(COLLECTION)
-    .where("shopDomain", "==", shopDomain)
-    .get();
+    try {
+        // Users were created with merchant_id = shopDomain (not shop_id),
+        // so we query using the domain string directly.
+        const data = await getMerchantUsers(shopDomain);
+        
+        const users = (data.users || []).map((u: any) => ({
+            id: u.user_id,
+            name: u.name,
+            email: u.email,
+            role: "operator",
+            createdAt: u.created_at || null
+        })).sort((a: any, b: any) => {
+            if (!a.createdAt) return 1;
+            if (!b.createdAt) return -1;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
 
-  // Sort client-side to avoid requiring a Firestore composite index
-  const users = snapshot.docs
-    .map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        name: data.name,
-        email: data.email,
-        role: data.role,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() ?? null,
-      };
-    })
-    .sort((a, b) => {
-      if (!a.createdAt) return 1;
-      if (!b.createdAt) return -1;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-
-  return json({ users });
+        return json({ users });
+    } catch (e: any) {
+        console.error("[Users Loader] Proxy error:", e);
+        return json({ users: [], error: e.message });
+    }
+  } catch (err: any) {
+    if (err instanceof Response) {
+      console.warn("[Users Loader] Auth redirect caught — returning empty user list");
+      return json({ users: [] });
+    }
+    console.error("[Users Loader] Unexpected error:", err);
+    return json({ users: [], error: "Failed to load users" });
+  }
 };
+
 
 // ─── POST: create / update / delete ──────────────────────────────────────────
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -64,27 +64,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ error: "Name, email and password are required" }, { status: 400 });
     }
 
-    // Check for duplicate email within this shop
-    const existing = await firestore
-      .collection(COLLECTION)
-      .where("shopDomain", "==", shopDomain)
-      .where("email", "==", email.toLowerCase())
-      .get();
-
-    if (!existing.empty) {
-      return json({ error: "A user with this email already exists" }, { status: 409 });
+    if (process.env.SENDGRID_API_KEY) {
+      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
     }
 
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    let inkUserId = "";
 
-    const docRef = await firestore.collection(COLLECTION).add({
-      name,
-      email: email.toLowerCase(),
-      passwordHash,
-      shopDomain,
-      role: "operator",
-      createdAt: new Date(),
-    });
+    try {
+      // Create User in INK Backend via Admin Proxy
+      const data = await adminCreateUser(shopDomain, name, email, password);
+      inkUserId = data.user_id;
+      console.log(`[UserManagement] Successfully created user in INK Backend: ${inkUserId}`);
+    } catch (inkError: any) {
+      console.error("[UserManagement] Failed to create user in INK:", inkError);
+      return json({ error: inkError.message || "Failed to create user in INK System" }, { status: 400 });
+    }
 
     // Send welcome email
     try {
@@ -118,34 +112,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
     } catch (emailErr) {
       console.error("[UserManagement] Failed to send welcome email:", emailErr);
-      // Non-fatal — user is still created
     }
 
-    return json({ success: true, userId: docRef.id });
+    return json({ success: true, userId: inkUserId });
   }
 
   // ── Update ──
   if (intent === "update") {
-    const { userId, name, password } = body;
-
-    if (!userId) {
-      return json({ error: "userId is required" }, { status: 400 });
-    }
-
-    // Verify the user belongs to this shop
-    const docRef = firestore.collection(COLLECTION).doc(userId);
-    const doc = await docRef.get();
-
-    if (!doc.exists || doc.data()?.shopDomain !== shopDomain) {
-      return json({ error: "User not found" }, { status: 404 });
-    }
-
-    const updates: Record<string, any> = { updatedAt: new Date() };
-    if (name) updates.name = name;
-    if (password) updates.passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-
-    await docRef.update(updates);
-    return json({ success: true });
+     // NOTE: The INK API specs provided do not document an update endpoint right now.
+     // Returning 501 Not Implemented until the INK backend supports it.
+     return json({ error: "Updating users is currently not supported by the INK API." }, { status: 501 });
   }
 
   // ── Delete ──
@@ -156,15 +132,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ error: "userId is required" }, { status: 400 });
     }
 
-    const docRef = firestore.collection(COLLECTION).doc(userId);
-    const doc = await docRef.get();
-
-    if (!doc.exists || doc.data()?.shopDomain !== shopDomain) {
-      return json({ error: "User not found" }, { status: 404 });
+    try {
+        await deleteMerchantUser(userId);
+        return json({ success: true });
+    } catch (e: any) {
+        console.error("[UserManagement] Failed to delete user:", e);
+        return json({ error: e.message || "Failed to delete user" }, { status: 500 });
     }
-
-    await docRef.delete();
-    return json({ success: true });
   }
 
   return json({ error: "Unknown intent" }, { status: 400 });

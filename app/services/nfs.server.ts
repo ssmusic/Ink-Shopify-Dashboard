@@ -1,7 +1,7 @@
 import crypto from "crypto";
 
 // Alan's NFS API Base URL
-const NFS_API_URL = process.env.NFS_API_URL || "http://193.57.137.90";
+const NFS_API_URL = process.env.NFS_API_URL || process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
 const NFS_HMAC_SECRET = process.env.NFS_HMAC_SECRET;
 
 if (!NFS_HMAC_SECRET) {
@@ -79,7 +79,7 @@ export const NFSService = {
   async enroll(payload: EnrollPayload): Promise<EnrollResponse> {
     console.log("🚀 Enrolling with ink. Backend:", JSON.stringify(payload, null, 2));
 
-    const response = await fetch(`${NFS_API_URL}/enroll`, {
+    const response = await fetch(`${NFS_API_URL}/api/enroll`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -120,7 +120,7 @@ export const NFSService = {
   async verify(payload: VerifyPayload): Promise<VerifyResponse> {
     console.log("🔍 Verifying with ink. Backend:", JSON.stringify(payload, null, 2));
 
-    const response = await fetch(`${NFS_API_URL}/verify`, {
+    const response = await fetch(`${NFS_API_URL}/api/verify`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -155,7 +155,7 @@ export const NFSService = {
   async retrieveProof(proofId: string): Promise<RetrieveResponse> {
     console.log(`📄 Retrieving proof from ink. Backend: ${proofId}`);
 
-    const response = await fetch(`${NFS_API_URL}/retrieve/${proofId}`, {
+    const response = await fetch(`${NFS_API_URL}/api/proofs/${proofId}`, {
       method: "GET",
     });
 

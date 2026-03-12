@@ -60,12 +60,6 @@ export default function UserManagementSettings() {
     setName(""); setEmail(""); setPassword(""); setFormError("");
   };
 
-  const openEdit = (user: WarehouseUser) => {
-    setFormMode("edit");
-    setEditingUser(user);
-    setName(user.name); setEmail(user.email); setPassword(""); setFormError("");
-  };
-
   const closeForm = () => {
     setFormMode(null);
     setEditingUser(null);
@@ -83,15 +77,6 @@ export default function UserManagementSettings() {
       }
       mutateFetcher.submit(
         JSON.stringify({ intent: "create", name: name.trim(), email: email.trim(), password }),
-        { method: "POST", action: "/app/api/users", encType: "application/json" }
-      );
-    } else if (formMode === "edit" && editingUser) {
-      if (!name.trim()) {
-        setFormError("Name is required.");
-        return;
-      }
-      mutateFetcher.submit(
-        JSON.stringify({ intent: "update", userId: editingUser.id, name: name.trim(), ...(password ? { password } : {}) }),
         { method: "POST", action: "/app/api/users", encType: "application/json" }
       );
     }
@@ -131,7 +116,7 @@ export default function UserManagementSettings() {
         <div className="border border-border rounded-sm p-5 mb-6 bg-muted/30">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-foreground">
-              {formMode === "create" ? "Add New User" : `Edit — ${editingUser?.name}`}
+              Add New User
             </h3>
             <button onClick={closeForm} className="text-muted-foreground hover:text-foreground transition-colors">
               <X className="h-4 w-4" />
@@ -156,24 +141,19 @@ export default function UserManagementSettings() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="jane@warehouse.com"
                 required
-                disabled={formMode === "edit"}
-                className={formMode === "edit" ? "opacity-50 cursor-not-allowed" : ""}
               />
-              {formMode === "edit" && (
-                <p className="text-xs text-muted-foreground mt-1">Email cannot be changed after creation.</p>
-              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">
-                {formMode === "edit" ? "New Password (leave blank to keep current)" : "Password"}
+                Password
               </label>
               <div className="relative">
                 <Input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={formMode === "edit" ? "Leave blank to keep unchanged" : "••••••••"}
-                  required={formMode === "create"}
+                  placeholder="••••••••"
+                  required
                   className="pr-10"
                 />
                 <button
@@ -194,7 +174,7 @@ export default function UserManagementSettings() {
               <Button type="submit" size="sm" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <><Loader2 className="h-3 w-3 animate-spin mr-2" /> Saving...</>
-                ) : formMode === "create" ? "Add User" : "Save Changes"}
+                ) : "Add User"}
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={closeForm} disabled={isSubmitting}>
                 Cancel
@@ -264,13 +244,6 @@ export default function UserManagementSettings() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => openEdit(user)}
-                          className="p-1.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          title="Edit user"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
                         <button
                           onClick={() => setDeleteConfirmId(user.id)}
                           className="p-1.5 rounded-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"

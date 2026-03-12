@@ -11,12 +11,7 @@ import {
 } from "@shopify/polaris";
 import { toast } from "../../hooks/use-toast";
 
-const inventoryData = {
-  current: 1200,
-  usedThisPeriod: 1800,
-};
-
-const TagsSettings = () => {
+const TagsSettings = ({ inventoryData }: { inventoryData?: { current: string, usedThisPeriod: string } }) => {
   const [autoRefillEnabled, setAutoRefillEnabled] = useState(true);
   const [refillQuantity, setRefillQuantity] = useState("500");
   const [lowInventoryThreshold, setLowInventoryThreshold] = useState(true);
@@ -41,7 +36,7 @@ const TagsSettings = () => {
             <Card>
               <BlockStack gap="200">
                 <Text as="p" tone="subdued" variant="bodySm">In Stock</Text>
-                <Text as="p" variant="headingLg">{inventoryData.current.toLocaleString()}</Text>
+                <Text as="p" variant="headingLg">{inventoryData?.current || "0"}</Text>
                 <Text as="p" tone="subdued" variant="bodySm">tags remaining</Text>
               </BlockStack>
             </Card>
@@ -50,7 +45,7 @@ const TagsSettings = () => {
             <Card>
               <BlockStack gap="200">
                 <Text as="p" tone="subdued" variant="bodySm">Used This Month</Text>
-                <Text as="p" variant="headingLg">{inventoryData.usedThisPeriod.toLocaleString()}</Text>
+                <Text as="p" variant="headingLg">{inventoryData?.usedThisPeriod || "0"}</Text>
                 <Text as="p" tone="subdued" variant="bodySm">tags shipped</Text>
               </BlockStack>
             </Card>
