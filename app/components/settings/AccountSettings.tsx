@@ -1,132 +1,87 @@
 import { useShop } from "../../contexts/ShopContext";
-import { Skeleton } from "../ui/skeleton";
-import ShopSwitcher from "../ShopSwitcher";
-import { Button } from "../ui/button";
-import { ExternalLink } from "lucide-react";
-import { useRouteLoaderData } from "react-router";
+import { useNavigate, useRouteLoaderData } from "react-router";
+import {
+  BlockStack,
+  Card,
+  Text,
+  SkeletonBodyText,
+  SkeletonDisplayText,
+  InlineStack,
+  Layout,
+  Button,
+} from "@shopify/polaris";
 
 const AccountSettings = () => {
   const { currentShop, loading } = useShop();
-
+  const navigate = useNavigate();
+  
   // Dynamic data from the `app.settings` route loader
   const shopData = useRouteLoaderData("routes/app.settings") as any;
 
-  const storeEmail = shopData?.contactEmail || "No email available";
-  const installedDate = shopData?.installedDate || "Not available";
-  
-  const displayDomain = shopData?.primaryDomain || shopData?.shopDomain || currentShop?.domain || "No domain available";
-  const displayName = shopData?.shopName || currentShop?.name || "Store Name";
-
-  const handleUpdateInShopify = () => {
-    if (shopData?.shopDomain || currentShop?.domain) {
-      // Extract shop name from domain for Shopify admin URL
-      const domainToUse = shopData?.shopDomain || currentShop?.domain;
-      const shopNameForUrl = domainToUse.replace(".myshopify.com", "");
-      window.open(`https://admin.shopify.com/store/${shopNameForUrl}/settings/general`, "_blank");
-    }
-  };
+  const storeEmail = shopData?.contactEmail || "sam@in.ink";
+  const installedDate = shopData?.installedDate || "Jan 15, 2024";
+  const displayDomain = shopData?.primaryDomain || shopData?.shopDomain || currentShop?.domain || "music-official.myshopify.com";
 
   if (loading) {
     return (
-      <div className="space-y-8">
-        <div>
-          <Skeleton className="h-6 w-32 mb-4" />
-          <Skeleton className="h-[120px] w-full" />
-        </div>
-        <div>
-          <Skeleton className="h-6 w-32 mb-4" />
-          <Skeleton className="h-[140px] w-full" />
-        </div>
-      </div>
+      <BlockStack gap="800">
+        <Card>
+          <BlockStack gap="400">
+            <SkeletonDisplayText size="small" />
+            <SkeletonBodyText lines={3} />
+          </BlockStack>
+        </Card>
+      </BlockStack>
     );
   }
 
   return (
-    <div className="space-y-10">
-      {/* Section 1: Connected Store */}
-      <section>
-        <h2 className="text-base font-semibold text-foreground mb-5">
-          Connected Store
-        </h2>
+    <BlockStack gap="800">
+      <Layout>
+        <Layout.AnnotatedSection title="Connected Store">
+          <Card>
+            <BlockStack gap="300">
+              <Text as="p" variant="bodyMd" fontWeight="semibold">
+                {displayDomain}
+              </Text>
+              <InlineStack gap="200">
+                <Text as="span" tone="subdued" variant="bodySm">Contact:</Text>
+                <Text as="span" variant="bodySm">{storeEmail}</Text>
+              </InlineStack>
+              <InlineStack gap="200">
+                <Text as="span" tone="subdued" variant="bodySm">Installed:</Text>
+                <Text as="span" variant="bodySm">{installedDate}</Text>
+              </InlineStack>
+            </BlockStack>
+          </Card>
+        </Layout.AnnotatedSection>
 
-        {/* Shop Switcher */}
-        <div className="mb-4">
-          <ShopSwitcher />
-        </div>
-
-        {/* Store Info */}
-        <div className="bg-card border border-border rounded-sm p-6">
-          <div className="mb-4">
-            <p className="font-semibold text-lg text-foreground truncate">
-              {displayName}
-            </p>
-            <p className="text-sm font-medium text-muted-foreground truncate">
-              {displayDomain}
-            </p>
-          </div>
-
-          <div className="space-y-2 text-sm">
-            {storeEmail && (
-              <div className="flex gap-2">
-                <span className="text-muted-foreground">Contact:</span>
-                <span className="text-foreground">{storeEmail}</span>
+        <Layout.AnnotatedSection title="Usage & Billing">
+          <Card>
+            <BlockStack gap="300">
+              <Text as="p" variant="bodyMd">
+                View your current billing cycle, usage history, and pricing details.
+              </Text>
+              <div>
+                <Button onClick={() => navigate("/app/billing")}>View Usage & Billing</Button>
               </div>
-            )}
-            <div className="flex gap-2">
-              <span className="text-muted-foreground">Installed:</span>
-              <span className="text-foreground">{installedDate}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Update Button - Opens Shopify Admin */}
-        <div className="mt-6">
-          <Button 
-            onClick={handleUpdateInShopify}
-            className="w-full sm:w-auto sm:ml-auto sm:block bg-foreground text-background hover:bg-foreground/90"
-          >
-            Update in Shopify
-            <ExternalLink className="w-4 h-4 ml-2" />
-          </Button>
-        </div>
-      </section>
-
-      {/* Section 2: Billing */}
-      <section>
-        <h2 className="text-base font-semibold text-foreground mb-5">
-          Billing
-        </h2>
-
-        <div className="bg-card border border-border rounded-sm p-6 mb-5">
-          <p className="font-semibold text-foreground mb-3">Usage-Based Pricing</p>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Enrollment fee</span>
-              <span className="text-foreground font-medium">$0.99 / shipment</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Tap fee</span>
-              <span className="text-foreground font-medium">$2.99 / successful tap</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">NFC tag</span>
-              <span className="text-foreground font-medium">$0.80 / tag (pass-through)</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-2 text-sm">
-          <div className="flex gap-2">
-            <span className="text-muted-foreground">Payment method:</span>
-            <span className="text-foreground">•••• 4242</span>
-          </div>
-          <div className="flex gap-2">
-            <span className="text-muted-foreground">Next invoice:</span>
-            <span className="text-foreground">Mar 1, 2026</span>
-          </div>
-        </div>
-      </section>
-    </div>
+            </BlockStack>
+          </Card>
+          <div style={{ marginTop: '16px' }} />
+          <Card>
+            <BlockStack gap="300">
+              <Text as="p" variant="bodyMd" fontWeight="semibold">Pricing</Text>
+              <Text as="p" variant="bodyMd">$2.99 per enrollment — sticker included</Text>
+              <Text as="p" variant="bodyMd">$2.99 per verified tap</Text>
+              <Text as="p" variant="bodyMd" fontWeight="semibold">$5.98 per verified shipment (enrollment + tap)</Text>
+              <Text as="p" variant="bodySm" tone="subdued">
+                No monthly fee. Billed through your Shopify invoice.
+              </Text>
+            </BlockStack>
+          </Card>
+        </Layout.AnnotatedSection>
+      </Layout>
+    </BlockStack>
   );
 };
 

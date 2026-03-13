@@ -1,8 +1,23 @@
-import { useState, useEffect } from "react";
-import { useFetcher } from "react-router";
-import { Users, Plus, Pencil, Trash2, X, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
+import { useState, useEffect, useCallback } from "react";
+import { useFetcher, useRouteLoaderData } from "react-router";
+import {
+  BlockStack,
+  Card,
+  Text,
+  TextField,
+  Button,
+  InlineStack,
+  Avatar,
+  Badge,
+  IndexTable,
+  Modal,
+  Select,
+  Layout,
+  Icon,
+} from "@shopify/polaris";
+import { PlusIcon, DeleteIcon, SearchIcon, ClipboardIcon } from "@shopify/polaris-icons";
+import { useShop } from "../../contexts/ShopContext";
+import { Copy, Download, ExternalLink } from "lucide-react";
 
 interface WarehouseUser {
   id: string;
@@ -12,259 +27,264 @@ interface WarehouseUser {
   createdAt: string | null;
 }
 
-type FormMode = "create" | "edit" | null;
-
-export default function UserManagementSettings() {
-  // Use two separate fetchers: one for reading (GET), one for mutations (POST)
+const UserManagementSettings = () => {
+  const { currentShop } = useShop();
+  // Dynamic data from the `app.settings` route loader
+  const shopData = useRouteLoaderData("routes/app.settings") as any;
+  
   const listFetcher = useFetcher<{ users: WarehouseUser[] }>();
   const mutateFetcher = useFetcher<{ success?: boolean; error?: string; userId?: string }>();
 
-  const [formMode, setFormMode] = useState<FormMode>(null);
-  const [editingUser, setEditingUser] = useState<WarehouseUser | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-
+  const [search, setSearch] = useState("");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  
   // Form state
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [formError, setFormError] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [invitePassword, setInvitePassword] = useState("");
+  const [inviteRole, setInviteRole] = useState("operator");
 
-  // Load users on mount using useFetcher.load (carries Shopify session context)
+  // Load users on mount
   useEffect(() => {
     listFetcher.load("/app/api/users");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // After a successful mutation, reload list and close form
   useEffect(() => {
     if (mutateFetcher.state === "idle" && mutateFetcher.data) {
-      const data = mutateFetcher.data;
-      if (data.success) {
-        setFormMode(null);
-        setEditingUser(null);
-        setName(""); setEmail(""); setPassword(""); setFormError("");
-        setDeleteConfirmId(null);
+      if (mutateFetcher.data.success) {
+        setInviteOpen(false);
+        setInviteName("");
+        setInviteEmail("");
+        setInvitePassword("");
         // Reload the list
         listFetcher.load("/app/api/users");
-      } else if (data.error) {
-        setFormError(data.error);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutateFetcher.state, mutateFetcher.data]);
 
-  const openCreate = () => {
-    setFormMode("create");
-    setEditingUser(null);
-    setName(""); setEmail(""); setPassword(""); setFormError("");
-  };
-
-  const closeForm = () => {
-    setFormMode(null);
-    setEditingUser(null);
-    setName(""); setEmail(""); setPassword(""); setFormError("");
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError("");
-
-    if (formMode === "create") {
-      if (!name.trim() || !email.trim() || !password.trim()) {
-        setFormError("All fields are required.");
-        return;
-      }
-      mutateFetcher.submit(
-        JSON.stringify({ intent: "create", name: name.trim(), email: email.trim(), password }),
-        { method: "POST", action: "/app/api/users", encType: "application/json" }
-      );
-    }
-  };
-
-  const handleDelete = (userId: string) => {
+  const handleInvite = useCallback(() => {
+    if (!inviteName || !inviteEmail || !invitePassword) return;
+    
     mutateFetcher.submit(
-      JSON.stringify({ intent: "delete", userId }),
+      JSON.stringify({ 
+        intent: "create", 
+        name: inviteName.trim(), 
+        email: inviteEmail.trim(), 
+        password: invitePassword 
+      }),
       { method: "POST", action: "/app/api/users", encType: "application/json" }
     );
-  };
+  }, [inviteName, inviteEmail, invitePassword]);
+
+  const handleRemove = useCallback((id: string) => {
+    mutateFetcher.submit(
+      JSON.stringify({ intent: "delete", userId: id }),
+      { method: "POST", action: "/app/api/users", encType: "application/json" }
+    );
+  }, []);
+
+  const users = listFetcher.data?.users ?? [];
+  const filtered = users.filter(
+    (m) =>
+      m.name.toLowerCase().includes(search.toLowerCase()) ||
+      m.email.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const getInitials = (name: string) =>
+    name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+
+  const merchantId = shopData?.shopId || "MID-7X92KF";
+  const storeName = shopData?.shopName || currentShop?.name || "Luminary Goods";
 
   const isSubmitting = mutateFetcher.state !== "idle";
-  const isLoading = listFetcher.state === "loading";
-  const users = listFetcher.data?.users ?? [];
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h2 className="text-base font-semibold text-foreground">User Management</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage warehouse operator accounts that can log into the INK Warehouse App.
-          </p>
-        </div>
-        {formMode === null && (
-          <Button onClick={openCreate} size="sm" className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Add New User
-          </Button>
-        )}
-      </div>
-
-      {/* Inline form */}
-      {formMode !== null && (
-        <div className="border border-border rounded-sm p-5 mb-6 bg-muted/30">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-foreground">
-              Add New User
-            </h3>
-            <button onClick={closeForm} className="text-muted-foreground hover:text-foreground transition-colors">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Name</label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Jane Smith"
-                required
+    <Layout>
+      <Layout.AnnotatedSection title="Team Members">
+        <BlockStack gap="400">
+          {/* Actions */}
+          <InlineStack align="space-between" blockAlign="center">
+            <div style={{ maxWidth: "280px", width: "100%" }}>
+              <TextField
+                label=""
+                labelHidden
+                placeholder="Search users..."
+                value={search}
+                onChange={setSearch}
+                prefix={<Icon source={SearchIcon} />}
+                autoComplete="off"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Email</label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="jane@warehouse.com"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">
-                Password
-              </label>
-              <div className="relative">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
+            <Button icon={PlusIcon} onClick={() => setInviteOpen(true)}>
+              Invite User
+            </Button>
+          </InlineStack>
 
-            {formError && (
-              <p className="text-sm text-destructive">{formError}</p>
-            )}
-
-            <div className="flex gap-3 pt-1">
-              <Button type="submit" size="sm" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <><Loader2 className="h-3 w-3 animate-spin mr-2" /> Saving...</>
-                ) : "Add User"}
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={closeForm} disabled={isSubmitting}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* User Table */}
-      {isLoading && users.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin mr-3" />
-          <span className="text-sm">Loading users…</span>
-        </div>
-      ) : users.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-            <Users className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <p className="text-sm font-medium text-foreground">No warehouse users yet</p>
-          <p className="text-xs text-muted-foreground mt-1">Click "Add New User" to create the first operator account.</p>
-        </div>
-      ) : (
-        <div className="border border-border rounded-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Email</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Role</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Added</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user, idx) => (
-                <tr key={user.id} className={`border-b border-border last:border-0 ${idx % 2 === 0 ? "" : "bg-muted/10"}`}>
-                  <td className="px-4 py-3 font-medium text-foreground">{user.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{user.email}</td>
-                  <td className="px-4 py-3 hidden sm:table-cell">
-                    <span className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-0.5 rounded-full">
-                      <ShieldCheck className="h-3 w-3" />
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs hidden sm:table-cell">
-                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {deleteConfirmId === user.id ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="text-xs text-muted-foreground">Delete?</span>
-                        <button
-                          onClick={() => handleDelete(user.id)}
-                          disabled={isSubmitting}
-                          className="text-xs text-destructive font-medium hover:underline disabled:opacity-50"
-                        >
-                          Yes
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirmId(null)}
-                          className="text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          No
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setDeleteConfirmId(user.id)}
-                          className="p-1.5 rounded-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                          title="Delete user"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
+          {/* Users Table */}
+          <Card padding="0">
+            <IndexTable
+              resourceName={{ singular: "user", plural: "users" }}
+              itemCount={filtered.length}
+              headings={[
+                { title: "User" },
+                { title: "Role" },
+                { title: "Status" },
+                { title: "" },
+              ]}
+              selectable={false}
+              loading={listFetcher.state === "loading"}
+            >
+              {filtered.map((member, index) => (
+                <IndexTable.Row id={member.id} key={member.id} position={index} selected={false}>
+                  <IndexTable.Cell>
+                    <InlineStack gap="300" blockAlign="center">
+                      <Avatar initials={getInitials(member.name)} size="sm" />
+                      <BlockStack gap="0">
+                        <Text as="span" variant="bodyMd" fontWeight="medium">{member.name}</Text>
+                        <Text as="span" variant="bodySm" tone="subdued">{member.email}</Text>
+                      </BlockStack>
+                    </InlineStack>
+                  </IndexTable.Cell>
+                  <IndexTable.Cell>
+                    <Badge tone="info">{member.role}</Badge>
+                  </IndexTable.Cell>
+                  <IndexTable.Cell>
+                    <Badge tone="success">Active</Badge>
+                  </IndexTable.Cell>
+                  <IndexTable.Cell>
+                    <Button
+                      icon={DeleteIcon}
+                      variant="plain"
+                      tone="critical"
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to remove ${member.name}?`)) {
+                            handleRemove(member.id);
+                        }
+                      }}
+                      accessibilityLabel="Remove user"
+                    />
+                  </IndexTable.Cell>
+                </IndexTable.Row>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </IndexTable>
+          </Card>
+        </BlockStack>
+      </Layout.AnnotatedSection>
 
-      <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1.5">
-        <ShieldCheck className="h-3.5 w-3.5" />
-        Passwords are encrypted and never stored in plain text. A welcome email with credentials is sent to each new user.
-      </p>
-    </div>
+      {/* Warehouse App */}
+      <Layout.AnnotatedSection
+        title="Warehouse App"
+        description="Download the INK enrollment app for your packing stations."
+      >
+        <Card>
+          <InlineStack gap="600" wrap={false} blockAlign="start">
+            <div style={{ width: "120px", height: "120px", border: "1px solid var(--p-color-border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "var(--p-color-bg-surface-secondary)" }}>
+              <svg viewBox="0 0 100 100" style={{ width: "100px", height: "100px" }} aria-label="QR code to download Warehouse App">
+                <rect x="5" y="5" width="25" height="25" fill="currentColor" />
+                <rect x="35" y="5" width="5" height="5" fill="currentColor" />
+                <rect x="45" y="5" width="5" height="5" fill="currentColor" />
+                <rect x="55" y="5" width="5" height="5" fill="currentColor" />
+                <rect x="70" y="5" width="25" height="25" fill="currentColor" />
+                <rect x="10" y="10" width="15" height="15" fill="var(--p-color-bg)" />
+                <rect x="75" y="10" width="15" height="15" fill="var(--p-color-bg)" />
+                <rect x="13" y="13" width="9" height="9" fill="currentColor" />
+                <rect x="78" y="13" width="9" height="9" fill="currentColor" />
+                <rect x="5" y="70" width="25" height="25" fill="currentColor" />
+                <rect x="10" y="75" width="15" height="15" fill="var(--p-color-bg)" />
+                <rect x="13" y="78" width="9" height="9" fill="currentColor" />
+              </svg>
+            </div>
+            <BlockStack gap="400">
+              <Text as="p" tone="subdued" variant="bodySm">
+                Scan to download the INK Warehouse app on your packing station devices.
+              </Text>
+              <BlockStack gap="200">
+                <InlineStack gap="200">
+                  <Text as="span" tone="subdued" variant="bodySm">Store Name:</Text>
+                  <Text as="span" variant="bodySm" fontWeight="medium">{storeName}</Text>
+                </InlineStack>
+                <InlineStack gap="200" blockAlign="center">
+                  <Text as="span" tone="subdued" variant="bodySm">Merchant ID:</Text>
+                  <code style={{ fontSize: "12px", fontFamily: "monospace", background: "var(--p-color-bg-surface-secondary)", padding: "2px 6px" }}>{merchantId}</code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(merchantId);
+                    }}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", display: 'flex', alignItems: 'center' }}
+                    aria-label="Copy Merchant ID"
+                  >
+                    <Icon source={ClipboardIcon} tone="subdued" />
+                  </button>
+                </InlineStack>
+              </BlockStack>
+              <InlineStack gap="300">
+                <Button onClick={() => window.open("https://apps.apple.com/us/app/ink-warehouse/id6670417764", "_blank")} icon={() => <Download size={16} />}>
+                  Download App
+                </Button>
+                <Button variant="plain" onClick={() => window.open("https://warehouse-bee05.web.app/login", "_blank")} icon={() => <ExternalLink size={16} />}>
+                  Open App
+                </Button>
+              </InlineStack>
+            </BlockStack>
+          </InlineStack>
+        </Card>
+      </Layout.AnnotatedSection>
+
+      {/* Invite Modal */}
+      <Modal
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        title="Invite a user"
+        primaryAction={{ 
+          content: isSubmitting ? "Inviting..." : "Send Invite", 
+          onAction: handleInvite, 
+          disabled: !inviteEmail || !inviteName || !invitePassword || isSubmitting 
+        }}
+        secondaryActions={[{ content: "Cancel", onAction: () => setInviteOpen(false) }]}
+      >
+        <Modal.Section>
+          <BlockStack gap="400">
+            <TextField
+              label="Full name"
+              placeholder="Jane Smith"
+              value={inviteName}
+              onChange={setInviteName}
+              autoComplete="name"
+            />
+            <TextField
+              label="Email address"
+              type="email"
+              placeholder="name@company.com"
+              value={inviteEmail}
+              onChange={setInviteEmail}
+              autoComplete="email"
+            />
+            <TextField
+              label="Password"
+              type="password"
+              placeholder="••••••••"
+              value={invitePassword}
+              onChange={setInvitePassword}
+              autoComplete="new-password"
+            />
+            <Select
+              label="Role"
+              value={inviteRole}
+              onChange={setInviteRole}
+              options={[
+                { label: "Operator", value: "operator" },
+              ]}
+              disabled
+            />
+            {mutateFetcher.data?.error && (
+              <Text as="p" tone="critical">{mutateFetcher.data.error}</Text>
+            )}
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
+    </Layout>
   );
-}
+};
+
+export default UserManagementSettings;

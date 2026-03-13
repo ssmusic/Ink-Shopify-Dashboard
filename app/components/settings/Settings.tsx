@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Page, Tabs } from "@shopify/polaris";
 import PolarisAppLayout from "../PolarisAppLayout";
 import AccountSettings from "./AccountSettings";
@@ -18,14 +18,12 @@ const tabs = [
 
 const Settings = ({ initialData }: { initialData?: any }) => {
   const [searchParams] = useSearchParams();
-  const initialTab = tabs.findIndex(
-    (t) => t.id === (searchParams.get("tab") || "account")
-  );
+  const initialTab = tabs.findIndex(t => t.id === (searchParams.get("tab") || "account"));
   const [selected, setSelected] = useState(Math.max(initialTab, 0));
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    const idx = tabs.findIndex((t) => t.id === tabParam);
+    const idx = tabs.findIndex(t => t.id === tabParam);
     if (idx >= 0) setSelected(idx);
   }, [searchParams]);
 
@@ -33,18 +31,12 @@ const Settings = ({ initialData }: { initialData?: any }) => {
 
   const renderTabContent = () => {
     switch (tabs[selected]?.id) {
-      case "account":
-        return <AccountSettings />;
-      case "tags":
-        return <TagsSettings inventoryData={initialData?.inventoryData} />;
-      case "branding":
-        return <BrandingSettings />;
-      case "communication":
-        return <CommunicationSettings />;
-      case "users":
-        return <UserManagementSettings />;
-      default:
-        return <AccountSettings />;
+      case "account": return <AccountSettings />;
+      case "tags": return <TagsSettings inventoryData={initialData?.inventoryData} />;
+      case "branding": return <BrandingSettings />;
+      case "communication": return <CommunicationSettings />;
+      case "users": return <UserManagementSettings />;
+      default: return <AccountSettings />;
     }
   };
 
@@ -52,7 +44,9 @@ const Settings = ({ initialData }: { initialData?: any }) => {
     <PolarisAppLayout>
       <Page title="Settings">
         <Tabs tabs={tabs} selected={selected} onSelect={handleTabChange}>
-          <div style={{ paddingTop: "16px" }}>{renderTabContent()}</div>
+          <div style={{ paddingTop: "16px" }}>
+            {renderTabContent()}
+          </div>
         </Tabs>
       </Page>
     </PolarisAppLayout>

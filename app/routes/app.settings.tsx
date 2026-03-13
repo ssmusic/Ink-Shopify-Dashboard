@@ -2,7 +2,7 @@ import { useLoaderData, type LoaderFunctionArgs } from "react-router";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
-import { getInventory, getInventoryByShopDomain } from "../services/ink-api.server";
+import { getInventory, getInventoryByShopDomain, getShopIdByDomain } from "../services/ink-api.server";
 import Settings from "../components/settings/Settings";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -57,8 +57,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const payload = {
      shopName: shop?.name || session.shop.replace(".myshopify.com", ""),
      shopDomain: session.shop,
+     shopId: "", // Will be populated below if available
      primaryDomain: shop?.primaryDomain?.host || session.shop,
-     // No hardcoded fallback — use empty string if Shopify doesn't return one
      contactEmail: shop?.contactEmail || "",
      installedDate,
      inventoryData: {
@@ -66,6 +66,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
        usedThisPeriod: usedStr
      }
   };
+
+  // Populate shopId if found during inventory fetch
+  try {
+    payload.shopId = await getShopIdByDomain(session.shop);
+  } catch (e) {
+    console.warn("Could not fetch shopId:", e);
+  }
 
   return json(payload);
 }

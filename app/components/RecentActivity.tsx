@@ -101,7 +101,7 @@ const RecentActivity = () => {
       {/* View All Link */}
       <div className="flex justify-end mt-4">
         <Link
-          to="/shipments"
+          to="/app/tagged-shipments"
           className="text-sm text-foreground hover:underline focus-visible:underline"
           aria-label="View all orders"
         >
