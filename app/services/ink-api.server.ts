@@ -192,7 +192,7 @@ export const getInventory = async (apiKey: string) => {
  * Finds the shop_id from the INK merchants list, then POSTs a zero-delta 
  * (or reads from Firestore directly). Falls back gracefully.
  */
-export const getInventoryByShopDomain = async (shopDomain: string): Promise<{ current_count: number; used_this_month: number; recent_transactions: any[] }> => {
+export const getInventoryByShopDomain = async (shopDomain: string): Promise<{ current_count: number; total_purchased: number; used_this_month: number; recent_transactions: any[] }> => {
     // 1. Find the shop_id for this domain
     const listRes = await fetch(`${INK_API_URL}/admin/merchants?limit=200`, {
         headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
@@ -223,9 +223,8 @@ export const getInventoryByShopDomain = async (shopDomain: string): Promise<{ cu
         .get();
 
     if (ledgerSnap.empty) {
-        return { current_count: 0, used_this_month: 0, recent_transactions: [] };
+        return { current_count: 0, total_purchased: 0, used_this_month: 0, recent_transactions: [] };
     }
-
     // Sort descending by created_at
     const docs = ledgerSnap.docs.map(doc => doc.data());
     docs.sort((a, b) => {
@@ -238,14 +237,18 @@ export const getInventoryByShopDomain = async (shopDomain: string): Promise<{ cu
     const latestEntry = docs[0];
     const currentCount = latestEntry.balance_after || 0;
 
-    // Calculate "Used This Month" - sum of absolute value of negative deltas in current month
+    // Calculate "Used This Month" and "Total Purchased"
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
     
     let usedThisMonth = 0;
+    let totalPurchased = 0;
     docs.forEach(d => {
         const dDate = new Date(d.created_at || 0);
+        if (d.quantity_change > 0) {
+            totalPurchased += d.quantity_change;
+        }
         if (dDate.getMonth() === currentMonth && dDate.getFullYear() === currentYear) {
             if (d.quantity_change < 0) {
                 usedThisMonth += Math.abs(d.quantity_change);
@@ -265,6 +268,7 @@ export const getInventoryByShopDomain = async (shopDomain: string): Promise<{ cu
 
     return { 
         current_count: currentCount, 
+        total_purchased: totalPurchased || 100, // Fallback to 100 if no positive changes found
         used_this_month: usedThisMonth,
         recent_transactions: recentTransactions 
     };

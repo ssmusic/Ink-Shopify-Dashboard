@@ -1,14 +1,29 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useFetcher } from "react-router";
 import { Button } from "~/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 
-interface NFCTagInventoryProps {
-  remaining?: number;
-  total?: number;
+interface InventoryData {
+  remaining: number;
+  total: number;
+  success: boolean;
 }
 
-const NFCTagInventory = ({ remaining = 87, total = 100 }: NFCTagInventoryProps) => {
-  const percentage = Math.round((remaining / total) * 100);
+const NFCTagInventory = () => {
+  const fetcher = useFetcher<InventoryData>();
+  
+  useEffect(() => {
+    if (fetcher.state === "idle" && !fetcher.data) {
+      fetcher.load("/app/api/dashboard/inventory");
+    }
+  }, [fetcher]);
+
+  const remaining = fetcher.data?.remaining ?? 0;
+  const total = fetcher.data?.total ?? 100;
+  const isLoading = fetcher.state === "loading";
+
+  const percentage = total > 0 ? Math.round((remaining / total) * 100) : 0;
   const isLowInventory = remaining < 20;
   const isCriticalInventory = remaining < 10;
 
@@ -51,7 +66,7 @@ const NFCTagInventory = ({ remaining = 87, total = 100 }: NFCTagInventoryProps) 
             />
           )}
           <span className="text-2xl sm:text-[32px] font-light text-foreground">
-            {remaining} / {total}
+            {isLoading ? "..." : `${remaining} / ${total}`}
           </span>
         </div>
         <p className="text-[13px]" style={{ color: "#666666" }}>
@@ -97,7 +112,7 @@ const NFCTagInventory = ({ remaining = 87, total = 100 }: NFCTagInventoryProps) 
             : "border-border hover:border-foreground"
         }`}
       >
-        <Link to="/settings?tab=tags">
+        <Link to="/app/settings?tab=tags">
           {isCriticalInventory ? "Reorder Now" : "Reorder Tags"}
         </Link>
       </Button>

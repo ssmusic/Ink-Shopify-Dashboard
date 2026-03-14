@@ -1,19 +1,70 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
 import { adminCreateUser, getShopIdByDomain, getMerchantUsers, deleteMerchantUser } from "../services/ink-api.server";
 import sgMail from "@sendgrid/mail";
+import crypto from "crypto";
+
+const JWT_SECRET =
+  process.env.WAREHOUSE_JWT_SECRET ||
+  process.env.SHOPIFY_API_SECRET ||
+  "fallback-dev-secret";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
 const json = (data: any, init?: ResponseInit) =>
   new Response(JSON.stringify(data), {
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...corsHeaders },
     ...init,
   });
 
-// ─── GET: list all users for this shop ───────────────────────────────────────
-export const loader = async ({ request }: LoaderFunctionArgs) => {
+function verifyToken(token: string): { shop: string } | null {
   try {
-    const { session } = await authenticate.admin(request);
-    const shopDomain = session.shop;
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const [header, body, signature] = parts;
+    const expectedSig = crypto
+      .createHmac("sha256", JWT_SECRET)
+      .update(`${header}.${body}`)
+      .digest("base64url");
+    if (signature !== expectedSig) return null;
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+// ─── GET: list all users for this shop ───────────────────────────────────────
+export async function loader({ request }: LoaderFunctionArgs) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
+  try {
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return json({ error: "Missing or invalid authorization header" }, { status: 401 });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const payload = verifyToken(token);
+    
+    let shopDomain = payload?.shop;
+    
+    if (!shopDomain) {
+      try {
+        const decodedBody = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+        shopDomain = decodedBody.merchant_id || decodedBody.shop;
+      } catch (e) {}
+    }
+
+    if (!shopDomain) {
+      return json({ error: "Invalid token or missing shop domain" }, { status: 401 });
+    }
 
     try {
         // Users were created with merchant_id = shopDomain (not shop_id),
@@ -49,12 +100,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 
 // ─── POST: create / update / delete ──────────────────────────────────────────
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shopDomain = session.shop;
+export async function action({ request }: ActionFunctionArgs) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
 
-  const body = await request.json();
-  const { intent } = body;
+  try {
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return json({ error: "Missing or invalid authorization header" }, { status: 401 });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const payload = verifyToken(token);
+    let shopDomain = payload?.shop;
+
+    if (!shopDomain) {
+      try {
+        const decodedBody = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+        shopDomain = decodedBody.merchant_id || decodedBody.shop;
+      } catch (e) {}
+    }
+
+    if (!shopDomain) {
+      return json({ error: "Invalid token or missing shop domain" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { intent } = body;
 
   // ── Create ──
   if (intent === "create") {
@@ -141,5 +214,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
-  return json({ error: "Unknown intent" }, { status: 400 });
+  } catch (err: any) {
+    console.error("[Users Action] Error:", err);
+    return json({ error: err.message || "Action failed" }, { status: 500 });
+  }
 };
