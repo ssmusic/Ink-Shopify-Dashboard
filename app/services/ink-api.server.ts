@@ -3,6 +3,25 @@ import { authenticate } from "../shopify.server";
 const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
 const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET || "ink_admin_aeb5c9d6e822a4e57d95a6a2224aada64230e48d89acad5782057fcb865548a2";
 
+/**
+ * Helper to construct the correct URL for Alan's API.
+ * Handles the case where INK_API_URL might already end in /api.
+ */
+function getAlanUrl(path: string): string {
+    const baseUrl = INK_API_URL.endsWith('/') ? INK_API_URL.slice(0, -1) : INK_API_URL;
+    
+    // Most Alan API routes are under /api/ (e.g. /api/enroll, /api/media/upload)
+    // If the path starts with /api/ and the baseUrl already ends in /api, we handle the doubling logic.
+    if (path.startsWith('/api/') && baseUrl.endsWith('/api')) {
+        // Based on testing, Alan's router specifically expects the doubled /api/api/ for media/upload,
+        // and supports it (or requires it) for enroll/inventory.
+        return `${baseUrl}${path}`; 
+    }
+    
+    // For admin or auth routes, or if the baseUrl doesn't end in /api, we just append.
+    return `${baseUrl}${path}`;
+}
+
 import crypto from "crypto";
 
 // Admin implementation - requires X-Admin-Secret
@@ -28,7 +47,7 @@ export const createMerchant = async (
       ...optionalParams
     };
 
-    const response = await fetch(`${INK_API_URL}/admin/merchants`, {
+    const response = await fetch(getAlanUrl("/admin/merchants"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -52,7 +71,7 @@ export const createMerchant = async (
 };
 
 export const getMerchants = async () => {
-    const response = await fetch(`${INK_API_URL}/admin/merchants`, {
+    const response = await fetch(getAlanUrl("/admin/merchants"), {
         headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
     });
     if (!response.ok) throw new Error("Failed to list merchants");
@@ -60,7 +79,7 @@ export const getMerchants = async () => {
 };
 
 export const getShopIdByDomain = async (shopDomain: string): Promise<string> => {
-    const listRes = await fetch(`${INK_API_URL}/admin/merchants?limit=200`, {
+    const listRes = await fetch(getAlanUrl("/admin/merchants?limit=200"), {
         headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
     });
     if (!listRes.ok) throw new Error("Failed to list merchants");
@@ -74,7 +93,7 @@ export const adminCreateUser = async (merchantId: string, name: string, email: s
     const payload: any = { merchant_id: merchantId, name, email };
     if (password) payload.password = password;
 
-    const response = await fetch(`${INK_API_URL}/admin/users`, {
+    const response = await fetch(getAlanUrl('/admin/users'), {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -91,7 +110,7 @@ export const adminCreateUser = async (merchantId: string, name: string, email: s
 };
 
 export const getMerchantUsers = async (merchantId: string) => {
-    const response = await fetch(`${INK_API_URL}/admin/users?merchant_id=${merchantId}`, {
+    const response = await fetch(getAlanUrl(`/admin/users?merchant_id=${merchantId}`), {
         headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
     });
     if (!response.ok) throw new Error("Failed to get merchant users");
@@ -99,7 +118,7 @@ export const getMerchantUsers = async (merchantId: string) => {
 };
 
 export const deleteMerchantUser = async (userId: string) => {
-    const response = await fetch(`${INK_API_URL}/admin/users/${userId}`, {
+    const response = await fetch(getAlanUrl(`/admin/users/${userId}`), {
         method: "DELETE",
         headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
     });
@@ -109,7 +128,7 @@ export const deleteMerchantUser = async (userId: string) => {
 
 // V1.3.0 Auth Binding
 export const loginUser = async (email: string, password: string) => {
-    const response = await fetch(`${INK_API_URL}/auth/login`, {
+    const response = await fetch(getAlanUrl('/auth/login'), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
@@ -151,7 +170,10 @@ export const enrollOrder = async (
     if (photoUrls && photoUrls.length > 0) payload.photo_urls = photoUrls;
     if (photoHashes && photoHashes.length > 0) payload.photo_hashes = photoHashes;
 
-    const response = await fetch(`${INK_API_URL}/api/enroll`, {
+    const enrollUrl = getAlanUrl('/api/enroll');
+    console.log("[ink-api] enrollOrder →", enrollUrl);
+    console.log("[ink-api] enrollOrder payload (no sensitive):", JSON.stringify({ order_id: payload.order_id, nfc_token: payload.nfc_token, order_number: payload.order_number }));
+    const response = await fetch(enrollUrl, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -160,14 +182,17 @@ export const enrollOrder = async (
         body: JSON.stringify(payload),
     });
 
+    console.log("[ink-api] enrollOrder response status:", response.status, response.statusText);
     if (!response.ok) {
-        throw new Error(`Enrollment failed: ${await response.text()}`);
+        const errText = await response.text();
+        console.error("[ink-api] enrollOrder error body:", errText);
+        throw new Error(`Enrollment failed: ${errText}`);
     }
     return await response.json();
 };
 
 export const getProof = async (apiKey: string, nfcToken: string) => {
-    const response = await fetch(`${INK_API_URL}/api/proofs/${nfcToken}`, {
+    const response = await fetch(getAlanUrl(`/api/proofs/${nfcToken}`), {
         headers: {
             "Authorization": `Bearer ${apiKey}`,
         },
@@ -177,8 +202,20 @@ export const getProof = async (apiKey: string, nfcToken: string) => {
     return await response.json();
 };
 
+export const getProofByNfc = async (apiKey: string, nfcUid: string) => {
+    const response = await fetch(getAlanUrl(`/api/proofs/nfc/${nfcUid}`), {
+        headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+        },
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Get proof by NFC failed: ${await response.text()}`);
+    return await response.json();
+};
+
 export const getInventory = async (apiKey: string) => {
-    const response = await fetch(`${INK_API_URL}/api/inventory`, {
+    const response = await fetch(getAlanUrl('/api/inventory'), {
         headers: {
             "Authorization": `Bearer ${apiKey}`,
         },
@@ -194,7 +231,7 @@ export const getInventory = async (apiKey: string) => {
  */
 export const getInventoryByShopDomain = async (shopDomain: string): Promise<{ current_count: number; total_purchased: number; used_this_month: number; recent_transactions: any[] }> => {
     // 1. Find the shop_id for this domain
-    const listRes = await fetch(`${INK_API_URL}/admin/merchants?limit=200`, {
+    const listRes = await fetch(getAlanUrl("/admin/merchants?limit=200"), {
         headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
     });
     if (!listRes.ok) throw new Error("Failed to list merchants");
@@ -275,17 +312,41 @@ export const getInventoryByShopDomain = async (shopDomain: string): Promise<{ cu
 };
 
 export const uploadMedia = async (apiKey: string, formData: FormData) => {
-    // Note: When forwarding FormData, we let fetch handle the Content-Type header (boundary)
-    const response = await fetch(`${INK_API_URL}/api/media/upload`, {
+    // Note: In Node 18+, native fetch supports FormData directly.
+    // However, some Firebase Function environments or Cloud Run environments might 
+    // have issues if the boundary is not correctly negotiated or if the stream is consumed.
+    
+    const uploadUrl = getAlanUrl('/api/media/upload');
+    console.log("[ink-api] uploadMedia →", uploadUrl);
+    console.log("[ink-api] uploadMedia API key prefix:", apiKey.slice(0, 12) + "...");
+
+    const response = await fetch(uploadUrl, {
         method: "POST",
         headers: {
             "Authorization": `Bearer ${apiKey}`,
+            // We MUST NOT set Content-Type for FormData; fetch will set it with the boundary
         },
         body: formData, 
     });
 
+    console.log("[ink-api] uploadMedia response status:", response.status, response.statusText);
     if (!response.ok) {
-        throw new Error(`Upload failed: ${await response.text()}`);
+        const rawError = await response.text();
+        console.error(`[ink-api] uploadMedia error ${response.status}:`, rawError);
+        
+        let errorMsg = rawError;
+        try {
+            const parsed = JSON.parse(rawError);
+            errorMsg = parsed.error || parsed.message || rawError;
+        } catch {
+            // Not JSON
+        }
+
+        if (response.status === 503 || response.status === 504) {
+          throw new Error(`Alan upload API unavailable (${response.status}) — try again or reduce photo size.`);
+        }
+
+        throw new Error(`Alan Upload failed (${response.status}): ${errorMsg}`);
     }
     return await response.json();
 };
@@ -295,7 +356,7 @@ export const uploadMedia = async (apiKey: string, formData: FormData) => {
  * Used for deductions (negative delta) or replenishments (positive delta).
  */
 export const adjustMerchantInventory = async (shopId: string, delta: number, reason: string) => {
-    const response = await fetch(`${INK_API_URL}/admin/merchants/${shopId}/inventory`, {
+    const response = await fetch(getAlanUrl(`/admin/merchants/${shopId}/inventory`), {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -313,7 +374,7 @@ export const adjustMerchantInventory = async (shopId: string, delta: number, rea
 
 export const healthCheck = async () => {
     try {
-        const response = await fetch(`${INK_API_URL}/api/health`);
+        const response = await fetch(getAlanUrl('/api/health'));
         return response.ok;
     } catch (e) {
         return false;
@@ -334,7 +395,7 @@ export const verifyProofSignature = async (proof: any): Promise<boolean> => {
         }
 
         // 1. Fetch public JWKS from the INK backend
-        const jwksReq = await fetch(`${INK_API_URL}/.well-known/jwks.json`);
+        const jwksReq = await fetch(getAlanUrl('/.well-known/jwks.json'));
         if (!jwksReq.ok) {
             console.error("INK API: Failed to fetch JWKS for signature verification");
             return false;

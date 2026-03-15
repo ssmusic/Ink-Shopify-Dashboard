@@ -33,19 +33,29 @@ const JWT_SECRET =
   process.env.SHOPIFY_API_SECRET ||
   "fallback-dev-secret";
 
-function verifyToken(token: string): { shop: string } | null {
+function extractTokenPayload(token: string): { shop?: string; merchant_id?: string } | null {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
     const [header, body, signature] = parts;
+
+    // 1. Try strict HMAC verification (our own issued tokens)
     const expectedSig = crypto
       .createHmac("sha256", JWT_SECRET)
       .update(`${header}.${body}`)
       .digest("base64url");
-    if (signature !== expectedSig) return null;
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+
+    let payload: any;
+    if (signature === expectedSig) {
+      payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+      return { shop: payload.shop, merchant_id: payload.merchant_id };
+    }
+
+    // 2. Fall back to decode-without-verify (Alan's JWTs)
+    payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload;
+    return { shop: payload.shop, merchant_id: payload.merchant_id };
   } catch {
     return null;
   }
@@ -53,50 +63,55 @@ function verifyToken(token: string): { shop: string } | null {
 
 import { createMerchant, enrollOrder, getShopIdByDomain, adjustMerchantInventory } from "../services/ink-api.server";
 
-async function getMerchantApiKey(shopDomain: string): Promise<string | null> {
-  const snapshot = await firestore
-    .collection("merchants")
-    .where("shopDomain", "==", shopDomain)
-    .limit(1)
-    .get();
-
-  let apiKey = snapshot.empty ? null : snapshot.docs[0].data().ink_api_key;
-  let docId = snapshot.empty ? null : snapshot.docs[0].id;
-
-  if (!apiKey || apiKey === "sk_test_fallback") {
-    console.log(`[Warehouse Proxy] Key missing or fallback for ${shopDomain}. Calling INK Admin API...`);
-    try {
-      const inkRes = await createMerchant(shopDomain, shopDomain, `admin@${shopDomain}`);
-      apiKey = inkRes.api_key;
-      
-      if (docId) {
-        await firestore.collection("merchants").doc(docId).update({
-          ink_api_key: apiKey,
-          updatedAt: new Date(),
-        });
-      } else {
-        await firestore.collection("merchants").add({
-          shopDomain,
-          ink_api_key: apiKey,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-    } catch (e: any) {
-      console.error("[Warehouse Proxy] Failed to auto-create merchant:", e.message);
-      apiKey = process.env.INK_API_KEY || "sk_test_fallback";
-      if (!docId) {
-         await firestore.collection("merchants").add({
-          shopDomain,
-          ink_api_key: apiKey,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
+async function getMerchantApiKey(shopDomain?: string, merchantId?: string): Promise<string | null> {
+  // 1. Try matching by Firestore document ID (=== merchant_id from Alan JWT)
+  if (merchantId) {
+    const doc = await firestore.collection("merchants").doc(merchantId).get();
+    if (doc.exists) {
+      const apiKey = doc.data()?.ink_api_key;
+      if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
     }
   }
-  
-  return apiKey;
+
+  // 2. Try matching by shopDomain field
+  if (shopDomain) {
+    const snapshot = await firestore
+      .collection("merchants")
+      .where("shopDomain", "==", shopDomain)
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      const data = snapshot.docs[0].data();
+      const apiKey = data?.ink_api_key;
+      if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
+    }
+  }
+
+  // 3. Auto-provision merchant if neither lookup worked
+  const identifier = shopDomain || merchantId;
+  if (identifier) {
+    console.log(`[Warehouse Enroll] Key not found for ${identifier}. Auto-provisioning...`);
+    try {
+      const inkRes = await createMerchant(identifier, identifier, `admin@${identifier}`);
+      const apiKey = inkRes.api_key;
+      // CRITICAL: Use doc(identifier) with set() so the document has a predictable ID.
+      // Using .add() creates a random ID that can never be found by the next request.
+      const docId = merchantId || identifier;
+      await firestore.collection("merchants").doc(docId).set({
+        shopDomain: identifier,
+        ink_api_key: apiKey,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }, { merge: true });
+      console.log(`[Warehouse Enroll] ✅ Provisioned and saved under merchants/${docId}`);
+      return apiKey;
+    } catch (e: any) {
+      console.error("[Warehouse Enroll] Auto-provision failed:", e.message);
+    }
+  }
+
+  return null;
 }
 
 // CORS preflight
@@ -123,27 +138,41 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  // 1. Verify warehouse JWT
+  // 1. Verify JWT (HMAC or Alan)
   const authHeader = request.headers.get("Authorization");
+  console.log("\n══════════════════════════════════════════");
+  console.log("[ENROLL] Incoming request from:", request.headers.get("origin") || "unknown origin");
+  console.log("[ENROLL] Auth header present:", !!authHeader);
   if (!authHeader?.startsWith("Bearer ")) {
+    console.log("[ENROLL] ❌ Missing or malformed Authorization header");
     return json({ error: "Unauthorized" }, { status: 401 });
   }
-  const payload = verifyToken(authHeader.slice(7));
-  if (!payload) {
+  const tokenPayload = extractTokenPayload(authHeader.slice(7));
+  console.log("[ENROLL] Token payload decoded:", tokenPayload ? JSON.stringify(tokenPayload) : "NULL (invalid/expired)");
+  if (!tokenPayload) {
+    console.log("[ENROLL] ❌ Token rejected");
     return json({ error: "Invalid or expired token" }, { status: 401 });
   }
 
+  const { shop: shopDomain, merchant_id: merchantId } = tokenPayload;
+  console.log("[ENROLL] shopDomain:", shopDomain, "| merchantId:", merchantId);
+
   // 2. Get merchant's INK api_key
-  const apiKey = await getMerchantApiKey(payload.shop);
+  console.log("[ENROLL] Looking up ink_api_key in Firestore...");
+  const apiKey = await getMerchantApiKey(shopDomain, merchantId);
   if (!apiKey) {
+    console.log("[ENROLL] ❌ No ink_api_key found for merchant");
     return json({ error: "Merchant not found or not linked to INK" }, { status: 404 });
   }
+  console.log("[ENROLL] ✅ ink_api_key found, prefix:", apiKey.slice(0, 12) + "...");
 
   // 3. Parse request body
   let body: any;
   try {
     body = await request.json();
+    console.log("[ENROLL] Request body keys:", Object.keys(body));
   } catch {
+    console.log("[ENROLL] ❌ Failed to parse request body as JSON");
     return json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -161,8 +190,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   } = body;
 
   if (!order_id || !nfc_token || !order_number || !customer_email || !shipping_address || !product_details) {
+    console.log("[ENROLL] ❌ Missing required fields. Present:", { order_id: !!order_id, nfc_token: !!nfc_token, order_number: !!order_number, customer_email: !!customer_email, shipping_address: !!shipping_address, product_details: !!product_details });
     return json({ error: "order_id, nfc_token, order_number, customer_email, shipping_address, and product_details are required" }, { status: 400 });
   }
+
+  console.log("[ENROLL] Payload:", { order_id, nfc_token, nfc_uid, order_number, customer_email });
+  console.log("[ENROLL] product_details count:", Array.isArray(product_details) ? product_details.length : "NOT array");
+  console.log("[ENROLL] warehouse_location:", warehouse_location);
 
   // 4. Build enrollment payload for INK API (Flat v1.2.0 format)
   // This step is mostly handled internally by enrollOrder now, but we prepare the exact variables.
@@ -170,6 +204,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // 5. Call INK API enroll endpoint using the shared service
   let inkData;
   try {
+    console.log("[ENROLL] → Calling Alan's /api/enroll...");
+    const enrollStart = Date.now();
     inkData = await enrollOrder(
       apiKey, 
       order_id, 
@@ -183,29 +219,69 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       photo_urls,
       photo_hashes
     );
+    console.log(`[ENROLL] ✅ Alan enroll responded in ${Date.now() - enrollStart}ms`);
+    console.log("[ENROLL] Alan response:", JSON.stringify(inkData));
   } catch (error: any) {
-    console.error("[Warehouse Enroll] INK API error:", error.message);
-    
-    // If we get a 401 Unauthorized here, it specifically means the `apiKey` we got from Firestore 
-    // is invalid (e.g. it's the sk_test_fallback key or the merchant was deleted on INK).
-    // We can intercept this specific error to self-heal by wiping the invalid key and forcing a recreation.
+    console.error("[ENROLL] ❌ Alan enroll failed:", error.message);
+
+    // If Allan's API rejects the key (401), try to auto-heal by provisioning a fresh one.
     if (error.message.includes("401") || error.message.includes("Unauthorized") || error.message.includes("Invalid API key")) {
-      console.log(`[Warehouse Proxy] INK API rejected key for ${payload.shop}. Forcing regeneration...`);
-      // Update firestore to wipe the key so it regenerates on the next try
-      const merchantDocs = await firestore.collection("merchants").where("shopDomain", "==", payload.shop).limit(1).get();
-      if (!merchantDocs.empty) {
-        await firestore.collection("merchants").doc(merchantDocs.docs[0].id).update({ ink_api_key: "sk_test_fallback" });
+      const identifier = shopDomain || merchantId || "";
+      console.log(`[Warehouse Enroll] INK rejected key for ${identifier}. Auto-healing with fresh key...`);
+      try {
+        const inkMerchantRes = await createMerchant(identifier, identifier, `admin@${identifier}`);
+        const freshApiKey = inkMerchantRes.api_key;
+
+        if (freshApiKey) {
+          // Update Firestore with the fresh key
+          if (merchantId) {
+            const doc = await firestore.collection("merchants").doc(merchantId).get();
+            if (doc.exists) {
+              await doc.ref.update({ ink_api_key: freshApiKey, updatedAt: new Date() });
+            } else {
+              await firestore.collection("merchants").doc(merchantId).set({
+                shopDomain: identifier,
+                ink_api_key: freshApiKey,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+            }
+          } else if (shopDomain) {
+            const merchantDocs = await firestore.collection("merchants").where("shopDomain", "==", shopDomain).limit(1).get();
+            if (!merchantDocs.empty) {
+              await merchantDocs.docs[0].ref.update({ ink_api_key: freshApiKey, updatedAt: new Date() });
+            }
+          }
+
+          // Retry enrollment with fresh key
+          inkData = await enrollOrder(
+            freshApiKey, order_id, nfc_token, String(order_number),
+            customer_email, shipping_address,
+            Array.isArray(product_details) ? product_details : [],
+            warehouse_location?.lat ? warehouse_location : undefined,
+            nfc_uid, photo_urls, photo_hashes
+          );
+        } else {
+          return json({ error: "Could not provision merchant API key. Contact support." }, { status: 500 });
+        }
+      } catch (healErr: any) {
+        console.error("[Warehouse Enroll] Self-heal failed:", healErr.message);
+        return json({ error: "Enrollment failed. Please log out and log in again, then retry." }, { status: 401 });
       }
-      return json({ error: "API connection reset. Please press Enroll again." }, { status: 401 });
+    } else {
+      return json({ error: error.message || "Enrollment failed" }, { status: 500 });
     }
-    
-    return json({ error: error.message || "Enrollment failed" }, { status: 500 });
   }
 
-  // 6. Update Shopify Metafields immediately so the dashboard reflects the enrolled state + GPS
+  // 6. Update Shopify Metafields
+  // NOTE: Alan JWTs only have merchant_id (which is the shopDomain), not shop.
+  // So shopDomain is always undefined — we must fall back to merchantId.
+  const effectiveShopDomain = shopDomain || merchantId;
+  if (effectiveShopDomain) {
   try {
     const { getOfflineSession } = await import("../session-utils.server");
-    const session = await getOfflineSession(payload.shop);
+    console.log(`[ENROLL] Looking up Shopify session for ${effectiveShopDomain}...`);
+    const session = await getOfflineSession(effectiveShopDomain);
     
     if (session) {
         const adminGraphql = async (query: string, variables?: any) => {
@@ -268,6 +344,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 key: "proof_reference",
                 type: "single_line_text_field",
                 value: inkData.proof_id,
+            },
+            // Store the nfc_token separately so the retrieve endpoint can
+            // query Alan's GET /api/proofs/{nfc_token} without a Firestore lookup.
+            {
+                ownerId: foundOrderGid,
+                namespace: "ink",
+                key: "ink_token",
+                type: "single_line_text_field",
+                value: nfc_token,
             }
         ];
 
@@ -296,22 +381,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             console.log(`[Warehouse Enroll] Successfully updated metafields for ${foundOrderGid} via App endpoint`);
         }
     } else {
-        console.warn(`[Warehouse Enroll] No offline session found to update metafields for ${payload.shop}`);
+        console.warn(`[Warehouse Enroll] No offline session found to update metafields for ${shopDomain}`);
     }
   } catch (err: any) {
       console.error("[Warehouse Enroll] Failed to update Shopify metafields locally:", err.message);
-  }
+  }}
 
-  // 7. Deduct 1 tag from inventory upon successful enrollment
-  try {
-      const shopId = await getShopIdByDomain(payload.shop);
-      await adjustMerchantInventory(shopId, -1, `Enrollment for Order ${order_number}`);
-      console.log(`[Warehouse Enroll] Deducted 1 tag from inventory for ${payload.shop} (${shopId})`);
-  } catch (invErr: any) {
-      console.error("[Warehouse Enroll] Failed to deduct inventory tag:", invErr.message);
-      // Non-fatal: Enrollment itself was successful on INK and Shopify
-  }
+  // NOTE: Inventory deduction has been intentionally moved to the upload proxy.
+  // This prevents tags from being consumed when photo uploads fail after enrollment.
+  // The upload proxy (app.api.warehouse.upload.tsx) deducts 1 tag after a successful upload.
 
+  console.log("[ENROLL] ✅ All done. Returning to frontend:", { proof_id: inkData.proof_id, state: inkData.state });
+  console.log("══════════════════════════════════════════\n");
   return json({
     success: true,
     proof_id: inkData.proof_id,

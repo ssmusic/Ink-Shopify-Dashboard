@@ -1,4 +1,5 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
+import { authenticate } from "../shopify.server";
 import { adminCreateUser, getShopIdByDomain, getMerchantUsers, deleteMerchantUser } from "../services/ink-api.server";
 import sgMail from "@sendgrid/mail";
 import crypto from "crypto";
@@ -45,25 +46,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   try {
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return json({ error: "Missing or invalid authorization header" }, { status: 401 });
+    let shopDomain = "";
+
+    // 1. Try Shopify session (Admin UI)
+    try {
+      const { session } = await authenticate.admin(request);
+      shopDomain = session.shop;
+    } catch (e) {
+      // 2. Fallback to Bearer Token (External App)
+      const authHeader = request.headers.get("Authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.split(" ")[1];
+        const payload = verifyToken(token);
+        shopDomain = payload?.shop || "";
+        
+        if (!shopDomain) {
+          try {
+            const decodedBody = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+            shopDomain = decodedBody.merchant_id || decodedBody.shop;
+          } catch (e) {}
+        }
+      }
     }
 
-    const token = authHeader.split(" ")[1];
-    const payload = verifyToken(token);
-    
-    let shopDomain = payload?.shop;
-    
     if (!shopDomain) {
-      try {
-        const decodedBody = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
-        shopDomain = decodedBody.merchant_id || decodedBody.shop;
-      } catch (e) {}
-    }
-
-    if (!shopDomain) {
-      return json({ error: "Invalid token or missing shop domain" }, { status: 401 });
+      return json({ error: "Unauthorized" }, { status: 401 });
     }
 
     try {
@@ -106,24 +113,31 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return json({ error: "Missing or invalid authorization header" }, { status: 401 });
+    let shopDomain = "";
+
+    // 1. Try Shopify session (Admin UI)
+    try {
+      const { session } = await authenticate.admin(request);
+      shopDomain = session.shop;
+    } catch (e) {
+      // 2. Fallback to Bearer Token (External App)
+      const authHeader = request.headers.get("Authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.split(" ")[1];
+        const payload = verifyToken(token);
+        shopDomain = payload?.shop || "";
+        
+        if (!shopDomain) {
+          try {
+            const decodedBody = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+            shopDomain = decodedBody.merchant_id || decodedBody.shop;
+          } catch (e) {}
+        }
+      }
     }
 
-    const token = authHeader.split(" ")[1];
-    const payload = verifyToken(token);
-    let shopDomain = payload?.shop;
-
     if (!shopDomain) {
-      try {
-        const decodedBody = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
-        shopDomain = decodedBody.merchant_id || decodedBody.shop;
-      } catch (e) {}
-    }
-
-    if (!shopDomain) {
-      return json({ error: "Invalid token or missing shop domain" }, { status: 401 });
+      return json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();

@@ -145,6 +145,8 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
   const deviceInfo = order.metafields.device_info || "";
   const verifyUrl = order.metafields.verify_url || "";
   const gpsVerdict = order.metafields.gps_verdict || "";
+  // Only show a meaningful verdict badge — hide when genuinely unknown
+  const showGpsVerdictBadge = gpsVerdict && gpsVerdict.toLowerCase() !== "unknown";
 
   const statusRaw = order.status?.toLowerCase() || "pending";
   const statusLabel = statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1);
@@ -152,6 +154,9 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
   const addressLabel = order.customerAddress
     ? `${order.customerAddress.city}, ${order.customerAddress.provinceCode} ${order.customerAddress.zip}`
     : "";
+  // Keep for customer card only — do NOT show in Tap Location map
+  const _ = addressLabel; // suppress unused warning
+
 
   const tabItems = [
     { id: "write" as const, content: "Write" },
@@ -392,7 +397,7 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                                 <BlockStack gap="100">
                                   <InlineStack gap="200" blockAlign="center">
                                     <Text as="p" variant="bodySm" fontWeight="medium">Location verified</Text>
-                                    {gpsVerdict && (
+                                    {showGpsVerdictBadge && (
                                       <span style={{
                                         fontSize: "10px",
                                         fontWeight: 700,
@@ -448,15 +453,12 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                         </BlockStack>
                       </div>
 
-                      {/* Tap location map */}
                       {deliveryCoords && (
                         <div style={{ flex: 1 }}>
                           <BlockStack gap="200">
                             <Text as="p" tone="subdued" variant="bodySm" fontWeight="medium">Tap Location</Text>
                             <div style={{ background: "var(--p-color-bg-surface-secondary)", padding: "16px", borderRadius: "8px" }}>
-                              {addressLabel && (
-                                <Text as="p" variant="bodySm" tone="subdued">{addressLabel}</Text>
-                              )}
+                              <TapLocationCity coords={deliveryCoords} />
                               <Text as="p" variant="bodySm" tone="subdued">
                                 <code style={{ fontFamily: "monospace", fontSize: "12px" }}>{deliveryCoords}</code>
                               </Text>
@@ -485,6 +487,7 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                           </BlockStack>
                         </div>
                       )}
+
                     </InlineStack>
                   ) : (
                     <BlockStack gap="200" inlineAlign="center">
@@ -538,8 +541,10 @@ function PackagePhotos({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // ALAN API BUG: /api/proofs/nfc/[uid] does not exist and returns 404.
+    // We MUST prefer the proofId (proof_...) over the nfcTagUid.
     const lookupId =
-      nfcTagUid && nfcTagUid !== "—" ? nfcTagUid : proofId;
+      proofId && proofId !== "—" ? proofId : nfcTagUid;
 
     if (!lookupId || lookupId === "—") {
       setLoading(false);
@@ -601,5 +606,44 @@ function PackagePhotos({
         </div>
       )}
     </BlockStack>
+  );
+}
+
+// ─────────────────────────────────────────────
+// TapLocationCity - reverse geocodes GPS coords
+// using OpenStreetMap Nominatim (free, no key needed)
+// ─────────────────────────────────────────────
+function TapLocationCity({ coords }: { coords: string }) {
+  const [city, setCity] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!coords) return;
+    const [lat, lng] = coords.split(",").map((s) => s.trim());
+    if (!lat || !lng) return;
+
+    fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { "Accept-Language": "en" } }
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        const addr = data?.address;
+        if (!addr) return;
+        // Build a compact city label: "City, Country"
+        const cityName = addr.city || addr.town || addr.village || addr.county || addr.state_district || "";
+        const state = addr.state || "";
+        const country = addr.country_code?.toUpperCase() || addr.country || "";
+        const parts = [cityName, state, country].filter(Boolean);
+        setCity(parts.join(", "));
+      })
+      .catch(() => { /* silently ignore */ });
+  }, [coords]);
+
+  if (!city) return null;
+
+  return (
+    <Text as="p" variant="bodySm" fontWeight="medium">
+      {city}
+    </Text>
   );
 }
