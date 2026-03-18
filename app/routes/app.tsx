@@ -25,79 +25,79 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const path = url.pathname;
   const shop = session.shop;
 
-  // Public callback endpoint bypass (handled in its own route, but just in case)
-  // Also whitelist the root dashboard path so users can see the "Home" page
+  // Public paths — let through immediately without any DB/billing check
   if (path === "/app/payment" || path === "/app/payment/callback" || path === "/app" || path === "/app/") {
-      return { apiKey: process.env.SHOPIFY_API_KEY || "" };
-  }
-  
-  // 1. Check Firestore for Merchant Data
-  const merchant = await getMerchant(shop);
-  const paymentStatus = merchant?.payment_status;
-  const inkApiKey = merchant?.ink_api_key;
-
-  // 2. If valid locally, good to go
-  if (paymentStatus === "active" && inkApiKey) {
-     // Auto-register carrier service logic remains here
-     const appUrl = process.env.SHOPIFY_APP_URL || "";
-     if (appUrl) {
-        ensureCarrierServiceRegistered(admin, appUrl).catch((err) => {
-          console.error("[App] Carrier service registration error (non-blocking):", err);
-        });
-     }
-     return { apiKey: process.env.SHOPIFY_API_KEY || "" };
-  }
-
-  // 3. If not valid in DB, check Shopify Billing API (Source of Truth)
-  const billingResponse = await admin.graphql(
-    `#graphql
-    query {
-      currentAppInstallation {
-        activeSubscriptions {
-          id
-          name
-          test
-          status
-        }
-      }
-    }`
-  );
-  
-  const billingData = await billingResponse.json();
-  const subscriptions = billingData.data?.currentAppInstallation?.activeSubscriptions || [];
-  const hasActiveSubscription = subscriptions.length > 0;
-
-  if (hasActiveSubscription) {
-    // Sync DB if needed (e.g. if payment_status was missing)
-    if (paymentStatus !== "active") {
-        // We can't update DB here easily without importing the update function, 
-        // but the callback handles the main update. 
-        // For now, allow access, maybe trigger a background sync or just let it be.
-        // Actually, let's just proceed. The callback is the primary writer.
-    }
-    
-    // If we have subscription but NO API Key, redirect to callback to restore/generate it
-    if (!inkApiKey) {
-        return Response.redirect(`${process.env.SHOPIFY_APP_URL}/app/payment/callback?charge_id=restore`);
-    }
-    
-    // Check carrier service
-    const appUrl = process.env.SHOPIFY_APP_URL || "";
-    if (appUrl) {
-       ensureCarrierServiceRegistered(admin, appUrl).catch((err) => {
-         console.error("[App] Carrier service registration error (non-blocking):", err);
-       });
-    }
-
     return { apiKey: process.env.SHOPIFY_API_KEY || "" };
   }
 
-  // 4. No active subscription -> Redirect to Payment
-  // Preserve query parameters (embedded, shop, host, hmac, etc.)
+  // 1. Check Firestore for Merchant Data (fast path)
+  let merchant: any = null;
+  try {
+    merchant = await getMerchant(shop);
+  } catch (err) {
+    // Firestore cold-start timeout or error — don't crash, fall through to billing check
+    console.warn("[App] getMerchant failed (non-fatal):", err);
+  }
+
+  const paymentStatus = merchant?.payment_status;
+  const inkApiKey = merchant?.ink_api_key;
+
+  // FAST PATH: Merchant already has a valid API key in Firestore.
+  // This means they've already paid and been set up — skip the billing API entirely.
+  // This is the most common case and saves 1-3s on every page load.
+  if (inkApiKey && inkApiKey !== "undefined" && inkApiKey !== "sk_test_fallback") {
+    // Fire-and-forget carrier service registration — never blocks the response
+    const appUrl = process.env.SHOPIFY_APP_URL || "";
+    if (appUrl) {
+      ensureCarrierServiceRegistered(admin, appUrl).catch((err) =>
+        console.error("[App] Carrier service registration error (non-blocking):", err)
+      );
+    }
+    return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  }
+
+  // SLOW PATH: No API key yet — check Shopify Billing API to see if they have a subscription
+  // (Only reached for brand-new installs or merchants whose Firestore record is incomplete)
+  let hasActiveSubscription = false;
+  try {
+    const billingResponse = await admin.graphql(
+      `#graphql
+      query {
+        currentAppInstallation {
+          activeSubscriptions {
+            id name test status
+          }
+        }
+      }`
+    );
+    const billingData = await billingResponse.json();
+    const subscriptions = billingData.data?.currentAppInstallation?.activeSubscriptions || [];
+    hasActiveSubscription = subscriptions.length > 0;
+  } catch (err) {
+    console.error("[App] Billing check failed:", err);
+  }
+
+  if (hasActiveSubscription) {
+    // Has subscription but no API key yet — redirect to callback to generate it
+    if (!inkApiKey) {
+      return Response.redirect(`${process.env.SHOPIFY_APP_URL}/app/payment/callback?charge_id=restore`);
+    }
+
+    const appUrl = process.env.SHOPIFY_APP_URL || "";
+    if (appUrl) {
+      ensureCarrierServiceRegistered(admin, appUrl).catch((err) =>
+        console.error("[App] Carrier service registration error (non-blocking):", err)
+      );
+    }
+    return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  }
+
+  // No active subscription → redirect to payment
   const redirectUrl = new URL(`${process.env.SHOPIFY_APP_URL}/app/payment`);
   redirectUrl.search = url.search;
   return Response.redirect(redirectUrl.toString());
 };
+
 
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();

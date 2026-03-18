@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useLoaderData, useSubmit } from "react-router";
+import { useLoaderData, useRevalidator } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getMerchant } from "../services/merchant.server";
@@ -11,7 +11,6 @@ import {
   Badge,
   Text,
   TextField,
-  Select,
   Button,
   InlineStack,
   BlockStack,
@@ -207,7 +206,7 @@ const statusBadgeProps: Record<
 // ─────────────────────────────────────────────
 export default function ShipmentsIndex() {
   const { orders, counts } = useLoaderData() as any;
-  const submit = useSubmit();
+  const { revalidate } = useRevalidator();
 
   const [queryValue, setQueryValue] = useState("");
   const [selected, setSelected] = useState(0);
@@ -215,13 +214,13 @@ export default function ShipmentsIndex() {
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
-  // Auto-refresh every 30s
+  // Auto-refresh every 30s — revalidate re-runs the loader without losing App Bridge session
   useEffect(() => {
     const interval = setInterval(() => {
-      submit(null, { method: "get" });
+      revalidate();
     }, 30000);
     return () => clearInterval(interval);
-  }, [submit]);
+  }, [revalidate]);
 
   const tabs = [
     { id: "all", content: `All (${counts?.all || 0})`, panelID: "all" },
@@ -272,8 +271,25 @@ export default function ShipmentsIndex() {
   }, []);
 
   const handleRefresh = useCallback(() => {
-    submit(null, { method: "get" });
-  }, [submit]);
+    revalidate();
+  }, [revalidate]);
+
+  // Auto-retry if the page loaded blank (App Bridge hydration race on first open)
+  // Uses revalidate() to preserve the App Bridge session context
+  useEffect(() => {
+    if (!orders || orders.length === 0) {
+      const timer = setTimeout(() => {
+        const key = "ink_shipments_retried";
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, "1");
+          revalidate();
+        }
+      }, 1500);
+      return () => clearTimeout(timer);
+    } else {
+      sessionStorage.removeItem("ink_shipments_retried");
+    }
+  }, [orders, revalidate]);
 
   const resourceName = { singular: "shipment", plural: "shipments" };
 
@@ -374,19 +390,32 @@ export default function ShipmentsIndex() {
 
           {/* Sort + Refresh */}
           <InlineStack align="space-between" blockAlign="center">
-            <div style={{ width: "120px" }}>
-              <Select
-                label="Sort"
-                labelInline
-                options={[
-                  { label: "Newest", value: "new" },
-                  { label: "Oldest", value: "old" },
-                ]}
+            {/* Compact sort control — Polaris Select is too large */}
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--p-color-text-secondary)" }}>
+              Sort
+              <select
                 value={sortValue}
-                onChange={setSortValue}
-              />
-            </div>
-            <Button icon={RefreshIcon} onClick={handleRefresh}>
+                onChange={(e) => setSortValue(e.target.value)}
+                style={{
+                  fontSize: "13px",
+                  padding: "4px 28px 4px 8px",
+                  border: "1px solid var(--p-color-border)",
+                  borderRadius: "6px",
+                  background: "var(--p-color-bg-surface)",
+                  color: "var(--p-color-text)",
+                  appearance: "none",
+                  WebkitAppearance: "none",
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "right 8px center",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="new">Newest</option>
+                <option value="old">Oldest</option>
+              </select>
+            </label>
+            <Button icon={RefreshIcon} size="slim" onClick={handleRefresh}>
               Refresh
             </Button>
           </InlineStack>
