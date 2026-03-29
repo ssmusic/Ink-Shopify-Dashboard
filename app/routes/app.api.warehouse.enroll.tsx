@@ -245,10 +245,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         `;
         let orderNode = null;
         const searchResult = await adminGraphql(nameQuery, { query: `name:${numericOrderId}` });
+        if (searchResult?.errors) {
+          console.error("[ENROLL] GraphQL Error 1:", JSON.stringify(searchResult.errors, null, 2));
+        }
         if (searchResult?.data?.orders?.edges?.length > 0) {
           orderNode = searchResult.data.orders.edges[0].node;
         } else {
           const searchResult2 = await adminGraphql(nameQuery, { query: `name:#${numericOrderId}` });
+          if (searchResult2?.errors) {
+            console.error("[ENROLL] GraphQL Error 2:", JSON.stringify(searchResult2.errors, null, 2));
+          }
           if (searchResult2?.data?.orders?.edges?.length > 0) {
             orderNode = searchResult2.data.orders.edges[0].node;
           }
