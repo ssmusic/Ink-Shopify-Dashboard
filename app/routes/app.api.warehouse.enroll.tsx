@@ -222,37 +222,43 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           return response.json();
         };
 
-        const nameQuery = `#graphql
-          query FindOrderByName($query: String!) {
-            orders(first: 1, query: $query) {
-              edges { 
-                node { 
-                  id 
-                  fulfillments {
-                    trackingInfo {
-                      company
-                      number
-                    }
-                  }
-                } 
+        const idQuery = `#graphql
+          query getOrderById($id: ID!) {
+            order(id: $id) {
+              id
+              fulfillments {
+                trackingInfo {
+                  company
+                  number
+                }
               }
             }
           }
         `;
+
         let orderNode = null;
-        const searchResult = await adminGraphql(nameQuery, { query: `name:${numericOrderId}` });
-        if (searchResult?.errors) {
-          console.error("[ENROLL] GraphQL Error 1:", JSON.stringify(searchResult.errors, null, 2));
-        }
-        if (searchResult?.data?.orders?.edges?.length > 0) {
-          orderNode = searchResult.data.orders.edges[0].node;
+        const potentialGid = `gid://shopify/Order/${numericOrderId}`;
+        const idResult = await adminGraphql(idQuery, { id: potentialGid });
+        
+        if (idResult?.data?.order) {
+          orderNode = idResult.data.order;
         } else {
-          const searchResult2 = await adminGraphql(nameQuery, { query: `name:#${numericOrderId}` });
-          if (searchResult2?.errors) {
-            console.error("[ENROLL] GraphQL Error 2:", JSON.stringify(searchResult2.errors, null, 2));
-          }
-          if (searchResult2?.data?.orders?.edges?.length > 0) {
-            orderNode = searchResult2.data.orders.edges[0].node;
+          console.log(`[ENROLL] Direct ID lookup failed for ${potentialGid}. Trying name search...`);
+          const nameQuery = `#graphql
+            query FindOrderByName($query: String!) {
+              orders(first: 1, query: $query) {
+                edges { node { id fulfillments { trackingInfo { company number } } } }
+              }
+            }
+          `;
+          const searchResult = await adminGraphql(nameQuery, { query: `name:${numericOrderId}` });
+          if (searchResult?.data?.orders?.edges?.length > 0) {
+            orderNode = searchResult.data.orders.edges[0].node;
+          } else {
+            const searchResult2 = await adminGraphql(nameQuery, { query: `name:#${numericOrderId}` });
+            if (searchResult2?.data?.orders?.edges?.length > 0) {
+              orderNode = searchResult2.data.orders.edges[0].node;
+            }
           }
         }
 
