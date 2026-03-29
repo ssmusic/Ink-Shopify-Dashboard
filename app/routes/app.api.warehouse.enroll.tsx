@@ -198,8 +198,81 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   console.log("[ENROLL] product_details count:", Array.isArray(product_details) ? product_details.length : "NOT array");
   console.log("[ENROLL] warehouse_location:", warehouse_location);
 
-  // 4. Build enrollment payload for INK API (Flat v1.2.0 format)
-  // This step is mostly handled internally by enrollOrder now, but we prepare the exact variables.
+  // 4. Build enrollment payload and fetch tracking info from Shopify
+  let carrier_name: string | null = null;
+  let tracking_number: string | null = null;
+  const numericOrderId = order_id.replace(/\D/g, "");
+  let foundOrderGid = `gid://shopify/Order/${numericOrderId}`;
+
+  const effectiveShopDomain = shopDomain || merchantId;
+  if (effectiveShopDomain) {
+    try {
+      const { getOfflineSession } = await import("../session-utils.server");
+      const session = await getOfflineSession(effectiveShopDomain);
+      if (session) {
+        const adminGraphql = async (query: string, variables?: any) => {
+          const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Shopify-Access-Token": session.accessToken,
+            },
+            body: JSON.stringify({ query, variables }),
+          });
+          return response.json();
+        };
+
+        const nameQuery = `#graphql
+          query FindOrderByName($query: String!) {
+            orders(first: 1, query: $query) {
+              edges { 
+                node { 
+                  id 
+                  fulfillments(first: 10) {
+                    edges {
+                      node {
+                        trackingInfo {
+                          company
+                          number
+                        }
+                      }
+                    }
+                  }
+                } 
+              }
+            }
+          }
+        `;
+        let orderNode = null;
+        const searchResult = await adminGraphql(nameQuery, { query: `name:${numericOrderId}` });
+        if (searchResult?.data?.orders?.edges?.length > 0) {
+          orderNode = searchResult.data.orders.edges[0].node;
+        } else {
+          const searchResult2 = await adminGraphql(nameQuery, { query: `name:#${numericOrderId}` });
+          if (searchResult2?.data?.orders?.edges?.length > 0) {
+            orderNode = searchResult2.data.orders.edges[0].node;
+          }
+        }
+
+        if (orderNode) {
+          foundOrderGid = orderNode.id;
+          const fulfillments = orderNode.fulfillments?.edges || [];
+          for (const edge of fulfillments) {
+            const trackingInfo = edge?.node?.trackingInfo;
+            if (trackingInfo && trackingInfo.length > 0) {
+              carrier_name = trackingInfo[0]?.company || null;
+              tracking_number = trackingInfo[0]?.number || null;
+              if (carrier_name || tracking_number) break;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[Warehouse Enroll] Failed to fetch tracking info from Shopify:", err);
+    }
+  }
+
+  console.log(`[ENROLL] Extracted Carrier: ${carrier_name}, Tracking: ${tracking_number}`);
 
   // 5. Call INK API enroll endpoint using the shared service
   let inkData;
@@ -217,7 +290,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       warehouse_location && warehouse_location.lat ? { lat: warehouse_location.lat, lng: warehouse_location.lng } : undefined,
       nfc_uid,
       photo_urls,
-      photo_hashes
+      photo_hashes,
+      carrier_name,
+      tracking_number
     );
     console.log(`[ENROLL] ✅ Alan enroll responded in ${Date.now() - enrollStart}ms`);
     console.log("[ENROLL] Alan response:", JSON.stringify(inkData));
@@ -259,7 +334,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             customer_email, shipping_address,
             Array.isArray(product_details) ? product_details : [],
             warehouse_location?.lat ? warehouse_location : undefined,
-            nfc_uid, photo_urls, photo_hashes
+            nfc_uid, photo_urls, photo_hashes, carrier_name, tracking_number
           );
         } else {
           return json({ error: "Could not provision merchant API key. Contact support." }, { status: 500 });
@@ -274,9 +349,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   // 6. Update Shopify Metafields
-  // NOTE: Alan JWTs only have merchant_id (which is the shopDomain), not shop.
-  // So shopDomain is always undefined — we must fall back to merchantId.
-  const effectiveShopDomain = shopDomain || merchantId;
   if (effectiveShopDomain) {
   try {
     const { getOfflineSession } = await import("../session-utils.server");
@@ -295,33 +367,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             });
             return response.json();
         };
-
-        const numericOrderId = order_id.replace(/\D/g, ""); // Extract numbers for safety
-        const initialGid = `gid://shopify/Order/${numericOrderId}`;
-        
-        // Find correct order GID matching across possible stores (similar to ink.update.tsx fallback logic)
-        let foundOrderGid = initialGid;
-        
-        try {
-            const nameQuery = `#graphql
-              query FindOrderByName($query: String!) {
-                orders(first: 1, query: $query) {
-                  edges { node { id } }
-                }
-              }
-            `;
-            const searchResult = await adminGraphql(nameQuery, { query: `name:${numericOrderId}` });
-            if (searchResult?.data?.orders?.edges?.length > 0) {
-              foundOrderGid = searchResult.data.orders.edges[0].node.id;
-            } else {
-              const searchResult2 = await adminGraphql(nameQuery, { query: `name:#${numericOrderId}` });
-              if (searchResult2?.data?.orders?.edges?.length > 0) {
-                foundOrderGid = searchResult2.data.orders.edges[0].node.id;
-              }
-            }
-        } catch (searchErr) {
-            console.error("[Warehouse Enroll] Order search error, using presumed GID:", searchErr);
-        }
 
         const metafields = [
             {

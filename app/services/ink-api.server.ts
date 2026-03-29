@@ -154,7 +154,9 @@ export const enrollOrder = async (
     warehouseLocation?: { lat: number; lng: number },
     nfcUid?: string,
     photoUrls?: string[],
-    photoHashes?: string[]
+    photoHashes?: string[],
+    carrierName?: string | null,
+    trackingNumber?: string | null
 ) => {
     const payload: any = { 
         order_id: orderId, 
@@ -169,6 +171,8 @@ export const enrollOrder = async (
     if (nfcUid) payload.nfc_uid = nfcUid;
     if (photoUrls && photoUrls.length > 0) payload.photo_urls = photoUrls;
     if (photoHashes && photoHashes.length > 0) payload.photo_hashes = photoHashes;
+    if (carrierName) payload.carrier_name = carrierName;
+    if (trackingNumber) payload.tracking_number = trackingNumber;
 
     const enrollUrl = getAlanUrl('/api/enroll');
     console.log("[ink-api] enrollOrder →", enrollUrl);
