@@ -257,6 +257,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         if (orderNode) {
           foundOrderGid = orderNode.id;
           const fulfillments = orderNode.fulfillments?.edges || [];
+          console.log(`[ENROLL] Raw Fulfillments from Shopify API:`, JSON.stringify(fulfillments, null, 2));
           for (const edge of fulfillments) {
             const trackingInfo = edge?.node?.trackingInfo;
             if (trackingInfo && trackingInfo.length > 0) {
