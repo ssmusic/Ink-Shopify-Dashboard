@@ -272,6 +272,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     let nfsResponse;
     try {
+      console.log(`📦 Payload to NFS:`, JSON.stringify(enrollPayload, null, 2));
       nfsResponse = await NFSService.enroll(enrollPayload);
       console.log(`✅ NFS enrollment successful: ${nfsResponse.proof_id}`);
     } catch (error: any) {

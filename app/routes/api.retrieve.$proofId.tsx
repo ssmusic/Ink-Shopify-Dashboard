@@ -214,6 +214,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
         console.log(`   - state: ${proofData.state}`);
         console.log(`   - delivery_outcome: ${proofData.delivery_outcome}`);
         console.log(`   - media_items count: ${proofData.media_items?.length || 0}`);
+        console.log(`   - carrier_name: ${proofData.carrier_name || "Not Set"}`);
+        console.log(`   - tracking_number: ${proofData.tracking_number || "Not Set"}`);
 
         // Normalize the response so both old and new field names work seamlessly
         const normalized = {
