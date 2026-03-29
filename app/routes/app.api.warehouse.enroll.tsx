@@ -228,14 +228,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               edges { 
                 node { 
                   id 
-                  fulfillments(first: 10) {
-                    edges {
-                      node {
-                        trackingInfo {
-                          company
-                          number
-                        }
-                      }
+                  fulfillments {
+                    trackingInfo {
+                      company
+                      number
                     }
                   }
                 } 
@@ -262,10 +258,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
         if (orderNode) {
           foundOrderGid = orderNode.id;
-          const fulfillments = orderNode.fulfillments?.edges || [];
+          const fulfillments = orderNode.fulfillments || [];
           console.log(`[ENROLL] Raw Fulfillments from Shopify API:`, JSON.stringify(fulfillments, null, 2));
-          for (const edge of fulfillments) {
-            const trackingInfo = edge?.node?.trackingInfo;
+          for (const fulfillment of fulfillments) {
+            const trackingInfo = fulfillment?.trackingInfo;
             if (trackingInfo && trackingInfo.length > 0) {
               carrier_name = trackingInfo[0]?.company || null;
               tracking_number = trackingInfo[0]?.number || null;

@@ -103,14 +103,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             metafield(namespace: "ink", key: "customer_phone") {
               value
             }
-            fulfillments(first: 10) {
-              edges {
-                node {
-                  trackingInfo {
-                    company
-                    number
-                  }
-                }
+            fulfillments {
+              trackingInfo {
+                company
+                number
               }
             }
           }
@@ -146,14 +142,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   metafield(namespace: "ink", key: "customer_phone") {
                     value
                   }
-                  fulfillments(first: 10) {
-                    edges {
-                      node {
-                        trackingInfo {
-                          company
-                          number
-                        }
-                      }
+                  fulfillments {
+                    trackingInfo {
+                      company
+                      number
                     }
                   }
                 }
@@ -232,9 +224,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     let carrier_name = null;
     let tracking_number = null;
 
-    const fulfillments = orderData?.data?.order?.fulfillments?.edges || [];
-    for (const edge of fulfillments) {
-      const trackingInfo = edge?.node?.trackingInfo;
+    const fulfillments = orderData?.data?.order?.fulfillments || [];
+    for (const fulfillment of fulfillments) {
+      const trackingInfo = fulfillment?.trackingInfo;
       if (trackingInfo && trackingInfo.length > 0) {
         carrier_name = trackingInfo[0]?.company || null;
         tracking_number = trackingInfo[0]?.number || null;
