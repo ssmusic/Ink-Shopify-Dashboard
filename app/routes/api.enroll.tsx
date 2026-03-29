@@ -103,6 +103,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             metafield(namespace: "ink", key: "customer_phone") {
               value
             }
+            fulfillments(first: 10) {
+              edges {
+                node {
+                  trackingInfo {
+                    company
+                    number
+                  }
+                }
+              }
+            }
           }
         }
       `;
@@ -135,6 +145,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   }
                   metafield(namespace: "ink", key: "customer_phone") {
                     value
+                  }
+                  fulfillments(first: 10) {
+                    edges {
+                      node {
+                        trackingInfo {
+                          company
+                          number
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -209,6 +229,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const numericOrderId = String(order_id).replace(/\D/g, "");
 
+    let carrier_name = null;
+    let tracking_number = null;
+
+    const fulfillments = orderData?.data?.order?.fulfillments?.edges || [];
+    for (const edge of fulfillments) {
+      const trackingInfo = edge?.node?.trackingInfo;
+      if (trackingInfo && trackingInfo.length > 0) {
+        carrier_name = trackingInfo[0]?.company || null;
+        tracking_number = trackingInfo[0]?.number || null;
+        if (carrier_name || tracking_number) break;
+      }
+    }
+
     const enrollPayload: any = {
       order_id,
       nfc_token: token,
@@ -221,6 +254,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         product_details: [] // In a real flow, extract line items
       }
     };
+
+    if (carrier_name) enrollPayload.carrier_name = carrier_name;
+    if (tracking_number) enrollPayload.tracking_number = tracking_number;
 
     if (photo_urls && photo_urls.length > 0) {
       enrollPayload.photo_urls = photo_urls;
