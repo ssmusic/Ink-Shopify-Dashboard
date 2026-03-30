@@ -224,7 +224,7 @@ export const EmailService = {
             <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
               <tr>
                 <td align="center">
-                   <a href="${returnButtonUrl}" class="cta-button">
+                   <a href="${returnButtonUrl}" class="cta-button" style="color: #ffffff !important;">
                      Start Return
                    </a>
                 </td>
