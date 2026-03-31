@@ -23,6 +23,10 @@ api_version = "2024-10"
   topics = [ "orders/create" ]
   uri = "/webhooks/orders/create"
 
+  [[webhooks.subscriptions]]
+  topics = [ "orders/fulfilled" ]
+  uri = "/webhooks/orders_fulfilled"
+
 
 
 [access_scopes]

@@ -1,0 +1,7 @@
+npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
+
+> typecheck
+> react-router typegen && tsc --noEmit
+
+'react-router' is not recognized as an internal or external command,
+operable program or batch file.

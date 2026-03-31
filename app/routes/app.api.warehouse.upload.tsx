@@ -177,24 +177,9 @@ export async function action({ request }: ActionFunctionArgs) {
     console.log(`[UPLOAD] ✅ Alan upload responded in ${Date.now() - uploadStart}ms`);
     console.log("[UPLOAD] Alan response:", JSON.stringify(result));
 
-    // Deduct 1 tag from inventory after the FIRST successful photo upload per enrollment.
-    // We check for proof_id in the form data — every upload has one, but we only deduct once 
-    // per enrollment to avoid multiple deductions. We do it here because if upload fails,
-    // we do NOT want to deduct a tag (moved from enroll proxy for exactly this reason).
-    const proofId = formData.get("proof_id");
-    const isFirstPhoto = formData.get("is_first_photo") === "true";
-    if (isFirstPhoto && proofId) {
-      console.log("[UPLOAD] Deducting 1 tag from inventory for proof:", proofId);
-      try {
-        const identifier = shopDomain || merchantId || "";
-        const shopId = await getShopIdByDomain(identifier);
-        await adjustMerchantInventory(shopId, -1, `Upload for proof ${proofId}`);
-        console.log(`[Warehouse Upload] Deducted 1 tag for proof ${proofId}`);
-      } catch (invErr: any) {
-        console.error("[Warehouse Upload] Failed to deduct inventory tag:", invErr.message);
-        // Non-fatal
-      }
-    }
+    // Alan's backend automatically deducts inventory during the /api/enroll call.
+    // We previously attempted to deduct it here manually, but it caused redundancy 
+    // and failed because his schema changed to expect a positive "quantity".
 
     return json({ success: true, ...result });
   } catch (err: any) {

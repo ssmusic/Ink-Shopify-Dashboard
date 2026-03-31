@@ -176,6 +176,34 @@ export const NFSService = {
   },
 
   /**
+   * Marks a proof as delivered via Alan's backend API.
+   * Requires the merchant's ink_api_key (Bearer token) per API spec v1.2+.
+   * Called automatically from the orders/fulfilled Shopify webhook.
+   */
+  async markDelivered(proofId: string, apiKey: string, payload: { delivered_at: string; carrier?: string }): Promise<any> {
+    console.log(`📦 Marking delivery for proof ${proofId}:`, payload);
+
+    const response = await fetch(`${NFS_API_URL}/api/proofs/${proofId}/delivered`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ ink. Mark Delivered Failed [${response.status}]:`, errorText);
+      throw new Error(`ink. Mark Delivered failed: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("✅ ink. Mark Delivered Success:", data);
+    return data;
+  },
+
+  /**
    * Verifies the HMAC signature of an incoming webhook.
    */
   verifyWebhookSignature(payload: string, signature: string): boolean {

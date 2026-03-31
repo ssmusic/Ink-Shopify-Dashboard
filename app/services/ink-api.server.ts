@@ -7,20 +7,24 @@ const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET || "ink_admin_aeb5c9d6e822
  * Helper to construct the correct URL for Alan's API.
  * Handles the case where INK_API_URL might already end in /api.
  */
+/**
+ * Helper to construct the correct URL for Alan's API.
+ * The production INK_API_URL already ends in /api (e.g. https://.../api).
+ * Alan's routes are like /api/enroll, /api/media/upload, /admin/merchants, /auth/login.
+ * To avoid doubling (/api/api/...), we strip the trailing /api from the base when needed.
+ */
 function getAlanUrl(path: string): string {
     const baseUrl = INK_API_URL.endsWith('/') ? INK_API_URL.slice(0, -1) : INK_API_URL;
-    
-    // Most Alan API routes are under /api/ (e.g. /api/enroll, /api/media/upload)
-    // If the path starts with /api/ and the baseUrl already ends in /api, we handle the doubling logic.
+
+    // e.g. path = "/api/enroll", baseUrl ends in "/api" → strip it to avoid /api/api/enroll
     if (path.startsWith('/api/') && baseUrl.endsWith('/api')) {
-        // Based on testing, Alan's router specifically expects the doubled /api/api/ for media/upload,
-        // and supports it (or requires it) for enroll/inventory.
-        return `${baseUrl}${path}`; 
+        return `${baseUrl.slice(0, -4)}${path}`; // Remove trailing "/api", prepend base
     }
-    
-    // For admin or auth routes, or if the baseUrl doesn't end in /api, we just append.
+
+    // For /admin/*, /auth/*, etc., just append as-is
     return `${baseUrl}${path}`;
 }
+
 
 import crypto from "crypto";
 
