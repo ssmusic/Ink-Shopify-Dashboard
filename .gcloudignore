@@ -1,0 +1,21 @@
+# Exclude large directories not needed for Cloud Build
+# (Cloud Build installs dependencies itself via Dockerfile)
+node_modules/
+build/
+.git/
+.cursor/
+.shopify/
+.DS_Store
+
+# Test/temp files
+out.txt
+out2.txt
+ts_errors.txt
+project-tree.txt
+test_inv.ts
+check-proofs.ts
+
+# Docs (not needed for build)
+shopify_dashboard.md
+CHANGELOG.md
+README.md

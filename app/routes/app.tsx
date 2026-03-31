@@ -3,7 +3,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
 import { NavMenu } from "@shopify/app-bridge-react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
-import { authenticate } from "../shopify.server";
+import { authenticate, registerWebhooks } from "../shopify.server";
 import { ShopProvider } from "../contexts/ShopContext";
 import { ensureCarrierServiceRegistered } from "../services/carrier-service.server";
 
@@ -46,13 +46,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // This means they've already paid and been set up — skip the billing API entirely.
   // This is the most common case and saves 1-3s on every page load.
   if (inkApiKey && inkApiKey !== "undefined" && inkApiKey !== "sk_test_fallback") {
-    // Fire-and-forget carrier service registration — never blocks the response
+    // Fire-and-forget carrier service + webhook registration — never blocks the response
     const appUrl = process.env.SHOPIFY_APP_URL || "";
     if (appUrl) {
       ensureCarrierServiceRegistered(admin, appUrl).catch((err) =>
         console.error("[App] Carrier service registration error (non-blocking):", err)
       );
     }
+    // Ensure all webhooks in shopify.server.ts are registered with Shopify.
+    // The SDK skips this silently if they're already registered.
+    registerWebhooks({ session }).catch((err) =>
+      console.error("[App] Webhook registration error (non-blocking):", err)
+    );
     return { apiKey: process.env.SHOPIFY_API_KEY || "" };
   }
 
@@ -89,6 +94,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         console.error("[App] Carrier service registration error (non-blocking):", err)
       );
     }
+    registerWebhooks({ session }).catch((err) =>
+      console.error("[App] Webhook registration error (non-blocking):", err)
+    );
     return { apiKey: process.env.SHOPIFY_API_KEY || "" };
   }
 
