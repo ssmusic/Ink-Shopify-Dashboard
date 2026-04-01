@@ -1,0 +1,207 @@
+import { type LoaderFunctionArgs } from "react-router";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, X-Requested-With, Origin",
+};
+
+export const action = async ({ request }: any) => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+  return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
+};
+
+// Helper to determine if an order matches INK tracking logic
+function isInkProtected(order: any) {
+  const metafields: Record<string, string> = {};
+  order.metafields?.edges?.forEach((mfEdge: any) => {
+    metafields[mfEdge.node.key] = mfEdge.node.value;
+  });
+
+  const hasInkTag =
+    order.tags?.includes("INK-Premium-Delivery") ||
+    order.tags?.includes("INK-Verified-Delivery");
+  const hasDeliveryTypeMetafield = metafields.delivery_type === "premium";
+  const hasInkMetafield = metafields.ink_premium_order === "true";
+  const shippingTitle = (order.shippingLine?.title || "").toLowerCase();
+  const hasInkShipping =
+    shippingTitle.includes("ink. verified delivery") ||
+    shippingTitle.includes("ink verified") ||
+    shippingTitle.includes("verified delivery");
+
+  let hasInkLineItem = false;
+  for (const lineItem of order.lineItems?.edges || []) {
+    const title = (lineItem.node?.title || "").toLowerCase();
+    if (
+      title.includes("ink delivery") ||
+      title.includes("ink protected") ||
+      title.includes("ink premium") ||
+      title.includes("verified delivery")
+    ) {
+      hasInkLineItem = true;
+      break;
+    }
+    for (const attr of lineItem.node?.customAttributes || []) {
+      if (attr.key === "_ink_premium_fee" && attr.value === "true") {
+        hasInkLineItem = true;
+        break;
+      }
+    }
+  }
+
+  return hasInkTag || hasDeliveryTypeMetafield || hasInkMetafield || hasInkLineItem || hasInkShipping;
+}
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
+  const { getOfflineSession } = await import("../session-utils.server");
+  let graphqlClient: any = null;
+
+  try {
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader?.startsWith("Bearer ") && !authHeader.includes("Shopify")) {
+      // 1. Authenticate user from PWA JWT token
+      const token = authHeader.slice(7);
+      const payloadBase64 = token.split(".")[1];
+      const decoded = JSON.parse(Buffer.from(payloadBase64, "base64url").toString("utf8"));
+      const shopDomain = decoded.shop || decoded.shop_id || decoded.merchant_id;
+
+      if (!shopDomain) {
+        return new Response(JSON.stringify({ error: "Store context missing from token" }), { status: 401, headers: CORS_HEADERS });
+      }
+
+      const session = await getOfflineSession(shopDomain);
+      if (!session) {
+        return new Response(JSON.stringify({ error: `No session available` }), { status: 404, headers: CORS_HEADERS });
+      }
+
+      graphqlClient = {
+        graphql: async (query: string, options?: any) => {
+          const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Shopify-Access-Token": session.accessToken,
+            },
+            body: JSON.stringify({ query, variables: options?.variables || {} }),
+          });
+          return { json: async () => await response.json() };
+        },
+      };
+    } else {
+      // 2. Authenticate from Shopify embedded AppBridge (uses session cookies or AppBridge token under the hood)
+      const { authenticate } = await import("../shopify.server");
+      const { admin } = await authenticate.admin(request);
+      graphqlClient = admin;
+    }
+
+    if (!graphqlClient) {
+      throw new Error("No valid authentication found");
+    }
+
+    // Define 30-day cutoff points
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+
+    const query = `#graphql
+      query GetHistoricalOrders($query: String!) {
+        orders(first: 200, query: $query) {
+          edges {
+            node {
+              createdAt
+              totalPriceSet { shopMoney { amount } }
+              tags
+              metafields(namespace: "ink", first: 10) {
+                edges { node { key value } }
+              }
+              lineItems(first: 20) {
+                edges {
+                  node {
+                    title
+                    customAttributes { key value }
+                  }
+                }
+              }
+              shippingLine { title }
+            }
+          }
+        }
+      }
+    `;
+
+    // Fetch last 60 days
+    const response = await graphqlClient.graphql(query, {
+      variables: {
+        query: `created_at:>=${sixtyDaysAgo.toISOString().split("T")[0]}`
+      }
+    });
+
+    const data = await response.json();
+    if (!data?.data?.orders) {
+      return new Response(JSON.stringify({ 
+        currentPeriod: { totalValue: 0, count: 0, aov: 0 },
+        previousPeriod: { totalValue: 0, count: 0, aov: 0 },
+        trends: { valueProtected: 0, enrolledCount: 0, aov: 0 }
+      }), { headers: CORS_HEADERS });
+    }
+
+    let currentCount = 0;
+    let currentTotalValue = 0;
+    let prevCount = 0;
+    let prevTotalValue = 0;
+
+    data.data.orders.edges.forEach((edge: any) => {
+      const order = edge.node;
+      
+      // We only want INK protected orders
+      if (!isInkProtected(order)) return;
+
+      const orderDate = new Date(order.createdAt);
+      const amount = parseFloat(order.totalPriceSet.shopMoney.amount) || 0;
+
+      if (orderDate >= thirtyDaysAgo) {
+        currentCount++;
+        currentTotalValue += amount;
+      } else if (orderDate >= sixtyDaysAgo && orderDate < thirtyDaysAgo) {
+        prevCount++;
+        prevTotalValue += amount;
+      }
+    });
+
+    const currentAov = currentCount > 0 ? (currentTotalValue / currentCount) : 0;
+    const prevAov = prevCount > 0 ? (prevTotalValue / prevCount) : 0;
+
+    // Calculate percentages
+    const valueTrend = prevTotalValue > 0 ? ((currentTotalValue - prevTotalValue) / prevTotalValue) * 100 : (currentTotalValue > 0 ? 100 : 0);
+    const countTrend = prevCount > 0 ? ((currentCount - prevCount) / prevCount) * 100 : (currentCount > 0 ? 100 : 0);
+    const aovTrend = prevAov > 0 ? ((currentAov - prevAov) / prevAov) * 100 : (currentAov > 0 ? 100 : 0);
+
+    return new Response(JSON.stringify({
+      currentPeriod: {
+        totalValue: currentTotalValue,
+        count: currentCount,
+        aov: currentAov
+      },
+      previousPeriod: {
+        totalValue: prevTotalValue,
+        count: prevCount,
+        aov: prevAov
+      },
+      trends: {
+        valueProtected: valueTrend,
+        enrolledCount: countTrend,
+        aov: aovTrend
+      }
+    }), { headers: CORS_HEADERS });
+
+  } catch (err: any) {
+    console.error("Dashboard Metrics API Error:", err);
+    return new Response(JSON.stringify({ error: err.message || "Failed to fetch metrics" }), { status: 500, headers: CORS_HEADERS });
+  }
+};

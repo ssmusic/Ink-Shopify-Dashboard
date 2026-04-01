@@ -1,0 +1,732 @@
+INK Backend API Reference
+
+Version 1.3.0
+
+March 8, 2026
+
+Version	Date	Changes
+
+1.3.0	March 8, 2026	•	Updated POST /admin/merchants to support non-Shopify merchants with platform field
+
+•	Added POST /admin/users endpoint for merchant user management
+
+•	Added POST /auth/login endpoint for merchant user authentication
+
+•	Added GET /auth/validate endpoint for JWT token validation
+
+•	All new authentication content highlighted in red throughout the document
+
+1.2.0	March 5, 2026	•	Added PATCH /api/proofs/:proof_id/delivered endpoint
+
+•	Added GET /api/inventory endpoint
+
+•	Added POST /admin/merchants/:shop_id/inventory endpoint
+
+•	Modified POST /api/enroll to auto-deduct inventory
+
+•	Modified POST /verify to auto-calculate within_expected_window on first tap
+
+•	Modified POST /admin/merchants to auto-initialize inventory for new merchants
+
+•	Added StickerInventoryLedger schema for append-only inventory tracking
+
+•	Added configuration variables: INTERACTION_WINDOW_HOURS, EXPECTED_WINDOW_HOURS, INITIAL_STICKER_INVENTORY
+
+•	Added delivery context management and interaction window calculations
+
+•	All new content highlighted in blue throughout the document
+
+1.1.0	February 2026	Previous baseline version
+
+1.0.0	January 2026	Initial release
+
+
+
+Base URLs
+
+Production: https://us-central1-inink-c76d3.cloudfunctions.net/api
+
+Local Emulator: http://127.0.0.1:5001/inink-c76d3/us-central1/api
+
+
+
+Authentication
+
+The API uses two authentication mechanisms.
+
+
+
+Admin Secret (for /admin/* endpoints)
+
+Used by Shopify app to manage merchants. No login step required.
+
+
+
+Header	Value
+
+X-Admin-Secret	<admin_secret>
+
+Alternative (fallback): Authorization: Bearer <admin_secret>
+
+
+
+Merchant API Key (for /api/* endpoints)
+
+Issued once when a merchant is created via POST /admin/merchants. The backend hashes the key with SHA-256, resolves the shop_id, and enforces tenant isolation.
+
+
+
+Header	Value
+
+Authorization	Bearer <api_key>
+
+API key format: ink_live_<48 hex characters>
+
+Tenant Isolation: Every /api/* request is scoped to the merchant identified by the API key. Merchant A cannot read or modify Merchant B's data.
+
+
+
+
+
+
+
+API Endpoints
+
+GET /api/health
+
+Health check endpoint. No authentication required.
+
+Request
+
+GET /api/health
+
+No headers, no parameters.
+
+Response 200 OK
+
+Field	Description
+
+status	Always 'ok' when service is running
+
+
+
+POST /admin/merchants
+
+Create a new merchant and generate an API key. Called by Shopify app during the OAuth install callback.
+
+NEW in v1.2.0: When a new merchant is created (not a reinstall), the system automatically initializes their sticker inventory with the default amount .
+
+NEW in v1.3.0: Now supports both Shopify and custom (non-Shopify) merchants via the platform field. Added support for non-Shopify merchants with the platform parameter ("shopify" or "custom").
+
+The api_key is returned exactly once in the response. It is stored only as a SHA-256 hash and cannot be retrieved again.
+
+Request
+
+POST /admin/merchants
+
+Content-Type: application/json
+
+X-Admin-Secret: <admin_secret>
+
+Request Parameters
+
+Field	Type	Required	Description
+
+shop_domain	string	Yes	Shopify store domain, unique identifier
+
+shop_name	string	Yes	Display name of the store
+
+owner_email	string	Yes	Store owner's email address
+
+platform	string	No	"shopify" or "custom" - Platform type (default: "shopify"). For Shopify merchants, shop_domain is required. For custom merchants, shop_domain is optional.
+
+shopify_plan	string	No	Current Shopify plan tier (basic, shopify, advanced, plus)
+
+merchant_category	string	No	Product category (sneakers, electronics, fashion)
+
+merchant_region	string	No	Geographic region (US-East, EU-West)
+
+avg_order_value	number	No	Average order value in USD
+
+primary_carriers	array	No	List of primary shipping carriers
+
+monthly_order_volume	integer	No	Approximate monthly order count
+
+pre_ink_dispute_rate	number	No	Dispute rate before INK (0.0 to 1.0)
+
+
+
+Response 201 Created
+
+Field	Type	Required	Description
+
+shop_id	string	Yes	Unique merchant identifier (Firestore document ID)
+
+api_key	string	Yes	Merchant API key (ink_live_*). Only returned once.
+
+is_new_install	boolean	Yes	true if new merchant, false if reinstalled
+
+inventory_initialized	boolean	Yes	true if inventory was initialized for new merchant
+
+initial_inventory_count	number	No	Number of stickers added (only if inventory_initialized is true)
+
+
+
+
+
+GET /admin/merchants
+
+Retrieve all merchants. Paginated with offset/limit. Used for management dashboards.
+
+Request
+
+GET /admin/merchants?offset=0&limit=50
+
+X-Admin-Secret: <admin_secret>
+
+Query Parameters
+
+Field	Type	Required	Description
+
+offset	integer	No	Number of records to skip (default: 0)
+
+limit	integer	No	Max records to return (default: 50, max: 200)
+
+Response 200 OK
+
+Field	Type	Required	Description
+
+merchants	array	Yes	Array of merchant objects
+
+total	integer	Yes	Total count of merchants
+
+offset	integer	Yes	Current offset
+
+limit	integer	Yes	Current limit
+
+
+
+POST /api/enroll
+
+Enroll an order for proof tracking. Associates the NFC token with order details.
+
+MODIFIED in v1.2.0: Now automatically deducts 1 sticker from merchant inventory. Returns error if inventory insufficient.
+
+Request
+
+POST /api/enroll
+
+Content-Type: application/json
+
+Authorization: Bearer <api_key>
+
+Request Body
+
+Field	Type	Required	Description
+
+nfc_token	string	Yes	Unique NFC tag identifier
+
+order_id	string	Yes	Shopify order ID
+
+order_number	string	Yes	Human-readable order number
+
+customer_email	string	Yes	Customer email address
+
+customer_phone	string	No	Customer phone number
+
+shipping_address	object	Yes	Shipping address details (line1, line2, city, state, zip, country)
+
+product_details	array	Yes	Array of products in order (sku, name, quantity, price)
+
+
+
+Response 201 Created
+
+Field	Type	Required	Description
+
+proof_id	string	Yes	Unique proof document ID
+
+nfc_token	string	Yes	The enrolled NFC token
+
+status	string	Yes	Always 'enrolled'
+
+inventory_remaining	number	Yes	Remaining sticker count after enrollment
+
+
+
+POST /api/media/upload
+
+Upload proof media (photos/videos). Stores media in Cloud Storage and links to proof record.
+
+Request
+
+POST /api/media/upload
+
+Content-Type: multipart/form-data
+
+Authorization: Bearer <api_key>
+
+Form Data
+
+Field	Type	Required	Description
+
+proof_id	string	Yes	The proof ID from /api/enroll
+
+media_type	string	Yes	Type of media: 'package_photo', 'delivery_video', 'signature_photo'
+
+file	file	Yes	Media file (JPEG, PNG, MP4)
+
+timestamp	string	No	ISO 8601 timestamp when media was captured
+
+
+
+Response 200 OK
+
+Field	Type	Required	Description
+
+media_url	string	Yes	Public URL of uploaded media
+
+media_id	string	Yes	Unique media identifier
+
+
+
+GET /api/proofs/{nfc_token}
+
+Retrieve proof details by NFC token. Returns order info, media URLs, verification status.
+
+Request
+
+GET /api/proofs/{nfc_token}
+
+Authorization: Bearer <api_key>
+
+Path Parameters
+
+Field	Type	Required	Description
+
+nfc_token	string	Yes	The NFC tag identifier
+
+
+
+
+
+Response 200 OK
+
+Field	Type	Required	Description
+
+proof_id	string	Yes	Unique proof identifier
+
+order_details	object	Yes	Complete order information
+
+media_urls	array	Yes	Array of uploaded media URLs
+
+verification_status	string	Yes	Status: 'pending', 'verified', 'failed'
+
+created_at	string	Yes	ISO 8601 timestamp of enrollment
+
+delivered_at	string	No	ISO 8601 timestamp when marked delivered
+
+
+
+New Endpoints (v1.2.0)
+
+
+
+PATCH /api/proofs/:proof_id/delivered
+
+Mark a proof as delivered and record delivery context (timestamp, geolocation, carrier).
+
+NEW in v1.2.0: This endpoint calculates the interaction_window_end based on the delivery timestamp.
+
+Request
+
+PATCH /api/proofs/:proof_id/delivered
+
+Content-Type: application/json
+
+Authorization: Bearer <api_key>
+
+Path Parameters
+
+Field	Type	Required	Description
+
+proof_id	string	Yes	The proof document ID
+
+
+
+Request Body
+
+Field	Type	Required	Description
+
+delivered_at	string	Yes	ISO 8601 timestamp of delivery
+
+delivery_latitude	number	No	GPS latitude at delivery
+
+delivery_longitude	number	No	GPS longitude at delivery
+
+carrier	string	No	Delivery carrier name (e.g., 'UPS', 'FedEx')
+
+
+
+
+
+Response 200 OK
+
+Field	Type	Required	Description
+
+proof_id	string	Yes	The updated proof ID
+
+status	string	Yes	Always 'delivered'
+
+delivered_at	string	Yes	Confirmed delivery timestamp
+
+interaction_window_end	string	Yes	Calculated window end time (delivered_at + INTERACTION_WINDOW_HOURS)
+
+
+
+GET /api/inventory
+
+Retrieve current sticker inventory count and recent transactions for the authenticated merchant.
+
+Request
+
+GET /api/inventory
+
+Authorization: Bearer <api_key>
+
+
+
+Response 200 OK
+
+Field	Type	Required	Description
+
+current_count	number	Yes	Current available sticker count
+
+recent_transactions	array	Yes	Last 10 inventory transactions (timestamp, delta, reason, new_balance)
+
+
+
+POST /admin/merchants/:shop_id/inventory
+
+Add or remove stickers from a merchant's inventory. Used by admin to manage inventory.
+
+Request
+
+POST /admin/merchants/:shop_id/inventory
+
+Content-Type: application/json
+
+X-Admin-Secret: <admin_secret>
+
+Path Parameters
+
+Field	Type	Required	Description
+
+shop_id	string	Yes	The merchant's shop ID
+
+
+
+Request Body
+
+Field	Type	Required	Description
+
+delta	number	Yes	Amount to add (positive) or remove (negative)
+
+reason	string	Yes	Reason for adjustment (e.g., 'purchase', 'refund', 'correction')
+
+Response 200 OK
+
+Field	Type	Required	Description
+
+shop_id	string	Yes	The merchant ID
+
+old_balance	number	Yes	Balance before adjustment
+
+new_balance	number	Yes	Balance after adjustment
+
+delta	number	Yes	The applied delta
+
+
+
+Modified Endpoints in v1.2.0
+
+POST /verify
+
+Verify NFC tap and check if within expected interaction window.
+
+MODIFIED in v1.2.0: On first tap, automatically calculates and stores within_expected_window based on delivery timestamp and expected window configuration.
+
+Request
+
+POST /verify
+
+Content-Type: application/json
+
+Authorization: Bearer <api_key>
+
+Request Body
+
+Field	Type	Required	Description
+
+nfc_token	string	Yes	The NFC tag identifier
+
+tap_timestamp	string	Yes	ISO 8601 timestamp of tap
+
+tap_latitude	number	No	GPS latitude of tap
+
+tap_longitude	number	No	GPS longitude of tap
+
+Response 200 OK
+
+Field	Type	Required	Description
+
+verified	boolean	Yes	true if tap is valid
+
+proof_id	string	Yes	Associated proof ID
+
+within_expected_window	boolean	Yes	true if tap within expected window
+
+expected_window_end	string	No	End of expected window (ISO 8601)
+
+is_first_tap	boolean	Yes	true if this is the first tap for this proof
+
+
+
+Data Schemas
+
+StickerInventoryLedger
+
+Append-only ledger for tracking sticker inventory changes.
+
+Field	Type	Required	Description
+
+id	string	Yes	Firestore auto-generated document ID
+
+shop_id	string	Yes	Merchant identifier
+
+timestamp	timestamp	Yes	When the transaction occurred
+
+delta	number	Yes	Change amount (positive or negative)
+
+reason	string	Yes	Transaction reason (enrollment, purchase, refund, etc.)
+
+balance_after	number	Yes	Running balance after this transaction
+
+metadata	object	No	Additional context (proof_id, admin_user, etc.)
+
+
+
+OrderDetails
+
+Complete order information stored with each proof.
+
+Field	Type	Required	Description
+
+order_id	string	Yes	Shopify order ID
+
+order_number	string	Yes	Human-readable order number
+
+customer_email	string	Yes	Customer email
+
+customer_phone	string	No	Customer phone number
+
+shipping_address	object	Yes	Address object (line1, line2, city, state, zip, country)
+
+product_details	array	Yes	Array of product objects
+
+
+
+
+
+ShippingGeocode
+
+Geocoded shipping address coordinates.
+
+Field	Type	Required	Description
+
+latitude	number	Yes	GPS latitude
+
+longitude	number	Yes	GPS longitude
+
+accuracy	string	No	Geocoding accuracy level
+
+
+
+
+
+Typical Workflow
+
+
+
+Step 1: Merchant Installation (one-time)
+
+•	Shopify merchant installs INK app
+
+•	App calls POST /admin/merchants
+
+•	System returns API key and initializes inventory
+
+•	Merchant stores API key securely
+
+
+
+Step 2: Package Enrollment (per shipment)
+
+•	Merchant prepares package for shipment
+
+•	Scans NFC sticker and calls POST /api/enroll
+
+•	System deducts 1 sticker from inventory
+
+•	Returns proof_id for tracking
+
+
+
+Step 3: Media Upload (per shipment)
+
+•	Merchant takes package photo
+
+•	Calls POST /api/media/upload with proof_id
+
+•	System stores media in Cloud Storage
+
+
+
+Step 4: Mark as Delivered (when shipped)
+
+•	Carrier delivers package
+
+•	System calls PATCH /api/proofs/:proof_id/delivered
+
+•	Records delivery timestamp and location
+
+•	Calculates interaction window
+
+
+
+Step 5: Customer Verification (on delivery)
+
+•	Customer taps NFC sticker with phone
+
+•	App calls POST /verify
+
+•	System checks if within expected window
+
+•	Records first tap timestamp
+
+
+
+
+
+Step 6: Proof Retrieval (on demand)
+
+•	Merchant or customer calls GET /api/proofs/{nfc_token}
+
+•	System returns all proof details and media
+
+
+
+Step 7: Inventory Management (as needed)
+
+•	Merchant checks inventory with GET /api/inventory
+
+•	Admin adjusts inventory with POST /admin/merchants/:shop_id/inventory
+
+
+
+
+
+Merchant Authentication & Non-Shopify Support APIs (v1.3.0)
+
+This section documents the new merchant authentication and non-Shopify support APIs added in v1.3.0.
+
+POST /admin/users (New)
+
+Create a merchant user account (email + password) linked to a specific merchant.
+
+Path: /admin/users
+
+Auth: X-Admin-Secret: <ADMIN_SECRET>
+
+Request Parameters
+
+Field	Type	Required	Description
+
+merchant_id	string	Yes	shop_id of the merchant
+
+name	string	Yes	User's display name
+
+email	string	Yes	Login email (case-insensitive, globally unique)
+
+password	string	Yes	Plaintext password (min length: 8 characters)
+
+
+
+
+
+Response
+
+Field	Type	Description
+
+user_id	string	ID of the user document in merchant_users
+
+merchant_id	string	Linked merchant (shop_id)
+
+name	string	User's display name
+
+email	string	User's login email (normalized to lowercase)
+
+created_at	string	ISO timestamp when the user was created
+
+POST /auth/login (New)
+
+Merchant user login using email and password. Returns a JWT access token.
+
+Path: /auth/login
+
+Auth: None (public endpoint, credentials in body)
+
+Request Parameters
+
+Field	Type	Required	Description
+
+email	string	Yes	User's login email
+
+password	string	Yes	User's password
+
+Response
+
+Field	Type	Description
+
+token	string	JWT access token (expires in 7 days by default)
+
+user	object	User information (user_id, merchant_id, name, email, role)
+
+
+
+
+
+GET /auth/validate (New)
+
+Validate a JWT token and return the associated merchant and user info.
+
+Path: /auth/validate
+
+Auth: Authorization: Bearer <token>
+
+Response (valid token)
+
+Field	Type	Description
+
+valid	boolean	true if token is valid
+
+shop_id	string	Merchant ID (merchant_id in token)
+
+user_id	string	User ID (user_id in token)
+
+email	string	Email from token
+
+role	string	Role from token (currently "merchant")
+
+Response (invalid/expired/missing token): Always returns HTTP 200 with { "valid": false }
+

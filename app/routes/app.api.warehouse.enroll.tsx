@@ -182,11 +182,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     nfc_uid, 
     order_number, 
     customer_email, 
+    customer_phone,
     shipping_address, 
     product_details, 
     warehouse_location,
     photo_urls,
-    photo_hashes
+    photo_hashes,
+    carrier_name: frontend_carrier_name,
+    tracking_number: frontend_tracking_number
   } = body;
 
   if (!order_id || !nfc_token || !order_number || !customer_email || !shipping_address || !product_details) {
@@ -199,8 +202,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   console.log("[ENROLL] warehouse_location:", warehouse_location);
 
   // 4. Build enrollment payload and fetch tracking info from Shopify
-  let carrier_name: string | null = null;
-  let tracking_number: string | null = null;
+  let carrier_name: string | null = frontend_carrier_name || null;
+  let tracking_number: string | null = frontend_tracking_number || null;
   const numericOrderId = order_id.replace(/\D/g, "");
   let foundOrderGid = `gid://shopify/Order/${numericOrderId}`;
 
@@ -290,7 +293,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const enrollStart = Date.now();
     inkData = await enrollOrder(
       apiKey, 
-      order_id, 
+      numericOrderId, 
       nfc_token, 
       String(order_number), 
       customer_email,
@@ -301,7 +304,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       photo_urls,
       photo_hashes,
       carrier_name,
-      tracking_number
+      tracking_number,
+      customer_phone
     );
     console.log(`[ENROLL] ✅ Alan enroll responded in ${Date.now() - enrollStart}ms`);
     console.log("[ENROLL] Alan response:", JSON.stringify(inkData));
@@ -339,11 +343,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
           // Retry enrollment with fresh key
           inkData = await enrollOrder(
-            freshApiKey, order_id, nfc_token, String(order_number),
+            freshApiKey, numericOrderId, nfc_token, String(order_number),
             customer_email, shipping_address,
             Array.isArray(product_details) ? product_details : [],
             warehouse_location?.lat ? warehouse_location : undefined,
-            nfc_uid, photo_urls, photo_hashes, carrier_name, tracking_number
+            nfc_uid, photo_urls, photo_hashes, carrier_name, tracking_number, customer_phone
           );
         } else {
           return json({ error: "Could not provision merchant API key. Contact support." }, { status: 500 });

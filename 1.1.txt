@@ -1,0 +1,684 @@
+INK Backend API Reference
+
+
+
+Base URLs
+
+Production: https://us-central1-inink-c76d3.cloudfunctions.net/api
+
+Local Emulator: http://127.0.0.1:5001/inink-c76d3/us-central1/api
+
+
+
+
+
+Authentication
+
+The API uses two authentication mechanisms.
+
+
+
+Admin Secret (for /admin/* endpoints)
+
+Used by Taimoor's Shopify app to manage merchants. No login step required.
+
+Header	Value
+
+X-Admin-Secret	<admin_secret>
+
+
+
+Alternative (fallback): Authorization: Bearer <admin_secret>
+
+
+
+Merchant API Key (for /api/* endpoints)
+
+Issued once when a merchant is created via POST /admin/merchants. The backend hashes the key with SHA-256, resolves the shop_id, and enforces tenant isolation.
+
+Header	Value
+
+Authorization	Bearer <api_key>
+
+
+
+API key format: ink_live_<48 hex characters>
+
+
+
+Tenant Isolation: Every /api/* request is scoped to the merchant identified by the API key. Merchant A cannot read or modify Merchant B's data.
+
+
+
+
+
+GET /api/health
+
+Health check endpoint. No authentication required.
+
+
+
+Request
+
+GET /api/health
+
+No headers, no parameters.
+
+
+
+Response 200 OK
+
+Field	Description
+
+status	Always 'ok' when service is running
+
+
+
+
+
+POST /admin/merchants
+
+Create a new merchant and generate an API key. Called by Taimoor's Shopify app during the OAuth install callback.
+
+
+
+The api_key is returned exactly once in the response. It is stored only as a SHA-256 hash and cannot be retrieved again.
+
+
+
+Request
+
+POST /admin/merchants
+
+Content-Type: application/json
+
+X-Admin-Secret: <admin_secret>
+
+
+
+Request Parameters
+
+Field	Type	Required	Description
+
+shop_domain	string	Yes	Shopify store domain, unique identifier
+
+shop_name	string	Yes	Display name of the store
+
+owner_email	string	Yes	Store owner's email address
+
+shopify_plan	string	No	Current Shopify plan tier (basic, shopify, advanced, plus)
+
+merchant_category	string	No	Product category (sneakers, electronics, fashion)
+
+merchant_region	string	No	Geographic region (US-East, EU-West)
+
+avg_order_value	number	No	Average order value in USD
+
+primary_carriers	array	No	List of primary shipping carriers
+
+monthly_order_volume	integer	No	Approximate monthly order count
+
+pre_ink_dispute_rate	number	No	Dispute rate before INK (0.0 to 1.0)
+
+
+
+Response 200 OK
+
+Field	Description
+
+shop_id	Unique merchant identifier (format: shop_<16 hex chars>)
+
+api_key	Merchant API key - returned exactly once, store securely
+
+shop_domain	Registered Shopify domain
+
+status	Account status (always 'active' for pilot)
+
+
+
+Errors
+
+400 Bad Request - Missing required fields
+
+401 Unauthorized - Invalid or missing admin secret
+
+409 Conflict - shop_domain already registered
+
+
+
+
+
+GET /admin/merchants
+
+List all merchant records. The api_key_hash is never exposed in the response.
+
+
+
+Request
+
+GET /admin/merchants
+
+X-Admin-Secret: <admin_secret>
+
+
+
+No query parameters.
+
+
+
+Response Fields (each merchant)
+
+Field	Type	Description
+
+shop_id	string	Unique merchant identifier
+
+shop_domain	string	Shopify store domain
+
+shop_name	string	Display name
+
+owner_email	string	Owner's email address
+
+shopify_plan	string	Shopify plan tier
+
+status	string	active or inactive
+
+created_at	string	ISO 8601 timestamp
+
+updated_at	string	ISO 8601 timestamp
+
+
+
+Note: api_key_hash is never included in this response for security.
+
+
+
+
+
+POST /api/enroll
+
+Create a canonical proof record from Shopify order data and NFC tag information.
+
+
+
+The proof is created in state ENROLLED with delivery outcome UNCONFIRMED. An Ed25519 signature is computed server-side. Media (photos/videos) are uploaded separately via POST /api/media/upload. The nfc_token must be globally unique.
+
+
+
+Request
+
+POST /api/enroll
+
+Content-Type: application/json
+
+Authorization: Bearer <api_key>
+
+
+
+Request Parameters
+
+Field	Type	Required	Description
+
+order_id	string	Yes	Shopify order ID
+
+nfc_token	string	Yes	Unique NFC token (globally unique)
+
+nfc_uid	string	No	Hardware UID of the NFC tag
+
+carrier_name	string	No	Shipping carrier (USPS, FedEx, UPS)
+
+tracking_number	string	No	Carrier tracking number
+
+order_details	object	No	Shopify order line items and totals
+
+shipping_geocode	object	No	Pre-geocoded shipping coordinates
+
+shipping_address	string	No	Raw address for server-side geocoding
+
+warehouse_location	object	No	Warehouse coordinates
+
+
+
+Note: If both shipping_geocode and shipping_address are provided, shipping_geocode takes precedence.
+
+
+
+Response 200 OK
+
+Field	Description
+
+proof_id	Unique proof identifier (format: proof_<24 hex chars>)
+
+shop_id	Merchant identifier resolved from API key
+
+state	Always 'ENROLLED' on creation
+
+delivery_outcome	Always 'UNCONFIRMED' on creation
+
+enrolled_at	Server-side enrollment timestamp (ISO 8601)
+
+
+
+Errors
+
+400 Bad Request - Missing required fields (order_id, nfc_token)
+
+401 Unauthorized - Missing or invalid API key
+
+409 Conflict - nfc_token already enrolled
+
+
+
+
+
+POST /api/media/upload
+
+Upload one or more photos and/or videos and attach them to an existing proof.
+
+
+
+The proof must already exist (created via POST /api/enroll). The proof must belong to the authenticated merchant (tenant isolation). No limit on the number of files per request. Each file is hashed with SHA-256 and stored in Firebase Storage. Media items are atomically appended to the proof's media_items array.
+
+
+
+Request
+
+POST /api/media/upload
+
+Content-Type: multipart/form-data
+
+Authorization: Bearer <api_key>
+
+
+
+Request Body (multipart/form-data)
+
+Field	Type	Required	Description
+
+proof_id	string	Yes	ID of the proof to attach media to
+
+source	string	No	warehouse, customer, or system (default: warehouse)
+
+media	file(s)	Yes	One or more image/video files
+
+
+
+Allowed MIME Types
+
+Images: image/jpeg, image/png, image/webp, image/heic, image/heif
+
+Videos: video/mp4, video/quicktime, video/webm, video/x-msvideo
+
+Max file size: 50 MB per file (configurable)
+
+
+
+Response 200 OK
+
+Field	Description
+
+proof_id	The proof the media was attached to
+
+media_items	Array of all media items uploaded in this request
+
+
+
+MediaItem Fields
+
+Field	Description
+
+media_id	Unique media identifier (format: media_<24 hex chars>)
+
+media_type	'image' or 'video'
+
+media_url	Public URL to the stored file in Firebase Storage
+
+media_hash	SHA-256 hex digest of file bytes (64 chars)
+
+media_size_bytes	File size in bytes
+
+media_mime_type	MIME type (image/jpeg, video/mp4, etc.)
+
+captured_at	ISO 8601 timestamp when upload was processed
+
+captured_by	Source: warehouse, customer, or system
+
+
+
+Errors
+
+400 Bad Request - Missing proof_id, no files, unsupported type, or file too large
+
+401 Unauthorized - Missing or invalid API key
+
+404 Not Found - Proof not found or belongs to another merchant
+
+
+
+
+
+GET /api/proofs/{nfc_token}
+
+Retrieve a complete proof record by its NFC token. The query is scoped to the authenticated merchant (tenant isolation). If the token exists but belongs to a different merchant, 404 is returned.
+
+
+
+Request
+
+GET /api/proofs/{nfc_token}
+
+Authorization: Bearer <api_key>
+
+
+
+Path Parameters
+
+Parameter	Description
+
+nfc_token	The unique NFC token assigned during enrollment
+
+
+
+Response 200 OK - Complete Proof Record
+
+Returns complete proof record with 36 fields including identity, lifecycle, timestamps, outcome, media, logistics, geocode, tap summaries, Ed25519 signature, and audit fields.
+
+
+
+Identity Fields
+
+Field	Description
+
+proof_id	Unique proof identifier (format: proof_<24 hex>)
+
+shop_id	Owning merchant identifier (format: shop_<16 hex>)
+
+order_id	Shopify order ID
+
+nfc_token	NFC token (globally unique)
+
+nfc_uid	Hardware NFC UID (nullable)
+
+
+
+Lifecycle Fields
+
+Field	Description
+
+state	ENROLLED, COOLDOWN, ACTIVE, or NEUTERED
+
+state_changed_at	ISO 8601 timestamp (nullable)
+
+
+
+Timestamp Fields
+
+Field	Description
+
+enrolled_at	When proof was created (ISO 8601)
+
+delivered_at	Carrier delivered scan time (ISO 8601, nullable)
+
+interaction_window_closed_at	delivered_at + X hours (ISO 8601, nullable)
+
+
+
+Outcome Fields
+
+Field	Description
+
+delivery_outcome	UNCONFIRMED, ACCEPTED, DISPUTED, or EXPIRED
+
+outcome_source	system, merchant, or webhook (nullable)
+
+outcome_updated_at	ISO 8601 timestamp (nullable)
+
+
+
+Media Fields
+
+Field	Description
+
+media_items	Array of MediaItem objects (empty [] if no media)
+
+
+
+Logistics Fields
+
+Field	Description
+
+carrier_name	Shipping carrier (nullable)
+
+tracking_number	Carrier tracking number (nullable)
+
+order_details	Shopify order details object (nullable)
+
+
+
+Geocode - Shipping
+
+Field	Description
+
+shipping_geocode_lat	Latitude -90 to 90 (nullable)
+
+shipping_geocode_lng	Longitude -180 to 180 (nullable)
+
+shipping_geocode_source	google, mapbox, or client (nullable)
+
+shipping_geocode_accuracy_m	Accuracy radius in meters (nullable)
+
+shipping_address_raw	Original raw address if geocoded (nullable)
+
+
+
+Geocode - Warehouse
+
+Field	Description
+
+warehouse_lat	Latitude -90 to 90 (nullable)
+
+warehouse_lng	Longitude -180 to 180 (nullable)
+
+
+
+Tap Summary Fields
+
+Field	Description
+
+tap_count	Total NFC taps recorded (default: 0)
+
+first_tap_at	ISO 8601 timestamp (nullable)
+
+last_tap_at	ISO 8601 timestamp (nullable)
+
+first_tap_distance_to_shipping_m	Distance in meters (nullable)
+
+first_tap_distance_source	gps, ip, or none (nullable)
+
+gps_verdict	PASS, NEAR, or FLAGGED (nullable)
+
+within_expected_window	Boolean (nullable)
+
+
+
+Ed25519 Signature Fields
+
+Field	Description
+
+signature	Ed25519 hex signature (128 hex chars)
+
+sig_alg	Always 'ed25519'
+
+key_id	Signing key identifier (default: key_001)
+
+payload_hash	SHA-256 hex hash of signed payload (nullable)
+
+
+
+Phone Verification Fields
+
+Field	Description
+
+phone_verified	Boolean (default: false)
+
+phone_verified_at	ISO 8601 timestamp (nullable)
+
+phone_verification_provider	Provider name (nullable)
+
+
+
+Audit Fields
+
+Field	Description
+
+created_at	ISO 8601 timestamp
+
+updated_at	ISO 8601 timestamp
+
+
+
+Errors
+
+401 Unauthorized - Missing or invalid API key
+
+404 Not Found - Proof not found or belongs to another merchant
+
+
+
+
+
+GET /.well-known/jwks.json
+
+Returns the Ed25519 public key in standard JWKS (JSON Web Key Set) format. Use this key to verify the signature field on proof records. No authentication required.
+
+
+
+Request
+
+GET /.well-known/jwks.json
+
+
+
+Response 200 OK
+
+Field	Description
+
+kty	Key type (always 'OKP' - Octet Key Pair)
+
+crv	Curve (always 'Ed25519')
+
+kid	Key ID (matches key_id in proof records)
+
+x	Base64url-encoded Ed25519 public key (32 bytes)
+
+use	Key usage (always 'sig' for signature)
+
+
+
+
+
+Data Schemas
+
+OrderDetails
+
+Shopify order line items and totals. Passed as part of the enroll request body.
+
+
+
+Field	Description
+
+line_items	Array of order line items (nullable)
+
+line_items[].title	Product title (nullable)
+
+line_items[].quantity	Quantity ordered (nullable)
+
+line_items[].price	Unit price as string (nullable)
+
+line_items[].sku	Product SKU (nullable)
+
+line_items[].variant_id	Shopify variant ID (nullable)
+
+total_price	Total order price as string (nullable)
+
+currency	ISO 4217 currency code (nullable)
+
+
+
+ShippingGeocode
+
+Pre-geocoded shipping coordinates. Alternatively, pass raw_address for server-side geocoding via Google Maps API.
+
+
+
+Option A: Pre-geocoded coordinates
+
+Field	Description
+
+lat	Latitude -90 to 90 (nullable)
+
+lng	Longitude -180 to 180 (nullable)
+
+source	google, mapbox, or client (nullable)
+
+accuracy_m	Accuracy radius in meters (nullable)
+
+
+
+Option B: Raw address for server-side geocoding
+
+Field	Description
+
+raw_address	Raw address string (backend geocodes via Google Maps)
+
+
+
+Alternative: You can also pass the raw address as a top-level shipping_address string field in the enroll request.
+
+
+
+WarehouseLocation
+
+Warehouse coordinates where the package was packed.
+
+
+
+Field	Description
+
+lat	Latitude -90 to 90 (required if object provided)
+
+lng	Longitude -180 to 180 (required if object provided)
+
+
+
+
+
+Typical Workflow
+
+Step 1: Merchant Installation (one-time)
+
+Shopify app installs, then POST /admin/merchants returns shop_id and api_key. Store api_key securely.
+
+
+
+Step 2: Package Enrollment (per shipment)
+
+Warehouse scans NFC tag, then POST /api/enroll with order_id, nfc_token, and shipping info. Returns proof_id.
+
+
+
+Step 3: Media Upload (per shipment)
+
+Warehouse captures photos, then POST /api/media/upload with proof_id and files. Media attached to proof.
+
+
+
+Step 4: Proof Retrieval (on demand)
+
+Customer taps NFC tag, then GET /api/proofs/{nfc_token} returns complete proof record.
+
+
+
+Step 5: Signature Verification (optional)
+
+Client-side GET /.well-known/jwks.json, verify Ed25519 signature, confirm data integrity.
+

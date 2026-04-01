@@ -160,13 +160,15 @@ export const enrollOrder = async (
     photoUrls?: string[],
     photoHashes?: string[],
     carrierName?: string | null,
-    trackingNumber?: string | null
+    trackingNumber?: string | null,
+    customerPhone?: string | null
 ) => {
     const payload: any = { 
-        order_id: orderId, 
+        order_id: orderId, // We assume orderId is already the numeric ID string
         nfc_token: nfcToken,
         order_number: orderNumber,
-        customer_email: customerEmail,
+        customer_email: customerEmail || "unknown@email.com",
+        customer_phone: customerPhone || "",
         shipping_address: shippingAddress,
         product_details: productDetails
     };

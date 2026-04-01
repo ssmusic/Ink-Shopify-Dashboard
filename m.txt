@@ -1,0 +1,93 @@
+ink.
+Shopify App & Warehouse PWA — Milestones
+March 2026
+
+
+
+Shopify App
+M1 — Analytics Dashboard
+Wire the following to live data from Alan's API:
+•	Wire Total Value Protected — retail value of all enrolled shipments, with period comparison vs last period
+•	Wire Enrolled Shipments count and Avg. Order Value
+•	Wire Engagement Funnel — Enrolled → Active → Expired with drop-off percentages and overall engagement rate
+•	Wire Time to Engagement — avg, median, and distribution buckets (< 1h, 1–4h, 4–12h, 12–24h, 24h+)
+•	CORRECTION: Funnel state label currently reads "Verified" — change to "Active" throughout. "Verified" is not a proof lifecycle state.
+
+M2 — Delivered State: Automatic Push
+Priority: blocks proof lifecycle. Required before billing is accurate.
+•	Subscribe to Shopify orders/fulfilled webhook
+•	On fulfillment: match order to proof, call PATCH /api/proofs/:proof_id/delivered on Alan's backend automatically
+•	Pass Shopify fulfillment timestamp as delivered_at — no merchant action required
+•	Proof transitions to ACTIVE after COOLDOWN expires
+
+M3 — Billing: Usage & Billing
+Billing model: $2.99 per enrollment + $2.99 per verification (Active). All charges via Shopify Billing API only — never Stripe.
+•	Wire current billing cycle — date range, Enrolled line item with count and amount, Active line item with count and amount, cycle total
+•	Wire Usage Cap — display cap amount, amount used, percentage used, progress bar
+•	Wire Usage History — per-order list showing order number, Enrolled or Active badge, timestamp, and charge amount
+•	CORRECTION: Usage History badge currently shows "Verified" — change to "Active"
+•	Export CSV — usage history export
+•	When cap is reached: surface cap-reached state in dashboard, halt enrollment prompts
+
+M4 — Settings: Inventory
+•	Wire sticker inventory count with low-inventory indicator
+•	Wire minimum order value control — stored as min_enrollment_value on merchant record via Alan's API
+•	Orders below min_enrollment_value threshold are not enrolled — no proof created, no charge
+•	Display reorder prompt when inventory falls below threshold — links externally to shop.in.ink
+•	After confirmed purchase: call POST /admin/merchants/:shop_id/inventory/purchase with quantity and payment reference
+
+M5 — Settings: Media
+Upload infrastructure exists on Alan's backend. This is UI wiring only.
+•	Wire media list — filenames, duration, Primary badge, drag-to-reorder handles, delete control, expand chevron
+•	Wire Add Media upload
+•	Wire set-primary action
+•	Wire delete action
+•	Tap page renders merchant media returned from POST /verify response — plays instead of default bumper when available
+
+M6 — Settings: Notifications
+All customer notifications sent via Twilio. Taimoor owns the Twilio integration for both email and SMS.
+•	Integrate Twilio — configure credentials, sending domain, and SMS sender number
+•	Wire Notification Channel toggles — Email and SMS (SMS requires customer phone number from Shopify order)
+•	Wire Delivery Notifications — Out for delivery, Delivered (includes tap instructions), Delivery confirmed (sent after customer taps)
+•	Wire Tap Reminders — 4 hours after delivery (first), 24 hours (second), 48 hours (final). Reminders stop once customer taps.
+•	Wire Return Window Reminders — 7 days before window closes (includes return link), 48 hours before window closes
+•	All notification triggers are event-driven from Alan's backend state changes — delivered_at, tap events, return window expiry
+
+M7 — Settings: Return Window
+•	Wire Return Window setting — how long customers have to initiate a return after delivery
+•	Dropdown options: 14 days, 30 days, 60 days, 90 days (confirm full option set with Sam)
+•	Value stored as return_policy_window_days on merchant record via Alan's API
+
+M8 — Polish & Public Launch
+•	Replace logo and app title throughout
+•	Remove sticker from cart flow — sticker procurement routes to shop.in.ink only
+•	Hard-code INK bumper animation as default tap experience when no merchant media is uploaded
+•	Polish automated email copy and formatting — enrollment confirmation, delivery notification
+•	Resolve all known bugs
+•	Complete App Store listing — title: ink. - Tap Delivery & Returns, description, screenshots, privacy policy
+•	Submit for Shopify review
+•	Confirm OAuth scopes, redirect URLs, and webhook subscriptions match production config
+
+
+
+Warehouse PWA
+W1 — Dashboard
+•	Wire orders queue — enrolled proofs with proof state and order reference
+•	Wire sticker inventory count
+•	Wire enrollment history — recent enrollments by staff member
+
+W2 — Enrollment
+•	Support unlimited photos and video per enrollment — no cap on media per package
+
+W3 — Inventory
+•	Display reorder prompt when inventory falls below threshold — links to shop.in.ink
+
+W4 — Infrastructure
+•	Configure production URL
+•	Submit to Apple App Store
+•	Resolve all known bugs
+
+
+
+Architecture Note
+Shopify app and warehouse PWA are thin clients. All data reads and writes go through Alan's API. No independent database.
