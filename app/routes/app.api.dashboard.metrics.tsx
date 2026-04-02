@@ -20,14 +20,18 @@ export const action = async ({ request }: any) => {
 
 // Helper to determine if an order matches INK tracking logic
 function isInkProtected(order: any) {
-  const metafields: Record<string, string> = {};
-  order.metafields?.edges?.forEach((mfEdge: any) => {
-    metafields[mfEdge.node.key] = mfEdge.node.value;
-  });
-
   const hasInkTag =
     order.tags?.includes("INK-Premium-Delivery") ||
     order.tags?.includes("INK-Verified-Delivery");
+
+  // Correctly flatten the Shopify GraphQL metafields edges array into a simple JS Object
+  const metafields: Record<string, string> = {};
+  if (order.metafields?.edges) {
+    order.metafields.edges.forEach((mfEdge: any) => {
+      metafields[mfEdge.node.key] = mfEdge.node.value;
+    });
+  }
+
   const hasDeliveryTypeMetafield = metafields.delivery_type === "premium";
   const hasInkMetafield = metafields.ink_premium_order === "true";
   const shippingTitle = (order.shippingLine?.title || "").toLowerCase();
@@ -116,7 +120,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     const query = `#graphql
       query GetHistoricalOrders {
-        orders(first: 200, query: "tag:'INK-Premium-Delivery' OR tag:'INK-Verified-Delivery'", reverse: true) {
+        orders(first: 200, reverse: true) {
           edges {
             node {
               createdAt
@@ -140,8 +144,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
     `;
 
-    // Fetch last 200 INK tagged orders
-    console.log("[Dashboard Metrics] Executing targeted GraphQL query for INK tags...");
+    // Fetch last 200 orders (we removed the strict tag query to find the missing edge cases)
+    console.log("[Dashboard Metrics] Executing BLIND query for last 200 orders to find missing INK enrollments...");
     const response = await graphqlClient.graphql(query);
 
     const data = await response.json();
@@ -171,14 +175,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let debugProtectedOrders = 0;
     let debugThirtyDayOrders = 0;
 
-    console.log(`[Dashboard Metrics] Success: Fetched ${debugTotalOrders} tagged orders from Shopify`);
+    let dumpedOrderLogs = 0;
+
+    console.log(`[Dashboard Metrics] Success: Fetched ${debugTotalOrders} total UNFILTERED orders from Shopify`);
 
     data.data.orders.edges.forEach((edge: any) => {
       const order = edge.node;
       
-      // We only want INK protected orders (secondary check just in case)
+      // Dump the payload for the first 3 latest orders so we can visually inspect their JSON raw properties
+      if (dumpedOrderLogs < 3) {
+        console.log(`\n\n[Dashboard Metrics Data Tracer] DUMPING RAW ORDER ${dumpedOrderLogs + 1}:`);
+        console.log(JSON.stringify(order, null, 2));
+        dumpedOrderLogs++;
+      }
+
+      // We only want INK protected orders
       if (!isInkProtected(order)) {
-        console.log(`[Dashboard Metrics] Warn: Order ${order.createdAt} failed secondary isInkProtected check. Tags:`, order.tags);
         return;
       }
       debugProtectedOrders++;
