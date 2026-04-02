@@ -183,7 +183,7 @@ export const NFSService = {
   async markDelivered(proofId: string, apiKey: string, payload: { delivered_at: string; carrier?: string }): Promise<any> {
     console.log(`📦 Marking delivery for proof ${proofId}:`, payload);
 
-    const response = await fetch(`${NFS_API_URL}/api/proofs/${proofId}/delivered`, {
+    const response = await fetch(`${NFS_API_URL}/proofs/${proofId}/delivered`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
