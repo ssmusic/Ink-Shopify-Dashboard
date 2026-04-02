@@ -169,7 +169,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let prevCount = 0;
     let prevTotalValue = 0;
 
-    let debugTotalOrders = data.data.orders.edges.length;
 
     data.data.orders.edges.forEach((edge: any) => {
       const order = edge.node;
@@ -183,7 +182,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const amount = parseFloat(order.totalPriceSet.shopMoney.amount) || 0;
 
       if (orderDate >= thirtyDaysAgo) {
-        debugThirtyDayOrders++;
         currentCount++;
         currentTotalValue += amount;
       } else if (orderDate >= sixtyDaysAgo && orderDate < thirtyDaysAgo) {
@@ -200,7 +198,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const countTrend = prevCount > 0 ? ((currentCount - prevCount) / prevCount) * 100 : (currentCount > 0 ? 100 : 0);
     const aovTrend = prevAov > 0 ? ((currentAov - prevAov) / prevAov) * 100 : (currentAov > 0 ? 100 : 0);
 
-    console.log(`[Dashboard Metrics] Aggregation Complete. Total: ${debugTotalOrders}, Count: ${currentCount}, AOV: $${currentAov}`);
+    console.log(`[Dashboard Metrics] Aggregation Complete. Count: ${currentCount}, Value: $${currentTotalValue}, AOV: $${currentAov}`);
 
     return new Response(JSON.stringify({
       currentPeriod: {
