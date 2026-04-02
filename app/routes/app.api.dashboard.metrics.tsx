@@ -199,9 +199,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     return new Response(JSON.stringify({
       currentPeriod: {
-        totalValue: currentTotalValue,
-        count: currentCount,
-        aov: currentAov
+        totalValue: debugTotalOrders,
+        count: debugProtectedOrders,
+        aov: debugThirtyDayOrders
       },
       previousPeriod: {
         totalValue: prevTotalValue,
