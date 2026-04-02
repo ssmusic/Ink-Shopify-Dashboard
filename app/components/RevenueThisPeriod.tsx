@@ -7,7 +7,7 @@ const RevenueThisPeriod = () => {
 
   useEffect(() => {
     if (fetcher.state === "idle" && !fetcher.data) {
-      fetcher.load("/app/api/dashboard/metrics");
+      fetcher.load(`/app/api/dashboard/metrics?_t=${Date.now()}`);
     }
   }, [fetcher]);
 
