@@ -1,9 +1,11 @@
 import { type LoaderFunctionArgs } from "react-router";
+import { authenticate } from "../shopify.server";
+import { getOfflineSession } from "../session-utils.server";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, X-Requested-With, Origin",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, X-Requested-With, Origin, X-Client-Type",
 };
 
 export const action = async ({ request }: any) => {
@@ -59,12 +61,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  const { getOfflineSession } = await import("../session-utils.server");
   let graphqlClient: any = null;
 
   try {
     const authHeader = request.headers.get("Authorization");
-    if (authHeader?.startsWith("Bearer ") && !authHeader.includes("Shopify")) {
+    const clientType = request.headers.get("X-Client-Type");
+    
+    if (clientType === "PWA" && authHeader?.startsWith("Bearer ")) {
       // 1. Authenticate user from PWA JWT token
       const token = authHeader.slice(7);
       const payloadBase64 = token.split(".")[1];
@@ -95,7 +98,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       };
     } else {
       // 2. Authenticate from Shopify embedded AppBridge (uses session cookies or AppBridge token under the hood)
-      const { authenticate } = await import("../shopify.server");
       const { admin } = await authenticate.admin(request);
       graphqlClient = admin;
     }
@@ -110,8 +112,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
     const query = `#graphql
-      query GetHistoricalOrders($query: String!) {
-        orders(first: 200, query: $query) {
+      query GetHistoricalOrders {
+        orders(first: 200, reverse: true) {
           edges {
             node {
               createdAt
@@ -135,14 +137,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
     `;
 
-    // Fetch last 60 days
-    const response = await graphqlClient.graphql(query, {
-      variables: {
-        query: `created_at:>=${sixtyDaysAgo.toISOString().split("T")[0]}`
-      }
-    });
+    // Fetch last 200 orders
+    const response = await graphqlClient.graphql(query);
 
     const data = await response.json();
+    
+    // Check for GraphQL errors specifically!
+    if (data.errors) {
+       console.error("GraphQL Schema Error:", JSON.stringify(data.errors));
+       return new Response(JSON.stringify({ error: `GraphQL Error: ${data.errors[0].message}` }), { status: 500, headers: CORS_HEADERS });
+    }
+
     if (!data?.data?.orders) {
       return new Response(JSON.stringify({ 
         currentPeriod: { totalValue: 0, count: 0, aov: 0 },
@@ -156,16 +161,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let prevCount = 0;
     let prevTotalValue = 0;
 
+    let debugTotalOrders = data.data.orders.edges.length;
+    let debugProtectedOrders = 0;
+    let debugThirtyDayOrders = 0;
+
     data.data.orders.edges.forEach((edge: any) => {
       const order = edge.node;
       
       // We only want INK protected orders
       if (!isInkProtected(order)) return;
+      debugProtectedOrders++;
 
       const orderDate = new Date(order.createdAt);
       const amount = parseFloat(order.totalPriceSet.shopMoney.amount) || 0;
 
       if (orderDate >= thirtyDaysAgo) {
+        debugThirtyDayOrders++;
         currentCount++;
         currentTotalValue += amount;
       } else if (orderDate >= sixtyDaysAgo && orderDate < thirtyDaysAgo) {
@@ -197,7 +208,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         valueProtected: valueTrend,
         enrolledCount: countTrend,
         aov: aovTrend
-      }
+      },
+      debugLog: `Total: ${debugTotalOrders} | Protected: ${debugProtectedOrders} | Last30: ${debugThirtyDayOrders}`
     }), { headers: CORS_HEADERS });
 
   } catch (err: any) {

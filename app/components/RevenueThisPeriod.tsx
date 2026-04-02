@@ -1,5 +1,5 @@
 import { TrendingUp, TrendingDown, Loader2 } from "lucide-react";
-import { useFetcher } from "@remix-run/react";
+import { useFetcher } from "react-router";
 import { useEffect, useState } from "react";
 
 const RevenueThisPeriod = () => {
@@ -7,7 +7,7 @@ const RevenueThisPeriod = () => {
 
   useEffect(() => {
     if (fetcher.state === "idle" && !fetcher.data) {
-      fetcher.load("/api/dashboard/metrics");
+      fetcher.load("/app/api/dashboard/metrics");
     }
   }, [fetcher]);
 
@@ -18,6 +18,8 @@ const RevenueThisPeriod = () => {
 
   const isUp = trends.valueProtected >= 0;
   const changePct = Math.abs(trends.valueProtected).toFixed(1);
+  const debugError = fetcher.data?.error || null;
+  const debugLog = fetcher.data?.debugLog || null;
 
   return (
     <div
@@ -25,6 +27,11 @@ const RevenueThisPeriod = () => {
       role="region"
       aria-label="Total value protected"
     >
+      {(debugError || debugLog) && (
+        <div className="absolute top-0 left-0 w-full bg-red-100 text-red-700 text-xs p-1 text-center font-bold z-20">
+          API Trace: {debugError} {debugLog}
+        </div>
+      )}
       {isLoading && (
         <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center z-10 rounded-md transition-all duration-300">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
