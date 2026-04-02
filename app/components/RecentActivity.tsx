@@ -41,6 +41,7 @@ const RecentActivity = () => {
     <section aria-labelledby="recent-activity-heading">
       <h2 id="recent-activity-heading" className="text-base sm:text-lg font-medium mb-3 sm:mb-4 mt-6 sm:mt-8">
         Recent Activity
+        <span className="ml-4 bg-red-600 text-white font-bold p-1 rounded">TRACER: DEPLOYED</span>
       </h2>
       
       <div className="bg-card border border-border rounded overflow-hidden" role="list" aria-label="Recent order activity">
