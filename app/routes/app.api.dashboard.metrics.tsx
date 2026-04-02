@@ -116,7 +116,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     const query = `#graphql
       query GetHistoricalOrders {
-        orders(first: 200, reverse: true) {
+        orders(first: 200, query: "tag:'INK-Premium-Delivery' OR tag:'INK-Verified-Delivery'", reverse: true) {
           edges {
             node {
               createdAt
@@ -140,10 +140,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
     `;
 
-    // Fetch last 200 orders
+    // Fetch last 200 INK tagged orders
+    console.log("[Dashboard Metrics] Executing targeted GraphQL query for INK tags...");
     const response = await graphqlClient.graphql(query);
 
     const data = await response.json();
+    console.log(`[Dashboard Metrics] GraphQL Execution Complete. Payload received:`, !!data?.data);
     
     // Check for GraphQL errors specifically!
     if (data.errors) {
@@ -169,11 +171,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let debugProtectedOrders = 0;
     let debugThirtyDayOrders = 0;
 
+    console.log(`[Dashboard Metrics] Success: Fetched ${debugTotalOrders} tagged orders from Shopify`);
+
     data.data.orders.edges.forEach((edge: any) => {
       const order = edge.node;
       
-      // We only want INK protected orders
-      if (!isInkProtected(order)) return;
+      // We only want INK protected orders (secondary check just in case)
+      if (!isInkProtected(order)) {
+        console.log(`[Dashboard Metrics] Warn: Order ${order.createdAt} failed secondary isInkProtected check. Tags:`, order.tags);
+        return;
+      }
       debugProtectedOrders++;
 
       const orderDate = new Date(order.createdAt);
@@ -197,11 +204,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const countTrend = prevCount > 0 ? ((currentCount - prevCount) / prevCount) * 100 : (currentCount > 0 ? 100 : 0);
     const aovTrend = prevAov > 0 ? ((currentAov - prevAov) / prevAov) * 100 : (currentAov > 0 ? 100 : 0);
 
+    console.log(`[Dashboard Metrics] Aggregation Complete. Total Value: $${currentTotalValue}, Count: ${currentCount}, AOV: $${currentAov}`);
+
     return new Response(JSON.stringify({
       currentPeriod: {
-        totalValue: debugTotalOrders,
-        count: debugProtectedOrders,
-        aov: debugThirtyDayOrders
+        totalValue: currentTotalValue,
+        count: currentCount,
+        aov: currentAov
       },
       previousPeriod: {
         totalValue: prevTotalValue,
@@ -217,7 +226,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }), { headers: CORS_HEADERS });
 
   } catch (err: any) {
-    console.error("Dashboard Metrics API Error:", err);
-    return new Response(JSON.stringify({ error: err.message || "Failed to fetch metrics" }), { status: 500, headers: CORS_HEADERS });
+    console.error("Auth Error in Dashboard Metrics:", err);
+    return new Response(JSON.stringify({ error: "Unauthorized or missing token context: " + err.message }), { status: 200, headers: CORS_HEADERS });
   }
 };
