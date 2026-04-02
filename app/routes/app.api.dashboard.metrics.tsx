@@ -145,12 +145,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
     `;
 
-    // Fetch last 200 orders (we removed the strict tag query to find the missing edge cases)
-    console.log("[Dashboard Metrics] Executing BLIND query for last 200 orders to find missing INK enrollments...");
+    // Fetch last 200 orders
     const response = await graphqlClient.graphql(query);
 
     const data = await response.json();
-    console.log(`[Dashboard Metrics] GraphQL Execution Complete. Payload received:`, !!data?.data);
     
     // Check for GraphQL errors specifically!
     if (data.errors) {
@@ -160,10 +158,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     if (!data?.data?.orders) {
       return new Response(JSON.stringify({ 
-        currentPeriod: { totalValue: -999, count: -999, aov: -999 },
-        previousPeriod: { totalValue: -999, count: -999, aov: -999 },
-        trends: { valueProtected: 0, enrolledCount: 0, aov: 0 },
-        debugLog: `EMPTY_DATA_FALLBACK: ${JSON.stringify(data).substring(0, 50)}`
+        currentPeriod: { totalValue: 0, count: 0, aov: 0 },
+        previousPeriod: { totalValue: 0, count: 0, aov: 0 },
+        trends: { valueProtected: 0, enrolledCount: 0, aov: 0 }
       }), { headers: CORS_HEADERS });
     }
 
@@ -173,28 +170,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let prevTotalValue = 0;
 
     let debugTotalOrders = data.data.orders.edges.length;
-    let debugProtectedOrders = 0;
-    let debugThirtyDayOrders = 0;
-
-    let dumpedOrderLogs = 0;
-
-    console.log(`[Dashboard Metrics] Success: Fetched ${debugTotalOrders} total UNFILTERED orders from Shopify`);
 
     data.data.orders.edges.forEach((edge: any) => {
       const order = edge.node;
-      
-      // Dump the payload for the first 3 latest orders so we can visually inspect their JSON raw properties
-      if (dumpedOrderLogs < 3) {
-        console.log(`\n\n[Dashboard Metrics Data Tracer] DUMPING RAW ORDER ${dumpedOrderLogs + 1}:`);
-        console.log(JSON.stringify(order, null, 2));
-        dumpedOrderLogs++;
-      }
 
       // We only want INK protected orders
       if (!isInkProtected(order)) {
         return;
       }
-      debugProtectedOrders++;
 
       const orderDate = new Date(order.createdAt);
       const amount = parseFloat(order.totalPriceSet.shopMoney.amount) || 0;
@@ -217,7 +200,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const countTrend = prevCount > 0 ? ((currentCount - prevCount) / prevCount) * 100 : (currentCount > 0 ? 100 : 0);
     const aovTrend = prevAov > 0 ? ((currentAov - prevAov) / prevAov) * 100 : (currentAov > 0 ? 100 : 0);
 
-    console.log(`[Dashboard Metrics] Aggregation Complete. Total Value: $${currentTotalValue}, Count: ${currentCount}, AOV: $${currentAov}`);
+    console.log(`[Dashboard Metrics] Aggregation Complete. Total: ${debugTotalOrders}, Count: ${currentCount}, AOV: $${currentAov}`);
 
     return new Response(JSON.stringify({
       currentPeriod: {
@@ -234,8 +217,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         valueProtected: valueTrend,
         enrolledCount: countTrend,
         aov: aovTrend
-      },
-      debugLog: `Total: ${debugTotalOrders} | Protected: ${debugProtectedOrders} | Last30: ${debugThirtyDayOrders}`
+      }
     }), { headers: CORS_HEADERS });
 
   } catch (err: any) {
