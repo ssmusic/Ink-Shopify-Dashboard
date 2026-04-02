@@ -6,6 +6,9 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, X-Requested-With, Origin, X-Client-Type",
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "Pragma": "no-cache",
+  "Expires": "0",
 };
 
 export const action = async ({ request }: any) => {
@@ -150,9 +153,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     if (!data?.data?.orders) {
       return new Response(JSON.stringify({ 
-        currentPeriod: { totalValue: 0, count: 0, aov: 0 },
-        previousPeriod: { totalValue: 0, count: 0, aov: 0 },
-        trends: { valueProtected: 0, enrolledCount: 0, aov: 0 }
+        currentPeriod: { totalValue: -999, count: -999, aov: -999 },
+        previousPeriod: { totalValue: -999, count: -999, aov: -999 },
+        trends: { valueProtected: 0, enrolledCount: 0, aov: 0 },
+        debugLog: `EMPTY_DATA_FALLBACK: ${JSON.stringify(data).substring(0, 50)}`
       }), { headers: CORS_HEADERS });
     }
 
