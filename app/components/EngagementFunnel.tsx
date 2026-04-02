@@ -12,8 +12,7 @@ interface EngagementFunnelProps {
 
 const defaultSteps: FunnelStep[] = [
   { label: "Enrolled", count: 1247, color: "bg-amber-500" },
-  { label: "Active", count: 1089, color: "bg-blue-500" },
-  { label: "Verified", count: 843, color: "bg-emerald-500" },
+  { label: "Active", count: 843, color: "bg-emerald-500" },
   { label: "Expired", count: 158, color: "bg-gray-400" },
 ];
 
@@ -80,7 +79,7 @@ const EngagementFunnel = ({ steps = defaultSteps }: EngagementFunnelProps) => {
       <div className="mt-5 pt-4 border-t border-border flex items-center justify-between">
         <span className="text-xs text-muted-foreground">Overall engagement rate</span>
         <span className="text-sm font-semibold text-foreground tabular-nums">
-          {((steps[2]?.count || 0) / maxCount * 100).toFixed(1)}%
+          {((steps[1]?.count || 0) / maxCount * 100).toFixed(1)}%
         </span>
       </div>
     </div>

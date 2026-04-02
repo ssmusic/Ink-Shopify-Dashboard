@@ -352,7 +352,7 @@ export const loader = async ({
         // Determine normalized display status
         let displayStatus = "Pending";
         if (alanProofData?.verification_status === "verified") {
-            displayStatus = "Verified";
+            displayStatus = "Active";
         } else if (alanProofData?.enrollment_status === "enrolled" || metafields.verification_status === "enrolled") {
             displayStatus = "Enrolled";
         }

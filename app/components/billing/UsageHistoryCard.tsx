@@ -3,15 +3,15 @@ import { useNavigate } from "react-router";
 import { Badge } from "@shopify/polaris";
 
 const usageData = [
-  { date: "Mar 4, 2:41 PM", event: "Verified" as const, order: "#1052", amount: 2.99 },
+  { date: "Mar 4, 2:41 PM", event: "Active" as const, order: "#1052", amount: 2.99 },
   { date: "Mar 4, 1:15 PM", event: "Enrolled" as const, order: "#1055", amount: 2.99 },
   { date: "Mar 4, 11:02 AM", event: "Enrolled" as const, order: "#1054", amount: 2.99 },
-  { date: "Mar 3, 4:30 PM", event: "Verified" as const, order: "#1048", amount: 2.99 },
+  { date: "Mar 3, 4:30 PM", event: "Active" as const, order: "#1048", amount: 2.99 },
   { date: "Mar 3, 3:12 PM", event: "Enrolled" as const, order: "#1053", amount: 2.99 },
   { date: "Mar 3, 10:45 AM", event: "Enrolled" as const, order: "#1052", amount: 2.99 },
-  { date: "Mar 3, 9:20 AM", event: "Verified" as const, order: "#1041", amount: 2.99 },
+  { date: "Mar 3, 9:20 AM", event: "Active" as const, order: "#1041", amount: 2.99 },
   { date: "Mar 2, 3:55 PM", event: "Enrolled" as const, order: "#1051", amount: 2.99 },
-  { date: "Mar 2, 2:10 PM", event: "Verified" as const, order: "#1039", amount: 2.99 },
+  { date: "Mar 2, 2:10 PM", event: "Active" as const, order: "#1039", amount: 2.99 },
   { date: "Mar 2, 11:30 AM", event: "Enrolled" as const, order: "#1050", amount: 2.99 },
 ];
 
@@ -19,7 +19,7 @@ const TOTAL_ITEMS = 78;
 const PAGE_SIZE = 10;
 
 const badgeTone = {
-  Verified: "success" as const,
+  Active: "success" as const,
   Enrolled: "warning" as const,
 };
 

@@ -195,7 +195,7 @@ const statusBadgeProps: Record<
 > = {
   enrolled: { tone: "warning", label: "Enrolled" },
   active: { tone: "info", label: "Active" },
-  verified: { tone: "success", label: "Verified" },
+  verified: { tone: "success", label: "Active" },
   expired: { tone: undefined, label: "Expired" },
   cooldown: { tone: "attention", label: "Cooldown" },
   pending: { tone: undefined, label: "Pending" },
@@ -236,7 +236,7 @@ export default function ShipmentsIndex() {
     },
     {
       id: "verified",
-      content: `Verified (${counts?.verified || 0})`,
+      content: `Active (${counts?.verified || 0})`,
       panelID: "verified",
     },
     {
