@@ -3,6 +3,7 @@ import { authenticate } from "../shopify.server";
 import { getOfflineSession } from "../session-utils.server";
 
 const CORS_HEADERS = {
+  "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, X-Requested-With, Origin, X-Client-Type",
