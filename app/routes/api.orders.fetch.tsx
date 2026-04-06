@@ -25,8 +25,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { getOfflineSession } = await import("../session-utils.server");
 
   try {
+    console.log("🔍 [orders/fetch] Step 1: Request received");
+
     // 1. Authenticate user from JWT token
     const authHeader = request.headers.get("Authorization");
+    console.log("🔍 [orders/fetch] Step 2: Auth header present:", !!authHeader, "| Starts with Bearer:", authHeader?.startsWith("Bearer "));
+
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -37,12 +41,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const token = authHeader.slice(7);
     let shopDomain = "";
     try {
-      // Decode JWT payload (without full backend signature verification for now, 
-      // as it might be signed by INK or legacy Firestore auth)
       const payloadBase64 = token.split(".")[1];
       const decoded = JSON.parse(Buffer.from(payloadBase64, "base64url").toString("utf8"));
       shopDomain = decoded.shop || decoded.shop_id || decoded.merchant_id;
+      console.log("🔍 [orders/fetch] Step 3: Decoded token. shopDomain:", shopDomain, "| decoded keys:", Object.keys(decoded).join(", "));
     } catch (err) {
+      console.error("🔍 [orders/fetch] Step 3 FAILED: Token decode error:", err);
       return new Response(JSON.stringify({ error: "Invalid token format" }), {
         status: 401,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
@@ -50,6 +54,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     if (!shopDomain) {
+      console.error("🔍 [orders/fetch] Step 3 FAILED: shopDomain is empty/null");
       return new Response(JSON.stringify({ error: "Store context missing from token" }), {
         status: 401,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
@@ -57,7 +62,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     // 2. Get offline session for this specific store
+    console.log("🔍 [orders/fetch] Step 4: Fetching offline session for:", shopDomain);
     const session = await getOfflineSession(shopDomain);
+    console.log("🔍 [orders/fetch] Step 5: Session result:", session ? `Found (shop: ${session.shop}, hasToken: ${!!session.accessToken})` : "NULL - no session found");
 
     if (!session) {
       return new Response(
@@ -168,8 +175,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
     `;
 
+    console.log("🔍 [orders/fetch] Step 6: Making GraphQL call to Shopify for shop:", session.shop);
     const response = await admin.graphql(query);
     const data = await response.json();
+    console.log("🔍 [orders/fetch] Step 7: GraphQL response received. Has data:", !!data?.data, "Has errors:", !!data?.errors);
+    if (data?.errors) console.error("🔍 [orders/fetch] GraphQL errors:", JSON.stringify(data.errors));
 
     if (!data?.data?.orders) {
       console.error("❌ Failed to fetch orders:", data);
@@ -335,7 +345,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
 
   } catch (error: any) {
-    console.error("❌ Error fetching orders:", error);
+    console.error("❌ [orders/fetch] UNHANDLED ERROR:", error?.message);
+    console.error("❌ [orders/fetch] STACK:", error?.stack);
 
     return new Response(
       JSON.stringify({ 

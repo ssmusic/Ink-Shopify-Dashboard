@@ -61,7 +61,7 @@ function extractTokenPayload(token: string): { shop?: string; merchant_id?: stri
   }
 }
 
-import { createMerchant, enrollOrder, getShopIdByDomain, adjustMerchantInventory } from "../services/ink-api.server";
+import { createMerchant, enrollOrder, getShopIdByDomain, adjustMerchantInventory, getInventoryByShopDomain } from "../services/ink-api.server";
 
 async function getMerchantApiKey(shopDomain?: string, merchantId?: string): Promise<string | null> {
   // 1. Try matching by Firestore document ID (=== merchant_id from Alan JWT)
@@ -197,7 +197,49 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ error: "order_id, nfc_token, order_number, customer_email, shipping_address, and product_details are required" }, { status: 400 });
   }
 
-  console.log("[ENROLL] Payload:", { order_id, nfc_token, nfc_uid, order_number, customer_email });
+  // 3b. Inventory & min_enrollment_value gate (M4)
+  const effectiveIdentifier = shopDomain || merchantId;
+  if (effectiveIdentifier) {
+    try {
+      // Check live inventory count
+      const inventoryData = await getInventoryByShopDomain(effectiveIdentifier);
+      const currentCount = inventoryData?.current_count ?? 0;
+      if (currentCount <= 0) {
+        console.log("[ENROLL] ❌ Enrollment blocked: inventory is zero or negative:", currentCount);
+        return json(
+          { error: "Insufficient sticker inventory. Please reorder at shop.in.ink before enrolling new packages." },
+          { status: 400 }
+        );
+      }
+      console.log("[ENROLL] ✅ Inventory check passed. Current count:", currentCount);
+
+      // Check min_enrollment_value setting
+      const merchantDoc = await (async () => {
+        const doc = await firestore.collection("merchants").doc(effectiveIdentifier).get();
+        if (doc.exists) return doc.data();
+        const snap = await firestore.collection("merchants").where("shopDomain", "==", effectiveIdentifier).limit(1).get();
+        return snap.empty ? null : snap.docs[0].data();
+      })();
+
+      const minValue = merchantDoc?.min_enrollment_value ?? 0;
+      if (minValue > 0) {
+        // order_total_value is passed in body from the PWA
+        const orderTotal = parseFloat(body.order_total_value ?? "0") || 0;
+        if (orderTotal < minValue) {
+          console.log(`[ENROLL] ❌ Enrollment blocked: order total $${orderTotal} < min_enrollment_value $${minValue}`);
+          return json(
+            { error: `Order value $${orderTotal.toFixed(2)} is below the minimum enrollment value of $${minValue.toFixed(2)}.` },
+            { status: 400 }
+          );
+        }
+        console.log(`[ENROLL] ✅ Min value check passed. Order: $${orderTotal}, Min: $${minValue}`);
+      }
+    } catch (gateErr: any) {
+      // Non-fatal: if the gate check fails, log and continue to avoid blocking legitimate enrollments
+      console.warn("[ENROLL] ⚠️ Gate check error (non-fatal):", gateErr.message);
+    }
+  }
+
   console.log("[ENROLL] product_details count:", Array.isArray(product_details) ? product_details.length : "NOT array");
   console.log("[ENROLL] warehouse_location:", warehouse_location);
 

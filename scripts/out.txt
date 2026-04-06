@@ -1,0 +1,31 @@
+﻿ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+≡ƒöº Registering merchant: taimoor1-2.myshopify.com
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+
+≡ƒôí Calling: https://us-central1-inink-c76d3.cloudfunctions.net/api/admin/merchants
+   Payload: {"shop_domain":"taimoor1-2.myshopify.com","name":"taimoor1-2.myshopify.com","email":"admin@taimoor1-2.myshopify.com"}
+
+≡ƒôÑ Alan API response [400]: {"error":"Missing required fields: shop_name, owner_email"}
+node : Γ¥î No api_key 
+found in response. Full 
+response: {
+At line:1 char:1
++ node scripts/register-mer
+chant.mjs 2>&1 | Out-File 
+-FilePath scripts/ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo         
+     : NotSpecified: (Γ¥î  
+   No api_key ...ull res   
+ ponse: {:String) [], R    
+emoteException
+    + FullyQualifiedErrorI 
+   d : NativeCommandError
+ 
+  "error": "Missing 
+required fields: 
+shop_name, owner_email"
+}
+
+≡ƒÆí The merchant may already exist. Checking if there is an existing key...

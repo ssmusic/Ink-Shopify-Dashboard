@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "60b3bc94dce92e75df9de4ba630cf091"
-name = "test store"
+client_id = "8da1addef3dcd4251db5057cda3c85fa"
+name = "INK Verified Delivery"
 application_url = "https://shopify-app-250065525755.us-central1.run.app"
 embedded = true
 
