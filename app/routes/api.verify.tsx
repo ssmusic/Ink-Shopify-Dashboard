@@ -83,6 +83,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
         console.log("✅ INK server response state:", alanData.state, "outcome:", alanData.delivery_outcome);
 
+        // Inject merchant branding media into the verification payload.
+        try {
+            console.log(`[verify] Attempting to look up merchant configuration by apiKey...`);
+            const { default: firestore } = await import("../firestore.server");
+            const merchantDoc = await firestore.collection("merchants").where("ink_api_key", "==", apiKey).limit(1).get();
+            if (!merchantDoc.empty) {
+                const foundMedia = merchantDoc.docs[0].data().merchant_media || [];
+                console.log(`[verify] Successfully found merchant_media in Firestore: ${foundMedia.length} items`);
+                alanData.merchant_media = foundMedia;
+            } else {
+                console.warn(`[verify] No Firestore merchant configuration found matching the active INK API key!`);
+            }
+        } catch (err) {
+            console.error("Failed to append merchant media to verify payload", err);
+        }
+
         // =================================================================
         // FALLBACK: Update metafields immediately (redundancy with webhook)
         // This ensures dashboard updates even if webhook fails/is not configured

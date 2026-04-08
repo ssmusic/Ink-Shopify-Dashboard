@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useFetcher } from "react-router";
 import {
   Plus,
   Play,
@@ -26,64 +27,6 @@ interface MediaItem {
   uploadDate?: string;
   isMock?: boolean;
 }
-
-const createMockItems = (): MediaItem[] => [
-  {
-    id: "mock-1",
-    url: "mock:video",
-    name: "brand_intro.mp4",
-    type: "video",
-    duration: "5s",
-    size: "1.2 MB",
-    dimensions: "1080 × 1920",
-    uploadDate: "Feb 28, 2026",
-    isMock: true,
-  },
-  {
-    id: "mock-2",
-    url: "mock:video",
-    name: "unboxing_reveal.mp4",
-    type: "video",
-    duration: "4s",
-    size: "980 KB",
-    dimensions: "1080 × 1920",
-    uploadDate: "Feb 25, 2026",
-    isMock: true,
-  },
-  {
-    id: "mock-3",
-    url: "mock:video",
-    name: "tap_tutorial.mp4",
-    type: "video",
-    duration: "6s",
-    size: "1.5 MB",
-    dimensions: "1080 × 1920",
-    uploadDate: "Feb 20, 2026",
-    isMock: true,
-  },
-  {
-    id: "mock-4",
-    url: "mock:video",
-    name: "product_showcase.mp4",
-    type: "video",
-    duration: "5s",
-    size: "1.1 MB",
-    dimensions: "1080 × 1920",
-    uploadDate: "Feb 18, 2026",
-    isMock: true,
-  },
-  {
-    id: "mock-5",
-    url: "mock:video",
-    name: "thank_you.mp4",
-    type: "video",
-    duration: "3s",
-    size: "720 KB",
-    dimensions: "1080 × 1920",
-    uploadDate: "Feb 15, 2026",
-    isMock: true,
-  },
-];
 
 const MediaRow = ({
   item,
@@ -125,7 +68,7 @@ const MediaRow = ({
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const getFileExt = (name: string) =>
-    name.split(".").pop()?.toUpperCase() || "FILE";
+    name?.split(".").pop()?.toUpperCase() || "FILE";
 
   const togglePlay = () => {
     if (!videoRef.current) return;
@@ -177,7 +120,7 @@ const MediaRow = ({
                 ink.
               </span>
             </div>
-          ) : item.type === "video" ? (
+          ) : item.type === "video" || item.url?.match(/\.(mp4|webm|ogg)$/i) ? (
             <video
               src={item.url}
               className="w-full h-full object-cover"
@@ -191,7 +134,7 @@ const MediaRow = ({
               className="w-full h-full object-cover"
             />
           )}
-          {item.type === "video" && (
+          {(item.type === "video" || item.url?.match(/\.(mp4|webm|ogg)$/i)) && (
             <div className="absolute inset-0 flex items-center justify-center">
               <Play className="h-2.5 w-2.5 fill-background text-background drop-shadow" />
             </div>
@@ -264,7 +207,7 @@ const MediaRow = ({
         <div className="px-4 pb-4 pt-1 border-t border-border bg-muted/10">
           {/* Preview */}
           <div className="flex justify-center py-4">
-            {item.type === "video" ? (
+            {item.type === "video" || item.url?.match(/\.(mp4|webm|ogg)$/i) ? (
               <div className="relative w-[180px] aspect-[9/16] bg-background rounded-sm overflow-hidden border border-border">
                 {item.isMock ? (
                   <div
@@ -431,7 +374,9 @@ const MediaRow = ({
 };
 
 const BrandingSettings = () => {
-  const [items, setItems] = useState<MediaItem[]>(createMockItems);
+  const [items, setItems] = useState<MediaItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loopVideo, setLoopVideo] = useState(true);
   const [duration, setDuration] = useState(5);
@@ -440,43 +385,100 @@ const BrandingSettings = () => {
   const [guidelinesOpen, setGuidelinesOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (file: File) => {
+  // Helper to fetch securely passing App Bridge token
+  const fetchSecure = async (path: string, options: RequestInit = {}) => {
+    // Determine the host dynamically from the URL or default to current origin
+    const appUrl = window.location.origin;
+    
+    let token = "";
+    try {
+      // @ts-ignore
+      token = await window.shopify?.idToken();
+    } catch(e) {
+      console.warn("Could not retrieve Shopify session token", e);
+    }
+    
+    // For standalone testing, fallback to generic JWT
+    if (!token && localStorage.getItem('token')) {
+       token = localStorage.getItem('token') || '';
+    }
+
+    const headers = new Headers(options.headers);
+    if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    const response = await fetch(`${appUrl}${path}`, {
+      ...options,
+      headers
+    });
+    
+    // Check if response is JSON
+    const contentType = response.headers.get("content-type");
+    if (!response.ok) {
+       let errMessage = `Error: ${response.status}`;
+       if (contentType && contentType.includes("application/json")) {
+           const errData = await response.json();
+           errMessage = errData.error || errMessage;
+       }
+       throw new Error(errMessage);
+    }
+    
+    if (contentType && contentType.includes("application/json")) {
+       return response.json();
+    }
+    return null;
+  };
+
+  // Load existing items on mount
+  useEffect(() => {
+    const loadMedia = async () => {
+      try {
+        const data = await fetchSecure("/app/api/settings/media");
+        if (data && Array.isArray(data.media)) {
+          setItems(data.media);
+        }
+      } catch (err: any) {
+        console.error("Failed to load media:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadMedia();
+  }, []);
+
+  const handleFileUpload = async (file: File) => {
     const isVideo = file.type.startsWith("video/");
     const isImage = file.type.startsWith("image/");
     if (!isVideo && !isImage) {
       toast({
         title: "Invalid file type",
-        description:
-          "Upload an image (PNG, JPG, WebP) or video (MP4, WebM).",
+        description: "Upload an image (PNG, JPG, WebP) or video (MP4, WebM).",
         variant: "destructive",
       });
       return;
     }
-    const url = URL.createObjectURL(file);
-    const sizeKB = file.size / 1024;
-    const sizeStr =
-      sizeKB >= 1024
-        ? `${(sizeKB / 1024).toFixed(1)} MB`
-        : `${Math.round(sizeKB)} KB`;
-    const now = new Date();
-    const dateStr = now.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    setItems((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        url,
-        name: file.name,
-        type: isVideo ? "video" : "image",
-        duration: isVideo ? `${duration}s` : undefined,
-        size: sizeStr,
-        uploadDate: dateStr,
-      },
-    ]);
-    toast({ description: "Media added", duration: 1500 });
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    formData.append("duration", `${duration}s`);
+    
+    toast({ description: "Uploading media to storage...", duration: 2500 });
+    setIsSubmitting(true);
+    try {
+       const data = await fetchSecure("/app/api/settings/media", {
+         method: "POST",
+         // Do not set Content-Type header manually when sending FormData, the browser handles it + boundary
+         body: formData
+       });
+       if (data && data.media) {
+          setItems(data.media);
+          toast({ description: "Media uploaded successfully", duration: 2000 });
+       }
+    } catch (err: any) {
+       toast({ title: "Failed", description: err.message, variant: "destructive", duration: 3000 });
+    } finally {
+       setIsSubmitting(false);
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -485,22 +487,38 @@ const BrandingSettings = () => {
     e.target.value = "";
   };
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
-    if (expandedId === id) setExpandedId(null);
-    toast({ description: "Removed", duration: 1500 });
+  const removeItem = async (id: string) => {
+    toast({ description: "Removing media...", duration: 2000 });
+    setIsSubmitting(true);
+    try {
+        const data = await fetchSecure("/app/api/settings/media", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id })
+        });
+        if (data && data.media) setItems(data.media);
+    } catch (err: any) {
+         toast({ title: "Failed", description: err.message, variant: "destructive", duration: 3000 });
+    } finally {
+         setIsSubmitting(false);
+    }
   };
 
-  const setAsPrimary = (id: string) => {
-    setItems((prev) => {
-      const idx = prev.findIndex((i) => i.id === id);
-      if (idx <= 0) return prev;
-      const updated = [...prev];
-      const [moved] = updated.splice(idx, 1);
-      updated.unshift(moved);
-      return updated;
-    });
-    toast({ description: "Set as primary", duration: 1500 });
+  const setAsPrimary = async (id: string) => {
+    toast({ description: "Updating sequence...", duration: 2000 });
+    setIsSubmitting(true);
+    try {
+        const data = await fetchSecure("/app/api/settings/media", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ setPrimaryId: id })
+        });
+        if (data && data.media) setItems(data.media);
+    } catch (err: any) {
+         toast({ title: "Failed", description: err.message, variant: "destructive", duration: 3000 });
+    } finally {
+         setIsSubmitting(false);
+    }
   };
 
   const makeDragHandlers = (i: number) => ({
@@ -515,11 +533,19 @@ const BrandingSettings = () => {
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
       if (dragIndex !== null && dragIndex !== i) {
-        setItems((prev) => {
-          const updated = [...prev];
-          const [moved] = updated.splice(dragIndex, 1);
-          updated.splice(i, 0, moved);
-          return updated;
+        const updated = [...items];
+        const [moved] = updated.splice(dragIndex, 1);
+        updated.splice(i, 0, moved);
+        setItems(updated); // Optimistic UI local drag
+        
+        // Sync to server
+        const reorderedIds = updated.map(item => item.id);
+        fetchSecure("/app/api/settings/media", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reorderedIds })
+        }).catch(err => {
+             toast({ title: "Failed", description: err.message, variant: "destructive", duration: 3000 });
         });
       }
       setDragIndex(null);
@@ -535,7 +561,7 @@ const BrandingSettings = () => {
     <Layout>
       <Layout.AnnotatedSection
         title="Loading Media"
-        description="Upload the videos and images your customers see when they tap. One is selected at random per tap, so repeat customers see variety."
+        description="Upload the videos and images your customers see when they tap. The 'Primary' video is shown during the consumer tap experience!"
       >
         <input
           ref={fileInputRef}
@@ -565,39 +591,31 @@ const BrandingSettings = () => {
                 isDragOver: dragOverIndex === i,
               }}
               loopVideo={loopVideo}
-              onLoopChange={(v) => {
-                setLoopVideo(v);
-                toast({
-                  description: v ? "Loop enabled" : "Loop disabled",
-                  duration: 1500,
-                });
-              }}
+              onLoopChange={(v) => setLoopVideo(v) }
               duration={duration}
               onDurationChange={setDuration}
-              onDurationCommit={() =>
-                toast({
-                  description: `Duration set to ${duration}s`,
-                  duration: 1500,
-                })
-              }
+              onDurationCommit={() => {}}
             />
           ))}
 
           {/* Add Media row */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center gap-3 px-3 py-3 text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+            disabled={isSubmitting || isLoading}
+            className={`w-full flex items-center gap-3 px-3 py-3 text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors ${isSubmitting || isLoading ? "opacity-50" : ""}`}
           >
             <div className="w-5 shrink-0" />
             <div className="w-[27px] h-[48px] border border-dashed border-border rounded-sm flex items-center justify-center shrink-0">
               <Plus className="h-3.5 w-3.5" />
             </div>
-            <span className="text-sm">Add Media</span>
+            <span className="text-sm">
+               {isSubmitting ? "Processing..." : isLoading ? "Loading..." : "Add Media"}
+            </span>
           </button>
         </section>
 
         {/* Video Guidelines */}
-        <div className="border border-border rounded-sm overflow-hidden">
+        <div className="border border-border rounded-sm overflow-hidden mt-4">
           <button
             onClick={() => setGuidelinesOpen((v) => !v)}
             className="flex items-center justify-between w-full p-4 bg-card hover:bg-muted/30 transition-colors"
@@ -616,8 +634,8 @@ const BrandingSettings = () => {
               {[
                 "Format: MP4 or WebM (H.264 codec recommended)",
                 "Aspect ratio: 9:16 portrait recommended",
-                "Max file size: 2MB",
-                "Duration: 2–5 seconds (will loop continuously)",
+                "Max file size: 10MB",
+                "Duration: 3–15 seconds (will loop continuously)",
                 "Seamless loop point recommended for best experience",
               ].map((g, i) => (
                 <p
