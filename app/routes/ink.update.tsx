@@ -322,72 +322,93 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.log("✅ Shopify metafields updated successfully");
       }
 
-      // --- SEND EMAIL NOTIFICATION ---
-      // Only send email when status is "verified"
-      if (status === "verified" && verify_url) {
-        console.log("\n📧 ================================================");
-        console.log("📧 STARTING EMAIL NOTIFICATION PROCESS");
-        console.log("📧 Order GID:", orderGid);
-        console.log("📧 Verify URL:", verify_url);
-        console.log("📧 ================================================\n");
+      // --- SEND NOTIFICATIONS (Delivered / Verified) ---
+      if ((status === "verified" && verify_url) || status === "delivered") {
+        console.log("\n📨 ================================================");
+        console.log(`📨 STARTING IMMEDIATE NOTIFICATION PROCESS [${status.toUpperCase()}]`);
+        console.log("📨 Order GID:", orderGid);
+        console.log("📨 Verify URL:", verify_url);
+        console.log("📨 ================================================\n");
         
         try {
           // Fetch customer email from the order
           const orderQuery = `#graphql
-            query GetOrderForEmail($id: ID!) {
+            query GetOrderForNotification($id: ID!) {
               order(id: $id) {
                 name
                 customer {
                   email
+                  phone
                   firstName
                 }
               }
             }
           `;
           
-          console.log("📧 Fetching order details for email...");
-          console.log("📧 GraphQL Query:", orderQuery);
-          console.log("📧 Variables:", { id: orderGid });
+          console.log("📨 Fetching order details for notification...");
+          console.log("📨 GraphQL Query:", orderQuery);
+          console.log("📨 Variables:", { id: orderGid });
           
           const orderData = await adminGraphql(orderQuery, { id: orderGid });
           
-          console.log("📧 Shopify Response:", JSON.stringify(orderData, null, 2));
+          console.log("📨 Shopify Response:", JSON.stringify(orderData, null, 2));
           
-          if (orderData?.data?.order?.customer?.email) {
+          if (orderData?.data?.order?.customer) {
             const customerEmail = orderData.data.order.customer.email;
+            const customerPhone = orderData.data.order.customer.phone;
             const customerName = orderData.data.order.customer.firstName || "Customer";
             const orderName = orderData.data.order.name;
             
-            console.log("✅ Order found for email:");
+            console.log("✅ Order context found:");
             console.log("   - Order Name:", orderName);
             console.log("   - Customer Name:", customerName);
-            console.log("   - Customer Email:", customerEmail);
-            
-            const { EmailService } = await import("../services/email.server");
-            
-            console.log("📧 Calling EmailService.sendVerificationEmail...");
-            
-            await EmailService.sendVerificationEmail({
-              to: customerEmail,
-              customerName: customerName,
-              orderName: orderName,
-              proofUrl: verify_url,
-            });
-            
-            console.log(`✅ Verification email sent successfully to ${customerEmail}`);
+            console.log("   - Phone:", customerPhone);
+            console.log("   - Email:", customerEmail);
+
+            // Fetch Merchant Settings from Firestore
+            const { default: firestore } = await import("../firestore.server");
+            const settingsSnap = await firestore.collection("merchants").where("shopDomain", "==", targetSession.shop).limit(1).get();
+            const merchantName = settingsSnap.empty ? targetSession.shop : (settingsSnap.docs[0].data().shopName || targetSession.shop);
+            const settings = settingsSnap.empty ? null : settingsSnap.docs[0].data().notification_settings;
+
+            if (!settings) {
+               console.warn(`⚠️ No Notification Settings found for merchant ${targetSession.shop}. Skipping notifications.`);
+            } else {
+               const { NotificationService } = await import("../services/notifications.server");
+               
+               // Map Alan's status to our NotificationType
+               let notificationType: any = null;
+               if (status === "delivered") notificationType = "delivered";
+               if (status === "verified") notificationType = "deliveryConfirmed";
+
+               if (notificationType) {
+                 console.log(`📨 Dispatching immediate [${notificationType}] notification via NotificationService...`);
+                 
+                 await NotificationService.dispatch({
+                   type: notificationType,
+                   toEmail: customerEmail,
+                   toPhone: customerPhone,
+                   customerName,
+                   orderName,
+                   merchantName,
+                   verifyUrl: verify_url,
+                   returnWindowDays: settings.returnWindow ? parseInt(settings.returnWindow) : 30
+                 }, settings);
+               }
+            }
           } else {
-            console.warn("⚠️ Order found but no customer email available");
+            console.warn("⚠️ Order found but no customer context available");
             console.warn("⚠️ Order data:", JSON.stringify(orderData, null, 2));
           }
-        } catch (emailError: any) {
-          console.error("❌ Failed to send email:", emailError.message);
-          console.error("❌ Full error:", emailError);
-          // Don't fail the webhook if email fails
+        } catch (notifError: any) {
+          console.error("❌ Failed to send notification:", notifError.message);
+          console.error("❌ Full error:", notifError);
+          // Don't fail the webhook if notification fails
         }
         
-        console.log("📧 Email notification process completed\n");
+        console.log("📨 Immediate notification process completed\n");
       } else {
-        console.log(`ℹ️ Skipping email notification (status: ${status}, verify_url: ${verify_url ? "present" : "missing"})`);
+        console.log(`ℹ️ Skipping immediate notification (status: ${status}, verify_url: ${verify_url ? "present" : "missing"})`);
       }
     } catch (shopifyError: any) {
       console.error("❌ Shopify update failed:", shopifyError.message);
