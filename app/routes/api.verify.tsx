@@ -503,6 +503,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     if (order.customer?.email) {
                         const { EmailService } = await import("../services/email.server");
                         
+                        // Fetch settings
+                        const { default: firestore } = await import("../firestore.server");
+                        let rWindow = 30;
+                        try {
+                            const settingsSnap = await firestore.collection("merchants").where("shopDomain", "==", session.shop).limit(1).get();
+                            if (!settingsSnap.empty) {
+                                const settings = settingsSnap.docs[0].data().notification_settings;
+                                if (settings?.returnWindow) {
+                                    rWindow = parseInt(settings.returnWindow) || 30;
+                                }
+                            }
+                        } catch (e) {
+                            console.warn("Could not fetch return window settings:", e);
+                        }
+                        
                         // Send Return Passport email with photos
                         await EmailService.sendReturnPassportEmail({
                             to: order.customer.email,
@@ -510,7 +525,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             orderName: order.name,
                             proofUrl: alanData.verify_url || `https://in.ink/verify/${alanData.proof_id}`,
                             photoUrls: photoUrls,
-                            returnWindowDays: 30,
+                            returnWindowDays: rWindow,
                             merchantName: session.shop.replace('.myshopify.com', ''),
                             productImageUrl: productImageUrl,
                         });

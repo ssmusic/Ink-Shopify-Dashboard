@@ -120,7 +120,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
         try {
           // You need the API Key of the merchant to call Alan's API safely
-          const apiKey = settingsSnap.docs[0].data?.ink_api_key;
+          const apiKey = settingsSnap.docs[0].data()?.ink_api_key;
           if (!apiKey) continue;
 
           // GET /api/proofs/{proofRef}
@@ -143,6 +143,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const customerEmail = order.customer?.email || order.email;
         const customerPhone = order.customer?.phone || order.phone;
         const customerName = order.customer?.firstName || "Customer";
+        const returnWindowDays = settings.returnWindow ? parseInt(settings.returnWindow) : 30;
 
         const dispatchIfReady = async (type: NotificationType, timeRequired: Date) => {
           if (ledger[type]) return; // Already sent! Prevent spam.
@@ -155,7 +156,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               customerName,
               orderName: order.name,
               merchantName,
-              verifyUrl: alanVerifyUrl
+              verifyUrl: alanVerifyUrl,
+              returnWindowDays
             }, settings);
 
             if (sent) {

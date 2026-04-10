@@ -10,6 +10,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { payload, shop, topic, admin } = await authenticate.webhook(request);
 
+    // admin can be undefined for webhooks that don't carry an admin context
+    if (!admin) {
+      console.log(`📦 No admin context available for this webhook delivery. Exiting.`);
+      console.log("📦 ================================================\n");
+      return new Response("OK", { status: 200 });
+    }
+
     const fulfillment = payload as any;
     const shipmentStatus = fulfillment.shipment_status;
     const orderId = fulfillment.order_id;
