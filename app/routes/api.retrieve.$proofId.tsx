@@ -214,17 +214,42 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
         console.log(`   - state: ${proofData.state}`);
         console.log(`   - delivery_outcome: ${proofData.delivery_outcome}`);
         console.log(`   - media_items count: ${proofData.media_items?.length || 0}`);
+        console.log(`   - media_urls count:  ${proofData.media_urls?.length || 0}`);
         console.log(`   - carrier_name: ${proofData.carrier_name || "Not Set"}`);
         console.log(`   - tracking_number: ${proofData.tracking_number || "Not Set"}`);
 
-        // Normalize the response so both old and new field names work seamlessly
+        // Normalize the response — Alan's API returns media in multiple shapes across endpoints:
+        //   • proofData.media_urls  → array of URL strings (per GET /api/proofs docs v1.5)
+        //   • proofData.media_items → array of { media_url | url, media_id, ... } (merchant-animations pattern)
+        // Either shape's objects may use `media_url` or `url` as the field name.
+        // We normalize to media_items: [{ url, ...original }] for the client to render.
+        const rawItems = Array.isArray(proofData.media_items) ? proofData.media_items : [];
+        const rawUrls = Array.isArray(proofData.media_urls) ? proofData.media_urls : [];
+
+        const fromItems = rawItems.map((m: any) =>
+            typeof m === "string"
+                ? { url: m }
+                : { ...m, url: m.media_url || m.url }
+        );
+        const fromUrls = rawUrls.map((u: any) =>
+            typeof u === "string"
+                ? { url: u }
+                : { ...u, url: u.media_url || u.url }
+        );
+
+        // Union, dedupe by URL (in case Alan ever returns the same item in both fields)
+        const seen = new Set<string>();
+        const normalizedItems = [...fromItems, ...fromUrls].filter((m: any) => {
+            if (!m.url || seen.has(m.url)) return false;
+            seen.add(m.url);
+            return true;
+        });
+
+        console.log(`   - normalized media count: ${normalizedItems.length} (${rawItems.length} items + ${rawUrls.length} urls → dedupe)`);
+
         const normalized = {
             ...proofData,
-            // dashboard PackagePhotos reads media_items[].url — map from INK API's media_url
-            media_items: (proofData.media_items || []).map((m: any) => ({
-                ...m,
-                url: m.media_url || m.url, // Support both field names
-            })),
+            media_items: normalizedItems,
         };
 
         return new Response(JSON.stringify(normalized), {
