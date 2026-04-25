@@ -43,11 +43,7 @@ const MediaRow = ({
   isPrimary,
   dragHandlers,
   dragState,
-  loopVideo,
-  onLoopChange,
-  duration,
-  onDurationChange,
-  onDurationCommit,
+  onItemUpdate,
 }: {
   item: MediaItem;
   index: number;
@@ -63,14 +59,21 @@ const MediaRow = ({
     onDragEnd: () => void;
   };
   dragState: { isDragging: boolean; isDragOver: boolean };
-  loopVideo: boolean;
-  onLoopChange: (v: boolean) => void;
-  duration: number;
-  onDurationChange: (v: number) => void;
-  onDurationCommit: () => void;
+  onItemUpdate: (id: string, updates: Partial<MediaItem>) => void;
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Per-item settings, with defaults for legacy items predating these fields.
+  const loop = item.loop ?? true;
+  const durationSeconds = item.durationSeconds ?? 5;
+
+  // Transient local state for the slider during drag — committed on release.
+  // Sync if the upstream item value changes (e.g. server response after PATCH).
+  const [draftDuration, setDraftDuration] = useState(durationSeconds);
+  useEffect(() => {
+    setDraftDuration(durationSeconds);
+  }, [durationSeconds]);
 
   const getFileExt = (name: string) =>
     name?.split(".").pop()?.toUpperCase() || "FILE";
@@ -241,7 +244,7 @@ const MediaRow = ({
                       className="w-full h-full object-cover"
                       muted
                       playsInline
-                      loop
+                      loop={loop}
                       onEnded={() => setIsPlaying(false)}
                     />
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -325,13 +328,13 @@ const MediaRow = ({
                 </Label>
                 <Switch
                   id={`loop-${item.id}`}
-                  checked={loopVideo}
-                  onCheckedChange={onLoopChange}
+                  checked={loop}
+                  onCheckedChange={(v) => onItemUpdate(item.id, { loop: v })}
                 />
               </div>
               <div
                 className={`transition-opacity ${
-                  !loopVideo ? "opacity-50 pointer-events-none" : ""
+                  !loop ? "opacity-50 pointer-events-none" : ""
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -339,18 +342,20 @@ const MediaRow = ({
                     Duration
                   </Label>
                   <span className="text-xs font-medium tabular-nums bg-muted px-1.5 py-0.5 rounded">
-                    {duration}s
+                    {draftDuration}s
                   </span>
                 </div>
                 <Slider
-                  value={[duration]}
-                  onValueChange={(v) => onDurationChange(v[0])}
-                  onValueCommit={onDurationCommit}
+                  value={[draftDuration]}
+                  onValueChange={(v) => setDraftDuration(v[0])}
+                  onValueCommit={(v) =>
+                    onItemUpdate(item.id, { durationSeconds: v[0] })
+                  }
                   min={3}
                   max={15}
                   step={1}
                   className="w-full mb-4"
-                  disabled={!loopVideo}
+                  disabled={!loop}
                 />
               </div>
             </div>
@@ -383,8 +388,6 @@ const BrandingSettings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [loopVideo, setLoopVideo] = useState(true);
-  const [duration, setDuration] = useState(5);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [guidelinesOpen, setGuidelinesOpen] = useState(false);
@@ -465,7 +468,8 @@ const BrandingSettings = () => {
     }
     const formData = new FormData();
     formData.append("file", file, file.name);
-    formData.append("duration", `${duration}s`);
+    // Server stamps each new item with sane defaults (loop=true, duration=5).
+    // Per-item settings are edited after upload via PATCH updateMetadata.
     
     toast({ description: "Uploading media to storage...", duration: 2500 });
     setIsSubmitting(true);
@@ -506,6 +510,36 @@ const BrandingSettings = () => {
          toast({ title: "Failed", description: err.message, variant: "destructive", duration: 3000 });
     } finally {
          setIsSubmitting(false);
+    }
+  };
+
+  // Per-item metadata update (loop, durationSeconds, etc.).
+  // Optimistically merges into local state, then persists via PATCH updateMetadata.
+  const updateItemMetadata = async (
+    id: string,
+    updates: Partial<MediaItem>
+  ) => {
+    const previous = items;
+    const optimistic = items.map((it) =>
+      it.id === id ? { ...it, ...updates } : it
+    );
+    setItems(optimistic);
+
+    try {
+      const data = await fetchSecure("/app/api/settings/media", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updateMetadata: { id, updates } }),
+      });
+      if (data && data.media) setItems(data.media);
+    } catch (err: any) {
+      setItems(previous); // revert on failure
+      toast({
+        title: "Failed to save",
+        description: err.message,
+        variant: "destructive",
+        duration: 3000,
+      });
     }
   };
 
@@ -616,11 +650,7 @@ const BrandingSettings = () => {
                 isDragging: dragIndex === i,
                 isDragOver: dragOverIndex === i,
               }}
-              loopVideo={loopVideo}
-              onLoopChange={(v) => setLoopVideo(v) }
-              duration={duration}
-              onDurationChange={setDuration}
-              onDurationCommit={() => {}}
+              onItemUpdate={updateItemMetadata}
             />
           ))}
 
