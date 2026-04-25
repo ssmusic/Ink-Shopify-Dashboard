@@ -283,17 +283,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       console.log(`[settings/media] Upload SUCCESS. media_id=${mediaId}, url=${finalUrl}`);
 
+      // Parse duration like "5s" → 5 (numeric) for ConsumerTap consumption.
+      const durationStr = (formData.get("duration") as string) || "5s";
+      const durationSeconds = parseInt(durationStr.replace(/[^0-9]/g, ""), 10) || 5;
+
+      // First upload becomes primary by default — merchant always has exactly
+      // one primary at any time (or zero if media list is empty).
+      const isFirstUpload = merchantMedia.length === 0;
+
       const newItem = {
           id: mediaId,
           url: finalUrl,
           name: fileEntry.name,
           type: fileEntry.type.startsWith("video") ? "video" : "image",
-          duration: formData.get("duration") || "5s",
+          duration: durationStr,                    // legacy display string (e.g. "5s")
+          durationSeconds,                          // numeric, read by ConsumerTap
+          loop: true,                               // default loop=on
+          isPrimary: isFirstUpload,                 // first uploaded item becomes primary
+          isActive: true,
           size: `${(fileEntry.size / 1024).toFixed(1)} KB`,
           uploadDate: new Date().toLocaleDateString(),
           merchantSlug,
       };
-      
+
       merchantMedia.push(newItem);
       
       if (doc) {
@@ -350,10 +362,70 @@ export const action = async ({ request }: ActionFunctionArgs) => {
            merchantMedia = newMedia;
        } else if (body.setPrimaryId) {
            const id = body.setPrimaryId;
+           const item = merchantMedia.find((m: any) => m.id === id);
+           if (!item) {
+               return json({ error: "Media item not found" }, { status: 404 });
+           }
+
+           // Tell Alan's backend (source of truth) that this is now primary.
+           // ConsumerTap fetches branding from Alan, so without this call the
+           // dashboard and consumer experience drift.
+           const slugForAlan =
+               item.merchantSlug || (shopDomain ? toMerchantSlug(shopDomain) : "");
+           if (slugForAlan) {
+               const setPrimaryUrl = getAlanUrl(
+                   `/admin/merchant-animations/${slugForAlan}/primary`
+               );
+               console.log(
+                   `[settings/media] PATCH primary → ${setPrimaryUrl}, media_id=${id}`
+               );
+               try {
+                   const resp = await fetch(setPrimaryUrl, {
+                       method: "PATCH",
+                       headers: {
+                           "Content-Type": "application/json",
+                           Authorization: `Bearer ${INK_ADMIN_SECRET}`,
+                       },
+                       body: JSON.stringify({ media_id: id }),
+                   });
+                   if (!resp.ok) {
+                       const errText = await resp.text();
+                       console.error(
+                           `[settings/media] Alan setPrimary failed (${resp.status}): ${errText}`
+                       );
+                       return json(
+                           { error: `Backend rejected primary update: ${errText}` },
+                           { status: 502 }
+                       );
+                   }
+                   console.log(`[settings/media] Alan setPrimary OK`);
+               } catch (e: any) {
+                   console.error(
+                       `[settings/media] Exception calling Alan setPrimary:`,
+                       e.message
+                   );
+                   return json(
+                       { error: "Failed to reach storage backend" },
+                       { status: 502 }
+                   );
+               }
+           } else {
+               console.warn(
+                   `[settings/media] No merchantSlug on item — skipping Alan API call. ` +
+                   `Local Firestore will be updated but consumer experience may diverge.`
+               );
+           }
+
+           // Mark exactly one item as primary in local mirror, and pull it to
+           // index 0 so legacy code that reads array order still works.
+           merchantMedia = merchantMedia.map((m: any) => ({
+               ...m,
+               isPrimary: m.id === id,
+           }));
            const idx = merchantMedia.findIndex((m: any) => m.id === id);
            if (idx > 0) {
-              const [moved] = merchantMedia.splice(idx, 1);
-              merchantMedia.unshift(moved);
+               const [moved] = merchantMedia.splice(idx, 1);
+               merchantMedia.unshift(moved);
            }
        } else if (body.updateMetadata) {
            // Duration, loop, etc.

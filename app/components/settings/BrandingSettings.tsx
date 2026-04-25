@@ -21,10 +21,15 @@ interface MediaItem {
   url: string;
   name: string;
   type: "image" | "video";
-  duration?: string;
+  duration?: string;            // display string e.g. "5s"
+  durationSeconds?: number;     // numeric — used by ConsumerTap to cap playback
+  loop?: boolean;
+  isPrimary?: boolean;
+  isActive?: boolean;
   size?: string;
   dimensions?: string;
   uploadDate?: string;
+  merchantSlug?: string;
   isMock?: boolean;
 }
 
@@ -505,7 +510,16 @@ const BrandingSettings = () => {
   };
 
   const setAsPrimary = async (id: string) => {
-    toast({ description: "Updating sequence...", duration: 2000 });
+    // Optimistic update: flag the new primary, move to top, render instantly.
+    const previous = items;
+    const targetIdx = items.findIndex((it) => it.id === id);
+    if (targetIdx < 0) return;
+
+    const optimistic = items.map((it) => ({ ...it, isPrimary: it.id === id }));
+    const [moved] = optimistic.splice(targetIdx, 1);
+    optimistic.unshift(moved);
+    setItems(optimistic);
+
     setIsSubmitting(true);
     try {
         const data = await fetchSecure("/app/api/settings/media", {
@@ -514,8 +528,10 @@ const BrandingSettings = () => {
             body: JSON.stringify({ setPrimaryId: id })
         });
         if (data && data.media) setItems(data.media);
+        toast({ description: "Primary updated", duration: 1500 });
     } catch (err: any) {
-         toast({ title: "Failed", description: err.message, variant: "destructive", duration: 3000 });
+         setItems(previous); // revert on failure
+         toast({ title: "Failed to set primary", description: err.message, variant: "destructive", duration: 3000 });
     } finally {
          setIsSubmitting(false);
     }
@@ -557,6 +573,12 @@ const BrandingSettings = () => {
     },
   });
 
+  // True when at least one item has the new server-set isPrimary flag.
+  // Until that flag is on every legacy item, we keep a "first item is primary"
+  // fallback. Once Alan + the migration backfill all items, this can simplify
+  // to `const hasExplicitPrimary = true`.
+  const hasExplicitPrimary = items.some((it) => it.isPrimary);
+
   return (
     <Layout>
       <Layout.AnnotatedSection
@@ -584,7 +606,11 @@ const BrandingSettings = () => {
               }
               onDelete={() => removeItem(item.id)}
               onSetPrimary={() => setAsPrimary(item.id)}
-              isPrimary={i === 0}
+              // Prefer explicit isPrimary flag from server data. Fall back to
+              // "first item" only for legacy uploads predating the flag.
+              isPrimary={
+                hasExplicitPrimary ? !!item.isPrimary : i === 0
+              }
               dragHandlers={makeDragHandlers(i)}
               dragState={{
                 isDragging: dragIndex === i,
