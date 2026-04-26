@@ -202,13 +202,27 @@ export const enrollOrder = async (
 };
 
 export const getProof = async (apiKey: string, nfcToken: string) => {
-    const response = await fetch(getAlanUrl(`/api/proofs/${nfcToken}`), {
+    const url = getAlanUrl(`/api/proofs/${encodeURIComponent(nfcToken)}`);
+    console.log(`[ink-api] getProof → ${url} (apiKey prefix: ${apiKey.slice(0, 12)}...)`);
+    const response = await fetch(url, {
         headers: {
             "Authorization": `Bearer ${apiKey}`,
         },
     });
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`Get proof failed: ${await response.text()}`);
+    if (response.status === 404) {
+        // Log Alan's full response body so we can distinguish "real 404" from
+        // "auth failure dressed up as 404" or other backend issues.
+        const body = await response.text().catch(() => "<unreadable>");
+        console.warn(
+            `[ink-api] getProof 404 for token "${nfcToken.slice(0, 30)}…" — Alan response body: ${body.slice(0, 500)}`
+        );
+        return null;
+    }
+    if (!response.ok) {
+        const body = await response.text();
+        console.error(`[ink-api] getProof ${response.status}: ${body.slice(0, 500)}`);
+        throw new Error(`Get proof failed: ${body}`);
+    }
     return await response.json();
 };
 
