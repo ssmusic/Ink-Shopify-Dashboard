@@ -196,27 +196,36 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 // merchant's API key in Firestore. Closes follow-up issue #1.
 // ─────────────────────────────────────────────
 export const action = async ({ request }: ActionFunctionArgs) => {
+  console.log("[tagged-shipments] Action received");
   const { session } = await authenticate.admin(request);
 
   let formData: FormData;
   try {
     formData = await request.formData();
   } catch (e: any) {
+    console.warn(`[tagged-shipments] formData parse failed: ${e?.message || e}`);
     return json({ error: "Invalid form data" }, { status: 400 });
   }
 
   const intent = formData.get("intent");
-  if (intent !== "upload") {
-    return json({ error: `Unknown intent: ${intent}` }, { status: 400 });
-  }
-
   const file = formData.get("file");
   const proofId = formData.get("proofId");
 
+  console.log(
+    `[tagged-shipments] intent=${intent}, file=${file instanceof File ? `File(${file.name}, ${file.size} bytes)` : typeof file}, proofId=${typeof proofId === "string" ? `"${proofId}"` : typeof proofId}`
+  );
+
+  if (intent !== "upload") {
+    console.warn(`[tagged-shipments] Rejecting: unknown intent "${intent}"`);
+    return json({ error: `Unknown intent: ${intent}` }, { status: 400 });
+  }
+
   if (!(file instanceof File) || file.size === 0) {
+    console.warn(`[tagged-shipments] Rejecting: no file or empty file`);
     return json({ error: "No file provided" }, { status: 400 });
   }
   if (typeof proofId !== "string" || !proofId.trim()) {
+    console.warn(`[tagged-shipments] Rejecting: missing or empty proofId`);
     return json({ error: "Missing proofId — order must be enrolled first" }, { status: 400 });
   }
 
