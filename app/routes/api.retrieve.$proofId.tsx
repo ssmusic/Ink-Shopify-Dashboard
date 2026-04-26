@@ -158,6 +158,23 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
                 const eventSnap = await firestore.collection("chain_of_custody_events").where("proof_id", "==", proofId).limit(1).get();
                 if (!eventSnap.empty) {
                     const doc = eventSnap.docs[0].data();
+                    // Diagnostic: log every key on the doc so we can see all
+                    // available identifiers (nfc_token, nfc_uid, order_id, etc.)
+                    console.log(
+                        `🔬 chain_of_custody_event keys for ${proofId}: [${Object.keys(doc).join(", ")}]`
+                    );
+                    console.log(`🔬 event_data keys: [${doc.event_data ? Object.keys(doc.event_data).join(", ") : "—"}]`);
+                    const idCandidates = {
+                        nfc_token: doc.nfc_token,
+                        nfc_uid: doc.nfc_uid,
+                        nfc_id: doc.nfc_id,
+                        order_id: doc.order_id,
+                        token: doc.token,
+                        ed_nfc_token: doc.event_data?.nfc_token,
+                        ed_nfc_uid: doc.event_data?.nfc_uid,
+                    };
+                    console.log(`🔬 candidate identifiers:`, JSON.stringify(idCandidates));
+
                     const found = doc.nfc_token || doc.event_data?.nfc_token;
                     if (found) {
                         actualTokenToFetch = found;
