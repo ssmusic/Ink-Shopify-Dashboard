@@ -151,6 +151,15 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
   const statusRaw = order.status?.toLowerCase() || "pending";
   const statusLabel = statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1);
 
+  // Photo uploads are only allowed while the proof is in a state where
+  // adding new evidence still makes sense — enrolled but not yet
+  // customer-tapped. Once active/verified/expired, the chain of custody
+  // is locked from the merchant side. Also requires a real proof_id (the
+  // order must actually be enrolled with an INK sticker).
+  const canUpload =
+    proofId !== "—" &&
+    (statusRaw === "pending" || statusRaw === "enrolled");
+
   const addressLabel = order.customerAddress
     ? `${order.customerAddress.city}, ${order.customerAddress.provinceCode} ${order.customerAddress.zip}`
     : "";
@@ -362,6 +371,7 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                       isUploading={isUploading}
                       handleFileUpload={handleFileUpload}
                       onLightbox={setLightboxImage}
+                      canUpload={canUpload}
                     />
                   </BlockStack>
                 )}
@@ -529,6 +539,7 @@ function PackagePhotos({
   isUploading,
   handleFileUpload,
   onLightbox,
+  canUpload,
 }: {
   proofId: string;
   nfcTagUid?: string;
@@ -536,6 +547,7 @@ function PackagePhotos({
   isUploading: boolean;
   handleFileUpload: any;
   onLightbox: (url: string) => void;
+  canUpload: boolean;
 }) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -566,22 +578,28 @@ function PackagePhotos({
     <BlockStack gap="300">
       <InlineStack align="space-between" blockAlign="center">
         <Text as="p" tone="subdued" variant="bodySm">Package Photos</Text>
-        <div style={{ position: "relative" }}>
-          <input
-            type="file"
-            id="photo-upload-odv"
-            style={{ display: "none" }}
-            accept="image/*"
-            onChange={handleFileUpload}
-            disabled={isUploading}
-          />
-          <label
-            htmlFor="photo-upload-odv"
-            style={{ fontSize: "12px", cursor: "pointer", color: "var(--p-color-text-interactive)" }}
-          >
-            {isUploading ? "Uploading..." : "↑ Upload Photo"}
-          </label>
-        </div>
+        {/* Only show the upload affordance while the proof is in a state
+            where adding photos still makes sense — enrolled but not yet
+            customer-tapped. Once the proof is active/verified/expired the
+            chain of custody is sealed. */}
+        {canUpload && (
+          <div style={{ position: "relative" }}>
+            <input
+              type="file"
+              id="photo-upload-odv"
+              style={{ display: "none" }}
+              accept="image/*"
+              onChange={handleFileUpload}
+              disabled={isUploading}
+            />
+            <label
+              htmlFor="photo-upload-odv"
+              style={{ fontSize: "12px", cursor: "pointer", color: "var(--p-color-text-interactive)" }}
+            >
+              {isUploading ? "Uploading..." : "↑ Upload Photo"}
+            </label>
+          </div>
+        )}
       </InlineStack>
 
       {loading ? (
