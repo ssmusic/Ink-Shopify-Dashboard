@@ -7,9 +7,11 @@ import TagsSettings from "./TagsSettings";
 import BrandingSettings from "./BrandingSettings";
 import CommunicationSettings from "./CommunicationSettings";
 import UserManagementSettings from "./UserManagementSettings";
+import DeliveryModeSettings from "./DeliveryModeSettings";
 
 const tabs = [
   { id: "account", content: "Account" },
+  { id: "delivery", content: "Delivery" },
   { id: "tags", content: "Inventory" },
   { id: "branding", content: "Media" },
   { id: "communication", content: "Notifications" },
@@ -32,6 +34,7 @@ const Settings = ({ initialData }: { initialData?: any }) => {
   const renderTabContent = () => {
     switch (tabs[selected]?.id) {
       case "account": return <AccountSettings />;
+      case "delivery": return <DeliveryModeSettings />;
       case "tags": return <TagsSettings inventoryData={initialData?.inventoryData} />;
       case "branding": return <BrandingSettings />;
       case "communication": return <CommunicationSettings />;
