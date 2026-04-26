@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Copy } from "lucide-react";
-import { useFetcher, useRouteLoaderData } from "react-router";
+import { useRouteLoaderData } from "react-router";
 import {
   Page,
   Layout,
@@ -70,7 +70,6 @@ const statusBadgeTone = (s: string): BadgeProps["tone"] => {
 };
 
 export default function OrderDetailView({ order, onBack }: OrderDetailViewProps) {
-  const fetcher = useFetcher();
   const [activeTab, setActiveTab] = useState<"write" | "tap">("write");
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -90,27 +89,10 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
     }
   })();
 
-  const isUploading =
-    fetcher.state === "submitting" &&
-    fetcher.formData?.get("intent") === "upload";
-
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 1500);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const formData = new FormData();
-      formData.append("intent", "upload");
-      formData.append("file", e.target.files[0]);
-      formData.append("proofId", order.metafields.proof_reference || "");
-      fetcher.submit(formData, {
-        method: "post",
-        encType: "multipart/form-data",
-      });
-    }
   };
 
   const hasTapData = order.status === "verified" || order.status === "expired";
@@ -150,15 +132,6 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
 
   const statusRaw = order.status?.toLowerCase() || "pending";
   const statusLabel = statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1);
-
-  // Photo uploads are only allowed while the proof is in a state where
-  // adding new evidence still makes sense — enrolled but not yet
-  // customer-tapped. Once active/verified/expired, the chain of custody
-  // is locked from the merchant side. Also requires a real proof_id (the
-  // order must actually be enrolled with an INK sticker).
-  const canUpload =
-    proofId !== "—" &&
-    (statusRaw === "pending" || statusRaw === "enrolled");
 
   const addressLabel = order.customerAddress
     ? `${order.customerAddress.city}, ${order.customerAddress.provinceCode} ${order.customerAddress.zip}`
@@ -367,11 +340,7 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                     <PackagePhotos
                       proofId={proofId}
                       nfcTagUid={nfcUid}
-                      currency={order.currency}
-                      isUploading={isUploading}
-                      handleFileUpload={handleFileUpload}
                       onLightbox={setLightboxImage}
-                      canUpload={canUpload}
                     />
                   </BlockStack>
                 )}
@@ -535,26 +504,19 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
 function PackagePhotos({
   proofId,
   nfcTagUid,
-  currency,
-  isUploading,
-  handleFileUpload,
   onLightbox,
-  canUpload,
 }: {
   proofId: string;
   nfcTagUid?: string;
-  currency: string;
-  isUploading: boolean;
-  handleFileUpload: any;
   onLightbox: (url: string) => void;
-  canUpload: boolean;
 }) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // ALAN API BUG: /api/proofs/nfc/[uid] does not exist and returns 404.
-    // We MUST prefer the proofId (proof_...) over the nfcTagUid.
+    // Prefer proofId (proof_...) over nfcTagUid for retrieval. Alan's
+    // /api/proofs/nfc/{uid} subpath is not implemented; the resolver in
+    // /api/retrieve handles proof_id-style lookups via chain_of_custody.
     const lookupId =
       proofId && proofId !== "—" ? proofId : nfcTagUid;
 
@@ -572,35 +534,11 @@ function PackagePhotos({
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [proofId, isUploading]);
+  }, [proofId]);
 
   return (
     <BlockStack gap="300">
-      <InlineStack align="space-between" blockAlign="center">
-        <Text as="p" tone="subdued" variant="bodySm">Package Photos</Text>
-        {/* Only show the upload affordance while the proof is in a state
-            where adding photos still makes sense — enrolled but not yet
-            customer-tapped. Once the proof is active/verified/expired the
-            chain of custody is sealed. */}
-        {canUpload && (
-          <div style={{ position: "relative" }}>
-            <input
-              type="file"
-              id="photo-upload-odv"
-              style={{ display: "none" }}
-              accept="image/*"
-              onChange={handleFileUpload}
-              disabled={isUploading}
-            />
-            <label
-              htmlFor="photo-upload-odv"
-              style={{ fontSize: "12px", cursor: "pointer", color: "var(--p-color-text-interactive)" }}
-            >
-              {isUploading ? "Uploading..." : "↑ Upload Photo"}
-            </label>
-          </div>
-        )}
-      </InlineStack>
+      <Text as="p" tone="subdued" variant="bodySm">Package Photos</Text>
 
       {loading ? (
         <div style={{ padding: "32px", textAlign: "center" }}>

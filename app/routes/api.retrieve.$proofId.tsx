@@ -158,23 +158,6 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
                 const eventSnap = await firestore.collection("chain_of_custody_events").where("proof_id", "==", proofId).limit(1).get();
                 if (!eventSnap.empty) {
                     const doc = eventSnap.docs[0].data();
-                    // Diagnostic: log every key on the doc so we can see all
-                    // available identifiers (nfc_token, nfc_uid, order_id, etc.)
-                    console.log(
-                        `🔬 chain_of_custody_event keys for ${proofId}: [${Object.keys(doc).join(", ")}]`
-                    );
-                    console.log(`🔬 event_data keys: [${doc.event_data ? Object.keys(doc.event_data).join(", ") : "—"}]`);
-                    const idCandidates = {
-                        nfc_token: doc.nfc_token,
-                        nfc_uid: doc.nfc_uid,
-                        nfc_id: doc.nfc_id,
-                        order_id: doc.order_id,
-                        token: doc.token,
-                        ed_nfc_token: doc.event_data?.nfc_token,
-                        ed_nfc_uid: doc.event_data?.nfc_uid,
-                    };
-                    console.log(`🔬 candidate identifiers:`, JSON.stringify(idCandidates));
-
                     const found = doc.nfc_token || doc.event_data?.nfc_token;
                     if (found) {
                         actualTokenToFetch = found;
@@ -214,56 +197,19 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
             }
         }
         
-        // Try multiple lookup strategies in sequence. Alan's API documents
-        // GET /api/proofs/{nfc_token}, but in practice the token format we
-        // store in chain_of_custody_events sometimes doesn't match what Alan
-        // accepts. Try the most likely identifiers in priority order and log
-        // which one succeeds for future debugging.
-        const { getProof, getProofByNfc } = await import("../services/ink-api.server");
-
-        const candidates: { label: string; value: string }[] = [];
-        // 1. Whatever we resolved (may equal proof_id if mapping failed)
-        candidates.push({ label: "resolved nfc_token", value: actualTokenToFetch });
-        // 2. The original proof_id (in case Alan's endpoint accepts proof IDs too)
-        if (proofId !== actualTokenToFetch) {
-            candidates.push({ label: "proof_id direct", value: proofId });
-        }
-        // 3. The raw NFC UID if input was a MAC-style address — try the
-        //    /nfc/{uid} subpath (per docs, may not exist; harmless to try).
-        if (isMacAddress) {
-            candidates.push({ label: "nfc_uid via /nfc subpath", value: proofId });
-        }
-
-        let usedStrategy = "";
-        for (const c of candidates) {
-            console.log(`🚀 Trying strategy "${c.label}" → ${c.value.substring(0, 30)}...`);
-            try {
-                const fetcher =
-                    c.label === "nfc_uid via /nfc subpath" ? getProofByNfc : getProof;
-                const result = await fetcher(apiKey, c.value);
-                if (result) {
-                    proofData = result;
-                    usedStrategy = c.label;
-                    console.log(`✅ Strategy "${c.label}" succeeded`);
-                    break;
-                }
-                console.log(`  → 404 on "${c.label}"`);
-            } catch (e: any) {
-                console.warn(`  → exception on "${c.label}":`, e.message);
-            }
-        }
+        // Hit Alan's GET /api/proofs/{nfc_token} with the resolved token.
+        // If Alan returns 404 we surface it as a 404 to the client; the
+        // empty-state UI handles that gracefully.
+        console.log(`🚀 Calling INK API /api/proofs/{token}…`);
+        const { getProof } = await import("../services/ink-api.server");
+        proofData = await getProof(apiKey, actualTokenToFetch);
 
         if (!proofData) {
-            console.error(
-                `❌ All ${candidates.length} lookup strategies returned 404 for proof_id=${proofId}. ` +
-                `Tokens tried: ${candidates.map((c) => c.value).join(", ")}`
-            );
             return new Response(
                 JSON.stringify({ error: "Proof not found" }),
                 { status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
             );
         }
-        console.log(`✓ Resolved via strategy: ${usedStrategy}`);
         
         console.log("✅ Proof data retrieved from INK API");
         console.log(`   - state: ${proofData.state}`);

@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLoaderData, useRevalidator } from "react-router";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getMerchant } from "../services/merchant.server";
-import { enrollOrder, uploadMedia } from "../services/ink-api.server";
-import firestore from "../firestore.server";
+import { enrollOrder } from "../services/ink-api.server";
 import {
   Page,
   IndexTable,
@@ -185,108 +184,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 
   return { orders: eligibleOrders, counts };
-};
-
-// ─────────────────────────────────────────────
-// Action — handles photo uploads from OrderDetailView
-//
-// OrderDetailView's "Upload Photo" button submits via fetcher.submit() with
-// no explicit action prop, so the post lands here at the parent route. We
-// proxy the file to Alan's POST /api/media/upload after looking up the
-// merchant's API key in Firestore. Closes follow-up issue #1.
-// ─────────────────────────────────────────────
-export const action = async ({ request }: ActionFunctionArgs) => {
-  console.log("[tagged-shipments] Action received");
-  const { session } = await authenticate.admin(request);
-
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch (e: any) {
-    console.warn(`[tagged-shipments] formData parse failed: ${e?.message || e}`);
-    return json({ error: "Invalid form data" }, { status: 400 });
-  }
-
-  const intent = formData.get("intent");
-  const file = formData.get("file");
-  const proofId = formData.get("proofId");
-
-  console.log(
-    `[tagged-shipments] intent=${intent}, file=${file instanceof File ? `File(${file.name}, ${file.size} bytes)` : typeof file}, proofId=${typeof proofId === "string" ? `"${proofId}"` : typeof proofId}`
-  );
-
-  if (intent !== "upload") {
-    console.warn(`[tagged-shipments] Rejecting: unknown intent "${intent}"`);
-    return json({ error: `Unknown intent: ${intent}` }, { status: 400 });
-  }
-
-  if (!(file instanceof File) || file.size === 0) {
-    console.warn(`[tagged-shipments] Rejecting: no file or empty file`);
-    return json({ error: "No file provided" }, { status: 400 });
-  }
-  if (typeof proofId !== "string" || !proofId.trim()) {
-    console.warn(`[tagged-shipments] Rejecting: missing or empty proofId`);
-    return json({ error: "Missing proofId — order must be enrolled first" }, { status: 400 });
-  }
-
-  // Look up the merchant's API key by shop domain. Mirrors the lookup logic
-  // in api.retrieve.$proofId.tsx.
-  let apiKey: string | null = null;
-  try {
-    const merchantDoc = await firestore
-      .collection("merchants")
-      .doc(session.shop)
-      .get();
-    if (merchantDoc.exists) {
-      apiKey = merchantDoc.data()?.ink_api_key ?? null;
-    }
-    if (!apiKey) {
-      const byField = await firestore
-        .collection("merchants")
-        .where("shopDomain", "==", session.shop)
-        .limit(1)
-        .get();
-      if (!byField.empty) {
-        apiKey = byField.docs[0].data()?.ink_api_key ?? null;
-      }
-    }
-  } catch (e: any) {
-    console.warn(
-      `[tagged-shipments] Firestore lookup for API key failed:`,
-      e?.message || e
-    );
-  }
-
-  if (!apiKey) {
-    return json(
-      { error: "Merchant API key not found for this shop" },
-      { status: 500 }
-    );
-  }
-
-  // Build the form Alan expects per docs (v1.5 line 136):
-  //   proof_id (string), media_type (string), file (file).
-  const uploadForm = new FormData();
-  uploadForm.append("proof_id", proofId);
-  uploadForm.append("media_type", "package_photo");
-  uploadForm.append("file", file, file.name);
-
-  try {
-    const result = await uploadMedia(apiKey, uploadForm);
-    console.log(
-      `[tagged-shipments] Uploaded photo for proof ${proofId} on ${session.shop}`
-    );
-    return json({ success: true, ...result });
-  } catch (e: any) {
-    console.error(
-      `[tagged-shipments] uploadMedia failed:`,
-      e?.message || e
-    );
-    return json(
-      { error: e?.message || "Upload failed" },
-      { status: 500 }
-    );
-  }
 };
 
 // ─────────────────────────────────────────────
