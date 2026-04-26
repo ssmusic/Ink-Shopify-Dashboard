@@ -197,18 +197,56 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
             }
         }
         
-        // Final fallback: if it doesn't look like an nfc_token, the INK API will likely 404 it.
-        // We pass whatever token we resolved to Alan's standard endpoint
-        console.log(`🚀 Calling INK API /api/proofs/{token}...`);
-        const { getProof } = await import("../services/ink-api.server");
-        proofData = await getProof(apiKey, actualTokenToFetch);
-        
+        // Try multiple lookup strategies in sequence. Alan's API documents
+        // GET /api/proofs/{nfc_token}, but in practice the token format we
+        // store in chain_of_custody_events sometimes doesn't match what Alan
+        // accepts. Try the most likely identifiers in priority order and log
+        // which one succeeds for future debugging.
+        const { getProof, getProofByNfc } = await import("../services/ink-api.server");
+
+        const candidates: { label: string; value: string }[] = [];
+        // 1. Whatever we resolved (may equal proof_id if mapping failed)
+        candidates.push({ label: "resolved nfc_token", value: actualTokenToFetch });
+        // 2. The original proof_id (in case Alan's endpoint accepts proof IDs too)
+        if (proofId !== actualTokenToFetch) {
+            candidates.push({ label: "proof_id direct", value: proofId });
+        }
+        // 3. The raw NFC UID if input was a MAC-style address — try the
+        //    /nfc/{uid} subpath (per docs, may not exist; harmless to try).
+        if (isMacAddress) {
+            candidates.push({ label: "nfc_uid via /nfc subpath", value: proofId });
+        }
+
+        let usedStrategy = "";
+        for (const c of candidates) {
+            console.log(`🚀 Trying strategy "${c.label}" → ${c.value.substring(0, 30)}...`);
+            try {
+                const fetcher =
+                    c.label === "nfc_uid via /nfc subpath" ? getProofByNfc : getProof;
+                const result = await fetcher(apiKey, c.value);
+                if (result) {
+                    proofData = result;
+                    usedStrategy = c.label;
+                    console.log(`✅ Strategy "${c.label}" succeeded`);
+                    break;
+                }
+                console.log(`  → 404 on "${c.label}"`);
+            } catch (e: any) {
+                console.warn(`  → exception on "${c.label}":`, e.message);
+            }
+        }
+
         if (!proofData) {
+            console.error(
+                `❌ All ${candidates.length} lookup strategies returned 404 for proof_id=${proofId}. ` +
+                `Tokens tried: ${candidates.map((c) => c.value).join(", ")}`
+            );
             return new Response(
                 JSON.stringify({ error: "Proof not found" }),
                 { status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
             );
         }
+        console.log(`✓ Resolved via strategy: ${usedStrategy}`);
         
         console.log("✅ Proof data retrieved from INK API");
         console.log(`   - state: ${proofData.state}`);
