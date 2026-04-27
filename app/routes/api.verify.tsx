@@ -55,39 +55,66 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             console.log(`✅ Computed from serial: UID="${uid}", Token="${token.substring(0, 20)}..."`);
         }
 
-        // Call Alan's API directly
+        // Call Alan's API. We don't know which merchant owns this token
+        // (the consumer tap doesn't carry shop context), so iterate every
+        // merchant's API key and try the proof lookup until one resolves.
+        // Alan does tenant isolation — using the wrong merchant's key
+        // returns 404 even for valid tokens.
         console.log("🚀 Calling Alan's INK API to check verify status...");
-        
-        let apiKey: string | null = null;
+
+        let candidateKeys: string[] = [];
         try {
-            const merchantsSnapshot = await firestore.collection("merchants").limit(10).get();
+            const merchantsSnapshot = await firestore.collection("merchants").get();
             for (const doc of merchantsSnapshot.docs) {
                 const key = doc.data().ink_api_key;
-                if (key && key !== "sk_test_fallback") {
-                    apiKey = key;
-                    break;
+                if (
+                    key &&
+                    key !== "sk_test_fallback" &&
+                    key !== "undefined" &&
+                    !candidateKeys.includes(key)
+                ) {
+                    candidateKeys.push(key);
                 }
             }
         } catch (fsErr) {
             console.warn("⚠️ Firestore unavailable for API key lookup:", fsErr);
         }
 
-        if (!apiKey) {
-            apiKey = process.env.INK_API_KEY || "";
+        const envKey = process.env.INK_API_KEY;
+        if (envKey && !candidateKeys.includes(envKey)) {
+            candidateKeys.push(envKey);
         }
 
-        if (!apiKey) {
-            console.error("❌ No INK API key available for verification");
+        if (candidateKeys.length === 0) {
+            console.error("❌ No INK API keys available for verification");
             return new Response(
                 JSON.stringify({ error: "No API key available" }),
                 { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
             );
         }
 
-        const alanData = await getProof(apiKey, token);
+        console.log(
+            `🔑 Trying ${candidateKeys.length} merchant key(s) for proof lookup`
+        );
+
+        let alanData: any = null;
+        let apiKey: string | null = null;
+        for (const candidate of candidateKeys) {
+            const result = await getProof(candidate, token);
+            if (result) {
+                alanData = result;
+                apiKey = candidate;
+                console.log(
+                    `✅ Proof found via merchant key prefix: ${candidate.slice(0, 12)}...`
+                );
+                break;
+            }
+        }
 
         if (!alanData) {
-            console.error("❌ Verification failed: Proof not found on INK API");
+            console.error(
+                `❌ Verification failed: Proof not found on INK API (tried ${candidateKeys.length} merchant keys)`
+            );
             return new Response(
                 JSON.stringify({ error: "Proof not found" }),
                 { status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
