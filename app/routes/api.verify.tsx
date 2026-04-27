@@ -137,46 +137,89 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         let merchantAnimationUrl: string | null = null;
 
         try {
-            // ── Step 1: Identify the merchant from the proof's shop_domain ──
-            // Alan's proof returns shop_domain. Use that to find Firestore merchant record.
+            // ── Step 1: Identify the merchant from the proof. ──
+            // Alan's proof response sometimes includes `shop_domain`, but for
+            // legacy proofs only `shop_id` (e.g. "shop_a66c803d28e0f57f") is
+            // present. Try domain first, then shop_id, then fall back to
+            // matching by the API key that successfully resolved the proof.
             const proofShopDomain = alanData.shop_domain || alanData.merchant_id || "";
-            console.log(`[verify] Looking up Firestore merchant by shop_domain: "${proofShopDomain}"`);
+            const proofShopId = alanData.shop_id || "";
+            console.log(
+                `[verify] Looking up Firestore merchant. shop_domain: "${proofShopDomain}", shop_id: "${proofShopId}"`
+            );
 
             let merchantDoc: any = null;
             let merchantSlug = "";
 
+            // 1a. By shop_domain (most common when present)
             if (proofShopDomain) {
                 const merchantSnap = await firestore
                     .collection("merchants")
                     .where("shopDomain", "==", proofShopDomain)
                     .limit(1)
                     .get();
-
                 if (!merchantSnap.empty) {
                     merchantDoc = merchantSnap.docs[0].data();
-                    merchantSlug = proofShopDomain.replace(".myshopify.com", "").replace(/[^a-z0-9-]/gi, "-").toLowerCase();
-                    console.log(`[verify] ✅ Found Firestore merchant for shop_domain. Slug: "${merchantSlug}". Has merchant_media: ${(merchantDoc.merchant_media || []).length} items.`);
+                    merchantSlug = proofShopDomain
+                        .replace(".myshopify.com", "")
+                        .replace(/[^a-z0-9-]/gi, "-")
+                        .toLowerCase();
+                    console.log(
+                        `[verify] ✅ Found merchant by shop_domain. Slug: "${merchantSlug}". merchant_media: ${(merchantDoc.merchant_media || []).length} items.`
+                    );
                     merchantMedia = merchantDoc.merchant_media || [];
-                } else {
-                    console.warn(`[verify] ⚠️ No Firestore merchant found for shop_domain: "${proofShopDomain}". Trying api_key fallback...`);
-                    // Fallback: search by apiKey used for this proof  
-                    const keySnap = await firestore
-                        .collection("merchants")
-                        .where("ink_api_key", "==", apiKey)
-                        .limit(1)
-                        .get();
-                    if (!keySnap.empty) {
-                        merchantDoc = keySnap.docs[0].data();
-                        const fallbackDomain = merchantDoc.shopDomain || "";
-                        merchantSlug = fallbackDomain.replace(".myshopify.com", "").replace(/[^a-z0-9-]/gi, "-").toLowerCase();
-                        console.log(`[verify] ✅ Found merchant via api_key fallback. Domain: "${fallbackDomain}", Slug: "${merchantSlug}". merchant_media: ${(merchantDoc.merchant_media || []).length} items.`);
+                }
+            }
+
+            // 1b. By shop_id (Alan's internal identifier; legacy/most reliable)
+            if (!merchantDoc && proofShopId) {
+                const allMerchants = await firestore.collection("merchants").get();
+                for (const doc of allMerchants.docs) {
+                    const data = doc.data();
+                    if (
+                        data.shop_id === proofShopId ||
+                        data.ink_shop_id === proofShopId
+                    ) {
+                        merchantDoc = data;
+                        const dom = data.shopDomain || "";
+                        merchantSlug = dom
+                            .replace(".myshopify.com", "")
+                            .replace(/[^a-z0-9-]/gi, "-")
+                            .toLowerCase();
+                        console.log(
+                            `[verify] ✅ Found merchant by shop_id "${proofShopId}". Domain: "${dom}", Slug: "${merchantSlug}". merchant_media: ${(merchantDoc.merchant_media || []).length} items.`
+                        );
                         merchantMedia = merchantDoc.merchant_media || [];
-                    } else {
-                        console.error(`[verify] ❌ No Firestore merchant found by shop_domain OR api_key. Branding will be empty.`);
+                        break;
                     }
                 }
-            } else {
-                console.warn(`[verify] ⚠️ Alan proof has no shop_domain field. Cannot look up branding merchant.`);
+            }
+
+            // 1c. Fallback: match by the api_key that resolved the proof
+            if (!merchantDoc && apiKey) {
+                const keySnap = await firestore
+                    .collection("merchants")
+                    .where("ink_api_key", "==", apiKey)
+                    .limit(1)
+                    .get();
+                if (!keySnap.empty) {
+                    merchantDoc = keySnap.docs[0].data();
+                    const fallbackDomain = merchantDoc.shopDomain || "";
+                    merchantSlug = fallbackDomain
+                        .replace(".myshopify.com", "")
+                        .replace(/[^a-z0-9-]/gi, "-")
+                        .toLowerCase();
+                    console.log(
+                        `[verify] ✅ Found merchant via api_key fallback. Domain: "${fallbackDomain}", Slug: "${merchantSlug}". merchant_media: ${(merchantDoc.merchant_media || []).length} items.`
+                    );
+                    merchantMedia = merchantDoc.merchant_media || [];
+                }
+            }
+
+            if (!merchantDoc) {
+                console.error(
+                    `[verify] ❌ No Firestore merchant found by shop_domain, shop_id, OR api_key. Branding will be empty.`
+                );
             }
 
             // ── Step 2: Fetch the animation_url directly from Alan's merchant-animations API ──
