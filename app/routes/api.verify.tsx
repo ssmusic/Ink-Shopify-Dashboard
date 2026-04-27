@@ -151,8 +151,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             let merchantDoc: any = null;
             let merchantSlug = "";
 
-            // 1a. By shop_domain (most common when present)
-            if (proofShopDomain) {
+            // Try in priority order: api_key (most authoritative — we already
+            // know this key successfully retrieved the proof), then domain,
+            // then shop_id. The shop_id path can hit duplicate/malformed docs
+            // (Firestore has both a domain-keyed doc and a shop_id-keyed doc
+            // for some merchants), so it's last resort.
+
+            // 1a. By api_key (most reliable — already verified to own this proof)
+            if (apiKey) {
+                const keySnap = await firestore
+                    .collection("merchants")
+                    .where("ink_api_key", "==", apiKey)
+                    .limit(1)
+                    .get();
+                if (!keySnap.empty) {
+                    merchantDoc = keySnap.docs[0].data();
+                    const dom = merchantDoc.shopDomain || "";
+                    merchantSlug = dom
+                        .replace(".myshopify.com", "")
+                        .replace(/[^a-z0-9-]/gi, "-")
+                        .toLowerCase();
+                    console.log(
+                        `[verify] ✅ Found merchant by api_key. Domain: "${dom}", Slug: "${merchantSlug}". merchant_media: ${(merchantDoc.merchant_media || []).length} items.`
+                    );
+                    merchantMedia = merchantDoc.merchant_media || [];
+                }
+            }
+
+            // 1b. By shop_domain (when available and api_key didn't resolve)
+            if (!merchantDoc && proofShopDomain) {
                 const merchantSnap = await firestore
                     .collection("merchants")
                     .where("shopDomain", "==", proofShopDomain)
@@ -171,7 +198,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 }
             }
 
-            // 1b. By shop_id (Alan's internal identifier; legacy/most reliable)
+            // 1c. By shop_id (last resort; can match malformed duplicate docs)
             if (!merchantDoc && proofShopId) {
                 const allMerchants = await firestore.collection("merchants").get();
                 for (const doc of allMerchants.docs) {
@@ -195,30 +222,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 }
             }
 
-            // 1c. Fallback: match by the api_key that resolved the proof
-            if (!merchantDoc && apiKey) {
-                const keySnap = await firestore
-                    .collection("merchants")
-                    .where("ink_api_key", "==", apiKey)
-                    .limit(1)
-                    .get();
-                if (!keySnap.empty) {
-                    merchantDoc = keySnap.docs[0].data();
-                    const fallbackDomain = merchantDoc.shopDomain || "";
-                    merchantSlug = fallbackDomain
-                        .replace(".myshopify.com", "")
-                        .replace(/[^a-z0-9-]/gi, "-")
-                        .toLowerCase();
-                    console.log(
-                        `[verify] ✅ Found merchant via api_key fallback. Domain: "${fallbackDomain}", Slug: "${merchantSlug}". merchant_media: ${(merchantDoc.merchant_media || []).length} items.`
-                    );
-                    merchantMedia = merchantDoc.merchant_media || [];
-                }
-            }
-
             if (!merchantDoc) {
                 console.error(
-                    `[verify] ❌ No Firestore merchant found by shop_domain, shop_id, OR api_key. Branding will be empty.`
+                    `[verify] ❌ No Firestore merchant found by api_key, shop_domain, OR shop_id. Branding will be empty.`
                 );
             }
 
