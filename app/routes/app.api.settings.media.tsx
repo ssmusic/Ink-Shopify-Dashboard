@@ -235,11 +235,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const merchantSlug = shopDomain ? toMerchantSlug(shopDomain) : (merchantId || "unknown");
       console.log(`[settings/media] Uploading to Alan merchant-animations. merchantSlug=${merchantSlug}`);
 
-      // Alan's merchant branding endpoint uses:
+      // Alan's upload endpoint requires `merchant_id` (his internal shop_id
+      // format, e.g. "shop_a66c803d28e0f57f"), NOT the slug. Fetch it from
+      // the merchants list. Cached in merchant doc (shop_id field) where
+      // possible to avoid the round-trip.
+      let alanMerchantId: string | null = null;
+      try {
+        if (doc?.data()?.shop_id) {
+          alanMerchantId = doc.data().shop_id as string;
+          console.log(`[settings/media] Using cached merchant_id from Firestore: ${alanMerchantId}`);
+        } else if (shopDomain) {
+          const { getShopIdByDomain } = await import("../services/ink-api.server");
+          alanMerchantId = await getShopIdByDomain(shopDomain);
+          console.log(`[settings/media] Fetched merchant_id from Alan: ${alanMerchantId}`);
+        }
+      } catch (e: any) {
+        console.warn(`[settings/media] Failed to resolve merchant_id: ${e?.message || e}`);
+      }
+
+      if (!alanMerchantId) {
+        return json(
+          { error: "Could not resolve merchant_id for Alan upload — is the merchant registered in INK?" },
+          { status: 500 }
+        );
+      }
+
+      // Alan's merchant branding endpoint:
       //   POST /admin/merchant-animations/upload
-      //   Form fields: merchant (string), animation (file)
+      //   Form fields: merchant_id (his shop_id), merchant (slug), animation (file)
       //   Auth: Bearer <admin_jwt> (INK_ADMIN_SECRET)
+      // Sending both merchant_id and merchant (slug) to be safe across
+      // contract changes.
       const uploadForm = new FormData();
+      uploadForm.append("merchant_id", alanMerchantId);
       uploadForm.append("merchant", merchantSlug);
       uploadForm.append("animation", fileEntry, fileEntry.name);
 
