@@ -163,16 +163,25 @@ export const enrollOrder = async (
     trackingNumber?: string | null,
     customerPhone?: string | null
 ) => {
-    const payload: any = { 
-        order_id: orderId, // We assume orderId is already the numeric ID string
+    // Alan's API was changed to require order details nested in an
+    // `order_details` JSON object rather than as separate top-level fields.
+    // The v1.5 docs describe the old shape, but the live API rejects that
+    // with "order_details must be a JSON object" (verified in Cloud Run logs
+    // 2026-04-26). Nesting works around it without waiting on Alan to either
+    // revert or update docs. Top-level operational fields (order_id,
+    // nfc_token, photos, GPS, carrier) stay where they are.
+    const payload: any = {
+        order_id: orderId, // numeric ID string
         nfc_token: nfcToken,
-        order_number: orderNumber,
-        customer_email: customerEmail || "unknown@email.com",
-        customer_phone: customerPhone || "",
-        shipping_address: shippingAddress,
-        product_details: productDetails
+        order_details: {
+            order_number: orderNumber,
+            customer_email: customerEmail || "unknown@email.com",
+            customer_phone: customerPhone || "",
+            shipping_address: shippingAddress,
+            product_details: productDetails,
+        },
     };
-    
+
     if (warehouseLocation) payload.warehouse_location = warehouseLocation;
     if (nfcUid) payload.nfc_uid = nfcUid;
     if (photoUrls && photoUrls.length > 0) payload.photo_urls = photoUrls;
