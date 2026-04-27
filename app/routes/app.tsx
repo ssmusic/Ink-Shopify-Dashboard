@@ -10,8 +10,6 @@ import { ensureCarrierServiceRegistered } from "../services/carrier-service.serv
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
 
-import { getMerchant } from "../services/merchant.server";
-
 import { Toaster } from "../components/ui/toaster";
 import { Toaster as Sonner } from "../components/ui/sonner";
 import { TooltipProvider } from "../components/ui/tooltip";
@@ -21,89 +19,27 @@ const queryClient = new QueryClient();
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const url = new URL(request.url);
-  const path = url.pathname;
-  const shop = session.shop;
 
-  // Public paths — let through immediately without any DB/billing check
-  if (path === "/app/payment" || path === "/app/payment/callback" || path === "/app" || path === "/app/") {
-    return { apiKey: process.env.SHOPIFY_API_KEY || "" };
-  }
-
-  // 1. Check Firestore for Merchant Data (fast path)
-  let merchant: any = null;
-  try {
-    merchant = await getMerchant(shop);
-  } catch (err) {
-    // Firestore cold-start timeout or error — don't crash, fall through to billing check
-    console.warn("[App] getMerchant failed (non-fatal):", err);
-  }
-
-  const paymentStatus = merchant?.payment_status;
-  const inkApiKey = merchant?.ink_api_key;
-
-  // FAST PATH: Merchant already has a valid API key in Firestore.
-  // This means they've already paid and been set up — skip the billing API entirely.
-  // This is the most common case and saves 1-3s on every page load.
-  if (inkApiKey && inkApiKey !== "undefined" && inkApiKey !== "sk_test_fallback") {
-    // Fire-and-forget carrier service + webhook registration — never blocks the response
-    const appUrl = process.env.SHOPIFY_APP_URL || "";
-    if (appUrl) {
-      ensureCarrierServiceRegistered(admin, appUrl).catch((err) =>
-        console.error("[App] Carrier service registration error (non-blocking):", err)
-      );
-    }
-    // Ensure all webhooks in shopify.server.ts are registered with Shopify.
-    // The SDK skips this silently if they're already registered.
-    registerWebhooks({ session }).catch((err) =>
-      console.error("[App] Webhook registration error (non-blocking):", err)
+  // Billing gate temporarily disabled while the app is configured as a
+  // Managed Pricing app in Shopify Partners. Managed Pricing handles
+  // subscriptions through the App Store listing — calling
+  // `appSubscriptionCreate` from /app/payment errors out with
+  // "Managed Pricing Apps cannot use the Billing API (to create charges)".
+  //
+  // Until billing is reconciled (either switch off Managed Pricing in
+  // Partners, or rewrite this app to read activeSubscriptions only), we
+  // let every authenticated merchant through. Re-enable the fast/slow
+  // path below by reverting this commit.
+  const appUrl = process.env.SHOPIFY_APP_URL || "";
+  if (appUrl) {
+    ensureCarrierServiceRegistered(admin, appUrl).catch((err) =>
+      console.error("[App] Carrier service registration error (non-blocking):", err)
     );
-    return { apiKey: process.env.SHOPIFY_API_KEY || "" };
   }
-
-  // SLOW PATH: No API key yet — check Shopify Billing API to see if they have a subscription
-  // (Only reached for brand-new installs or merchants whose Firestore record is incomplete)
-  let hasActiveSubscription = false;
-  try {
-    const billingResponse = await admin.graphql(
-      `#graphql
-      query {
-        currentAppInstallation {
-          activeSubscriptions {
-            id name test status
-          }
-        }
-      }`
-    );
-    const billingData = await billingResponse.json();
-    const subscriptions = billingData.data?.currentAppInstallation?.activeSubscriptions || [];
-    hasActiveSubscription = subscriptions.length > 0;
-  } catch (err) {
-    console.error("[App] Billing check failed:", err);
-  }
-
-  if (hasActiveSubscription) {
-    // Has subscription but no API key yet — redirect to callback to generate it
-    if (!inkApiKey) {
-      return Response.redirect(`${process.env.SHOPIFY_APP_URL}/app/payment/callback?charge_id=restore`);
-    }
-
-    const appUrl = process.env.SHOPIFY_APP_URL || "";
-    if (appUrl) {
-      ensureCarrierServiceRegistered(admin, appUrl).catch((err) =>
-        console.error("[App] Carrier service registration error (non-blocking):", err)
-      );
-    }
-    registerWebhooks({ session }).catch((err) =>
-      console.error("[App] Webhook registration error (non-blocking):", err)
-    );
-    return { apiKey: process.env.SHOPIFY_API_KEY || "" };
-  }
-
-  // No active subscription → redirect to payment
-  const redirectUrl = new URL(`${process.env.SHOPIFY_APP_URL}/app/payment`);
-  redirectUrl.search = url.search;
-  return Response.redirect(redirectUrl.toString());
+  registerWebhooks({ session }).catch((err) =>
+    console.error("[App] Webhook registration error (non-blocking):", err)
+  );
+  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
 
