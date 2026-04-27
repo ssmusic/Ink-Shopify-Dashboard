@@ -222,21 +222,59 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 );
             }
 
-            // ── Step 2: Fetch the animation_url directly from Alan's merchant-animations API ──
-            // This is the authoritative primary URL set via the Shopify media panel.
-            if (merchantSlug) {
+            // ── Step 2: Fetch the animation_url from Alan's merchant-animations API ──
+            // Alan's storage is keyed inconsistently: some merchants by their
+            // myshopify slug (e.g. "taimoor1-2"), others by raw shop_id with
+            // underscores (e.g. "shop_a66c803d28e0f57f"). Our slugifier
+            // strips underscores to dashes which doesn't match. Try multiple
+            // candidates in order until one returns 200.
+            const slugCandidates: string[] = [];
+            if (proofShopId) slugCandidates.push(proofShopId); // raw, with underscores
+            if (merchantSlug) slugCandidates.push(merchantSlug);
+            const merchantDocDomain = (merchantDoc?.shopDomain as string) || "";
+            if (merchantDocDomain) {
+                const cleanedDomain = merchantDocDomain
+                    .replace(".myshopify.com", "")
+                    .toLowerCase();
+                if (!slugCandidates.includes(cleanedDomain)) {
+                    slugCandidates.push(cleanedDomain);
+                }
+            }
+            // Dedupe + drop empties
+            const uniqueSlugs = Array.from(
+                new Set(slugCandidates.filter((s) => s && s.length > 0))
+            );
+
+            if (uniqueSlugs.length > 0) {
                 const INK_API_BASE = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
                 const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET || "ink_admin_aeb5c9d6e822a4e57d95a6a2224aada64230e48d89acad5782057fcb865548a2";
-                // Build the URL — strip trailing /api since admin routes are already /admin/*
                 const baseUrl = INK_API_BASE.endsWith("/api") ? INK_API_BASE.slice(0, -4) : INK_API_BASE;
-                const animsUrl = `${baseUrl}/admin/merchant-animations/${merchantSlug}`;
-                
-                console.log(`[verify] Calling Alan GET merchant-animations: ${animsUrl}`);
-                try {
-                    const animResp = await fetch(animsUrl, {
-                        headers: { "Authorization": `Bearer ${INK_ADMIN_SECRET}` }
-                    });
-                    const animRaw = await animResp.text();
+
+                let animsUrl = "";
+                let animResp: Response | null = null;
+                let animRaw = "";
+
+                for (const slug of uniqueSlugs) {
+                    const url = `${baseUrl}/admin/merchant-animations/${encodeURIComponent(slug)}`;
+                    console.log(`[verify] Trying merchant-animations slug "${slug}" → ${url}`);
+                    try {
+                        const resp = await fetch(url, {
+                            headers: { "Authorization": `Bearer ${INK_ADMIN_SECRET}` },
+                        });
+                        if (resp.ok) {
+                            animResp = resp;
+                            animRaw = await resp.text();
+                            animsUrl = url;
+                            console.log(`[verify] ✅ Slug "${slug}" matched (200)`);
+                            break;
+                        }
+                        console.log(`[verify]   → ${resp.status} on "${slug}"`);
+                    } catch (e: any) {
+                        console.warn(`[verify]   → exception on "${slug}":`, e?.message);
+                    }
+                }
+
+                if (animResp) {
                     console.log(`[verify] Alan merchant-animations status: ${animResp.status}`);
                     console.log(`[verify] Alan merchant-animations response: ${animRaw}`);
 
@@ -278,8 +316,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     } else {
                         console.warn(`[verify] ⚠️ Alan merchant-animations responded non-OK (${animResp.status}). Relying on Firestore merchant_media only.`);
                     }
-                } catch (animErr: any) {
-                    console.warn(`[verify] ⚠️ Alan merchant-animations call failed: ${animErr.message}. Using Firestore only.`);
+                } else {
+                    console.warn(
+                        `[verify] ⚠️ All ${uniqueSlugs.length} slug attempt(s) returned non-200. Relying on Firestore merchant_media only.`
+                    );
                 }
             }
 
