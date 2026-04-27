@@ -38,9 +38,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             );
         }
 
-        // DETERMINISTIC: Compute token directly from serial number
-        const { uid, token } = serialNumberToToken(serial_number);
-        console.log(`✅ Computed from serial: UID="${uid}", Token="${token.substring(0, 20)}..."`);
+        // Input may be either a raw NFC serial (MAC-style, scanned from a
+        // physical tag) OR a pre-computed token (e.g. dashboard-initiated
+        // tests where the URL is built from an enrollment log). Detect and
+        // skip conversion when input already looks like a token.
+        let uid: string;
+        let token: string;
+        if (typeof serial_number === "string" && serial_number.startsWith("nfc_")) {
+            uid = "";
+            token = serial_number;
+            console.log(`✅ Input is already a token, using as-is: "${token.substring(0, 30)}..."`);
+        } else {
+            const computed = serialNumberToToken(serial_number);
+            uid = computed.uid;
+            token = computed.token;
+            console.log(`✅ Computed from serial: UID="${uid}", Token="${token.substring(0, 20)}..."`);
+        }
 
         // Call Alan's API directly
         console.log("🚀 Calling Alan's INK API to check verify status...");
