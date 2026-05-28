@@ -99,6 +99,38 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             name
             customer {
               phone
+              email
+            }
+            shippingAddress {
+              address1
+              address2
+              city
+              province
+              zip
+              country
+            }
+            totalPriceSet {
+              shopMoney {
+                amount
+                currencyCode
+              }
+            }
+            lineItems(first: 20) {
+              edges {
+                node {
+                  title
+                  quantity
+                  sku
+                  originalUnitPriceSet {
+                    shopMoney {
+                      amount
+                    }
+                  }
+                  image {
+                    url
+                  }
+                }
+              }
             }
             metafield(namespace: "ink", key: "customer_phone") {
               value
@@ -234,17 +266,52 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
+    // Real line items → product_details (incl. the product image URL, which
+    // the Parallel tap page renders as the hero). Shape matches what Parallel's
+    // mapProofToShipment reads: { name, sku, quantity, price, image_url }.
+    const lineItemEdges = orderData?.data?.order?.lineItems?.edges || [];
+    const product_details = lineItemEdges.map((edge: any) => {
+      const n = edge?.node || {};
+      return {
+        name: n.title || "",
+        sku: n.sku || "",
+        quantity: n.quantity ?? 1,
+        price: n.originalUnitPriceSet?.shopMoney?.amount ?? "0",
+        image_url: n.image?.url || null,
+      };
+    });
+
+    // Real shipping address (nested in order_details, matching Parallel's
+    // adapter which reads order_details.shipping_address). Falls back to a
+    // string when Shopify didn't include an address block.
+    const addr = orderData?.data?.order?.shippingAddress;
+    const shipping_address = addr
+      ? {
+          line1: addr.address1 || "",
+          line2: addr.address2 || "",
+          city: addr.city || "",
+          state: addr.province || "",
+          zip: addr.zip || "",
+          country: addr.country || "",
+        }
+      : "Not Provided";
+
+    const total_price = orderData?.data?.order?.totalPriceSet?.shopMoney?.amount;
+    const currency = orderData?.data?.order?.totalPriceSet?.shopMoney?.currencyCode;
+
     const enrollPayload: any = {
       order_id,
       nfc_token: token,
       nfc_uid: serial_number,
-      shipping_address: "Not Provided", // Extracted later if Shopify webhook includes address blocks
       order_details: {
         order_number: numericOrderId,
         customer_email: orderData?.data?.order?.customer?.email || "unknown@example.com",
         customer_phone: customer_phone_last4 || "1234",
-        product_details: [] // In a real flow, extract line items
-      }
+        shipping_address,
+        product_details,
+        ...(total_price ? { total_price } : {}),
+        ...(currency ? { currency } : {}),
+      },
     };
 
     if (carrier_name) enrollPayload.carrier_name = carrier_name;
