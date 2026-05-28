@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
-import { enrollOrder } from "../services/ink-api.server";
+import { enrollOrder, createMerchant } from "../services/ink-api.server";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -276,22 +276,55 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           }
 
           inkToken = genNfcToken();
-          const inkData = await enrollOrder(
-            apiKey,
-            numericOrderId,
-            inkToken,
-            order.name || numericOrderId,
-            order.customer?.email || "unknown@example.com",
-            shipping_address,
-            product_details,
-            undefined, // warehouse_location — none at order time
-            undefined, // nfc_uid — no physical chip bound yet
-            undefined, // photo_urls
-            undefined, // photo_hashes
-            carrier_name,
-            tracking_number,
-            finalPhone || order.customer?.phone || null
-          );
+          const runEnroll = (key: string) =>
+            enrollOrder(
+              key,
+              numericOrderId,
+              inkToken,
+              order.name || numericOrderId,
+              order.customer?.email || "unknown@example.com",
+              shipping_address,
+              product_details,
+              undefined, // warehouse_location — none at order time
+              undefined, // nfc_uid — no physical chip bound yet
+              undefined, // photo_urls
+              undefined, // photo_hashes
+              carrier_name,
+              tracking_number,
+              finalPhone || order.customer?.phone || null
+            );
+
+          let inkData: any;
+          try {
+            inkData = await runEnroll(apiKey);
+          } catch (e: any) {
+            // Stale/invalid ink_api_key → re-provision a fresh one and retry
+            // once (the same self-heal the warehouse enroll uses).
+            if (/401|invalid api key|unauthorized/i.test(e?.message || "")) {
+              console.warn(
+                `[orders/create] ink_api_key rejected for ${shop}; re-provisioning + retrying…`
+              );
+              const fresh = await createMerchant(shop, shop, `admin@${shop}`);
+              const freshKey = fresh?.api_key;
+              if (!freshKey) throw e;
+              const snap = await firestore
+                .collection("merchants")
+                .where("shopDomain", "==", shop)
+                .limit(1)
+                .get();
+              if (!snap.empty) {
+                await snap.docs[0].ref.update({ ink_api_key: freshKey, updatedAt: new Date() });
+              } else {
+                await firestore
+                  .collection("merchants")
+                  .doc(shop)
+                  .set({ shopDomain: shop, ink_api_key: freshKey, updatedAt: new Date() }, { merge: true });
+              }
+              inkData = await runEnroll(freshKey);
+            } else {
+              throw e;
+            }
+          }
           proofReference = inkData?.proof_id || "";
           verificationStatus = proofReference ? "enrolled" : "pending";
           console.log(
@@ -354,7 +387,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             type: "single_line_text_field",
             value: finalPhone,
           },
-        ],
+        ].filter((m) => m.value !== ""),
       },
     });
     const metafieldJson = await metafieldRes.json();
