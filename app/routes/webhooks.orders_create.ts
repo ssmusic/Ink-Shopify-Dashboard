@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
+import { enrollOrder } from "../services/ink-api.server";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -33,6 +34,34 @@ async function getMerchantDeliveryMode(
   }
 }
 
+/**
+ * The merchant's INK api_key — the Bearer Alan's /api/enroll (requireMerchant)
+ * needs. Same source the warehouse enroll uses.
+ */
+async function getMerchantApiKey(shopDomain: string): Promise<string | null> {
+  try {
+    const snapshot = await firestore
+      .collection("merchants")
+      .where("shopDomain", "==", shopDomain)
+      .limit(1)
+      .get();
+    let data = snapshot.empty ? null : snapshot.docs[0].data();
+    if (!data) {
+      const direct = await firestore.collection("merchants").doc(shopDomain).get();
+      if (direct.exists) data = direct.data() ?? null;
+    }
+    const key = data?.ink_api_key;
+    return key && key !== "sk_test_fallback" ? key : null;
+  } catch (e) {
+    console.warn(`[orders/create] getMerchantApiKey failed for ${shopDomain}:`, e);
+    return null;
+  }
+}
+
+function genNfcToken(): string {
+  return `nfc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 const TAG_MUTATION = `
 mutation AddOrderTag($id: ID!, $tags: [String!]!) {
   tagsAdd(id: $id, tags: $tags) {
@@ -47,6 +76,34 @@ mutation SetInkMetafields($metafields: [MetafieldsSetInput!]!) {
     userErrors { field message }
   }
 }
+`;
+
+// Order detail fetch for auto-enroll — line items (incl. product image),
+// customer, shipping address, total, and the existing proof_reference metafield
+// (for idempotency).
+const ORDER_DETAIL_QUERY = `
+  query AutoEnrollOrder($id: ID!) {
+    order(id: $id) {
+      id
+      name
+      customer { email phone }
+      shippingAddress { address1 address2 city province zip country }
+      totalPriceSet { shopMoney { amount currencyCode } }
+      lineItems(first: 20) {
+        edges {
+          node {
+            title
+            quantity
+            sku
+            originalUnitPriceSet { shopMoney { amount } }
+            image { url }
+          }
+        }
+      }
+      metafield(namespace: "ink", key: "proof_reference") { value }
+      fulfillments { trackingInfo { company number } }
+    }
+  }
 `;
 
 /**
@@ -154,7 +211,104 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    // Initialize INK metafields
+    // ─── AUTO-ENROLL ────────────────────────────────────────────────
+    // Create the Parallel proof now so the order autopopulates into Parallel
+    // Orders (the merchant later just writes the tap URL onto a physical
+    // sticker). Soft-fail: this must NEVER break order tagging / the webhook —
+    // if it fails, the order stays tagged and can be enrolled later.
+    let proofReference = "";
+    let inkToken = "";
+    let verificationStatus = "pending";
+    try {
+      const apiKey = await getMerchantApiKey(shop);
+      if (!apiKey) {
+        console.warn(
+          `[orders/create] No ink_api_key for ${shop} — order tagged, auto-enroll skipped`
+        );
+      } else {
+        const odRes = await admin.graphql(ORDER_DETAIL_QUERY, {
+          variables: { id: orderGid },
+        });
+        const odJson = await odRes.json();
+        const order = odJson?.data?.order;
+        const already = order?.metafield?.value;
+
+        if (already) {
+          // Idempotent: webhook retried (Shopify is at-least-once) — already enrolled.
+          console.log(
+            `[orders/create] Order ${orderName} already enrolled (proof ${already}); skipping re-enroll`
+          );
+          proofReference = already;
+          verificationStatus = "enrolled";
+        } else if (order) {
+          const numericOrderId =
+            String(data?.id ?? "").replace(/\D/g, "") ||
+            String(order.name ?? "").replace(/\D/g, "");
+          const lineItems = (order.lineItems?.edges || []).map((e: any) => e.node);
+          const product_details = lineItems.map((n: any) => ({
+            name: n.title,
+            sku: n.sku || "",
+            quantity: n.quantity ?? 1,
+            price: n.originalUnitPriceSet?.shopMoney?.amount ?? "0",
+            image_url: n.image?.url || null,
+          }));
+          const addr = order.shippingAddress;
+          const shipping_address = addr
+            ? {
+                line1: addr.address1 || "",
+                line2: addr.address2 || "",
+                city: addr.city || "",
+                state: addr.province || "",
+                zip: addr.zip || "",
+                country: addr.country || "",
+              }
+            : "Not Provided";
+
+          let carrier_name: string | null = null;
+          let tracking_number: string | null = null;
+          for (const f of order.fulfillments || []) {
+            const ti = f?.trackingInfo;
+            if (ti && ti.length > 0) {
+              carrier_name = ti[0]?.company || null;
+              tracking_number = ti[0]?.number || null;
+              if (carrier_name || tracking_number) break;
+            }
+          }
+
+          inkToken = genNfcToken();
+          const inkData = await enrollOrder(
+            apiKey,
+            numericOrderId,
+            inkToken,
+            order.name || numericOrderId,
+            order.customer?.email || "unknown@example.com",
+            shipping_address,
+            product_details,
+            undefined, // warehouse_location — none at order time
+            undefined, // nfc_uid — no physical chip bound yet
+            undefined, // photo_urls
+            undefined, // photo_hashes
+            carrier_name,
+            tracking_number,
+            finalPhone || order.customer?.phone || null
+          );
+          proofReference = inkData?.proof_id || "";
+          verificationStatus = proofReference ? "enrolled" : "pending";
+          console.log(
+            `✅ [orders/create] Auto-enrolled ${orderName} → proof ${proofReference}, token ${inkToken}`
+          );
+        }
+      }
+    } catch (enrollErr: any) {
+      console.warn(
+        `[orders/create] Auto-enroll soft-failed for ${orderName} (order still tagged):`,
+        enrollErr?.message || enrollErr
+      );
+    }
+
+    // Initialize / update INK metafields — proof_reference + ink_token are now
+    // real (when auto-enroll succeeded) so the order is linked to its proof and
+    // the warehouse knows which tap URL to write onto the sticker.
     const metafieldRes = await admin.graphql(METAFIELD_MUTATION, {
       variables: {
         metafields: [
@@ -163,7 +317,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             namespace: "ink",
             key: "verification_status",
             type: "single_line_text_field",
-            value: "pending",
+            value: verificationStatus,
           },
           {
             ownerId: orderGid,
@@ -177,7 +331,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             namespace: "ink",
             key: "proof_reference",
             type: "single_line_text_field",
-            value: "",
+            value: proofReference,
+          },
+          {
+            ownerId: orderGid,
+            namespace: "ink",
+            key: "ink_token",
+            type: "single_line_text_field",
+            value: inkToken,
           },
           {
             ownerId: orderGid,
