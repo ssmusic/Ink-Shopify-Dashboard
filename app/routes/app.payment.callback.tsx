@@ -1,7 +1,23 @@
 import { type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { createMerchant } from "../services/ink-api.server";
+import { createMerchant, adminCreateUser } from "../services/ink-api.server";
 import { updateMerchant } from "../services/merchant.server";
+
+// Temp password for the merchant's Parallel login. 16 chars, mixed classes
+// (excludes ambiguous chars) to satisfy typical complexity rules. The merchant
+// changes it on first login; it's stored on the merchant doc so onboarding can
+// surface it.
+function generateTempPassword(): string {
+  const upper = "ABCDEFGHJKMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const digit = "23456789";
+  const sym = "!@#$%^&*";
+  const all = upper + lower + digit + sym;
+  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+  let pw = pick(upper) + pick(lower) + pick(digit) + pick(sym);
+  for (let i = 0; i < 12; i++) pw += pick(all);
+  return pw;
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
@@ -38,6 +54,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         });
     } else {
         throw new Error("No API key returned from INK");
+    }
+
+    // Provision a Parallel login USER so the merchant can sign into
+    // parallel.in.ink. Install creates a merchant but no user otherwise, so
+    // there's no credential to log in with. Soft-fail: this must NEVER block
+    // the install/billing callback — if it fails, the install still completes
+    // and we log it. Credential is stored on the merchant doc for onboarding
+    // to surface (merchant changes it on first login).
+    try {
+        const merchantId = inkData.merchant_id ?? inkData.shop_id ?? inkData.id;
+        if (merchantId) {
+            const tempPassword = generateTempPassword();
+            await adminCreateUser(merchantId, name || myshopifyDomain, email, tempPassword);
+            await updateMerchant(session.shop, {
+                parallel_login_email: email,
+                parallel_temp_password: tempPassword,
+                parallel_user_provisioned_at: new Date().toISOString(),
+            });
+            console.log(`[payment.callback] Provisioned Parallel login user for ${email}`);
+        } else {
+            console.warn("[payment.callback] No merchant_id in createMerchant response — skipped user provisioning");
+        }
+    } catch (provisionErr) {
+        console.warn(
+            "[payment.callback] User provisioning soft-failed (install continues):",
+            provisionErr instanceof Error ? provisionErr.message : provisionErr,
+        );
     }
 
   } catch (error) {
