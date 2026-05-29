@@ -86,8 +86,8 @@ const ORDER_DETAIL_QUERY = `
     order(id: $id) {
       id
       name
-      customer { email phone }
-      shippingAddress { address1 address2 city province zip country }
+      customer { email phone firstName lastName }
+      shippingAddress { name address1 address2 city province zip country }
       totalPriceSet { shopMoney { amount currencyCode } }
       lineItems(first: 20) {
         edges {
@@ -253,8 +253,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             image_url: n.image?.url || null,
           }));
           const addr = order.shippingAddress;
+          // Recipient/customer name — Alan's order mapper reads
+          // shipping_address.name as the customer name fallback, so carry it
+          // through (the order webhook never used to fetch a name → blank
+          // "Customer" + "Ship To" in Parallel).
+          const recipientName =
+            addr?.name ||
+            [order.customer?.firstName, order.customer?.lastName]
+              .filter(Boolean)
+              .join(" ") ||
+            "";
           const shipping_address = addr
             ? {
+                name: recipientName,
                 line1: addr.address1 || "",
                 line2: addr.address2 || "",
                 city: addr.city || "",
@@ -262,7 +273,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 zip: addr.zip || "",
                 country: addr.country || "",
               }
-            : "Not Provided";
+            : recipientName
+              ? { name: recipientName }
+              : "Not Provided";
 
           let carrier_name: string | null = null;
           let tracking_number: string | null = null;
