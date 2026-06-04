@@ -6,6 +6,8 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { FirestoreSessionStorage } from "./firestore-session-storage.server";
 import { DeliveryMethod } from "@shopify/shopify-api"; // ✅ Added import
+import { ensureCarrierServiceRegistered } from "./services/carrier-service.server";
+import { createMerchant } from "./services/ink-api.server";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -53,6 +55,45 @@ const shopify = shopifyApp({
     ORDERS_FULFILLED: {
       deliveryMethod: DeliveryMethod.Http,
       callbackUrl: "/webhooks/orders_fulfilled",
+    },
+  },
+
+  // Provision a store the instant it installs, instead of relying on the
+  // merchant later opening the embedded app (app.tsx) or someone hitting the
+  // manual /app/register-webhook and /app/debug routes by hand. Without this,
+  // a fresh install created a session and nothing else — no webhooks, no
+  // carrier service, no INK merchant record — which is why every store except
+  // the one hand-wired during development came up dead. Each step is
+  // independent and non-blocking so one failure can't abort the install.
+  hooks: {
+    afterAuth: async ({ session }) => {
+      const appUrl = process.env.SHOPIFY_APP_URL || "";
+
+      // 1. Order/fulfillment webhooks — so the app receives events from
+      //    install onward (previously only registered when the merchant
+      //    opened the embedded app).
+      await shopify.registerWebhooks({ session }).catch((err: unknown) =>
+        console.error("[afterAuth] webhook registration failed:", err),
+      );
+
+      // 2. Carrier service (Verified Delivery Mode at checkout) — needs an
+      //    offline admin client for the freshly-installed shop.
+      try {
+        const { admin } = await shopify.unauthenticated.admin(session.shop);
+        if (appUrl) {
+          await ensureCarrierServiceRegistered(admin, appUrl).catch((err: unknown) =>
+            console.error("[afterAuth] carrier service registration failed:", err),
+          );
+        }
+      } catch (err) {
+        console.error("[afterAuth] could not get admin client for provisioning:", err);
+      }
+
+      // 3. Register the merchant in the INK backend so the store is known
+      //    downstream without waiting for billing or the first order.
+      await createMerchant(session.shop, session.shop, `admin@${session.shop}`).catch(
+        (err: unknown) => console.error("[afterAuth] INK createMerchant failed:", err),
+      );
     },
   },
 
