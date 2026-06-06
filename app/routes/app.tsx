@@ -6,6 +6,8 @@ import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
 import { authenticate, registerWebhooks } from "../shopify.server";
 import { ShopProvider } from "../contexts/ShopContext";
 import { ensureCarrierServiceRegistered } from "../services/carrier-service.server";
+import { createMerchant } from "../services/ink-api.server";
+import { getMerchant, updateMerchant } from "../services/merchant.server";
 
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
@@ -39,6 +41,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   registerWebhooks({ session }).catch((err) =>
     console.error("[App] Webhook registration error (non-blocking):", err)
   );
+
+  // Self-provision on app load. Managed-install apps (use_legacy_install_flow =
+  // false) don't fire afterAuth on token exchange — so the install hook never
+  // runs for these stores. This loader does, on every embedded load. Seed the
+  // INK merchant's api_key into merchants/{shop} + default to automatic the
+  // first time only (guarded on ink_api_key so an existing key is never
+  // re-rotated). Non-blocking: never delays or breaks the app render.
+  (async () => {
+    const existing = await getMerchant(session.shop);
+    if (!existing?.ink_api_key) {
+      const inkData = await createMerchant(session.shop, session.shop, `admin@${session.shop}`);
+      if (inkData?.api_key) {
+        await updateMerchant(session.shop, {
+          ink_api_key: inkData.api_key,
+          verified_delivery_mode: "background",
+          payment_status: "active",
+        });
+      }
+    }
+  })().catch((err) =>
+    console.error("[App] INK self-provision error (non-blocking):", err)
+  );
+
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
