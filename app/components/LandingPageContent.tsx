@@ -87,7 +87,7 @@ export const LandingPageContent = ({
       <header className="bg-foreground text-background py-6 px-6 relative z-20">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link to="/" className="text-2xl font-serif font-medium tracking-tight">
-            ink.
+            Parallel
           </Link>
           {showSignIn && (
             <Link to={signInLink}>
@@ -112,7 +112,7 @@ export const LandingPageContent = ({
               transition={{ duration: 0.8, ease: "easeOut" }}
               className="text-sm md:text-base font-serif font-light leading-snug tracking-tight mb-3"
             >
-              Smart/ Delivery + Returns
+              Every order ships with a live receipt.
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 20 }}
@@ -120,7 +120,7 @@ export const LandingPageContent = ({
               transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
               className="text-xs md:text-sm text-white/70 max-w-md mx-auto leading-relaxed mb-10"
             >
-              The verification layer for commerce.
+              The live receipt for every Shopify order. Built on ink.
             </motion.p>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -144,12 +144,12 @@ export const LandingPageContent = ({
           style={{ y: problemY, scale: problemScale, opacity: problemOpacity }}
           className="max-w-4xl mx-auto text-center will-change-transform"
         >
-          <p className="text-xs uppercase tracking-wider text-gray-400 mb-6 font-medium">The Missing Layer</p>
+          <p className="text-xs uppercase tracking-wider text-gray-400 mb-6 font-medium">The Receipt You Already Send</p>
           <h2 className="text-4xl md:text-5xl font-serif font-light tracking-tight mb-8 leading-tight">
-            ink. sits on top of infrastructure already in place.
+            Parallel upgrades the receipt. Nothing else has to change.
           </h2>
           <p className="text-lg text-gray-600 leading-relaxed max-w-2xl mx-auto">
-            The warehouse stays. The carrier stays. The POS stays. No IT integration, no vendor coordination, no workflow changes. Merchants can be running in weeks, not months.
+            The warehouse stays. The carrier stays. Shopify stays. You install one app and the receipt becomes a branded page that taps open, runs returns, and proves delivery. Live in days.
           </p>
         </motion.div>
       </section>
@@ -161,9 +161,9 @@ export const LandingPageContent = ({
             style={{ scale: cardScale, opacity: cardOpacity }}
             className="text-center mb-16 will-change-transform"
           >
-            <p className="text-xs uppercase tracking-wider text-gray-400 mb-6 font-medium">What Your Customer Gets</p>
+            <p className="text-xs uppercase tracking-wider text-gray-400 mb-6 font-medium">Two Sides of the Same Receipt</p>
             <h2 className="text-4xl font-serif font-light tracking-tight leading-tight">
-              A branded moment on arrival.
+              Your customer opens it. You see the truth.
             </h2>
           </motion.div>
 
@@ -176,9 +176,9 @@ export const LandingPageContent = ({
               <div className="w-14 h-14 bg-foreground flex items-center justify-center mb-8">
                 <Film className="h-7 w-7 text-background" />
               </div>
-              <h3 className="text-3xl font-serif font-medium mb-5">A Branded Moment on Arrival</h3>
+              <h3 className="text-3xl font-serif font-medium mb-5">A receipt that opens.</h3>
               <p className="text-gray-600 leading-relaxed mb-8 text-lg">
-                Phone touches sticker. Your logo, your colors, your message — full screen. No app. No login. One tap and they close their phone and go about their day.
+                Phone touches sticker. Your logo, your colors, your message. Full screen. No app. No login. One tap and they close their phone and go about their day.
               </p>
             </motion.div>
 
@@ -190,9 +190,9 @@ export const LandingPageContent = ({
               <div className="w-14 h-14 bg-foreground flex items-center justify-center mb-8">
                 <Shield className="h-7 w-7 text-background" />
               </div>
-              <h3 className="text-3xl font-serif font-medium mb-5">A Delivery Confirmation They Can Trust</h3>
+              <h3 className="text-3xl font-serif font-medium mb-5">Proof on every delivery.</h3>
               <p className="text-gray-600 leading-relaxed mb-8 text-lg">
-                On screen: their order is confirmed. In the background, ink. captures GPS, timestamp, and device data. Your customer sees a premium experience. You see verified proof.
+                On screen: their order is confirmed. In the background, the tap records GPS, time, and device. Your customer sees a premium experience. You see a verified record.
               </p>
             </motion.div>
           </div>
@@ -205,16 +205,16 @@ export const LandingPageContent = ({
           style={{ y: howY }}
           className="max-w-4xl mx-auto text-center will-change-transform"
         >
-          <p className="text-xs uppercase tracking-wider text-gray-400 mb-6 font-medium">What You Get</p>
+          <p className="text-xs uppercase tracking-wider text-gray-400 mb-6 font-medium">What Parallel Does</p>
           <h2 className="text-4xl font-serif font-light tracking-tight mb-16 leading-tight">
-            A record of every shipment. Evidence before anything ships. A dashboard that shows you everything.
+            Branded receipt. Proof of delivery. Amazon-style returns. One install.
           </h2>
 
           <div className="grid md:grid-cols-3 gap-12 text-left">
             {[
-              { num: "01", title: "A Record of Every Shipment", desc: "What was in the box. When it was delivered. That your customer received it. Cryptographically signed and timestamped." },
-              { num: "02", title: "Evidence Before Anything Ships", desc: "Pre-shipment photos lock what you packed to the sticker's unique ID. The record is created at your warehouse — not reconstructed after a dispute." },
-              { num: "03", title: "One Dashboard", desc: "Enrollment status. Tap rates. Time to engagement. Sticker inventory with auto-refill. One view." },
+              { num: "01", title: "A receipt that's alive.", desc: "NFC sticker on the box. Customer taps. The receipt opens on their phone, branded to your store. No app. No login. No download." },
+              { num: "02", title: "Proof before anything ships.", desc: "Pre-shipment photos tie what you packed to the sticker's unique ID. A tamper-evident, timestamped record. Created at the warehouse, not reconstructed after a dispute." },
+              { num: "03", title: "One merchant view.", desc: "Enrollment status. Tap rates. Time to engagement. Sticker inventory with auto-refill. One dashboard." },
             ].map((step, i) => (
               <motion.div
                 key={step.num}
@@ -337,7 +337,7 @@ export const LandingPageContent = ({
               style={{ fontSize: "3.75rem" }}
               className="font-serif font-light leading-snug tracking-tight mb-3"
             >
-              The verification layer for commerce.
+              Every receipt, alive.
             </motion.h2>
             <motion.p
               initial={{ opacity: 0, y: 20 }}
@@ -346,7 +346,7 @@ export const LandingPageContent = ({
               transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
               className="text-base md:text-lg text-white/70 max-w-lg mx-auto leading-relaxed mb-10"
             >
-              The hardware bolt-on that turns every delivery into a retention event.
+              Parallel, built on ink.
             </motion.p>
           </div>
         </div>
@@ -358,20 +358,20 @@ export const LandingPageContent = ({
           <div className="grid md:grid-cols-2 gap-8 md:gap-12">
             {[
               {
-                title: "One Tap at Delivery",
-                desc: "That's it. The customer sees a branded confirmation. In the background, ink. pre-authorizes a future return and sends the customer a return link — by email, text, or saved from the confirmation screen.",
+                title: "One tap to open the receipt.",
+                desc: "Phone touches sticker. The receipt opens on the customer's phone, full screen, your brand. No app. No login. One tap and they close the phone and go about their day.",
               },
               {
-                title: "Extended Return Window",
-                desc: "Customers who tap get a longer return window than customers who don't. The tap is the incentive. The tap is the unlock.",
+                title: "Refund at scan.",
+                desc: "Tappers get the express tier. The refund clears at the moment of return scan, not after a multi-day inspection cycle.",
               },
               {
-                title: "Any Carrier. Any Location.",
-                desc: "When the customer is ready to return, they open the link. No sticker needed. The system confirms eligibility. They walk into any FedEx, UPS, or USPS. GPS detects the carrier. A carrier-native QR generates in seconds. The associate scans it through their existing system. No printing. No portal. No receipt.",
+                title: "Returns from the receipt.",
+                desc: "Two ways. At your store, show the passport at the counter and refund at scan. Live today. At any carrier, GPS detects the drop-off and generates a scannable QR. Rolling out with the next ink. update.",
               },
               {
-                title: "Return Passport",
-                desc: "Walk into a retail partner instead? GPS detects the store. A Return Passport generates. No ID. No receipt. Instant verification.",
+                title: "Return Passport at retail.",
+                desc: "Walk into a retail partner instead of your own store. GPS detects the location. A Return Passport generates on the customer's phone. No ID, no receipt search, instant verification at the counter.",
                 badge: "Coming Soon",
               },
             ].map((card, i) => (
@@ -404,7 +404,7 @@ export const LandingPageContent = ({
             transition={{ duration: 0.6, delay: 0.3 }}
             className="text-sm text-foreground/40 max-w-2xl mx-auto text-center mt-12"
           >
-            Customers who never tap go through your standard return process — single-carrier label, standard return window. The tap is the unlock.
+            Customers who never tap go through your standard return process. Single-carrier label, standard return window. The tap is the unlock.
           </motion.p>
         </div>
       </section>
@@ -425,7 +425,7 @@ export const LandingPageContent = ({
             <span>·</span>
             <a href="#" className="hover:text-white transition-colors">Terms</a>
           </div>
-          <p className="mt-6 text-xs">© 2026 ink.</p>
+          <p className="mt-6 text-xs">© 2026 Parallel. Built on ink.</p>
         </div>
       </motion.footer>
     </div>
