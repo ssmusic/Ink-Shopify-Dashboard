@@ -130,6 +130,28 @@ export const deleteMerchantUser = async (userId: string) => {
     return true;
 };
 
+// Mint a single-use magic-login token for this shop. Lets the merchant open
+// the Parallel dashboard already authenticated — no password is created or
+// stored. Admin-gated on Alan's side; we pass the shop domain and Alan
+// resolves it to the merchant + mints the token (returned exactly once).
+export const mintMagicToken = async (
+    shopDomain: string,
+): Promise<{ token: string; shop_id: string; expires_at: string }> => {
+    const response = await fetch(getAlanUrl('/auth/magic-tokens'), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Secret": INK_ADMIN_SECRET,
+        },
+        body: JSON.stringify({ shop_domain: shopDomain }),
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to mint magic token: ${response.status} ${errorText}`);
+    }
+    return await response.json();
+};
+
 // V1.3.0 Auth Binding
 export const loginUser = async (email: string, password: string) => {
     const response = await fetch(getAlanUrl('/auth/login'), {
@@ -175,6 +197,13 @@ export const enrollOrder = async (
         nfc_token: nfcToken,
         order_details: {
             order_number: orderNumber,
+            // Parallel renders order_details.customer_name (no fallback to
+            // shipping_address.name), so lift the recipient name up to it —
+            // otherwise "Customer"/"Ship To" stay blank in the dashboard.
+            customer_name:
+                (shippingAddress && typeof shippingAddress === "object"
+                    ? shippingAddress.name
+                    : "") || "",
             customer_email: customerEmail || "unknown@email.com",
             customer_phone: customerPhone || "",
             shipping_address: shippingAddress,

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFetcher, type ActionFunctionArgs } from "react-router";
 import {
   Page,
   Card,
@@ -10,6 +11,8 @@ import {
   Banner,
   Layout,
 } from "@shopify/polaris";
+import { authenticate } from "../shopify.server";
+import { mintMagicToken } from "../services/ink-api.server";
 import PolarisAppLayout from "~/components/PolarisAppLayout";
 import RecentActivity from "~/components/RecentActivity";
 import EngagementFunnel from "~/components/EngagementFunnel";
@@ -21,9 +24,59 @@ import BillingWidget from "~/components/billing/BillingWidget";
 import CommunicationsUsage from "~/components/CommunicationsUsage";
 import { toast } from "sonner"; // Replaced with Sonner to match previous setup
 
+// Mint a single-use magic-login token for this shop and hand back a
+// parallel.in.ink/welcome URL the merchant can open already signed in.
+export const action = async ({
+  request,
+}: ActionFunctionArgs): Promise<{ url: string | null; error: string | null }> => {
+  const { session } = await authenticate.admin(request);
+  try {
+    const { token } = await mintMagicToken(session.shop);
+    const base = process.env.PARALLEL_APP_URL || "https://parallel.in.ink";
+    return {
+      url: `${base}/welcome?token=${encodeURIComponent(token)}`,
+      error: null,
+    };
+  } catch (err) {
+    console.error("[dashboard] mint magic token failed:", err);
+    return {
+      url: null,
+      error: "Couldn't open your Parallel dashboard. Try again in a moment.",
+    };
+  }
+};
+
 const Dashboard = () => {
   const [hasOrders, setHasOrders] = useState(true);
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const fetcher = useFetcher<typeof action>();
+  const pendingWindow = useRef<Window | null>(null);
+  const opening = fetcher.state !== "idle";
+
+  const openParallel = () => {
+    // Open the new tab synchronously inside the click handler (a user gesture)
+    // so the browser doesn't block it as a popup, then point it at the real
+    // signed-in URL once the token comes back from the action.
+    pendingWindow.current = window.open("", "_blank");
+    fetcher.submit({}, { method: "post" });
+  };
+
+  useEffect(() => {
+    const data = fetcher.data;
+    if (!data) return;
+    if (data.url) {
+      if (pendingWindow.current) {
+        pendingWindow.current.location.href = data.url;
+      } else {
+        window.open(data.url, "_blank", "noopener,noreferrer");
+      }
+      pendingWindow.current = null;
+    } else if (data.error && pendingWindow.current) {
+      pendingWindow.current.close();
+      pendingWindow.current = null;
+    }
+  }, [fetcher.data]);
 
   const handleViewDemo = () => {
     setIsTransitioning(true);
@@ -61,6 +114,29 @@ const Dashboard = () => {
     <PolarisAppLayout>
       <Page title="Dashboard">
         <BlockStack gap="400">
+          {fetcher.data?.error && (
+            <Banner tone="critical">{fetcher.data.error}</Banner>
+          )}
+
+          {/* Open the merchant's Parallel dashboard, auto-signed-in. */}
+          <Card>
+            <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
+              <BlockStack gap="100">
+                <Text as="h2" variant="headingMd">
+                  Your Parallel dashboard
+                </Text>
+                <Text as="p" tone="subdued">
+                  Open the post-purchase surface where your enrolled orders, tap
+                  pages, and returns live. You'll be signed in automatically — no
+                  password needed.
+                </Text>
+              </BlockStack>
+              <Button variant="primary" loading={opening} onClick={openParallel}>
+                Open your Parallel dashboard
+              </Button>
+            </InlineStack>
+          </Card>
+
           {/* Operational Analytics (Metabase) */}
           <Card padding="0">
             <div style={{ padding: "0" }}>

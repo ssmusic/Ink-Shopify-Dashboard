@@ -6,6 +6,7 @@ export interface MerchantData {
   shop: string;
   payment_status?: string;
   ink_api_key?: string;
+  verified_delivery_mode?: string;
   updatedAt?: string;
 }
 
