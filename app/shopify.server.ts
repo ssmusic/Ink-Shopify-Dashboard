@@ -6,6 +6,9 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { FirestoreSessionStorage } from "./firestore-session-storage.server";
 import { DeliveryMethod } from "@shopify/shopify-api"; // ✅ Added import
+import { ensureCarrierServiceRegistered } from "./services/carrier-service.server";
+import { createMerchant } from "./services/ink-api.server";
+import { updateMerchant } from "./services/merchant.server";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -53,6 +56,52 @@ const shopify = shopifyApp({
     ORDERS_FULFILLED: {
       deliveryMethod: DeliveryMethod.Http,
       callbackUrl: "/webhooks/orders_fulfilled",
+    },
+  },
+
+  // Provision a store the instant it installs — webhooks, carrier service,
+  // AND a fully usable INK merchant: seed the api_key into the app-side
+  // merchants/{shop} doc and default to automatic (background) delivery so
+  // every order auto-enrolls into Parallel. Without the seed step, a fresh
+  // install registers the merchant in INK but the orders/create webhook has
+  // no api_key to enroll with — orders get tagged and silently dropped.
+  // Each step is independent and non-blocking so one failure can't abort
+  // the install.
+  hooks: {
+    afterAuth: async ({ session }) => {
+      const appUrl = process.env.SHOPIFY_APP_URL || "";
+
+      await shopify.registerWebhooks({ session }).catch((err: unknown) =>
+        console.error("[afterAuth] webhook registration failed:", err),
+      );
+
+      try {
+        const { admin } = await shopify.unauthenticated.admin(session.shop);
+        if (appUrl) {
+          await ensureCarrierServiceRegistered(admin, appUrl).catch((err: unknown) =>
+            console.error("[afterAuth] carrier service registration failed:", err),
+          );
+        }
+      } catch (err) {
+        console.error("[afterAuth] could not get admin client for provisioning:", err);
+      }
+
+      try {
+        const inkData = await createMerchant(
+          session.shop,
+          session.shop,
+          `admin@${session.shop}`,
+        );
+        if (inkData?.api_key) {
+          await updateMerchant(session.shop, {
+            ink_api_key: inkData.api_key,
+            verified_delivery_mode: "background",
+            payment_status: "active",
+          });
+        }
+      } catch (err) {
+        console.error("[afterAuth] INK createMerchant/seed failed:", err);
+      }
     },
   },
 
