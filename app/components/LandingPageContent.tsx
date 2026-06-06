@@ -1,8 +1,9 @@
-import { useRef } from "react";
+// Parallel landing — editorial system mirrored from parallel.in.ink.
+// Brutalist paper + ink. Archivo Black display for the masthead spine,
+// Geist sans for chrome and body, JetBrains Mono for micro-labels.
+// Hairline dividers, no rounded cards, no scroll-zoom drama.
+
 import { Link } from "react-router";
-import { Button } from "./ui/button";
-import { ArrowRight, Shield, Film } from "lucide-react";
-import { motion, useScroll, useTransform } from "framer-motion";
 
 interface LandingPageContentProps {
   ctaLink?: string;
@@ -10,424 +11,458 @@ interface LandingPageContentProps {
   showSignIn?: boolean;
 }
 
+const FONT_BODY = "'Geist', 'Space Grotesk', ui-sans-serif, system-ui, sans-serif";
+const FONT_DISPLAY = "'Archivo Black', 'Space Grotesk', system-ui, sans-serif";
+const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
+
+const display = "uppercase tracking-[-0.028em] leading-[0.92] text-black";
+const eyebrow = "uppercase tracking-[0.22em] text-[11px] font-semibold text-neutral-500";
+const mono = "uppercase tracking-[0.18em]";
+
+const sectionBorder = "border-b border-black/10";
+const colBorder = "border-black/10";
+const containerX = "px-5 sm:px-9";
+const containerWidth = "max-w-[1280px] mx-auto";
+
 export const LandingPageContent = ({
   ctaLink = "/app",
   signInLink = "/app",
   showSignIn = true,
 }: LandingPageContentProps) => {
-  const heroRef = useRef<HTMLElement>(null);
-  const problemRef = useRef<HTMLElement>(null);
-  const valueRef = useRef<HTMLElement>(null);
-  const howItWorksRef = useRef<HTMLElement>(null);
-  const statsRef = useRef<HTMLElement>(null);
-  const quoteRef = useRef<HTMLElement>(null);
-  const dropCardsRef = useRef<HTMLElement>(null);
+  const sec04 = [
+    {
+      num: "01",
+      title: "A receipt that's alive.",
+      desc:
+        "NFC sticker on the box. Customer taps. The receipt opens on their phone, branded to your store. No app. No login. No download.",
+    },
+    {
+      num: "02",
+      title: "Proof before anything ships.",
+      desc:
+        "Pre-shipment photos tie what you packed to the sticker's unique ID. A tamper-evident, timestamped record. Created at the warehouse, not reconstructed after a dispute.",
+    },
+    {
+      num: "03",
+      title: "One merchant view.",
+      desc:
+        "Enrollment status. Tap rates. Time to engagement. Sticker inventory with auto-refill. One dashboard.",
+    },
+  ];
 
-  // Hero: dramatic zoom out and fade as you scroll
-  const { scrollYProgress: heroProgress } = useScroll({
-    target: heroRef,
-    offset: ["start start", "end start"],
-  });
-  const heroY = useTransform(heroProgress, [0, 1], ["0%", "-40%"]);
-  const heroOpacity = useTransform(heroProgress, [0, 1], [1, 1]);
+  const sec05 = [
+    {
+      status: "Available now",
+      title: "Photo.",
+      desc:
+        "Photograph each item. Apply the sticker. Ship. Maximum documentation for high-value orders.",
+    },
+    {
+      status: "Coming soon",
+      title: "High speed.",
+      desc:
+        "Scan the order. Scan the sticker. Ship. Two beeps. For volume operations where speed matters.",
+    },
+  ];
 
-  // Problem section - zoom in from far away
-  const { scrollYProgress: problemProgress } = useScroll({
-    target: problemRef,
-    offset: ["start end", "center center"],
-  });
-  const problemY = useTransform(problemProgress, [0, 1], [120, 0]);
-  const problemScale = useTransform(problemProgress, [0, 1], [0.8, 1]);
-  const problemOpacity = useTransform(problemProgress, [0, 0.3, 1], [0, 0.5, 1]);
+  const pricing = [
+    { val: "$0.99", label: "per enrollment" },
+    { val: "$2.99", label: "per verified tap" },
+    { val: "$0.80", label: "per sticker" },
+  ];
 
-  // Value cards - dramatic stagger with zoom
-  const { scrollYProgress: valueProgress } = useScroll({
-    target: valueRef,
-    offset: ["start end", "center center"],
-  });
-  const cardY = useTransform(valueProgress, [0, 1], [150, 0]);
-  const cardScale = useTransform(valueProgress, [0, 1], [0.85, 1]);
-  const cardOpacity = useTransform(valueProgress, [0, 0.2, 1], [0, 0.3, 1]);
+  const verticals = [
+    { title: "Luxury · Beauty · Jewelry", desc: "High-value items that deserve documentation before they ship." },
+    { title: "Electronics · Collectibles", desc: "Categories where disputes are costly and proof changes outcomes." },
+    { title: "High-AOV DTC", desc: "Anything worth documenting before it ships." },
+  ];
 
-  // How it works - parallax offset
-  const { scrollYProgress: howProgress } = useScroll({
-    target: howItWorksRef,
-    offset: ["start end", "end start"],
-  });
-  const howY = useTransform(howProgress, [0, 1], [80, -80]);
-
-  // Stats - scale up dramatically
-  const { scrollYProgress: statsProgress } = useScroll({
-    target: statsRef,
-    offset: ["start end", "center center"],
-  });
-  const statsScale = useTransform(statsProgress, [0, 1], [0.7, 1]);
-  const statsOpacity = useTransform(statsProgress, [0, 0.3, 1], [0, 0.5, 1]);
-
-  // ink. Drop hero — same pattern as top hero
-  const { scrollYProgress: quoteProgress } = useScroll({
-    target: quoteRef,
-    offset: ["start start", "end start"],
-  });
-  const quoteY = useTransform(quoteProgress, [0, 1], ["0%", "-40%"]);
-  const quoteOpacity = useTransform(quoteProgress, [0, 1], [1, 1]);
-
-  // Drop cards - aggressive stagger with zoom
-  const { scrollYProgress: dropCardsProgress } = useScroll({
-    target: dropCardsRef,
-    offset: ["start end", "center center"],
-  });
-  const dropCardY = useTransform(dropCardsProgress, [0, 1], [200, 0]);
-  const dropCardScale = useTransform(dropCardsProgress, [0, 1], [0.7, 1]);
-  const dropCardOpacity = useTransform(dropCardsProgress, [0, 0.3, 1], [0, 0.2, 1]);
+  const sec08 = [
+    {
+      num: "01",
+      title: "One tap to open the receipt.",
+      desc:
+        "Phone touches sticker. The receipt opens on the customer's phone, full screen, your brand. No app. No login. One tap and they close the phone and go about their day.",
+    },
+    {
+      num: "02",
+      title: "Refund at scan.",
+      desc:
+        "Tappers get the express tier. The refund clears at the moment of return scan, not after a multi-day inspection cycle.",
+    },
+    {
+      num: "03",
+      title: "Returns from the receipt.",
+      desc:
+        "Two ways. At your store, show the passport at the counter and refund at scan. Live today. At any carrier, GPS detects the drop-off and generates a scannable QR. Rolling out with the next ink. update.",
+    },
+    {
+      num: "04",
+      title: "Return Passport at retail.",
+      badge: "Coming soon",
+      desc:
+        "Walk into a retail partner instead of your own store. GPS detects the location. A Return Passport generates on the customer's phone. No ID, no receipt search, instant verification at the counter.",
+    },
+  ];
 
   return (
-    <div className="landing-typography min-h-screen bg-warm-white overflow-x-hidden">
-      {/* Header */}
-      <header className="bg-foreground text-background py-6 px-6 relative z-20">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link to="/" className="text-2xl font-serif font-medium tracking-tight">
+    <div
+      className="min-h-screen bg-white text-black antialiased"
+      style={{ fontFamily: FONT_BODY }}
+    >
+      {/* ───── Header ───── */}
+      <header className={`${sectionBorder} bg-white`}>
+        <div className={`${containerWidth} ${containerX} flex items-center justify-between py-5`}>
+          <Link
+            to="/"
+            className="text-[13px] font-semibold uppercase tracking-[0.18em] hover:opacity-70 transition-opacity"
+          >
             Parallel
           </Link>
           {showSignIn && (
-            <Link to={signInLink}>
-              <Button variant="ghost" className="text-background hover:bg-white/10 text-xs uppercase tracking-widest font-medium">
-                Sign In
-              </Button>
+            <Link
+              to={signInLink}
+              className={`${eyebrow} hover:text-black transition-colors`}
+            >
+              Sign in
             </Link>
           )}
         </div>
       </header>
 
-      {/* Hero Section - Sticky, content scrolls over it */}
-      <section ref={heroRef} className="relative h-[100vh]">
-        <motion.div
-          style={{ y: heroY, opacity: heroOpacity }}
-          className="fixed top-0 left-0 right-0 h-screen bg-foreground text-background flex items-center justify-center px-6 will-change-transform origin-center"
-        >
-          <div className="relative max-w-4xl mx-auto text-center">
-            <motion.h1
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="text-sm md:text-base font-serif font-light leading-snug tracking-tight mb-3"
-            >
-              Every order ships with a live receipt.
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-              className="text-xs md:text-sm text-white/70 max-w-md mx-auto leading-relaxed mb-10"
-            >
-              The live receipt for every Shopify order. Built on ink.
-            </motion.p>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-            >
-              <Link to={ctaLink}>
-                <Button className="bg-white text-black hover:bg-gray-100 px-4 py-2 h-auto text-xs uppercase tracking-wider font-medium rounded-none hover:-translate-y-0.5 hover:shadow-lg transition-all">
-                  Get Started
-                  <ArrowRight className="ml-1.5 h-3 w-3" />
-                </Button>
-              </Link>
-            </motion.div>
-          </div>
-        </motion.div>
-      </section>
-
-      {/* The Problem */}
-      <section ref={problemRef} className="bg-warm-white py-24 px-6 relative z-10">
-        <motion.div
-          style={{ y: problemY, scale: problemScale, opacity: problemOpacity }}
-          className="max-w-4xl mx-auto text-center will-change-transform"
-        >
-          <p className="text-xs uppercase tracking-wider text-gray-400 mb-6 font-medium">The Receipt You Already Send</p>
-          <h2 className="text-4xl md:text-5xl font-serif font-light tracking-tight mb-8 leading-tight">
-            Parallel upgrades the receipt. Nothing else has to change.
-          </h2>
-          <p className="text-lg text-gray-600 leading-relaxed max-w-2xl mx-auto">
-            The warehouse stays. The carrier stays. Shopify stays. You install one app and the receipt becomes a branded page that taps open, runs returns, and proves delivery. Live in days.
+      {/* ───── Masthead — No 01 ───── */}
+      <section className={`${sectionBorder} ${containerX} pt-12 sm:pt-20 pb-12 sm:pb-20`}>
+        <div className={containerWidth}>
+          <div className={`${eyebrow} pb-4 sm:pb-6`}>No 01 · Live receipt</div>
+          <h1
+            className={`m-0 ${display} text-[40px] sm:text-[clamp(56px,7.5vw,108px)]`}
+            style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+          >
+            Every order ships with a live receipt.
+          </h1>
+          <p className="max-w-[54ch] pt-8 text-[14px] sm:text-[15px] leading-[1.6] text-neutral-700">
+            The live receipt for every Shopify order. Branded post-purchase, proof of delivery,
+            Amazon-style returns. Built on ink.
           </p>
-        </motion.div>
-      </section>
-
-      {/* Two-Sided Value */}
-      <section ref={valueRef} className="bg-card py-20 px-6 relative z-10">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            style={{ scale: cardScale, opacity: cardOpacity }}
-            className="text-center mb-16 will-change-transform"
-          >
-            <p className="text-xs uppercase tracking-wider text-gray-400 mb-6 font-medium">Two Sides of the Same Receipt</p>
-            <h2 className="text-4xl font-serif font-light tracking-tight leading-tight">
-              Your customer opens it. You see the truth.
-            </h2>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 gap-16">
-            {/* Advertising Side */}
-            <motion.div
-              style={{ y: cardY, scale: cardScale, opacity: cardOpacity }}
-              className="group will-change-transform"
+          <div className="pt-10">
+            <Link
+              to={ctaLink}
+              className={`inline-flex items-center gap-2 bg-black text-white px-5 py-3 text-[11px] font-semibold ${mono} hover:bg-neutral-800 transition-colors`}
+              style={{ fontFamily: FONT_BODY }}
             >
-              <div className="w-14 h-14 bg-foreground flex items-center justify-center mb-8">
-                <Film className="h-7 w-7 text-background" />
-              </div>
-              <h3 className="text-3xl font-serif font-medium mb-5">A receipt that opens.</h3>
-              <p className="text-gray-600 leading-relaxed mb-8 text-lg">
-                Phone touches sticker. Your logo, your colors, your message. Full screen. No app. No login. One tap and they close their phone and go about their day.
-              </p>
-            </motion.div>
-
-            {/* Fraud Protection Side */}
-            <motion.div
-              style={{ y: cardY, scale: cardScale, opacity: cardOpacity }}
-              className="group will-change-transform"
-            >
-              <div className="w-14 h-14 bg-foreground flex items-center justify-center mb-8">
-                <Shield className="h-7 w-7 text-background" />
-              </div>
-              <h3 className="text-3xl font-serif font-medium mb-5">Proof on every delivery.</h3>
-              <p className="text-gray-600 leading-relaxed mb-8 text-lg">
-                On screen: their order is confirmed. In the background, the tap records GPS, time, and device. Your customer sees a premium experience. You see a verified record.
-              </p>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section ref={howItWorksRef} className="bg-warm-white py-20 px-6 relative z-10 overflow-hidden">
-        <motion.div
-          style={{ y: howY }}
-          className="max-w-4xl mx-auto text-center will-change-transform"
-        >
-          <p className="text-xs uppercase tracking-wider text-gray-400 mb-6 font-medium">What Parallel Does</p>
-          <h2 className="text-4xl font-serif font-light tracking-tight mb-16 leading-tight">
-            Branded receipt. Proof of delivery. Amazon-style returns. One install.
-          </h2>
-
-          <div className="grid md:grid-cols-3 gap-12 text-left">
-            {[
-              { num: "01", title: "A receipt that's alive.", desc: "NFC sticker on the box. Customer taps. The receipt opens on their phone, branded to your store. No app. No login. No download." },
-              { num: "02", title: "Proof before anything ships.", desc: "Pre-shipment photos tie what you packed to the sticker's unique ID. A tamper-evident, timestamped record. Created at the warehouse, not reconstructed after a dispute." },
-              { num: "03", title: "One merchant view.", desc: "Enrollment status. Tap rates. Time to engagement. Sticker inventory with auto-refill. One dashboard." },
-            ].map((step, i) => (
-              <motion.div
-                key={step.num}
-                initial={{ opacity: 0, y: 60, scale: 0.9 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.7, delay: i * 0.2 }}
-                className="will-change-transform"
-              >
-                <div className="text-6xl font-serif font-light text-gray-200 mb-4">{step.num}</div>
-                <h3 className="text-xl font-serif font-medium mb-3">{step.title}</h3>
-                <p className="text-gray-600 leading-relaxed">{step.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      </section>
-
-      {/* The Stakes / Stats */}
-      <section ref={statsRef} className="bg-card py-20 px-6 relative z-10 overflow-hidden">
-        <motion.div
-          style={{ scale: statsScale, opacity: statsOpacity }}
-          className="max-w-4xl mx-auto will-change-transform"
-        >
-          <div className="text-center mb-12">
-            <p className="text-xs uppercase tracking-wider text-gray-400 mb-6 font-medium">How You Enroll</p>
-            <h2 className="text-4xl font-serif font-light tracking-tight">
-              Two enrollment methods. Both simple.
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8 text-center max-w-2xl mx-auto">
-            {[
-              { value: "Photo", label: "Photograph each item. Apply the sticker. Ship. Maximum documentation for high-value orders. Available now." },
-              { value: "High Speed", label: "Scan the order. Scan the sticker. Ship. Two beeps. For volume operations where speed matters. Coming soon." },
-            ].map((stat, i) => (
-              <motion.div
-                key={stat.value}
-                initial={{ opacity: 0, scale: 0.5, y: 40 }}
-                whileInView={{ opacity: 1, scale: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.6, delay: i * 0.15 }}
-                className="p-6 will-change-transform"
-              >
-                <div className="text-5xl md:text-6xl font-serif font-light mb-2">
-                  {stat.value}
-                </div>
-                <p className="text-gray-500 text-sm">{stat.label}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Enterprise / Pricing */}
-      <section className="bg-secondary text-foreground py-24 px-6 relative z-10 overflow-hidden">
-        <div className="max-w-5xl mx-auto relative">
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.7 }}
-            className="text-center mb-16"
-          >
-            <p className="text-xs uppercase tracking-wider text-foreground/40 mb-6 font-medium">Pricing</p>
-            <h2 className="text-4xl md:text-5xl font-serif font-light tracking-tight leading-tight mb-8">
-              No monthly fee. No tiers. Pay per package.
-            </h2>
-            <p className="text-lg text-foreground/60 max-w-3xl mx-auto leading-relaxed">
-              $0.99 per enrollment · $2.99 per verified tap · $0.80 per sticker
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-8 mb-16">
-            {[
-              { title: "Luxury · Beauty · Jewelry", desc: "High-value items that deserve documentation before they ship." },
-              { title: "Electronics · Collectibles", desc: "Categories where disputes are costly and proof changes outcomes." },
-              { title: "High-AOV DTC", desc: "Anything worth documenting before it ships." },
-            ].map((item, i) => (
-              <motion.div
-                key={item.title}
-                initial={{ opacity: 0, y: 50 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.6, delay: i * 0.15 }}
-                className="border border-border/30 p-8"
-              >
-                <h3 className="text-xl font-serif font-medium mb-4 text-foreground">{item.title}</h3>
-                <p className="text-muted-foreground leading-relaxed text-sm">{item.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="text-center"
-          >
-            <Link to={ctaLink}>
-              <Button className="bg-foreground text-background hover:bg-foreground/90 px-4 py-2 h-auto text-xs uppercase tracking-wider font-medium rounded-none hover:-translate-y-0.5 hover:shadow-lg transition-all">
-                Get Started
-                <ArrowRight className="ml-1.5 h-3 w-3" />
-              </Button>
+              Get started
+              <span aria-hidden style={{ fontFamily: FONT_MONO }}>↗</span>
             </Link>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ink. Drop Hero */}
-      <section ref={quoteRef} className="relative z-10">
-        <div className="sticky top-0 h-screen bg-foreground text-background flex items-center justify-center px-6 overflow-hidden">
-          <div className="relative max-w-4xl mx-auto text-center">
-            <motion.h2
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              style={{ fontSize: "3.75rem" }}
-              className="font-serif font-light leading-snug tracking-tight mb-3"
-            >
-              Every receipt, alive.
-            </motion.h2>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-              className="text-base md:text-lg text-white/70 max-w-lg mx-auto leading-relaxed mb-10"
-            >
-              Parallel, built on ink.
-            </motion.p>
           </div>
         </div>
       </section>
 
-      {/* ink. Drop Cards */}
-      <section ref={dropCardsRef} className="bg-secondary py-24 md:py-32 px-6 relative z-10">
-        <div className="max-w-5xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-8 md:gap-12">
-            {[
-              {
-                title: "One tap to open the receipt.",
-                desc: "Phone touches sticker. The receipt opens on the customer's phone, full screen, your brand. No app. No login. One tap and they close the phone and go about their day.",
-              },
-              {
-                title: "Refund at scan.",
-                desc: "Tappers get the express tier. The refund clears at the moment of return scan, not after a multi-day inspection cycle.",
-              },
-              {
-                title: "Returns from the receipt.",
-                desc: "Two ways. At your store, show the passport at the counter and refund at scan. Live today. At any carrier, GPS detects the drop-off and generates a scannable QR. Rolling out with the next ink. update.",
-              },
-              {
-                title: "Return Passport at retail.",
-                desc: "Walk into a retail partner instead of your own store. GPS detects the location. A Return Passport generates on the customer's phone. No ID, no receipt search, instant verification at the counter.",
-                badge: "Coming Soon",
-              },
-            ].map((card, i) => (
-              <motion.div
-                key={card.title}
-                initial={{ opacity: 0, y: 100, scale: 0.85 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.8, delay: i * 0.15, ease: "easeOut" }}
-                className="border border-border/30 p-10 will-change-transform hover:-translate-y-1 hover:shadow-xl transition-all duration-300"
+      {/* ───── No 02 — The Receipt You Already Send ───── */}
+      <section className={`${sectionBorder} ${containerX} py-16 sm:py-24`}>
+        <div className={`${containerWidth} grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-x-10 gap-y-8`}>
+          <div>
+            <div className={`${eyebrow} pb-4`}>No 02 · The receipt you already send</div>
+            <h2
+              className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)]`}
+              style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+            >
+              Parallel upgrades the receipt. Nothing else has to change.
+            </h2>
+          </div>
+          <div className="max-w-[60ch]">
+            <p className="text-[14px] sm:text-[15px] leading-[1.7] text-neutral-700">
+              The warehouse stays. The carrier stays. Shopify stays. You install one app and the
+              receipt becomes a branded page that taps open, runs returns, and proves delivery.
+              Live in days.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ───── No 03 — Two sides of the same receipt ───── */}
+      <section className={sectionBorder}>
+        <div className={`${containerWidth} ${containerX} pt-16 sm:pt-24 pb-10`}>
+          <div className={`${eyebrow} pb-4`}>No 03 · Two sides of the same receipt</div>
+          <h2
+            className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)] max-w-[20ch]`}
+            style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+          >
+            Your customer opens it. You see the truth.
+          </h2>
+        </div>
+        <div className={`${containerWidth} grid grid-cols-1 sm:grid-cols-2 border-t ${colBorder}`}>
+          <div className={`${containerX} py-12 sm:py-16 sm:border-r ${colBorder}`}>
+            <div
+              className={`${mono} text-[11px] text-neutral-500 pb-4`}
+              style={{ fontFamily: FONT_MONO }}
+            >
+              Customer side
+            </div>
+            <h3
+              className={`m-0 ${display} text-[22px] sm:text-[28px] pb-5`}
+              style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+            >
+              A receipt that opens.
+            </h3>
+            <p className="text-[14px] leading-[1.65] text-neutral-700 max-w-[44ch]">
+              Phone touches sticker. Your logo, your colors, your message. Full screen. No app. No
+              login. One tap and they close their phone and go about their day.
+            </p>
+          </div>
+          <div className={`${containerX} py-12 sm:py-16 border-t sm:border-t-0 ${colBorder}`}>
+            <div
+              className={`${mono} text-[11px] text-neutral-500 pb-4`}
+              style={{ fontFamily: FONT_MONO }}
+            >
+              Merchant side
+            </div>
+            <h3
+              className={`m-0 ${display} text-[22px] sm:text-[28px] pb-5`}
+              style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+            >
+              Proof on every delivery.
+            </h3>
+            <p className="text-[14px] leading-[1.65] text-neutral-700 max-w-[44ch]">
+              On screen: their order is confirmed. In the background, the tap records GPS, time,
+              and device. Your customer sees a premium experience. You see a verified record.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ───── No 04 — What Parallel does ───── */}
+      <section className={sectionBorder}>
+        <div className={`${containerWidth} ${containerX} pt-16 sm:pt-24 pb-10`}>
+          <div className={`${eyebrow} pb-4`}>No 04 · What Parallel does</div>
+          <h2
+            className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)] max-w-[22ch]`}
+            style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+          >
+            Branded receipt. Proof of delivery. Amazon-style returns.
+          </h2>
+        </div>
+        <div className={`${containerWidth} grid grid-cols-1 sm:grid-cols-3 border-t ${colBorder}`}>
+          {sec04.map((step, i) => (
+            <div
+              key={step.num}
+              className={`${containerX} py-12 sm:py-16 ${
+                i < sec04.length - 1 ? `sm:border-r ${colBorder} border-b sm:border-b-0` : ""
+              }`}
+            >
+              <div
+                className={`${mono} text-[12px] text-neutral-500 pb-4`}
+                style={{ fontFamily: FONT_MONO }}
               >
-                <div className="flex items-center gap-3 mb-5">
-                  <span className="text-xs text-muted-foreground font-medium tabular-nums">0{i + 1}</span>
-                  <h3 className="text-xl md:text-2xl font-serif font-medium">{card.title}</h3>
+                {step.num}
+              </div>
+              <h3
+                className={`m-0 ${display} text-[20px] sm:text-[24px] pb-4`}
+                style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+              >
+                {step.title}
+              </h3>
+              <p className="text-[14px] leading-[1.65] text-neutral-700">{step.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ───── No 05 — Enrollment ───── */}
+      <section className={sectionBorder}>
+        <div className={`${containerWidth} ${containerX} pt-16 sm:pt-24 pb-10`}>
+          <div className={`${eyebrow} pb-4`}>No 05 · How you enroll</div>
+          <h2
+            className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)]`}
+            style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+          >
+            Two methods. Both simple.
+          </h2>
+        </div>
+        <div className={`${containerWidth} grid grid-cols-1 sm:grid-cols-2 border-t ${colBorder}`}>
+          {sec05.map((m, i) => (
+            <div
+              key={m.title}
+              className={`${containerX} py-12 sm:py-16 ${
+                i === 0 ? `sm:border-r ${colBorder} border-b sm:border-b-0` : ""
+              }`}
+            >
+              <div
+                className={`${mono} text-[11px] text-neutral-500 pb-4`}
+                style={{ fontFamily: FONT_MONO }}
+              >
+                {m.status}
+              </div>
+              <h3
+                className={`m-0 ${display} text-[24px] sm:text-[30px] pb-5`}
+                style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+              >
+                {m.title}
+              </h3>
+              <p className="text-[14px] leading-[1.65] text-neutral-700 max-w-[42ch]">{m.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ───── No 06 — Pricing ───── */}
+      <section className={`${sectionBorder} bg-[#fafafa]`}>
+        <div className={`${containerWidth} ${containerX} pt-16 sm:pt-24 pb-16 sm:pb-24`}>
+          <div className={`${eyebrow} pb-4`}>No 06 · Pricing</div>
+          <h2
+            className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)] pb-10`}
+            style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+          >
+            No monthly fee. No tiers. Pay per package.
+          </h2>
+          <div className={`grid grid-cols-1 sm:grid-cols-3 pt-8 border-t ${colBorder}`}>
+            {pricing.map((p, i) => (
+              <div
+                key={p.val}
+                className={`pt-8 sm:pt-10 pb-2 ${
+                  i < pricing.length - 1 ? `sm:border-r sm:pr-8 ${colBorder}` : ""
+                } ${i > 0 ? "sm:pl-8" : ""}`}
+              >
+                <div
+                  className={`text-[48px] sm:text-[64px] tabular-nums ${display}`}
+                  style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+                >
+                  {p.val}
+                </div>
+                <div
+                  className={`${mono} text-[11px] text-neutral-500 pt-2`}
+                  style={{ fontFamily: FONT_MONO }}
+                >
+                  {p.label}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className={`grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-6 pt-16`}>
+            {verticals.map((v) => (
+              <div key={v.title}>
+                <div
+                  className="text-[13px] font-semibold text-black pb-2"
+                  style={{ fontFamily: FONT_BODY }}
+                >
+                  {v.title}
+                </div>
+                <p className="text-[13px] leading-[1.65] text-neutral-600 max-w-[34ch]">{v.desc}</p>
+              </div>
+            ))}
+          </div>
+          <div className="pt-12">
+            <Link
+              to={ctaLink}
+              className={`inline-flex items-center gap-2 bg-black text-white px-5 py-3 text-[11px] font-semibold ${mono} hover:bg-neutral-800 transition-colors`}
+              style={{ fontFamily: FONT_BODY }}
+            >
+              Get started
+              <span aria-hidden style={{ fontFamily: FONT_MONO }}>↗</span>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ───── No 07 — The hero refrain ───── */}
+      <section className={`${sectionBorder} ${containerX} py-28 sm:py-44 text-center`}>
+        <div className={containerWidth}>
+          <div className={`${eyebrow} pb-6`}>No 07</div>
+          <h2
+            className={`m-0 ${display} text-[44px] sm:text-[clamp(72px,10vw,148px)]`}
+            style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+          >
+            Every receipt, alive.
+          </h2>
+          <p
+            className={`pt-8 text-[12px] sm:text-[13px] ${mono} text-neutral-500`}
+            style={{ fontFamily: FONT_MONO }}
+          >
+            Parallel · Built on ink.
+          </p>
+        </div>
+      </section>
+
+      {/* ───── No 08 — From opening to refund ───── */}
+      <section className={sectionBorder}>
+        <div className={`${containerWidth} ${containerX} pt-16 sm:pt-24 pb-10`}>
+          <div className={`${eyebrow} pb-4`}>No 08 · The receipt does the work</div>
+          <h2
+            className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)] max-w-[20ch]`}
+            style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+          >
+            From opening to refund. One surface.
+          </h2>
+        </div>
+        <div className={`${containerWidth} grid grid-cols-1 sm:grid-cols-2 border-t ${colBorder}`}>
+          {sec08.map((card, i) => {
+            const isRight = i % 2 === 1;
+            const isLastRow = i >= 2;
+            return (
+              <div
+                key={card.num}
+                className={`${containerX} py-12 sm:py-16 ${
+                  !isRight ? `sm:border-r ${colBorder}` : ""
+                } ${!isLastRow ? `border-b ${colBorder}` : ""}`}
+              >
+                <div
+                  className={`${mono} text-[12px] text-neutral-500 pb-4 flex items-center gap-3`}
+                  style={{ fontFamily: FONT_MONO }}
+                >
+                  <span>{card.num}</span>
                   {card.badge && (
-                    <span className="text-[10px] uppercase tracking-wider text-foreground/40 border border-foreground/20 px-2 py-0.5 font-medium">
+                    <span className="border border-black/20 px-2 py-0.5 text-[10px] tracking-[0.22em]">
                       {card.badge}
                     </span>
                   )}
                 </div>
-                <p className="text-muted-foreground leading-relaxed text-sm">{card.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="text-sm text-foreground/40 max-w-2xl mx-auto text-center mt-12"
-          >
-            Customers who never tap go through your standard return process. Single-carrier label, standard return window. The tap is the unlock.
-          </motion.p>
+                <h3
+                  className={`m-0 ${display} text-[22px] sm:text-[28px] pb-5 max-w-[22ch]`}
+                  style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+                >
+                  {card.title}
+                </h3>
+                <p className="text-[14px] leading-[1.65] text-neutral-700 max-w-[44ch]">
+                  {card.desc}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+        <div
+          className={`${containerWidth} ${containerX} py-10 text-[12px] leading-[1.65] text-neutral-500 max-w-[64ch] text-center mx-auto`}
+        >
+          Customers who never tap go through your standard return process. Single-carrier label,
+          standard return window. The tap is the unlock.
         </div>
       </section>
 
-      {/* Footer */}
-      <motion.footer
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.5 }}
-        className="bg-foreground text-white/60 py-10 px-6 relative z-10"
-      >
-        <div className="max-w-7xl mx-auto text-center">
-          <div className="flex items-center justify-center gap-6 text-xs uppercase tracking-wider">
-            <Link to="/app/help" className="hover:text-white transition-colors">Support</Link>
-            <span>·</span>
-            <a href="#" className="hover:text-white transition-colors">Privacy</a>
-            <span>·</span>
-            <a href="#" className="hover:text-white transition-colors">Terms</a>
+      {/* ───── Footer ───── */}
+      <footer className="bg-white">
+        <div
+          className={`${containerWidth} ${containerX} py-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4`}
+        >
+          <div
+            className={`${mono} text-[11px] text-neutral-500`}
+            style={{ fontFamily: FONT_MONO }}
+          >
+            © 2026 Parallel · Built on ink.
           </div>
-          <p className="mt-6 text-xs">© 2026 Parallel. Built on ink.</p>
+          <div
+            className={`flex items-center gap-6 text-[11px] ${mono} text-neutral-500`}
+            style={{ fontFamily: FONT_MONO }}
+          >
+            <Link to="/app/help" className="hover:text-black transition-colors">
+              Support
+            </Link>
+            <a href="#" className="hover:text-black transition-colors">
+              Privacy
+            </a>
+            <a href="#" className="hover:text-black transition-colors">
+              Terms
+            </a>
+          </div>
         </div>
-      </motion.footer>
+      </footer>
     </div>
   );
 };
