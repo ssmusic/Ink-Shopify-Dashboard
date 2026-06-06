@@ -29,24 +29,51 @@ export const LandingPageContent = ({
   signInLink = "/app",
   showSignIn = true,
 }: LandingPageContentProps) => {
-  const sec04 = [
+  const sec03 = [
     {
       num: "01",
-      title: "A receipt that's alive.",
+      title: "Tap to unlock.",
       desc:
-        "NFC sticker on the box. Customer taps. The receipt opens on their phone, branded to your store. No app. No login. No download.",
+        "Phone meets sticker. A native browser opens. No app. No download. No login. Under a second to portal.",
     },
     {
       num: "02",
-      title: "Proof before anything ships.",
+      title: "Branded portal.",
       desc:
-        "Pre-shipment photos tie what you packed to the sticker's unique ID. A tamper-evident, timestamped record. Created at the warehouse, not reconstructed after a dispute.",
+        "The page renders in your typography, colors, and voice. Care guides. Product story. Related items from your catalog.",
     },
     {
       num: "03",
-      title: "One merchant view.",
+      title: "Proof of arrival.",
       desc:
-        "Enrollment status. Tap rates. Time to engagement. Sticker inventory with auto-refill. One dashboard.",
+        "Tap captures GPS, time, and device. Chain of custody from the warehouse photo to the customer's hand.",
+    },
+    {
+      num: "04",
+      title: "Returns at the source.",
+      desc:
+        "One QR for any carrier, or the in-store passport at your counter. Refund at scan.",
+    },
+  ];
+
+  const sec04 = [
+    {
+      num: "01",
+      title: "The receipt is alive.",
+      desc:
+        "NFC sticker on the box. Tap to open. The receipt renders on the customer's phone, branded to your store. No app. No download.",
+    },
+    {
+      num: "02",
+      title: "Returns run from the receipt.",
+      desc:
+        "In-store passport at your counter, live today. Universal QR for FedEx, UPS, USPS rolling out with the next ink. update. The customer never sees a PDF.",
+    },
+    {
+      num: "03",
+      title: "The brand owns the surface.",
+      desc:
+        "Your typography, colors, and voice in the post-purchase moment. The merchant dashboard tracks enrollment, taps, and engagement.",
     },
   ];
 
@@ -80,21 +107,21 @@ export const LandingPageContent = ({
   const sec08 = [
     {
       num: "01",
-      title: "One tap to open the receipt.",
-      desc:
-        "Phone touches sticker. The receipt opens on the customer's phone, full screen, your brand. No app. No login. One tap and they close the phone and go about their day.",
-    },
-    {
-      num: "02",
       title: "Refund at scan.",
       desc:
         "Tappers get the express tier. The refund clears at the moment of return scan, not after a multi-day inspection cycle.",
     },
     {
-      num: "03",
-      title: "Returns from the receipt.",
+      num: "02",
+      title: "In-store passport.",
       desc:
-        "Two ways. At your store, show the passport at the counter and refund at scan. Live today. At any carrier, GPS detects the drop-off and generates a scannable QR. Rolling out with the next ink. update.",
+        "Customer brings the item to your store. Shows the passport on their phone. Counter scans, refund clears. No login. No receipt search. Live today.",
+    },
+    {
+      num: "03",
+      title: "Carrier-agnostic QR.",
+      desc:
+        "GPS detects the carrier. A universal QR generates on the phone. Walk into any FedEx, UPS, or USPS. The associate scans it. No printer, no portal. Rolling out with the next ink. update.",
     },
     {
       num: "04",
@@ -140,9 +167,10 @@ export const LandingPageContent = ({
           >
             Every order ships with a live receipt.
           </h1>
-          <p className="max-w-[54ch] pt-8 text-[14px] sm:text-[15px] leading-[1.6] text-neutral-700">
-            The live receipt for every Shopify order. Branded post-purchase, proof of delivery,
-            Amazon-style returns. Built on ink.
+          <p className="max-w-[58ch] pt-8 text-[14px] sm:text-[15px] leading-[1.6] text-neutral-700">
+            Traditional e-commerce cuts ties when the box hits the porch. Parallel keeps the loop
+            alive. Every order becomes a live checkout counter and a return drop-off box,
+            unlocked by one tap. Built on ink.
           </p>
           <div className="pt-10">
             <Link
@@ -157,88 +185,81 @@ export const LandingPageContent = ({
         </div>
       </section>
 
-      {/* ───── No 02 — The Receipt You Already Send ───── */}
+      {/* ───── No 02 — The continuous loop ───── */}
       <section className={`${sectionBorder} ${containerX} py-16 sm:py-24`}>
         <div className={`${containerWidth} grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-x-10 gap-y-8`}>
           <div>
-            <div className={`${eyebrow} pb-4`}>No 02 · The receipt you already send</div>
+            <div className={`${eyebrow} pb-4`}>No 02 · The continuous loop</div>
             <h2
               className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)]`}
               style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
             >
-              Parallel upgrades the receipt. Nothing else has to change.
+              Most e-commerce cuts ties when the box hits the porch.
             </h2>
           </div>
           <div className="max-w-[60ch]">
             <p className="text-[14px] sm:text-[15px] leading-[1.7] text-neutral-700">
-              The warehouse stays. The carrier stays. Shopify stays. You install one app and the
-              receipt becomes a branded page that taps open, runs returns, and proves delivery.
-              Live in days.
+              The receipt becomes a forwarded email. The brand becomes a tracking number. The
+              return becomes a printed label and a counter no one wants to visit. Parallel keeps
+              the loop alive. Every product gets a live twin that taps open into a branded portal.
+              The warehouse, carrier, and Shopify all stay. You install one app. Live in days.
             </p>
           </div>
         </div>
       </section>
 
-      {/* ───── No 03 — Two sides of the same receipt ───── */}
+      {/* ───── No 03 — The tap journey ───── */}
       <section className={sectionBorder}>
         <div className={`${containerWidth} ${containerX} pt-16 sm:pt-24 pb-10`}>
-          <div className={`${eyebrow} pb-4`}>No 03 · Two sides of the same receipt</div>
+          <div className={`${eyebrow} pb-4`}>No 03 · The tap journey</div>
           <h2
-            className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)] max-w-[20ch]`}
+            className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)] max-w-[18ch]`}
             style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
           >
-            Your customer opens it. You see the truth.
+            One tap. Four moments.
           </h2>
         </div>
         <div className={`${containerWidth} grid grid-cols-1 sm:grid-cols-2 border-t ${colBorder}`}>
-          <div className={`${containerX} py-12 sm:py-16 sm:border-r ${colBorder}`}>
-            <div
-              className={`${mono} text-[11px] text-neutral-500 pb-4`}
-              style={{ fontFamily: FONT_MONO }}
-            >
-              Customer side
-            </div>
-            <h3
-              className={`m-0 ${display} text-[22px] sm:text-[28px] pb-5`}
-              style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
-            >
-              A receipt that opens.
-            </h3>
-            <p className="text-[14px] leading-[1.65] text-neutral-700 max-w-[44ch]">
-              Phone touches sticker. Your logo, your colors, your message. Full screen. No app. No
-              login. One tap and they close their phone and go about their day.
-            </p>
-          </div>
-          <div className={`${containerX} py-12 sm:py-16 border-t sm:border-t-0 ${colBorder}`}>
-            <div
-              className={`${mono} text-[11px] text-neutral-500 pb-4`}
-              style={{ fontFamily: FONT_MONO }}
-            >
-              Merchant side
-            </div>
-            <h3
-              className={`m-0 ${display} text-[22px] sm:text-[28px] pb-5`}
-              style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
-            >
-              Proof on every delivery.
-            </h3>
-            <p className="text-[14px] leading-[1.65] text-neutral-700 max-w-[44ch]">
-              On screen: their order is confirmed. In the background, the tap records GPS, time,
-              and device. Your customer sees a premium experience. You see a verified record.
-            </p>
-          </div>
+          {sec03.map((step, i) => {
+            const isRight = i % 2 === 1;
+            const isLastRow = i >= 2;
+            return (
+              <div
+                key={step.num}
+                className={`${containerX} py-12 sm:py-16 ${
+                  !isRight ? `sm:border-r ${colBorder}` : ""
+                } ${!isLastRow ? `border-b ${colBorder}` : ""}`}
+              >
+                <div
+                  className={`${mono} text-[12px] text-neutral-500 pb-4`}
+                  style={{ fontFamily: FONT_MONO }}
+                >
+                  {step.num}
+                </div>
+                <h3
+                  className={`m-0 ${display} text-[22px] sm:text-[26px] pb-5 max-w-[22ch]`}
+                  style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
+                >
+                  {step.title}
+                </h3>
+                <p className="text-[14px] leading-[1.65] text-neutral-700 max-w-[44ch]">
+                  {step.desc}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </section>
 
       {/* ───── No 04 — What Parallel does ───── */}
       <section className={sectionBorder}>
         <div className={`${containerWidth} ${containerX} pt-16 sm:pt-24 pb-10`}>
-          <div className={`${eyebrow} pb-4`}>No 04 · What Parallel does</div>
+          <div className={`${eyebrow} pb-4`}>No 04 · What ships with Parallel</div>
           <h2
             className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)] max-w-[22ch]`}
             style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
           >
-            Branded receipt. Proof of delivery. Amazon-style returns.
+            Live receipt. Carrier-agnostic returns. Branded post-purchase.
           </h2>
         </div>
         <div className={`${containerWidth} grid grid-cols-1 sm:grid-cols-3 border-t ${colBorder}`}>
@@ -385,12 +406,12 @@ export const LandingPageContent = ({
       {/* ───── No 08 — From opening to refund ───── */}
       <section className={sectionBorder}>
         <div className={`${containerWidth} ${containerX} pt-16 sm:pt-24 pb-10`}>
-          <div className={`${eyebrow} pb-4`}>No 08 · The receipt does the work</div>
+          <div className={`${eyebrow} pb-4`}>No 08 · Returns from the receipt</div>
           <h2
             className={`m-0 ${display} text-[28px] sm:text-[clamp(36px,4.4vw,56px)] max-w-[20ch]`}
             style={{ fontFamily: FONT_DISPLAY, fontWeight: 400 }}
           >
-            From opening to refund. One surface.
+            Four ways the customer returns.
           </h2>
         </div>
         <div className={`${containerWidth} grid grid-cols-1 sm:grid-cols-2 border-t ${colBorder}`}>
