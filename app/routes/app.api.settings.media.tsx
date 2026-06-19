@@ -352,12 +352,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
        const { id } = body;
        console.log(`[settings/media] DELETE media id=${id}`);
        
-       // Find the item to get the merchantSlug for Alan API call
-       const item = merchantMedia.find((m: any) => m.id === id);
+       // Resolve shop_id so we delete from the SAME merchant_animations doc the
+       // upload writes + the tap reads (via the by-id route). The old slug route
+       // deleted a different doc, leaving the media live at tap (the split-brain).
+       const dData = doc?.data();
+       let alanMerchantId: string | null =
+           dData && typeof dData.shop_id === "string" ? dData.shop_id : null;
+       if (!alanMerchantId && shopDomain) {
+           try {
+               const { getShopIdByDomain } = await import("../services/ink-api.server");
+               alanMerchantId = await getShopIdByDomain(shopDomain);
+           } catch (e: any) {
+               console.warn(`[settings/media] DELETE: couldn't resolve shop_id: ${e?.message || e}`);
+           }
+       }
        
        // Try to delete from Alan's API too (best effort — don't fail if it errors)
-       if (item?.merchantSlug) {
-           const deleteUrl = getAlanUrl(`/admin/merchant-animations/${item.merchantSlug}/${id}`);
+       if (alanMerchantId) {
+           const deleteUrl = getAlanUrl(`/admin/merchant-animations/by-id/${encodeURIComponent(alanMerchantId)}/${encodeURIComponent(id)}`);
            console.log(`[settings/media] Calling Alan DELETE → ${deleteUrl}`);
            try {
                const delResp = await fetch(deleteUrl, {
