@@ -14,7 +14,7 @@ export default function LandingPage() {
       ctaLabel="Open dashboard"
       showSignIn={false}
       headline="Your dashboard is ready."
-      sub="The live receipt for every Shopify order. Branded post-purchase, carrier-agnostic returns, built on ink."
+      sub="A living page for every Shopify order. Branded post-purchase, carrier-agnostic returns — opened on a tap."
       footnote="New here? Open the dashboard to set up your brand and order your first stickers."
     />
   );

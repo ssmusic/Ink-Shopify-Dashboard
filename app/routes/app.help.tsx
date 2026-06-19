@@ -128,7 +128,7 @@ const faqSections = [
       {
         question: "When am I charged for a tap?",
         answer:
-          "Only when a customer successfully taps the sticker and the system captures a verified delivery event. You'll be billed monthly.",
+          "Only when a customer successfully taps the sticker and the system captures a verified tap. You'll be billed monthly.",
       },
       {
         question: "How do I order more stickers?",

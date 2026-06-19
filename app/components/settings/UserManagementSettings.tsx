@@ -175,7 +175,7 @@ const UserManagementSettings = () => {
       {/* Warehouse App */}
       <Layout.AnnotatedSection
         title="Warehouse App"
-        description="Download the INK enrollment app for your packing stations."
+        description="Download the ink. enrollment app for your packing stations."
       >
         <Card>
           <InlineStack gap="600" wrap={false} blockAlign="start">
@@ -197,7 +197,7 @@ const UserManagementSettings = () => {
             </div>
             <BlockStack gap="400">
               <Text as="p" tone="subdued" variant="bodySm">
-                Scan to download the INK Warehouse app on your packing station devices.
+                Scan to download the ink. Warehouse app on your packing station devices.
               </Text>
               <BlockStack gap="200">
                 <InlineStack gap="200">

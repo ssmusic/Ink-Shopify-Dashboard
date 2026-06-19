@@ -205,7 +205,7 @@ export const EmailService = {
         <div class="email-container">
           <!-- Header -->
           <div class="header">
-            <h1 class="header-title">ink. Verified Delivery</h1>
+            <h1 class="header-title">ink.</h1>
           </div>
 
           <!-- Main Content -->
@@ -282,7 +282,7 @@ export const EmailService = {
 
           <!-- Footer -->
           <div class="footer">
-            <p style="margin: 0 0 10px 0;">Secured by ink. Verified Delivery Protocol</p>
+            <p style="margin: 0 0 10px 0;">Secured by ink.</p>
             <p style="margin: 0;">&copy; ${new Date().getFullYear()} ink. All rights reserved.</p>
           </div>
         </div>

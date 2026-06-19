@@ -90,22 +90,22 @@ export const NotificationService = {
     
     switch (payload.type) {
       case "outForDelivery":
-        messageBody = `Hi ${payload.customerName}, your order ${payload.orderName} from ${payload.merchantName} is out for delivery today. Get ready to tap your INK sticker!`;
+        messageBody = `Hi ${payload.customerName}, your order ${payload.orderName} from ${payload.merchantName} is out for delivery today. Get ready to tap your ink. sticker!`;
         break;
       case "delivered":
-        messageBody = `Your package ${payload.orderName} has arrived! Tap the INK sticker on the box with your phone to verify delivery and unlock your return window.`;
+        messageBody = `Your package ${payload.orderName} has arrived! Tap the ink. sticker on the box with your phone to verify delivery and unlock your return window.`;
         break;
       case "deliveryConfirmed":
-        messageBody = `Verified! Your INK delivery for ${payload.orderName} is confirmed. ${payload.verifyUrl ? `View your passport: ${payload.verifyUrl}` : ""}`;
+        messageBody = `Verified! Your ink. delivery for ${payload.orderName} is confirmed. ${payload.verifyUrl ? `View your passport: ${payload.verifyUrl}` : ""}`;
         break;
       case "hours4":
-        messageBody = `Hi ${payload.customerName}, we noticed your package ${payload.orderName} arrived earlier today. Please tap the INK sticker to verify it!`;
+        messageBody = `Hi ${payload.customerName}, we noticed your package ${payload.orderName} arrived earlier today. Please tap the ink. sticker to verify it!`;
         break;
       case "hours24":
-        messageBody = `Reminder: Tap the INK sticker on your recent delivery (${payload.orderName}) to verify it and unlock your ${payload.returnWindowDays || 30}-day return window.`;
+        messageBody = `Reminder: Tap the ink. sticker on your recent delivery (${payload.orderName}) to verify it and unlock your ${payload.returnWindowDays || 30}-day return window.`;
         break;
       case "hours48":
-        messageBody = `Final reminder from ${payload.merchantName}: Please tap the INK sticker on your order ${payload.orderName} to properly register your delivery.`;
+        messageBody = `Final reminder from ${payload.merchantName}: Please tap the ink. sticker on your order ${payload.orderName} to properly register your delivery.`;
         break;
       case "return7d":
         messageBody = `Hi ${payload.customerName}, you have 7 days left to return order ${payload.orderName}. Need to start a return? Click here: ${payload.verifyUrl}`;
@@ -153,17 +153,17 @@ export const NotificationService = {
     switch (payload.type) {
       case "outForDelivery":
         subject = subjectPrefix + "Out for Delivery";
-        body = `Hi ${payload.customerName},\n\nYour order is out for delivery today. Get ready to tap your INK sticker!`;
+        body = `Hi ${payload.customerName},\n\nYour order is out for delivery today. Get ready to tap your ink. sticker!`;
         break;
       case "delivered":
         subject = subjectPrefix + "Delivered - Tap Your Sticker!";
-        body = `Your package has arrived!\n\nTap the INK sticker on the box with your phone to verify delivery and unlock your return window.`;
+        body = `Your package has arrived!\n\nTap the ink. sticker on the box with your phone to verify delivery and unlock your return window.`;
         break;
       case "hours4":
       case "hours24":
       case "hours48":
         subject = subjectPrefix + "Friendly Reminder to Tap Your Sticker";
-        body = `Hi ${payload.customerName},\n\nWe noticed your package arrived recently. Please tap the INK sticker to verify it and unlock returns.`;
+        body = `Hi ${payload.customerName},\n\nWe noticed your package arrived recently. Please tap the ink. sticker to verify it and unlock returns.`;
         break;
       case "return7d":
         subject = subjectPrefix + "7 Days Left to Return";

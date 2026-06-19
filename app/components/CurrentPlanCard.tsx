@@ -1,8 +1,8 @@
-import { Clock } from "lucide-react";
+import { Clock, Loader2 } from "lucide-react";
+import { useFetcher } from "react-router";
+import { useEffect } from "react";
 
 interface CurrentPlanCardProps {
-  enrollments?: number;
-  taps?: number;
   enrollmentRate?: number;
   tapRate?: number;
   tagsCost?: number;
@@ -15,8 +15,6 @@ interface CurrentPlanCardProps {
 }
 
 const CurrentPlanCard = ({
-  enrollments = 1247,
-  taps = 843,
   enrollmentRate = 0.99,
   tapRate = 2.99,
   tagsCost = 997.60,
@@ -27,6 +25,22 @@ const CurrentPlanCard = ({
   paymentMethod = "•••• 4242",
   className = "",
 }: CurrentPlanCardProps) => {
+  // Real verified-tap + enrollment counts, summed from the merchant's proofs
+  // (replaces the old hardcoded 843/1247 mock — "the tap count wasn't coming through").
+  // NOTE: the dollar/account figures below (tags pass-through, payment method,
+  // invoice dates, customer-since) are still placeholders; a full billing wire-up
+  // is a separate task from the tap count.
+  const fetcher = useFetcher<{ totalTaps: number; enrollments: number }>();
+  useEffect(() => {
+    if (fetcher.state === "idle" && !fetcher.data) {
+      fetcher.load(`/app/api/dashboard/tap-stats?_t=${Date.now()}`);
+    }
+  }, [fetcher]);
+
+  const isLoading = fetcher.state === "loading" || !fetcher.data;
+  const taps = fetcher.data?.totalTaps ?? 0;
+  const enrollments = fetcher.data?.enrollments ?? 0;
+
   const enrollmentRevenue = enrollments * enrollmentRate;
   const tapRevenue = taps * tapRate;
   const totalInkCharges = enrollmentRevenue + tapRevenue + tagsCost;
@@ -36,7 +50,12 @@ const CurrentPlanCard = ({
     `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
-    <div className={`bg-card border border-border rounded-sm overflow-hidden ${className}`}>
+    <div className={`relative bg-card border border-border rounded-sm overflow-hidden ${className}`}>
+      {isLoading && (
+        <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center z-10 transition-all duration-300">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
       {/* Header */}
       <div className="px-5 py-4 border-b border-border">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -83,7 +102,7 @@ const CurrentPlanCard = ({
 
         {/* Total */}
         <div className="flex items-center justify-between pt-3 border-t border-border">
-          <p className="text-sm font-semibold text-foreground">Total INK Charges</p>
+          <p className="text-sm font-semibold text-foreground">Total ink. Charges</p>
           <span className="text-sm font-semibold text-foreground">{fmt(totalInkCharges)}</span>
         </div>
 

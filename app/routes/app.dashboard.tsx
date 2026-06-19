@@ -41,7 +41,7 @@ export const action = async ({
     console.error("[dashboard] mint magic token failed:", err);
     return {
       url: null,
-      error: "Couldn't open your Parallel dashboard. Try again in a moment.",
+      error: "Couldn't open your ink. dashboard. Try again in a moment.",
     };
   }
 };
@@ -118,12 +118,12 @@ const Dashboard = () => {
             <Banner tone="critical">{fetcher.data.error}</Banner>
           )}
 
-          {/* Open the merchant's Parallel dashboard, auto-signed-in. */}
+          {/* Open the merchant's ink. dashboard, auto-signed-in. */}
           <Card>
             <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
               <BlockStack gap="100">
                 <Text as="h2" variant="headingMd">
-                  Your Parallel dashboard
+                  Your ink. dashboard
                 </Text>
                 <Text as="p" tone="subdued">
                   Open the post-purchase surface where your enrolled orders, tap
@@ -132,7 +132,7 @@ const Dashboard = () => {
                 </Text>
               </BlockStack>
               <Button variant="primary" loading={opening} onClick={openParallel}>
-                Open your Parallel dashboard
+                Open your ink. dashboard
               </Button>
             </InlineStack>
           </Card>

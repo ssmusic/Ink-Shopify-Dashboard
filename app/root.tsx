@@ -37,7 +37,7 @@ function GlobalLoadingScreen() {
         boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
       }}>
         <span style={{ color: "#fff", fontSize: 22, fontWeight: 700, fontFamily: "system-ui, sans-serif" }}>
-          INK
+          ink.
         </span>
       </div>
 

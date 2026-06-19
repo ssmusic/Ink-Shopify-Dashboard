@@ -1,4 +1,4 @@
-// Parallel landing — one screen, one door.
+// ink. landing — one screen, one door.
 // Brand top-left, optional sign-in top-right, big Archivo Black
 // headline centered, short Geist deck, single black enter button.
 // Used by both the public landing (_index) and the in-admin landing
@@ -25,8 +25,8 @@ export const LandingPageContent = ({
   ctaLabel = "Get started",
   signInLink = "/app",
   showSignIn = true,
-  headline = "Every order ships with a live receipt.",
-  sub = "Traditional e-commerce cuts ties when the box hits the porch. Parallel keeps the loop alive. Built on ink.",
+  headline = "Every order opens a living page.",
+  sub = "Traditional e-commerce cuts ties when the box hits the porch. ink. keeps the loop alive — a living page for every order, opened on a tap.",
   footnote,
 }: LandingPageContentProps) => {
   return (
@@ -41,7 +41,7 @@ export const LandingPageContent = ({
             to="/"
             className="text-[13px] font-semibold uppercase tracking-[0.18em] hover:opacity-70 transition-opacity"
           >
-            Parallel
+            ink.
           </Link>
           {showSignIn && (
             <Link
@@ -94,7 +94,7 @@ export const LandingPageContent = ({
             className="text-[10px] uppercase tracking-[0.22em] text-neutral-400"
             style={{ fontFamily: FONT_MONO }}
           >
-            © 2026 Parallel · Built on ink.
+            © 2026 ink.
           </div>
         </div>
       </footer>

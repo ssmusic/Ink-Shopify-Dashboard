@@ -1,4 +1,6 @@
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, Loader2 } from "lucide-react";
+import { useFetcher } from "react-router";
+import { useEffect } from "react";
 
 interface FunnelStep {
   label: string;
@@ -6,30 +8,43 @@ interface FunnelStep {
   color: string;
 }
 
-interface EngagementFunnelProps {
-  steps?: FunnelStep[];
-}
+const EngagementFunnel = () => {
+  // Real funnel from the merchant's proofs (replaces the 1247/843/158 mock):
+  // Enrolled = all proofs, Tapped = proofs tapped at least once. Shared source
+  // with CurrentPlanCard + BillingWidget.
+  const fetcher = useFetcher<{ totalTaps: number; enrollments: number; engaged: number }>();
+  useEffect(() => {
+    if (fetcher.state === "idle" && !fetcher.data) {
+      fetcher.load(`/app/api/dashboard/tap-stats?_t=${Date.now()}`);
+    }
+  }, [fetcher]);
 
-const defaultSteps: FunnelStep[] = [
-  { label: "Enrolled", count: 1247, color: "bg-amber-500" },
-  { label: "Active", count: 843, color: "bg-emerald-500" },
-  { label: "Expired", count: 158, color: "bg-gray-400" },
-];
+  const isLoading = fetcher.state === "loading" || !fetcher.data;
+  const enrollments = fetcher.data?.enrollments ?? 0;
+  const engaged = fetcher.data?.engaged ?? 0;
 
-const EngagementFunnel = ({ steps = defaultSteps }: EngagementFunnelProps) => {
+  const steps: FunnelStep[] = [
+    { label: "Enrolled", count: enrollments, color: "bg-amber-500" },
+    { label: "Tapped", count: engaged, color: "bg-emerald-500" },
+  ];
   const maxCount = steps[0]?.count || 1;
 
   return (
     <div
-      className="bg-card border border-border rounded-md p-4 sm:p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+      className="relative bg-card border border-border rounded-md p-4 sm:p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
       role="region"
       aria-label="Engagement funnel"
     >
+      {isLoading && (
+        <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center z-10 rounded-md">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
       {/* Header */}
       <div className="mb-5">
         <h3 className="text-sm font-semibold text-foreground">Engagement Funnel</h3>
         <p className="text-xs text-muted-foreground mt-0.5">
-          How shipments move through the verification lifecycle
+          How many enrolled shipments were tapped
         </p>
       </div>
 
@@ -38,7 +53,7 @@ const EngagementFunnel = ({ steps = defaultSteps }: EngagementFunnelProps) => {
         {steps.map((step, index) => {
           const widthPercent = Math.max((step.count / maxCount) * 100, 12);
           const dropoff = index > 0
-            ? (((steps[index - 1].count - step.count) / steps[index - 1].count) * 100).toFixed(0)
+            ? (((steps[index - 1].count - step.count) / (steps[index - 1].count || 1)) * 100).toFixed(0)
             : null;
           const isLast = index === steps.length - 1;
 
@@ -79,7 +94,7 @@ const EngagementFunnel = ({ steps = defaultSteps }: EngagementFunnelProps) => {
       <div className="mt-5 pt-4 border-t border-border flex items-center justify-between">
         <span className="text-xs text-muted-foreground">Overall engagement rate</span>
         <span className="text-sm font-semibold text-foreground tabular-nums">
-          {((steps[1]?.count || 0) / maxCount * 100).toFixed(1)}%
+          {((engaged / maxCount) * 100).toFixed(1)}%
         </span>
       </div>
     </div>

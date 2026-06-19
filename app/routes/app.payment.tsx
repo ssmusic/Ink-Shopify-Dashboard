@@ -29,7 +29,7 @@ export const action = async ({ request }: LoaderFunctionArgs) => {
     }`,
     {
       variables: {
-        name: "INK Verified Delivery",
+        name: "ink — Tap Pages",
         returnUrl: `${process.env.SHOPIFY_APP_URL}/app/payment/callback`,
         lineItems: [
           {
@@ -85,16 +85,16 @@ export default function Payment() {
               <Card>
                 <BlockStack gap="500">
                   <Text as="h2" variant="headingLg">
-                    Activate INK Verified Delivery
+                    Activate ink.
                   </Text>
                   <Text as="p" variant="bodyMd">
-                    To start using INK Verified Delivery and access your dashboard, please activate your subscription.
+                    To start using ink. and access your dashboard, please activate your subscription.
                   </Text>
                   
                   <List type="bullet">
                     <List.Item>Automated Shipping Rates</List.Item>
                     <List.Item>NFC Tag Enrollment</List.Item>
-                    <List.Item>Verified Delivery Proofs</List.Item>
+                    <List.Item>Tap pages for every order</List.Item>
                   </List>
 
                   <div style={{ padding: "20px", background: "#f1f1f1", borderRadius: "8px" }}>

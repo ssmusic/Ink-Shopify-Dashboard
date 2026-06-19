@@ -123,14 +123,14 @@ const DeliveryModeSettings = () => {
   return (
     <Layout>
       <Layout.AnnotatedSection
-        title="Verified Delivery Mode"
-        description="Choose how INK Verified Delivery shows up to your customers at checkout."
+        title="Delivery mode"
+        description="Choose how ink. shows up to your customers at checkout."
       >
         <Card>
           <BlockStack gap="400">
             <RadioButton
               label="Optional add-on"
-              helpText="Customers see ink. Verified Delivery as a paid checkout option alongside their other shipping methods. They choose whether to opt in."
+              helpText="Customers see an ink. delivery option as a paid checkout choice alongside their other shipping methods. They choose whether to opt in."
               checked={mode === "addon"}
               id="delivery-mode-addon"
               name="delivery-mode"
@@ -139,7 +139,7 @@ const DeliveryModeSettings = () => {
             />
             <RadioButton
               label="Automatic (background)"
-              helpText="Customers see only your standard shipping methods. INK is silently applied to every order. You absorb the per-sticker cost (or price it into your products)."
+              helpText="Customers see only your standard shipping methods. ink. is silently applied to every order. You absorb the per-sticker cost (or price it into your products)."
               checked={mode === "background"}
               id="delivery-mode-background"
               name="delivery-mode"
@@ -150,7 +150,7 @@ const DeliveryModeSettings = () => {
             {mode === "background" && (
               <Banner tone="info">
                 <Text as="p" variant="bodySm">
-                  Background mode hides INK from your checkout the next time
+                  Background mode hides ink. from your checkout the next time
                   Shopify polls our carrier service (usually within a few
                   minutes). Existing in-flight checkouts may still show the
                   option until then.

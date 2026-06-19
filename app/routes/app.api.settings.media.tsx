@@ -398,11 +398,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
            // Tell Alan's backend (source of truth) that this is now primary.
            // ConsumerTap fetches branding from Alan, so without this call the
            // dashboard and consumer experience drift.
-           const slugForAlan =
-               item.merchantSlug || (shopDomain ? toMerchantSlug(shopDomain) : "");
-           if (slugForAlan) {
+           // Set-primary MUST target the SAME merchant_animations doc the upload
+           // writes and the consumer tap reads — keyed by shop_id, via the by-id
+           // route. The old slug route (/{toMerchantSlug(domain)}/primary) wrote a
+           // DIFFERENT doc that lacks the uploaded media_items → 502 MEDIA_NOT_FOUND
+           // (the split-brain: upload used shop_id, set-primary used the slug).
+           const dData = doc?.data();
+           let alanMerchantId: string | null =
+               dData && typeof dData.shop_id === "string" ? dData.shop_id : null;
+           if (!alanMerchantId && shopDomain) {
+               try {
+                   const { getShopIdByDomain } = await import("../services/ink-api.server");
+                   alanMerchantId = await getShopIdByDomain(shopDomain);
+               } catch (e: any) {
+                   console.warn(`[settings/media] setPrimary: couldn't resolve shop_id: ${e?.message || e}`);
+               }
+           }
+           if (alanMerchantId) {
                const setPrimaryUrl = getAlanUrl(
-                   `/admin/merchant-animations/${slugForAlan}/primary`
+                   `/admin/merchant-animations/by-id/${encodeURIComponent(alanMerchantId)}/primary`
                );
                console.log(
                    `[settings/media] PATCH primary → ${setPrimaryUrl}, media_id=${id}`
@@ -439,8 +453,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                }
            } else {
                console.warn(
-                   `[settings/media] No merchantSlug on item — skipping Alan API call. ` +
-                   `Local Firestore will be updated but consumer experience may diverge.`
+                   `[settings/media] Could not resolve shop_id — skipping Alan setPrimary. ` +
+                   `Local Firestore will be updated but the consumer tap may diverge.`
                );
            }
 

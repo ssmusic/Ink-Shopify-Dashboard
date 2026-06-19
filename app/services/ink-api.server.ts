@@ -93,6 +93,35 @@ export const getShopIdByDomain = async (shopDomain: string): Promise<string> => 
     return merchant.shop_id;
 };
 
+// Real verified-tap + enrollment totals for a merchant, summed from Alan's proof
+// rows (GET /admin/proofs?merchant_id=<shop_id>, which returns tap_count per row).
+// Powers the dashboard's "verified engagements" number — replaces the hardcoded
+// 843/1247 mock. Degrades to zeros on any failure so the card never throws.
+export const getMerchantTapStats = async (
+    shopDomain: string,
+): Promise<{ totalTaps: number; enrollments: number; engaged: number }> => {
+    try {
+        const shopId = await getShopIdByDomain(shopDomain);
+        const res = await fetch(
+            getAlanUrl(`/admin/proofs?merchant_id=${encodeURIComponent(shopId)}`),
+            { headers: { "X-Admin-Secret": INK_ADMIN_SECRET } },
+        );
+        if (!res.ok) {
+            console.warn(`[ink-api] getMerchantTapStats ${res.status} for ${shopDomain}`);
+            return { totalTaps: 0, enrollments: 0, engaged: 0 };
+        }
+        const body = await res.json();
+        const proofs: any[] = Array.isArray(body) ? body : (body.proofs ?? []);
+        const totalTaps = proofs.reduce((sum, p) => sum + (Number(p.tap_count) || 0), 0);
+        // "engaged" = proofs tapped at least once (tap_count > 0) — the Engagement Funnel's "Tapped" bucket.
+        const engaged = proofs.reduce((n, p) => n + ((Number(p.tap_count) || 0) > 0 ? 1 : 0), 0);
+        return { totalTaps, enrollments: proofs.length, engaged };
+    } catch (e: any) {
+        console.error("[ink-api] getMerchantTapStats error:", e?.message || e);
+        return { totalTaps: 0, enrollments: 0, engaged: 0 };
+    }
+};
+
 export const adminCreateUser = async (merchantId: string, name: string, email: string, password?: string) => {
     const payload: any = { merchant_id: merchantId, name, email };
     if (password) payload.password = password;
