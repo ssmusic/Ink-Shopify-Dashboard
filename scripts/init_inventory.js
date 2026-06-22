@@ -2,7 +2,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
-const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET || "ink_admin_aeb5c9d6e822a4e57d95a6a2224aada64230e48d89acad5782057fcb865548a2";
+const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET;
+if (!INK_ADMIN_SECRET) { console.error("INK_ADMIN_SECRET is not set"); process.exit(1); }
 
 // Make configurable via ENV as requested
 const INITIAL_TAGS = parseInt(process.env.INITIAL_STICKER_INVENTORY || "100", 10);

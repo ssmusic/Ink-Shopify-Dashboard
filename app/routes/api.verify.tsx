@@ -253,7 +253,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
             if (uniqueSlugs.length > 0) {
                 const INK_API_BASE = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
-                const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET || "ink_admin_aeb5c9d6e822a4e57d95a6a2224aada64230e48d89acad5782057fcb865548a2";
+                const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET;
+                if (!INK_ADMIN_SECRET) throw new Error("INK_ADMIN_SECRET is not set");
                 const baseUrl = INK_API_BASE.endsWith("/api") ? INK_API_BASE.slice(0, -4) : INK_API_BASE;
 
                 let animsUrl = "";
