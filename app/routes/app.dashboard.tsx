@@ -25,14 +25,14 @@ import CommunicationsUsage from "~/components/CommunicationsUsage";
 import { toast } from "sonner"; // Replaced with Sonner to match previous setup
 
 // Mint a single-use magic-login token for this shop and hand back a
-// parallel.in.ink/welcome URL the merchant can open already signed in.
+// www.in.ink/welcome URL the merchant can open already signed in.
 export const action = async ({
   request,
 }: ActionFunctionArgs): Promise<{ url: string | null; error: string | null }> => {
   const { session } = await authenticate.admin(request);
   try {
     const { token } = await mintMagicToken(session.shop);
-    const base = process.env.PARALLEL_APP_URL || "https://parallel.in.ink";
+    const base = process.env.PARALLEL_APP_URL || "https://www.in.ink";
     return {
       url: `${base}/welcome?token=${encodeURIComponent(token)}`,
       error: null,
