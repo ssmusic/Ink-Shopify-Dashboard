@@ -437,9 +437,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   };
 
                   const data = buildReceiptEmailData(book, proof);
+                  // First-party QR image: the ink-backend /api/qr endpoint renders
+                  // an SVG QR encoding the receipt URL. INK_API_URL already ends in
+                  // "/api" (same constant used across this app for ink calls), so
+                  // `${INK_API_URL}/qr` resolves to /api/qr.
+                  const INK_API_BASE =
+                    process.env.INK_API_URL ||
+                    "https://us-central1-inink-c76d3.cloudfunctions.net/api";
                   const html = renderReceiptEmail(data, {
                     receiptUrl: verify_url,
-                    qrImageUrl: null,
+                    qrImageUrl: `${INK_API_BASE}/qr?u=${encodeURIComponent(verify_url)}`,
                     poweredByInk: true,
                   });
 
