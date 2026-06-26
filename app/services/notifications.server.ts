@@ -6,9 +6,26 @@ const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER;
 
+const TWILIO_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
+
 const twilioClient = TWILIO_SID && TWILIO_TOKEN ? twilio(TWILIO_SID, TWILIO_TOKEN) : null;
 
-export type NotificationType = 
+/**
+ * Normalize a phone number to E.164 (Twilio rejects anything else).
+ * Returns null for anything we can't confidently coerce — callers must bail
+ * rather than send to a malformed number.
+ */
+function normalizeE164(p?: string | null): string | null {
+  if (!p) return null;
+  const d = p.replace(/[^\d+]/g, "");
+  if (d.startsWith("+")) return d;
+  const only = d.replace(/\D/g, "");
+  if (only.length === 10) return `+1${only}`;
+  if (only.length === 11 && only.startsWith("1")) return `+${only}`;
+  return null;
+}
+
+export type NotificationType =
   | "outForDelivery" 
   | "delivered" 
   | "deliveryConfirmed" 
@@ -83,7 +100,20 @@ export const NotificationService = {
       return false;
     }
 
-    if (!payload.toPhone) return false;
+    // Normalize the recipient to E.164. Bail on anything we can't coerce —
+    // Twilio would reject it anyway. Never log the phone number.
+    const toNumber = normalizeE164(payload.toPhone);
+    if (!toNumber) {
+      console.warn("⚠️ SMS skipped: recipient phone is missing or not a valid number.");
+      return false;
+    }
+
+    // Strip a known-bad legacy link before sending. The old `in.ink/verify/...`
+    // URL is broken (wrong host + not the real token); if we see it, drop the
+    // URL so the body falls back to the no-link copy rather than SMS a dead link.
+    if (payload.verifyUrl && /in\.ink\/verify\//.test(payload.verifyUrl)) {
+      payload = { ...payload, verifyUrl: undefined };
+    }
 
     // Format message based on type
     let messageBody = "";
@@ -93,7 +123,9 @@ export const NotificationService = {
         messageBody = `Hi ${payload.customerName}, your order ${payload.orderName} from ${payload.merchantName} is out for delivery today. Get ready to tap your ink. sticker!`;
         break;
       case "delivered":
-        messageBody = `Your package ${payload.orderName} has arrived! Tap the ink. sticker on the box with your phone to verify delivery and unlock your return window.`;
+        messageBody = payload.verifyUrl
+          ? `Your ${payload.merchantName} order ${payload.orderName} was delivered. Your receipt + returns: ${payload.verifyUrl}`
+          : `Your package ${payload.orderName} has arrived! Tap the ink. sticker on the box to verify delivery and unlock your return window.`;
         break;
       case "deliveryConfirmed":
         messageBody = `Verified! Your ink. delivery for ${payload.orderName} is confirmed. ${payload.verifyUrl ? `View your passport: ${payload.verifyUrl}` : ""}`;
@@ -115,16 +147,34 @@ export const NotificationService = {
         break;
     }
 
+    // Production A2P / toll-free pools send via a Messaging Service; otherwise
+    // fall back to a single normalized from-number. Guard the from-number too —
+    // if neither a Messaging Service nor a valid from-number is configured, we
+    // can't send.
+    const fromNumber = normalizeE164(TWILIO_PHONE);
+    if (!TWILIO_MESSAGING_SERVICE_SID && !fromNumber) {
+      console.warn("⚠️ SMS skipped: no TWILIO_MESSAGING_SERVICE_SID and no valid TWILIO_PHONE_NUMBER configured.");
+      return false;
+    }
+
+    const createParams: any = {
+      body: messageBody,
+      to: toNumber,
+    };
+    if (TWILIO_MESSAGING_SERVICE_SID) {
+      createParams.messagingServiceSid = TWILIO_MESSAGING_SERVICE_SID;
+    } else {
+      createParams.from = fromNumber;
+    }
+
     try {
-      await twilioClient.messages.create({
-        body: messageBody,
-        from: TWILIO_PHONE,
-        to: payload.toPhone,
-      });
-      console.log(`✅ SMS (${payload.type}) sent via Twilio to ${payload.toPhone}`);
+      await twilioClient.messages.create(createParams);
+      console.log(`✅ SMS (${payload.type}) sent via Twilio.`);
       return true;
     } catch (error: any) {
-      console.error(`❌ Twilio SMS failed:`, error.message);
+      // Surface Twilio's code + message (e.g. 21608 trial-unverified recipient,
+      // 21211 bad to-number, 21610 unsubscribed). Never log phone/creds.
+      console.error(`❌ Twilio SMS failed [code ${error?.code ?? "?"}]: ${error?.message ?? error}`);
       return false;
     }
   },

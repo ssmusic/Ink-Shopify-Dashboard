@@ -45,6 +45,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             phone
             firstName
           }
+          shippingAddress {
+            phone
+          }
           proofMetafield: metafield(namespace: "ink", key: "proof_reference") { value }
           verifyUrlMetafield: metafield(namespace: "ink", key: "verify_url") { value }
         }
@@ -115,7 +118,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (notificationType) {
       const customerEmail = order.customer?.email;
-      const customerPhone = order.customer?.phone;
+      // Shopify often nulls customer.phone but keeps shippingAddress.phone.
+      const customerPhone = order.customer?.phone ?? order.shippingAddress?.phone;
       const customerName = order.customer?.firstName || "Customer";
       // Use the REAL verify_url that Alan's /ink/update webhook stored on the
       // order (canonical {brand}.in.ink/r/{token}). The old code built
