@@ -359,6 +359,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   phone
                   firstName
                 }
+                shippingAddress {
+                  phone
+                }
               }
             }
           `;
@@ -373,7 +376,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           
           if (orderData?.data?.order?.customer) {
             const customerEmail = orderData.data.order.customer.email;
-            const customerPhone = orderData.data.order.customer.phone;
+            // Shopify often nulls customer.phone but keeps shippingAddress.phone.
+            const customerPhone = orderData.data.order.customer.phone ?? orderData.data.order.shippingAddress?.phone;
             const customerName = orderData.data.order.customer.firstName || "Customer";
             const orderName = orderData.data.order.name;
             
