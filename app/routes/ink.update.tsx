@@ -8,6 +8,20 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, X-INK-Signature, Authorization, Accept",
 };
 
+/**
+ * Fallback merchant name for the branded receipt's `proof.merchant`. The
+ * painter only uses this when the brand book has no runtime/site/IG name, so a
+ * best-effort name is fine: prefer order_details.merchant, else the shop
+ * domain's stem (e.g. "buckmason" → "Buckmason").
+ */
+function merchantNameForReceipt(targetSession: any, orderDetails: any): string {
+  const fromOrder = (orderDetails?.merchant || orderDetails?.merchant_name || "").toString().trim();
+  if (fromOrder) return fromOrder;
+  const shop: string = targetSession?.shop || "";
+  const stem = shop.replace(/\.myshopify\.com$/i, "").split(".")[0] || "";
+  return stem ? stem.charAt(0).toUpperCase() + stem.slice(1) : "";
+}
+
 // Handle OPTIONS preflight
 export const loader = async () => {
   return new Response(null, {
@@ -87,6 +101,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       timestamp,
       verify_url,
       device_info,
+      // Best-effort: Alan's webhook may also carry the proof's shop_id +
+      // order_details. Used (when present) to paint the branded receipt email.
+      shop_id,
+      order_details,
     } = payload;
 
     console.log("📦 Webhook data:", {
@@ -365,6 +383,86 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             console.log("   - Phone:", customerPhone);
             console.log("   - Email:", customerEmail);
 
+            // ── BRANDED RECEIPT EMAIL (delivered case) ──
+            // Paint the SAME branded receipt the tap page is built from
+            // (brand book's published page + the proof) and send it via
+            // SendGrid. This REPLACES the old generic delivered email when it
+            // succeeds. Best-effort + fully guarded: if the book or customer
+            // email is missing — or anything throws — we fall straight through
+            // to the existing NotificationService.dispatch path below, so we
+            // never regress or send nothing. The webhook must never break.
+            let brandedReceiptSent = false;
+            if (status === "delivered") {
+              try {
+                const { fetchBrandBook, buildReceiptEmailData, renderReceiptEmail } =
+                  await import("../services/receipt-email");
+                const sgModule = await import("@sendgrid/mail");
+                const sendgrid = sgModule.default;
+
+                const sgApiKey = process.env.SENDGRID_API_KEY;
+                const sgFromEmail = process.env.SENDGRID_FROM_EMAIL || "noreply@in.ink";
+
+                // shop_id comes from Alan's webhook payload when present;
+                // fetchBrandBook returns null on anything missing/erroring.
+                const book = shop_id ? await fetchBrandBook(String(shop_id)) : null;
+
+                if (book && customerEmail && sgApiKey && verify_url) {
+                  // Map Alan's order_details TOLERANTLY into the shape the
+                  // painter reads: order_details.line_items[*] with
+                  // { title, description, image_url, unit_price, qty }.
+                  // Alan/enroll use `product_details` with { name, image_url,
+                  // price, quantity }, so mirror both.
+                  const od: any = order_details || {};
+                  const rawItems: any[] = od.line_items || od.product_details || [];
+                  const lineItems = (Array.isArray(rawItems) ? rawItems : []).map((it: any) => ({
+                    title: it?.title || it?.name || "",
+                    description: it?.description || "",
+                    image_url: it?.image_url || it?.imageUrl || null,
+                    unit_price: it?.unit_price || it?.price || "",
+                    qty: it?.qty ?? it?.quantity ?? 1,
+                  }));
+
+                  const proof: any = {
+                    merchant: merchantNameForReceipt(targetSession, order_details),
+                    order_id: order_id,
+                    order_details: {
+                      customer_name:
+                        od.customer_name ||
+                        orderData.data.order.customer.firstName ||
+                        customerName ||
+                        "",
+                      order_number: od.order_number || orderName || order_id || "",
+                      line_items: lineItems,
+                    },
+                  };
+
+                  const data = buildReceiptEmailData(book, proof);
+                  const html = renderReceiptEmail(data, {
+                    receiptUrl: verify_url,
+                    qrImageUrl: null,
+                    poweredByInk: true,
+                  });
+
+                  sendgrid.setApiKey(sgApiKey);
+                  await sendgrid.send({
+                    to: customerEmail,
+                    from: sgFromEmail,
+                    subject: `${data.brandName} — your receipt`,
+                    html,
+                  });
+
+                  brandedReceiptSent = true;
+                  console.log(`✅ Branded receipt email sent to ${customerEmail} (${data.brandName})`);
+                } else {
+                  console.log(
+                    `ℹ️ Branded receipt skipped (book: ${!!book}, email: ${!!customerEmail}, sgKey: ${!!sgApiKey}, verify_url: ${!!verify_url}) — falling back to generic path.`
+                  );
+                }
+              } catch (receiptErr: any) {
+                console.error("❌ Branded receipt email failed — falling back to generic path:", receiptErr?.message || receiptErr);
+              }
+            }
+
             // Fetch Merchant Settings from Firestore
             const { default: firestore } = await import("../firestore.server");
             const settingsSnap = await firestore.collection("merchants").where("shopDomain", "==", targetSession.shop).limit(1).get();
@@ -380,6 +478,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                let notificationType: any = null;
                if (status === "delivered") notificationType = "delivered";
                if (status === "verified") notificationType = "deliveryConfirmed";
+
+               // If we already sent the new branded receipt for the delivered
+               // case, don't ALSO fire the old generic delivered notification.
+               if (brandedReceiptSent && notificationType === "delivered") {
+                 console.log("ℹ️ Branded receipt already sent — skipping generic 'delivered' notification.");
+                 notificationType = null;
+               }
 
                if (notificationType) {
                  console.log(`📨 Dispatching immediate [${notificationType}] notification via NotificationService...`);

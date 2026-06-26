@@ -45,6 +45,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             firstName
           }
           proofMetafield: metafield(namespace: "ink", key: "proof_reference") { value }
+          verifyUrlMetafield: metafield(namespace: "ink", key: "verify_url") { value }
         }
       }
     `;
@@ -91,7 +92,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const customerEmail = order.customer?.email;
       const customerPhone = order.customer?.phone;
       const customerName = order.customer?.firstName || "Customer";
-      const verifyUrl = order.proofMetafield?.value ? `https://shop.in.ink/t/${order.proofMetafield.value}` : undefined;
+      // Use the REAL verify_url that Alan's /ink/update webhook stored on the
+      // order (canonical {brand}.in.ink/r/{token}). The old code built
+      // `https://shop.in.ink/t/${proof_reference}` which is a known-bad link
+      // (wrong host + proof_reference is not the token). If no real verify_url
+      // is on the order yet, omit the URL rather than send a broken one.
+      const verifyUrl = order.verifyUrlMetafield?.value || undefined;
 
       console.log(`\n📨 Dispatching immediate [${notificationType}] notification via NotificationService...`);
       console.log(`   - To: ${customerName}`);
