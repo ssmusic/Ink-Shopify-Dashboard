@@ -393,6 +393,12 @@ const BrandingSettings = () => {
   const [guidelinesOpen, setGuidelinesOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Lock the tap screen. When on, each customer's receipt freezes to the tap page
+  // they saw on their FIRST tap (the INK backend snapshots it server-side); the
+  // merchant keeps editing the live page for new customers. Default off → receipts
+  // render live. Persisted to merchants.lock_tap_screen via the settings route.
+  const [lockTapScreen, setLockTapScreen] = useState(false);
+
   // Helper to fetch securely passing App Bridge token
   const fetchSecure = async (path: string, options: RequestInit = {}) => {
     // Determine the host dynamically from the URL or default to current origin
@@ -454,6 +460,46 @@ const BrandingSettings = () => {
     };
     loadMedia();
   }, []);
+
+  // Load the lock-tap-screen flag on mount.
+  useEffect(() => {
+    const loadLock = async () => {
+      try {
+        const data = await fetchSecure("/app/api/settings/lock-tap-screen");
+        if (data && typeof data.lock_tap_screen === "boolean") {
+          setLockTapScreen(data.lock_tap_screen);
+        }
+      } catch (err: any) {
+        console.error("Failed to load lock-tap-screen setting:", err);
+      }
+    };
+    loadLock();
+  }, []);
+
+  // Persist the lock-tap-screen flag. Optimistic; reverts on failure.
+  const toggleLockTapScreen = async (next: boolean) => {
+    const previous = lockTapScreen;
+    setLockTapScreen(next);
+    try {
+      await fetchSecure("/app/api/settings/lock-tap-screen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lock_tap_screen: next }),
+      });
+      toast({
+        description: `Lock the tap screen ${next ? "enabled" : "disabled"}`,
+        duration: 1500,
+      });
+    } catch (err: any) {
+      setLockTapScreen(previous); // revert on failure
+      toast({
+        title: "Failed to save",
+        description: err.message,
+        variant: "destructive",
+        duration: 3000,
+      });
+    }
+  };
 
   const handleFileUpload = async (file: File) => {
     const isVideo = file.type.startsWith("video/");
@@ -615,6 +661,34 @@ const BrandingSettings = () => {
 
   return (
     <Layout>
+      <Layout.AnnotatedSection
+        title="Tap Page"
+        description="Control how each customer's receipt behaves after they tap."
+      >
+        <div className="border border-border rounded-sm p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Label
+                htmlFor="lock-tap-screen"
+                className="text-sm font-medium text-foreground"
+              >
+                Lock the tap screen
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Freeze each customer's receipt to the tap page they saw on their
+                first tap. You can keep editing the live page — new customers see
+                your latest version, but receipts already opened stay as they were.
+              </p>
+            </div>
+            <Switch
+              id="lock-tap-screen"
+              checked={lockTapScreen}
+              onCheckedChange={toggleLockTapScreen}
+            />
+          </div>
+        </div>
+      </Layout.AnnotatedSection>
+
       <Layout.AnnotatedSection
         title="Loading Media"
         description="Upload the videos and images your customers see when they tap. The 'Primary' video is shown during the consumer tap experience!"
