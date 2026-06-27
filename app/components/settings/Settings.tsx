@@ -5,6 +5,7 @@ import PolarisAppLayout from "../PolarisAppLayout";
 import AccountSettings from "./AccountSettings";
 import TagsSettings from "./TagsSettings";
 import BrandingSettings from "./BrandingSettings";
+import TapPageSettings from "./TapPageSettings";
 import CommunicationSettings from "./CommunicationSettings";
 import UserManagementSettings from "./UserManagementSettings";
 import DeliveryModeSettings from "./DeliveryModeSettings";
@@ -14,6 +15,7 @@ const tabs = [
   { id: "delivery", content: "Delivery" },
   { id: "tags", content: "Inventory" },
   { id: "branding", content: "Media" },
+  { id: "tap-page", content: "Tap Page" },
   { id: "communication", content: "Notifications" },
   { id: "users", content: "Users" },
 ];
@@ -37,6 +39,7 @@ const Settings = ({ initialData }: { initialData?: any }) => {
       case "delivery": return <DeliveryModeSettings />;
       case "tags": return <TagsSettings inventoryData={initialData?.inventoryData} />;
       case "branding": return <BrandingSettings />;
+      case "tap-page": return <TapPageSettings />;
       case "communication": return <CommunicationSettings />;
       case "users": return <UserManagementSettings />;
       default: return <AccountSettings />;
