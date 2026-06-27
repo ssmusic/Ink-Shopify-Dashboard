@@ -243,7 +243,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       let alanMerchantId: string | null = null;
       try {
         if (doc?.data()?.shop_id) {
-          alanMerchantId = doc.data().shop_id as string;
+          alanMerchantId = doc.data()?.shop_id as string;
           console.log(`[settings/media] Using cached merchant_id from Firestore: ${alanMerchantId}`);
         } else if (shopDomain) {
           const { getShopIdByDomain } = await import("../services/ink-api.server");
