@@ -78,15 +78,36 @@ mutation SetInkMetafields($metafields: [MetafieldsSetInput!]!) {
 }
 `;
 
-// Order detail fetch for auto-enroll — line items (incl. product image),
-// customer, shipping address, total, and the existing proof_reference metafield
-// (for idempotency).
+// Order detail fetch for auto-enroll — line items (incl. product image +
+// variant id), customer (incl. buyer-history profile: order count, lifetime
+// spend, tags, marketing consent), shipping address, total, acquisition source,
+// and the existing proof_reference metafield (for idempotency).
+//
+// Buyer-profile fields verified valid in Admin API 2024-10 / 2025-10:
+//   Customer.id, .numberOfOrders (UnsignedInt64 → string), .amountSpent (MoneyV2),
+//   .tags ([String!]!), .emailMarketingConsent/.smsMarketingConsent { marketingState }.
+//   Order.sourceName (String, nullable). All nullable — handle null downstream.
+//   (landing_site / referring_site are NOT fetched here — they live under
+//    customerJourneySummary which needs extra analytics scope. We read them
+//    from the order webhook payload instead, where they're already present.)
 const ORDER_DETAIL_QUERY = `
   query AutoEnrollOrder($id: ID!) {
     order(id: $id) {
       id
       name
-      customer { email phone firstName lastName }
+      sourceName
+      customer {
+        id
+        email
+        phone
+        firstName
+        lastName
+        numberOfOrders
+        amountSpent { amount currencyCode }
+        tags
+        emailMarketingConsent { marketingState }
+        smsMarketingConsent { marketingState }
+      }
       shippingAddress { name address1 address2 city province zip country }
       totalPriceSet { shopMoney { amount currencyCode } }
       lineItems(first: 20) {
@@ -97,6 +118,7 @@ const ORDER_DETAIL_QUERY = `
             sku
             originalUnitPriceSet { shopMoney { amount } }
             image { url }
+            variant { id }
           }
         }
       }
@@ -251,7 +273,38 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             quantity: n.quantity ?? 1,
             price: n.originalUnitPriceSet?.shopMoney?.amount ?? "0",
             image_url: n.image?.url || null,
+            // Variant id → the backend has a validated slot for this; the
+            // first-tap resolver uses it to map product → variant page.
+            variant_id: n.variant?.id || null,
           }));
+
+          // ─── Buyer profile (additive, null-safe) ─────────────────────────
+          // Everything degrades gracefully for guest checkout (no customer
+          // object): customer_profile stays null and the backend tiers as 'new'.
+          const c = order.customer;
+          const customer_profile = c
+            ? {
+                customer_id: c.id || null,
+                // numberOfOrders is UnsignedInt64 (string) — coerce to int.
+                orders_count: c.numberOfOrders != null ? Number(c.numberOfOrders) : 0,
+                // amountSpent.amount is a Decimal string — keep as-is; backend coerces.
+                total_spent: c.amountSpent?.amount ?? "0",
+                currency: c.amountSpent?.currencyCode || null,
+                tags: Array.isArray(c.tags) ? c.tags : [],
+                // Pass the enum string straight through; the backend normalizes
+                // SUBSCRIBED/NOT_SUBSCRIBED/etc. into a tri-state boolean.
+                email_consent: c.emailMarketingConsent?.marketingState ?? null,
+                sms_consent: c.smsMarketingConsent?.marketingState ?? null,
+              }
+            : null;
+
+          // Acquisition: sourceName from GraphQL; landing/referring from the
+          // raw order webhook payload (already in hand, no extra scope/fetch).
+          const acquisition = {
+            source_name: order.sourceName || data?.source_name || null,
+            landing_site: data?.landing_site || null,
+            referring_site: data?.referring_site || null,
+          };
           const addr = order.shippingAddress;
           // Recipient/customer name — Alan's order mapper reads
           // shipping_address.name as the customer name fallback, so carry it
@@ -288,6 +341,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }
           }
 
+          // Order total → forwarded into order_details (the interactive enroll
+          // path already does this; the auto path used to drop it).
+          const total_price = order.totalPriceSet?.shopMoney?.amount ?? null;
+          const order_currency = order.totalPriceSet?.shopMoney?.currencyCode ?? null;
+
           inkToken = genNfcToken();
           const runEnroll = (key: string) =>
             enrollOrder(
@@ -304,7 +362,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               undefined, // photo_hashes
               carrier_name,
               tracking_number,
-              finalPhone || order.customer?.phone || null
+              finalPhone || order.customer?.phone || null,
+              {
+                total_price,
+                currency: order_currency,
+                customer_profile,
+                acquisition,
+              }
             );
 
           let inkData: any;

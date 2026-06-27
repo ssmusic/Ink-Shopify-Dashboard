@@ -20,6 +20,22 @@ interface EnrollPayload {
   customer_phone_last4?: string;
   warehouse_gps?: { lat: number; lng: number };
   merchant?: string;
+  // Buyer profile (additive, null-safe) — forwarded verbatim to the backend
+  // enroll, which computes customer_tier and stamps first-class proof fields.
+  customer_profile?: {
+    customer_id?: string | null;
+    orders_count?: number | null;
+    total_spent?: string | number | null;
+    currency?: string | null;
+    tags?: string[];
+    email_consent?: string | boolean | null;
+    sms_consent?: string | boolean | null;
+  } | null;
+  acquisition?: {
+    source_name?: string | null;
+    landing_site?: string | null;
+    referring_site?: string | null;
+  } | null;
 }
 
 interface EnrollResponse {

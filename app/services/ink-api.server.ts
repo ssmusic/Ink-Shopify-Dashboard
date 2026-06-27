@@ -199,10 +199,32 @@ export const loginUser = async (email: string, password: string) => {
 };
 
 // Merchant implementation - requires Bearer ink_api_key
+// Buyer-profile + order-economics extras, threaded through to the backend
+// enroll so the proof carries a first-class buyer profile (tier keystone).
+// Every field is optional/null-safe — omit the whole object for legacy callers.
+export interface EnrollExtras {
+    total_price?: string | number | null;
+    currency?: string | null;
+    customer_profile?: {
+        customer_id?: string | null;
+        orders_count?: number | null;
+        total_spent?: string | number | null;
+        currency?: string | null;
+        tags?: string[];
+        email_consent?: string | boolean | null;
+        sms_consent?: string | boolean | null;
+    } | null;
+    acquisition?: {
+        source_name?: string | null;
+        landing_site?: string | null;
+        referring_site?: string | null;
+    } | null;
+}
+
 export const enrollOrder = async (
-    apiKey: string, 
-    orderId: string, 
-    nfcToken: string, 
+    apiKey: string,
+    orderId: string,
+    nfcToken: string,
     orderNumber: string,
     customerEmail: string,
     shippingAddress: any,
@@ -213,7 +235,8 @@ export const enrollOrder = async (
     photoHashes?: string[],
     carrierName?: string | null,
     trackingNumber?: string | null,
-    customerPhone?: string | null
+    customerPhone?: string | null,
+    extras?: EnrollExtras
 ) => {
     // Alan's API was changed to require order details nested in an
     // `order_details` JSON object rather than as separate top-level fields.
@@ -238,6 +261,11 @@ export const enrollOrder = async (
             customer_phone: customerPhone || "",
             shipping_address: shippingAddress,
             product_details: productDetails,
+            // Order economics — forwarded into order_details (backend
+            // validateOrderDetails sanitizes total_price/currency). The auto
+            // path used to drop these; the interactive path already nested them.
+            ...(extras?.total_price != null ? { total_price: extras.total_price } : {}),
+            ...(extras?.currency != null ? { currency: extras.currency } : {}),
         },
     };
 
@@ -247,6 +275,12 @@ export const enrollOrder = async (
     if (photoHashes && photoHashes.length > 0) payload.photo_hashes = photoHashes;
     if (carrierName) payload.carrier_name = carrierName;
     if (trackingNumber) payload.tracking_number = trackingNumber;
+
+    // Buyer profile (top-level — the backend reads customer_profile/acquisition
+    // off req.body and computes customer_tier from them). Null-safe: a guest
+    // checkout passes customer_profile:null → backend tiers as 'new'.
+    if (extras?.customer_profile != null) payload.customer_profile = extras.customer_profile;
+    if (extras?.acquisition != null) payload.acquisition = extras.acquisition;
 
     const enrollUrl = getAlanUrl('/api/enroll');
     console.log("[ink-api] enrollOrder →", enrollUrl);

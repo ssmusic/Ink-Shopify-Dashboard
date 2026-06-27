@@ -97,9 +97,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           order(id: $id) {
             id
             name
+            sourceName
             customer {
+              id
               phone
               email
+              numberOfOrders
+              amountSpent { amount currencyCode }
+              tags
+              emailMarketingConsent { marketingState }
+              smsMarketingConsent { marketingState }
             }
             shippingAddress {
               address1
@@ -129,6 +136,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   image {
                     url
                   }
+                  variant { id }
                 }
               }
             }
@@ -278,6 +286,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         quantity: n.quantity ?? 1,
         price: n.originalUnitPriceSet?.shopMoney?.amount ?? "0",
         image_url: n.image?.url || null,
+        // Variant id → backend has a validated slot; first-tap resolver maps
+        // product → variant page. Null when the lookup-by-name fallback was used.
+        variant_id: n.variant?.id || null,
       };
     });
 
@@ -299,6 +310,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const total_price = orderData?.data?.order?.totalPriceSet?.shopMoney?.amount;
     const currency = orderData?.data?.order?.totalPriceSet?.shopMoney?.currencyCode;
 
+    // ─── Buyer profile (additive, null-safe) ─────────────────────────────
+    // Degrades cleanly: no customer object (or lookup-by-name fallback) →
+    // customer_profile null → backend tiers as 'new'.
+    const cust = orderData?.data?.order?.customer;
+    const customer_profile = cust
+      ? {
+          customer_id: cust.id || null,
+          orders_count: cust.numberOfOrders != null ? Number(cust.numberOfOrders) : 0,
+          total_spent: cust.amountSpent?.amount ?? "0",
+          currency: cust.amountSpent?.currencyCode || null,
+          tags: Array.isArray(cust.tags) ? cust.tags : [],
+          email_consent: cust.emailMarketingConsent?.marketingState ?? null,
+          sms_consent: cust.smsMarketingConsent?.marketingState ?? null,
+        }
+      : null;
+
+    // Acquisition: only sourceName is cleanly available on this interactive
+    // (GraphQL-only) path — landing/referring need the order webhook payload.
+    const sourceName = orderData?.data?.order?.sourceName || null;
+    const acquisition = sourceName
+      ? { source_name: sourceName, landing_site: null, referring_site: null }
+      : null;
+
     const enrollPayload: any = {
       order_id,
       nfc_token: token,
@@ -312,6 +346,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ...(total_price ? { total_price } : {}),
         ...(currency ? { currency } : {}),
       },
+      ...(customer_profile ? { customer_profile } : {}),
+      ...(acquisition ? { acquisition } : {}),
     };
 
     if (carrier_name) enrollPayload.carrier_name = carrier_name;
