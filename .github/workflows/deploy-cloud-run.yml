@@ -1,0 +1,74 @@
+# Deploy the shopify-app Cloud Run service FROM GitHub — not a laptop.
+#
+# Once active, the live shopify-app always equals what's on `main` in GitHub.
+# (`shopify app deploy` — the package.json script — is a SEPARATE concern that
+#  pushes app config/extensions to Shopify's platform; this workflow only ships
+#  the Cloud Run web server that receives orders/create webhooks → /enroll.)
+#
+# ── ACTIVATION (one-time, needs the founder — it's GCP IAM, I can't do it) ──
+# 1. Create a deploy service account in project inink-c76d3 with these roles:
+#      roles/run.admin            (deploy Cloud Run)
+#      roles/cloudbuild.builds.editor   (build the image with --source)
+#      roles/artifactregistry.writer    (push the built image)
+#      roles/storage.admin        (Cloud Build staging bucket)
+#      roles/iam.serviceAccountUser     (act as the service's runtime SA)
+# 2. Add its JSON key as a repo secret:
+#      gcloud iam service-accounts keys create sa.json --iam-account=<the-sa-email>
+#      gh secret set GCP_SA_KEY --repo ssmusic/Ink-Shopify-Dashboard < sa.json && rm sa.json
+#    (A long-lived key is the quick path; the more-secure option is Workload
+#     Identity Federation — swap the auth step's `credentials_json` for
+#     `workload_identity_provider` + `service_account`. Either works here.)
+# 3. Run it once manually (Actions tab → "Run workflow") to confirm it deploys +
+#    smoke passes. main already equals live, so that first run just re-ships the
+#    same code — safe proof.
+# 4. THEN flip on auto: uncomment the `push:` block below.
+#
+# SAFE-BY-DEFAULT: `gcloud run deploy --source .` with no --set-env-vars /
+# --clear-env-vars PRESERVES the service's existing env vars and settings, and
+# routes 100% traffic to the new revision. Do not add env flags here unless you
+# intend to change them.
+# ──────────────────────────────────────────────────────────────────────────
+
+name: Deploy shopify-app · Cloud Run
+
+on:
+  workflow_dispatch: {}
+  # push:
+  #   branches: [main]
+
+concurrency:
+  group: deploy-shopify-app
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run (preserves existing env + routes traffic)
+        run: |
+          gcloud run deploy shopify-app \
+            --source . \
+            --project inink-c76d3 \
+            --region us-central1 \
+            --quiet
+
+      - name: Smoke check (fail loud if the service is unhealthy)
+        run: |
+          set -euo pipefail
+          url="https://shopify-app-3ijhzmtboa-uc.a.run.app/"
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$url")
+          echo "shopify-app -> HTTP $code"
+          if [ -z "$code" ] || [ "$code" = "000" ] || [ "$code" -ge 500 ]; then
+            echo "SMOKE FAILED — shopify-app is unhealthy after deploy"; exit 1
+          fi
+          echo "smoke ok"
