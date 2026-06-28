@@ -33,8 +33,11 @@ name: Deploy shopify-app · Cloud Run
 
 on:
   workflow_dispatch: {}
-  # push:
-  #   branches: [main]
+  push:
+    branches: [main]
+    paths-ignore:
+      - '.github/**'
+      - '**.md'
 
 concurrency:
   group: deploy-shopify-app
