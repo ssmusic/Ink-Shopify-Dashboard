@@ -3,9 +3,9 @@
 // $2.50 completed-return usage charge. There's no browser session on this call,
 // so we load the merchant's OFFLINE session via unauthenticated.admin(shop).
 //
-// Auth: the shared INK_ADMIN_SECRET (same secret the app uses to call the
-// backend's /admin/* routes — both services already hold it). Sent as
-// X-Ink-Admin-Secret.
+// Auth: the shared INK_RETURN_WEBHOOK_SECRET (the same secret the existing
+// return-status bridge in api.return-status.tsx uses; falls back to
+// INK_ADMIN_SECRET). Sent as X-Ink-Secret or a Bearer token.
 //
 // INERT until managed pricing is configured: reportUsageCharge() no-ops
 // (skipped:"no_usage_line") until the merchant is on a managed-pricing plan
@@ -30,8 +30,12 @@ function json(body: unknown, status = 200) {
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  const secret = request.headers.get("X-Ink-Admin-Secret");
-  if (!process.env.INK_ADMIN_SECRET || secret !== process.env.INK_ADMIN_SECRET) {
+  const expected =
+    process.env.INK_RETURN_WEBHOOK_SECRET || process.env.INK_ADMIN_SECRET;
+  const provided =
+    request.headers.get("X-Ink-Secret") ||
+    request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
+  if (!expected || provided !== expected) {
     return json({ error: "unauthorized" }, 401);
   }
 
@@ -47,7 +51,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   } catch {
     body = {};
   }
-  const shop = body.shop || body.shop_domain;
+  const shop = body.shop_domain || body.shop;
   const returnId = body.return_id || body.returnId;
   const amountUsd =
     typeof body.amount === "number" && body.amount > 0 ? body.amount : COMPLETED_RETURN_FEE_USD;
