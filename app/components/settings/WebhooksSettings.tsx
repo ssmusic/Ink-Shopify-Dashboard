@@ -6,22 +6,20 @@ import { toast } from "../../hooks/use-toast";
 import { Eye, EyeOff, Check, AlertTriangle } from "lucide-react";
 import { LiveRegion } from "../ui/live-region";
 
-const mockActivityLog = [
-  { id: 1, timestamp: "Feb 2, 11:40 AM", event: "Order #1064 verified", statusCode: 200 },
-  { id: 2, timestamp: "Feb 2, 11:36 AM", event: "Order #1064 enrolled", statusCode: 200 },
-  { id: 3, timestamp: "Feb 1, 3:25 PM", event: "Order #1063 verified", statusCode: 200 },
-  { id: 4, timestamp: "Feb 1, 2:10 PM", event: "Order #1062 verified", statusCode: 200 },
-  { id: 5, timestamp: "Jan 31, 4:45 PM", event: "Order #1061 enrolled", statusCode: 201 },
-  { id: 6, timestamp: "Jan 31, 11:20 AM", event: "Order #1060 verified", statusCode: 500 },
-  { id: 7, timestamp: "Jan 30, 3:15 PM", event: "Order #1059 verified", statusCode: 200 },
-  { id: 8, timestamp: "Jan 30, 10:30 AM", event: "Order #1058 enrolled", statusCode: 404 },
-];
+// Real webhook activity will populate here once an activity feed is wired.
+// Empty until then — no mock data (a Shopify reviewer must not see fabricated events).
+const activityLog: {
+  id: number;
+  timestamp: string;
+  event: string;
+  statusCode: number;
+}[] = [];
 
 const WebhooksSettings = () => {
   const [webhookUrl, setWebhookUrl] = useState("https://api.in.ink/shopify/webhook");
-  const [hmacSecret, setHmacSecret] = useState("sk_live_abc123xyz789");
+  const [hmacSecret, setHmacSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
-  const [isConnected, setIsConnected] = useState(true);
+  const [isConnected] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
   const [announcement, setAnnouncement] = useState("");
 
@@ -218,7 +216,10 @@ const WebhooksSettings = () => {
         </h2>
 
         <div className="space-y-2" role="log" aria-label="Webhook activity log">
-          {mockActivityLog.map((activity) => (
+          {activityLog.length === 0 && (
+            <p className="text-sm text-muted-foreground py-2">No webhook activity yet.</p>
+          )}
+          {activityLog.map((activity) => (
             <div
               key={activity.id}
               className="flex items-center justify-between py-2 border-b border-border last:border-0"
