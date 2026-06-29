@@ -156,7 +156,9 @@ export async function reportUsageCharge(
     variables: {
       subscriptionLineItemId,
       description: opts.description,
-      price: { amount: opts.amountUsd, currencyCode: "USD" },
+      // MoneyInput.amount is a Decimal — send it as a string to avoid float
+      // precision surprises on the money path.
+      price: { amount: opts.amountUsd.toFixed(2), currencyCode: "USD" },
       idempotencyKey: opts.idempotencyKey,
     },
   });
