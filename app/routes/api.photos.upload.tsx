@@ -189,7 +189,7 @@ async function createAdminClient(session: any): Promise<any> {
   // Using 'any' type to bypass strict type checking for the custom implementation
   return {
     graphql: async (query: string, options?: any) => {
-      const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
+      const response = await fetch(`https://${session.shop}/admin/api/2025-10/graphql.json`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -133,7 +133,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log(`🔍 Attempting to locate order (Raw ID: ${rawOrderId}, Proof ID: ${proof_ref || 'None'})`);
 
     const adminGraphqlForSession = async (session: any, query: string, variables?: any) => {
-      const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
+      const response = await fetch(`https://${session.shop}/admin/api/2025-10/graphql.json`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -225,7 +225,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       // Re-create the adminGraphql wrapper for the correct target session so the rest of the code works
       const adminGraphql = async (query: string, variables?: any) => {
-        const response = await fetch(`https://${targetSession.shop}/admin/api/2024-10/graphql.json`, {
+        const response = await fetch(`https://${targetSession.shop}/admin/api/2025-10/graphql.json`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
