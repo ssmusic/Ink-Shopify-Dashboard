@@ -305,6 +305,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       nfc_uid: serial_number,
       order_details: {
         order_number: numericOrderId,
+        // Stamp the store domain onto the proof so the backend can later call
+        // the Shopify app's /api/return-status (which needs shop_domain to load
+        // that store's session) for returns back-and-forth.
+        shop_domain: session.shop,
         customer_email: orderData?.data?.order?.customer?.email || "unknown@example.com",
         customer_phone: customer_phone_last4 || "1234",
         shipping_address,
