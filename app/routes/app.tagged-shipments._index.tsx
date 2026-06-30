@@ -46,6 +46,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               firstName lastName email
             }
             shippingAddress { address1 city provinceCode zip }
+            billingAddress { address1 city provinceCode zip }
             tags
             metafields(namespace: "ink", first: 10) {
               edges { node { key value } }
@@ -151,9 +152,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         ? `${order.customer.firstName} ${order.customer.lastName}`
         : "Guest",
       customerEmail: order.customer?.email || "",
-      // THIS order's ship-to — never the customer's saved default address
-      // (which leaks a stale/previous address onto a new order).
-      customerAddress: order.shippingAddress,
+      // THIS order's ship-to, falling back to the billing address when there's
+      // no shipping address (pickup / billing-only orders). NEVER the customer's
+      // saved default — that leaks a stale/previous address onto a new order.
+      customerAddress: order.shippingAddress ?? order.billingAddress,
       date: new Date(order.createdAt).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
