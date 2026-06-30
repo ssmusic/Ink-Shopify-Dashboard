@@ -44,8 +44,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             totalPriceSet { shopMoney { amount currencyCode } }
             customer {
               firstName lastName email
-              defaultAddress { address1 city provinceCode zip }
             }
+            shippingAddress { address1 city provinceCode zip }
             tags
             metafields(namespace: "ink", first: 10) {
               edges { node { key value } }
@@ -151,7 +151,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         ? `${order.customer.firstName} ${order.customer.lastName}`
         : "Guest",
       customerEmail: order.customer?.email || "",
-      customerAddress: order.customer?.defaultAddress,
+      // THIS order's ship-to — never the customer's saved default address
+      // (which leaks a stale/previous address onto a new order).
+      customerAddress: order.shippingAddress,
       date: new Date(order.createdAt).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
