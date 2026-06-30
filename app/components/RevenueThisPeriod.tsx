@@ -23,7 +23,7 @@ const RevenueThisPeriod = () => {
     <div
       className="bg-card border border-border rounded-md p-4 sm:p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] relative"
       role="region"
-      aria-label="Total value protected"
+      aria-label="Enrolled order value"
     >
       {isLoading && (
         <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center z-10 rounded-md transition-all duration-300">
@@ -33,7 +33,7 @@ const RevenueThisPeriod = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-foreground">Total Value Protected</h3>
+          <h3 className="text-sm font-semibold text-foreground">Enrolled Order Value</h3>
         </div>
         <span className="text-xs text-muted-foreground">Last 30 Days</span>
       </div>

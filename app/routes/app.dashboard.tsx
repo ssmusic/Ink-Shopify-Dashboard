@@ -10,6 +10,7 @@ import {
   EmptyState,
   Banner,
   Layout,
+  Collapsible,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { mintMagicToken } from "../services/ink-api.server";
@@ -49,6 +50,11 @@ export const action = async ({
 const Dashboard = () => {
   const [hasOrders, setHasOrders] = useState(true);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  // The full operational-analytics BI lives in the standalone ink. dashboard;
+  // here it's tucked behind an Advanced disclosure (collapsed by default) so the
+  // embed leads with the lightweight engagement cards + handoff, not a second
+  // comprehensive dashboard to keep in sync.
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const fetcher = useFetcher<typeof action>();
   const pendingWindow = useRef<Window | null>(null);
@@ -137,28 +143,13 @@ const Dashboard = () => {
             </InlineStack>
           </Card>
 
-          {/* Operational Analytics (Metabase) */}
-          <Card padding="0">
-            <div style={{ padding: "0" }}>
-              <iframe
-                src="https://metabase-production-afb0.up.railway.app/public/dashboard/2987f9a3-e933-48d4-bb41-ad571c22c565#theme=transparent"
-                frameBorder="0"
-                width="100%"
-                height="800"
-                allowTransparency
-                title="Operational Analytics Dashboard"
-                style={{ display: "block" }}
-              ></iframe>
-            </div>
-          </Card>
-
           {/* Row 1: Time to Engagement + Engagement Funnel */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <TimeToEngagement />
             <EngagementFunnel />
           </div>
 
-          {/* Row 2: NFC Tag Inventory + Total Value Protected */}
+          {/* Row 2: Tag Inventory + Enrolled Order Value */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <NFCTagInventory />
             <RevenueThisPeriod />
@@ -175,6 +166,48 @@ const Dashboard = () => {
 
           {/* Row 4: Communications — full width */}
           <CommunicationsUsage />
+
+          {/* Advanced — the full operational-analytics BI, collapsed by default.
+              Relocated here (not deleted) so the embed stays lean; the rich
+              dashboard is the standalone ink. app. */}
+          <Card>
+            <BlockStack gap="300">
+              <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
+                <BlockStack gap="100">
+                  <Text as="h2" variant="headingMd">
+                    Advanced — operational analytics
+                  </Text>
+                  <Text as="p" tone="subdued">
+                    Detailed operational metrics. The full post-purchase dashboard
+                    lives in your ink. app.
+                  </Text>
+                </BlockStack>
+                <Button
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  ariaExpanded={showAdvanced}
+                  ariaControls="advanced-analytics"
+                  disclosure={showAdvanced ? "up" : "down"}
+                >
+                  {showAdvanced ? "Hide" : "Show"}
+                </Button>
+              </InlineStack>
+              <Collapsible
+                id="advanced-analytics"
+                open={showAdvanced}
+                transition={{ duration: "200ms", timingFunction: "ease-in-out" }}
+              >
+                <iframe
+                  src="https://metabase-production-afb0.up.railway.app/public/dashboard/2987f9a3-e933-48d4-bb41-ad571c22c565#theme=transparent"
+                  frameBorder="0"
+                  width="100%"
+                  height="800"
+                  allowTransparency
+                  title="Operational Analytics Dashboard"
+                  style={{ display: "block" }}
+                ></iframe>
+              </Collapsible>
+            </BlockStack>
+          </Card>
         </BlockStack>
       </Page>
     </PolarisAppLayout>
