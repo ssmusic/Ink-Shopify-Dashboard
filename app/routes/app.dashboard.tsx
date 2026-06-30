@@ -23,6 +23,7 @@ import TimeToEngagement from "~/components/TimeToEngagement";
 import CurrentPlanCard from "~/components/CurrentPlanCard";
 import BillingWidget from "~/components/billing/BillingWidget";
 import CommunicationsUsage from "~/components/CommunicationsUsage";
+import AdvancedAnalytics from "~/components/AdvancedAnalytics";
 import { toast } from "sonner"; // Replaced with Sonner to match previous setup
 
 // Mint a single-use magic-login token for this shop and hand back a
@@ -196,15 +197,7 @@ const Dashboard = () => {
                 open={showAdvanced}
                 transition={{ duration: "200ms", timingFunction: "ease-in-out" }}
               >
-                <iframe
-                  src="https://metabase-production-afb0.up.railway.app/public/dashboard/2987f9a3-e933-48d4-bb41-ad571c22c565#theme=transparent"
-                  frameBorder="0"
-                  width="100%"
-                  height="800"
-                  allowTransparency
-                  title="Operational Analytics Dashboard"
-                  style={{ display: "block" }}
-                ></iframe>
+                {showAdvanced ? <AdvancedAnalytics /> : null}
               </Collapsible>
             </BlockStack>
           </Card>
