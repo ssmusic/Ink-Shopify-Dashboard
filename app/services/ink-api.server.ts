@@ -123,6 +123,41 @@ export const getMerchantTapStats = async (
     }
 };
 
+export type MerchantInsights = {
+    sample_size: number;
+    capped: boolean;
+    throughput: { enrollments: number; opened: number; open_rate_pct: number };
+    integrity: {
+        payload_integrity_pct: number;
+        geofence: { avg_distance_m: number | null; gps_count: number; ip_count: number };
+        outcomes: { ACCEPTED: number; UNCONFIRMED: number; DISPUTED: number; EXPIRED: number; RETURNED: number };
+    };
+};
+
+// Server-side operational + integrity aggregate for the embed's Advanced section
+// (GET /api/merchant-insights, admin-secret + merchant_id). Reads RAW proofs, so
+// it's accurate where /admin/proofs is lossy (preserves RETURNED + true gps/ip).
+// Returns null on any failure so the Advanced card degrades to "unavailable".
+export const getMerchantInsights = async (
+    shopDomain: string,
+): Promise<MerchantInsights | null> => {
+    try {
+        const shopId = await getShopIdByDomain(shopDomain);
+        const res = await fetch(
+            getAlanUrl(`/merchant-insights?merchant_id=${encodeURIComponent(shopId)}`),
+            { headers: { "X-Admin-Secret": INK_ADMIN_SECRET as string } },
+        );
+        if (!res.ok) {
+            console.warn(`[ink-api] getMerchantInsights ${res.status} for ${shopDomain}`);
+            return null;
+        }
+        return (await res.json()) as MerchantInsights;
+    } catch (e: any) {
+        console.error("[ink-api] getMerchantInsights error:", e?.message || e);
+        return null;
+    }
+};
+
 export const adminCreateUser = async (merchantId: string, name: string, email: string, password?: string) => {
     const payload: any = { merchant_id: merchantId, name, email };
     if (password) payload.password = password;
