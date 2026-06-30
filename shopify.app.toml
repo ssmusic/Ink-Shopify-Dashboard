@@ -27,11 +27,26 @@ api_version = "2025-10"
   topics = [ "orders/fulfilled" ]
   uri = "/webhooks/orders_fulfilled"
 
+  # Returns ingestion (READ / reconciliation). One handler serves every returns/*
+  # topic and branches on the topic. Catches returns created natively, by us, or
+  # by Loop/AfterShip — they all write Shopify's Return object.
+  [[webhooks.subscriptions]]
+  topics = [ "returns/request", "returns/approve", "returns/decline", "returns/cancel", "returns/close", "returns/reopen", "returns/update" ]
+  uri = "/webhooks/returns"
+
+  # Refund = the return's terminal money event. Phase 1 mirrors it into ink for
+  # visibility; the $2.50 billing fire is deferred (see ink-backend ingestion route).
+  [[webhooks.subscriptions]]
+  topics = [ "refunds/create" ]
+  uri = "/webhooks/refunds_create"
+
 
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_customers,read_files,write_files,read_fulfillments,write_fulfillments,read_metaobjects,write_metaobjects,read_online_store_pages,write_online_store_pages,read_orders,write_orders,write_shipping,write_themes"
+# read_returns added for Phase-1 returns ingestion. write_returns is deferred to
+# Phase 2 (driving returns) so we don't carry an unused scope into App Review.
+scopes = "read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_customers,read_files,write_files,read_fulfillments,write_fulfillments,read_metaobjects,write_metaobjects,read_online_store_pages,write_online_store_pages,read_orders,write_orders,read_returns,write_shipping,write_themes"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

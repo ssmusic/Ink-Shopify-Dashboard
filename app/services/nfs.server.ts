@@ -204,6 +204,46 @@ export const NFSService = {
   },
 
   /**
+   * Forwards a Shopify return/refund lifecycle event INTO ink-backend so it can
+   * mirror the return state onto the proof (read-only reconciliation). Signed
+   * with the shared INK_RETURN_WEBHOOK_SECRET (X-Ink-Secret), matching the
+   * existing ink↔Shopify bridge. Best-effort: never throws — a webhook handler
+   * must still 200 so Shopify doesn't retry the whole event.
+   */
+  async ingestReturnEvent(payload: {
+    shop_domain: string;
+    order_id: string | number;
+    event_type: string;
+    return?: unknown;
+    refund?: unknown;
+  }): Promise<void> {
+    const secret = process.env.INK_RETURN_WEBHOOK_SECRET || process.env.INK_ADMIN_SECRET;
+    if (!secret) {
+      console.warn("⚠️ INK_RETURN_WEBHOOK_SECRET not set — skipping return ingest to ink.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${NFS_API_URL}/api/webhooks/shopify-returns`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Ink-Secret": secret,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ ink. Return ingest failed [${response.status}]:`, errorText);
+      } else {
+        console.log(`✅ ink. Return ingest OK (${payload.event_type}) for order ${payload.order_id}`);
+      }
+    } catch (err: any) {
+      console.error("❌ ink. Return ingest error:", err?.message || err);
+    }
+  },
+
+  /**
    * Verifies the HMAC signature of an incoming webhook.
    */
   verifyWebhookSignature(payload: string, signature: string): boolean {
