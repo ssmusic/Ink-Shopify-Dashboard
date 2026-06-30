@@ -93,7 +93,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       graphqlClient = {
         graphql: async (query: string, options?: any) => {
-          const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
+          const response = await fetch(`https://${session.shop}/admin/api/2025-10/graphql.json`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

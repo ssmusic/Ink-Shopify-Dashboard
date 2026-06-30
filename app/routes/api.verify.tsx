@@ -370,7 +370,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     if (!sess.accessToken) continue;
 
                     const adminGraphql = async (query: string, variables?: any) => {
-                        const response = await fetch(`https://${sess.shop}/admin/api/2024-10/graphql.json`, {
+                        const response = await fetch(`https://${sess.shop}/admin/api/2025-10/graphql.json`, {
                             method: "POST",
                             headers: {
                                 "Content-Type": "application/json",
@@ -410,7 +410,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 const orderGid = foundOrderGid;
 
                 const adminGraphql = async (query: string, variables?: any) => {
-                    const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
+                    const response = await fetch(`https://${session.shop}/admin/api/2025-10/graphql.json`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -537,7 +537,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 
                 // Create admin GraphQL helper
                 const adminGraphql = async (query: string, variables?: any) => {
-                    const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
+                    const response = await fetch(`https://${session.shop}/admin/api/2025-10/graphql.json`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",

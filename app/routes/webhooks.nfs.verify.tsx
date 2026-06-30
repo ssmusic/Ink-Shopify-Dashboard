@@ -60,7 +60,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Create admin client with graphql method
     const client = {
       request: async (query: string, options?: any) => {
-        const response = await fetch(`https://${session.shop}/admin/api/2024-10/graphql.json`, {
+        const response = await fetch(`https://${session.shop}/admin/api/2025-10/graphql.json`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

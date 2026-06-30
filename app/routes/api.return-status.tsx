@@ -114,7 +114,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const adminGraphql = async (query: string, variables: unknown) => {
     const resp = await fetch(
-      `https://${session.shop}/admin/api/2024-10/graphql.json`,
+      `https://${session.shop}/admin/api/2025-10/graphql.json`,
       {
         method: "POST",
         headers: {
