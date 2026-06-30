@@ -11,6 +11,14 @@ automatically_update_urls_on_dev = true
 [webhooks]
 api_version = "2025-10"
 
+  # MANDATORY GDPR / privacy compliance webhooks. Declared as ONE block with
+  # compliance_topics + a single uri (Shopify's prescribed shape). Handled by
+  # app/routes/webhooks.compliance.tsx, which HMAC-verifies (401 on bad sig) and
+  # branches on topic. Unregistered compliance webhooks = automatic review fail.
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/webhooks/compliance"
+
   [[webhooks.subscriptions]]
   topics = [ "app/uninstalled" ]
   uri = "/webhooks/app/uninstalled"
