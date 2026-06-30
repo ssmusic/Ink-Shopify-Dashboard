@@ -178,9 +178,14 @@ export const NFSService = {
   /**
    * Marks a proof as delivered via Alan's backend API.
    * Requires the merchant's ink_api_key (Bearer token) per API spec v1.2+.
-   * Called automatically from the orders/fulfilled Shopify webhook.
+   * Called from the fulfillments/update webhook on shipment_status === "delivered".
+   * carrier/tracking are optional and persisted onto the proof when present.
    */
-  async markDelivered(proofId: string, apiKey: string, payload: { delivered_at: string; carrier?: string }): Promise<any> {
+  async markDelivered(
+    proofId: string,
+    apiKey: string,
+    payload: { delivered_at: string; carrier?: string; tracking_number?: string; tracking_url?: string },
+  ): Promise<any> {
     console.log(`📦 Marking delivery for proof ${proofId}:`, payload);
 
     const response = await fetch(`${NFS_API_URL}/api/proofs/${proofId}/delivered`, {

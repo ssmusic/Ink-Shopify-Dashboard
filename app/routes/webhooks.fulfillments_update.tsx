@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { NotificationService } from "../services/notifications.server";
+import { NFSService } from "../services/nfs.server";
 import firestore from "../firestore.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -65,20 +66,54 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return new Response("OK", { status: 200 });
     }
 
-    // 2. Fetch Merchant Notification Settings from Firestore
-    console.log(`📦 Fetching Merchant Settings for ${shop}...`);
-    const settingsSnap = await firestore.collection("merchants").where("shopDomain", "==", shop).limit(1).get();
-    
-    if (settingsSnap.empty) {
+    // 2. Fetch the Merchant doc (ink_api_key + notification settings) from Firestore
+    console.log(`📦 Fetching Merchant for ${shop}...`);
+    const merchantSnap = await firestore.collection("merchants").where("shopDomain", "==", shop).limit(1).get();
+
+    if (merchantSnap.empty) {
       console.log(`⚠️ No merchant document found for ${shop}. Exiting.`);
       return new Response("OK", { status: 200 });
     }
 
-    const settings = settingsSnap.docs[0].data().notification_settings;
-    const merchantName = settingsSnap.docs[0].data().shopName || shop;
+    const merchantDoc = merchantSnap.docs[0].data();
+    const merchantApiKey: string | null = merchantDoc.ink_api_key || null;
+    const settings = merchantDoc.notification_settings;
+    const merchantName = merchantDoc.shopName || shop;
+    const proofReference: string | null = order.proofMetafield?.value || null;
+
+    // 2a. SOURCE OF TRUTH for delivery. When Shopify's carrier tracking reports
+    //     shipment_status === "delivered", stamp delivered_at on the proof. This
+    //     replaces the premature stamp that orders/fulfilled (ship time) used to
+    //     do. The return window starts here, sourced from Shopify (which already
+    //     aggregates every carrier). markProofDelivered is idempotent
+    //     (first-write-wins), so a later Shippo-tracker event is a safe no-op.
+    if (shipmentStatus === "delivered" && proofReference && merchantApiKey) {
+      try {
+        const deliveredAt = fulfillment.updated_at || new Date().toISOString();
+        const carrier = fulfillment.tracking_company || undefined;
+        const trackingNumber =
+          fulfillment.tracking_number || fulfillment.tracking_numbers?.[0] || undefined;
+        const trackingUrl =
+          fulfillment.tracking_url || fulfillment.tracking_urls?.[0] || undefined;
+
+        await NFSService.markDelivered(proofReference, merchantApiKey, {
+          delivered_at: deliveredAt,
+          carrier,
+          tracking_number: trackingNumber,
+          tracking_url: trackingUrl,
+        });
+        console.log(`✅ delivered_at stamped from Shopify DELIVERED for proof ${proofReference}`);
+      } catch (deliveryErr: any) {
+        // Best-effort: a delivery-mark failure must not block notifications or
+        // cause Shopify to retry the whole webhook.
+        console.error(`❌ Failed to stamp delivered_at for ${proofReference}:`, deliveryErr.message);
+      }
+    } else if (shipmentStatus === "delivered" && proofReference && !merchantApiKey) {
+      console.log(`⚠️ DELIVERED for ${shop} but no ink_api_key on merchant — cannot stamp delivered_at.`);
+    }
 
     if (!settings) {
-      console.log(`⚠️ Merchant has no Notification Settings configured. Exiting.`);
+      console.log(`ℹ️ Merchant has no Notification Settings configured. Delivery handled; skipping notification.`);
       return new Response("OK", { status: 200 });
     }
 

@@ -27,6 +27,17 @@ api_version = "2025-10"
   topics = [ "orders/fulfilled" ]
   uri = "/webhooks/orders_fulfilled"
 
+  # Carrier delivery signal. fulfillments/update carries shipment_status, which
+  # flips to "delivered" when Shopify's carrier tracking reports delivery. This —
+  # NOT orders/fulfilled (which fires at ship time) — is the source of delivered_at.
+  [[webhooks.subscriptions]]
+  topics = [ "fulfillments/create" ]
+  uri = "/webhooks/fulfillments_create"
+
+  [[webhooks.subscriptions]]
+  topics = [ "fulfillments/update" ]
+  uri = "/webhooks/fulfillments_update"
+
 
 
 [access_scopes]
