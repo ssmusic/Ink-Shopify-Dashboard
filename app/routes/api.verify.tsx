@@ -763,7 +763,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                 isTestMerchant = Boolean(mDoc.returns_test_mode || mDoc.is_test);
 
                                 // Branded sender — {brand}@in.ink via the same slug
-                                // resolver that mints {brand}.in.ink. Prefer the
+                                // resolver that mints {brand}.in.ink. A merchant-doc
+                                // brand_slug override wins (dev/demo stores whose
+                                // shop_domain is not the brand, e.g. sm-test-… →
+                                // "stevemadden"); otherwise derive from the
                                 // merchant's own shop_domain (snake first), then the
                                 // Shopify session host. Name = shop_name; reply-to =
                                 // support/owner email. Unresolvable slug → undefined,
@@ -772,7 +775,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                     (mDoc.shop_domain as string | undefined) ||
                                     (mDoc.shopDomain as string | undefined) ||
                                     session.shop;
-                                const brandSlug = brandSlugFromDomain(brandDomain);
+                                const brandSlug =
+                                    brandSlugFromDomain(mDoc.brand_slug as string | undefined) ||
+                                    brandSlugFromDomain(brandDomain);
                                 if (brandSlug && brandSlug.length >= 2) {
                                     senderFromEmail = `${brandSlug}@in.ink`;
                                 }
@@ -789,11 +794,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             console.warn("Could not fetch outreach settings:", e);
                         }
 
+                        // SEND_ALLOWLIST (comma-separated emails) = pre-customer dev
+                        // mode (Bible §20). While it is set, mail can ONLY reach the
+                        // listed addresses — and an allowlisted recipient may receive
+                        // mail even from a test-flagged merchant (that's the point:
+                        // every merchant is test-flagged today, but Sam still needs
+                        // to see the branded send in his own inbox). Unset ⇒ no
+                        // allowlist behavior at all: the test-merchant gate rules.
+                        const sendAllowlist = (process.env.SEND_ALLOWLIST || "")
+                            .split(",")
+                            .map((s) => s.trim().toLowerCase())
+                            .filter(Boolean);
+                        const recipientAllowlisted = sendAllowlist.includes(
+                            order.customer.email.trim().toLowerCase(),
+                        );
+
                         if (!merchantDocLoaded) {
                             console.warn(
                                 `📧 SKIP (no merchant doc): could not resolve a merchant for proof shop_id="${alanData.shop_id || ""}" / shop="${session.shop}". Failing closed — refusing to send to ${order.customer.email}.`,
                             );
-                        } else if (isTestMerchant) {
+                        } else if (sendAllowlist.length > 0 && !recipientAllowlisted) {
+                            console.log(
+                                `📧 SKIP (allowlist): SEND_ALLOWLIST is set and ${order.customer.email} is not on it — dev mode sends only to the allowlist.`,
+                            );
+                        } else if (isTestMerchant && !recipientAllowlisted) {
                             console.log(
                                 `📧 SKIP (test-mode): merchant returns_test_mode=true or is_test=true — refusing to send real customer email for ${order.customer.email}`,
                             );
@@ -802,6 +826,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                 `📧 SKIP (merchant outreach off): email_enabled=${emailEnabled}, delivered_on=${deliveredOn}`,
                             );
                         } else {
+                            if (isTestMerchant) {
+                                console.log(
+                                    `📧 DEV-MODE send: merchant is test-flagged but ${order.customer.email} is on SEND_ALLOWLIST — sending anyway (from ${senderFromEmail || "notifications@in.ink"}).`,
+                                );
+                            }
                             const productName = order.lineItems?.edges?.[0]?.node?.title || undefined;
                             await EmailService.sendReturnPassportEmail({
                                 to: order.customer.email,
