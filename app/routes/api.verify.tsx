@@ -762,6 +762,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         let senderFromEmail: string | undefined;
                         let senderFromName: string | undefined;
                         let senderReplyTo: string | undefined;
+                        // Canonical TAP-page URL for the email CTA —
+                        // {brand}.in.ink/r/{nfc_token}, same slug that mints the
+                        // branded From. The email must land on the tap page (never
+                        // a /verify/ or deep /return link) so the click REGISTERS
+                        // as a tap in the state machine before any return starts.
+                        let receiptTapUrl: string | undefined;
                         // FAIL-CLOSED guard: only send once we've POSITIVELY loaded
                         // the proof's merchant doc. If the lookup misses or throws,
                         // we can't confirm the merchant isn't a test store or hasn't
@@ -833,6 +839,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                     brandSlugFromDomain(brandDomain);
                                 if (brandSlug && brandSlug.length >= 2) {
                                     senderFromEmail = `${brandSlug}@in.ink`;
+                                    // Mirror the From: {brand}.in.ink/r/{nfc_token} —
+                                    // the SAME live tap link the physical tag resolves
+                                    // to. Any slug serves the SPA via the CF worker,
+                                    // and the brand resolves from the proof itself.
+                                    if (alanData.nfc_token) {
+                                        receiptTapUrl = `https://${brandSlug}.in.ink/r/${alanData.nfc_token}`;
+                                    }
                                 }
                                 senderFromName =
                                     (mDoc.shop_name as string | undefined) ||
@@ -889,7 +902,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                 to: order.customer.email,
                                 customerName: order.customer.firstName || "Customer",
                                 orderName: order.name,
-                                proofUrl: alanData.verify_url || `https://in.ink/verify/${alanData.proof_id}`,
+                                // TAP page first (registers the tap in the state
+                                // machine), then the stored canonical verify_url,
+                                // then a canonical-shaped /r/ fallback on the www
+                                // front door. NEVER the legacy /verify/ path — it
+                                // 404s (caught live 2026-07-01: the proof had no
+                                // stored verify_url and the email's Start Return
+                                // button dead-ended).
+                                proofUrl:
+                                    receiptTapUrl ||
+                                    alanData.verify_url ||
+                                    `https://www.in.ink/r/${alanData.nfc_token || alanData.proof_id}`,
                                 photoUrls: photoUrls,
                                 returnWindowDays: rWindow,
                                 // Brand name, never the raw store handle: the subject
