@@ -37,6 +37,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const query = `#graphql
     query GetOrders {
+      shop { ianaTimezone }
       orders(first: 50, reverse: true) {
         edges {
           node {
@@ -79,6 +80,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const data = await response.json();
   if (!data?.data?.orders) return { orders: [], error: "Failed to fetch orders" };
+
+  // Format order dates in the MERCHANT'S store timezone, not the Cloud Run
+  // server's UTC. Without this, an order placed at 5:30pm PT (00:30 UTC) renders
+  // as the next calendar day. Falls back to America/Los_Angeles if unavailable.
+  const shopTz: string = data?.data?.shop?.ianaTimezone || "America/Los_Angeles";
 
   const allOrders = data.data.orders.edges.map((edge: any) => {
     const order = edge.node;
@@ -160,6 +166,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         month: "short",
         day: "numeric",
         year: "numeric",
+        timeZone: shopTz,
       }),
       total: order.totalPriceSet.shopMoney.amount,
       subtotal: subtotal.toFixed(2),
