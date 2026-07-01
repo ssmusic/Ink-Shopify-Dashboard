@@ -25,8 +25,8 @@ export const LandingPageContent = ({
   ctaLabel = "Get started",
   signInLink = "/app",
   showSignIn = true,
-  headline = "Every order opens a living page.",
-  sub = "Traditional e-commerce cuts ties when the box hits the porch. ink. keeps the loop alive — a living page for every order, opened on a tap.",
+  headline = "A surface that opens when the order arrives.",
+  sub = "You communicate in ink. You sign in ink. Now you do both on every order — the loud half is the brand; the quiet half is the signature that closes the loop with the buyer.",
   footnote,
 }: LandingPageContentProps) => {
   return (
