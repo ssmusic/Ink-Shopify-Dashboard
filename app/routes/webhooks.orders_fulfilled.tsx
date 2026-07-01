@@ -71,15 +71,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     if (proofReference) {
-      console.log(`[${topic}] Found proof_reference: ${proofReference} for order ${orderGid}. Marking as delivered.`);
-      
-      // 3. Call Alan's API with the merchant's Bearer token (not the admin secret)
-      await NFSService.markDelivered(proofReference, merchantApiKey, {
-        delivered_at: fulfilledAt,
-        carrier,
-      });
-
-      console.log(`[${topic}] ✅ Successfully pushed delivery state to Alan's backend for proof: ${proofReference}`);
+      // Deliberately DO NOT mark delivered here. orders/fulfilled fires at SHIP
+      // time; marking delivered now would pre-empt the REAL carrier "delivered"
+      // event (webhooks.fulfillments_update.tsx), which is the authoritative
+      // delivered_at. This fixes the "return window opened at ship time" bug.
+      // (merchantApiKey / fulfilledAt / carrier stay computed above for a future
+      // shipped_at record; markProofDelivered is idempotent first-write-wins, so
+      // whoever sets delivered_at first wins — that must be REAL delivery.)
+      console.log(`[${topic}] Order ${orderGid} shipped (proof ${proofReference}); delivery is marked on the REAL carrier-delivered event, not at ship time.`);
     } else {
       console.log(`[${topic}] Order ${orderGid} has no INK proof_reference metafield. Skipping (not an INK order).`);
     }
