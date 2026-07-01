@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs } from "react-router";
 import crypto from "crypto";
 import { INK_NAMESPACE } from "../utils/metafields.server";
+import { brandSlugFromDomain } from "../services/email.server";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -387,6 +388,50 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             console.log("   - Phone:", customerPhone);
             console.log("   - Email:", customerEmail);
 
+            // ── SEND-GATE (test-merchant + arm switch + branded From) ──
+            // Load the proof's merchant doc ONCE and derive the gates that every
+            // customer send below must pass (Bible §19). Snake_case `shop_domain`
+            // first (ink-backend-provisioned docs), camelCase fallback.
+            const { default: firestore } = await import("../firestore.server");
+            let merchantDoc: Record<string, any> | null = null;
+            try {
+              if (shop_id) {
+                const byId = await firestore.collection("merchants").doc(String(shop_id)).get();
+                if (byId.exists) merchantDoc = byId.data() || null;
+              }
+              if (!merchantDoc) {
+                const s = await firestore.collection("merchants").where("shop_domain", "==", targetSession.shop).limit(1).get();
+                if (!s.empty) merchantDoc = s.docs[0].data();
+              }
+              if (!merchantDoc) {
+                const s = await firestore.collection("merchants").where("shopDomain", "==", targetSession.shop).limit(1).get();
+                if (!s.empty) merchantDoc = s.docs[0].data();
+              }
+            } catch (e) {
+              console.warn("⚠️ Could not load merchant doc for send-gate:", e);
+            }
+            // A test/dev merchant NEVER fires a real customer email/SMS (Steve/
+            // sm-test is returns_test_mode:true). Fail-closed if we can't resolve
+            // the merchant at all — don't send on an unknown store.
+            const isTestMerchant = Boolean(merchantDoc?.returns_test_mode || merchantDoc?.is_test);
+            const merchantResolved = !!merchantDoc;
+            // The branded delivered receipt is off by default; when unarmed it
+            // falls through to the existing generic dispatch (unchanged live
+            // behavior). Arm with SEND_DELIVERED_EMAIL=true on Cloud Run.
+            const deliveredEmailArmed = process.env.SEND_DELIVERED_EMAIL === "true";
+            // Dynamic branded From — {brand}@in.ink via the same resolver that
+            // mints {brand}.in.ink (Bible §19). Falls back to the neutral env From.
+            const brandSlug = brandSlugFromDomain(
+              (merchantDoc?.shop_domain as string) ||
+              (merchantDoc?.shopDomain as string) ||
+              targetSession.shop
+            );
+            if (isTestMerchant || !merchantResolved) {
+              console.log(
+                `📧 Delivered customer sends SKIPPED (${isTestMerchant ? "test-merchant" : "merchant unresolved — fail-closed"}) for ${targetSession.shop}`
+              );
+            }
+
             // ── BRANDED RECEIPT EMAIL (delivered case) ──
             // Paint the SAME branded receipt the tap page is built from
             // (brand book's published page + the proof) and send it via
@@ -404,13 +449,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 const sendgrid = sgModule.default;
 
                 const sgApiKey = process.env.SENDGRID_API_KEY;
-                const sgFromEmail = process.env.SENDGRID_FROM_EMAIL || "noreply@in.ink";
+                const sgFromEmail = process.env.SENDGRID_FROM_EMAIL || "notifications@in.ink";
+                // {brand}@in.ink when the slug resolves, else the neutral default.
+                const brandedFromEmail = brandSlug && brandSlug.length >= 2 ? `${brandSlug}@in.ink` : sgFromEmail;
 
                 // shop_id comes from Alan's webhook payload when present;
                 // fetchBrandBook returns null on anything missing/erroring.
                 const book = shop_id ? await fetchBrandBook(String(shop_id)) : null;
 
-                if (book && customerEmail && sgApiKey && verify_url) {
+                // Gated: armed + not a test merchant + merchant resolved, THEN the
+                // content preconditions (book/email/key/url). Unarmed or test →
+                // skip branded; fall through to the (test-gated) generic dispatch.
+                if (deliveredEmailArmed && !isTestMerchant && merchantResolved && book && customerEmail && sgApiKey && verify_url) {
                   // Map Alan's order_details TOLERANTLY into the shape the
                   // painter reads: order_details.line_items[*] with
                   // { title, description, image_url, unit_price, qty }.
@@ -457,16 +507,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   sendgrid.setApiKey(sgApiKey);
                   await sendgrid.send({
                     to: customerEmail,
-                    from: sgFromEmail,
+                    from: { email: brandedFromEmail, name: data.brandName },
+                    ...(merchantDoc?.support_email || merchantDoc?.owner_email
+                      ? { replyTo: (merchantDoc.support_email || merchantDoc.owner_email) as string }
+                      : {}),
                     subject: `${data.brandName} — your receipt`,
                     html,
                   });
 
                   brandedReceiptSent = true;
-                  console.log(`✅ Branded receipt email sent to ${customerEmail} (${data.brandName})`);
+                  console.log(`✅ Branded receipt email sent to ${customerEmail} (${data.brandName}, from ${brandedFromEmail})`);
                 } else {
                   console.log(
-                    `ℹ️ Branded receipt skipped (book: ${!!book}, email: ${!!customerEmail}, sgKey: ${!!sgApiKey}, verify_url: ${!!verify_url}) — falling back to generic path.`
+                    `ℹ️ Branded receipt skipped (armed: ${deliveredEmailArmed}, test: ${isTestMerchant}, book: ${!!book}, email: ${!!customerEmail}, sgKey: ${!!sgApiKey}, verify_url: ${!!verify_url}) — falling back to generic path.`
                   );
                 }
               } catch (receiptErr: any) {
@@ -474,13 +527,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               }
             }
 
-            // Fetch Merchant Settings from Firestore
-            const { default: firestore } = await import("../firestore.server");
-            const settingsSnap = await firestore.collection("merchants").where("shopDomain", "==", targetSession.shop).limit(1).get();
-            const merchantName = settingsSnap.empty ? targetSession.shop : (settingsSnap.docs[0].data().shopName || targetSession.shop);
-            const settings = settingsSnap.empty ? null : settingsSnap.docs[0].data().notification_settings;
+            // Merchant name + notification settings from the already-loaded doc
+            // (no second Firestore read; reuses `merchantDoc` from the send-gate).
+            const merchantName =
+              (merchantDoc?.shopName as string) ||
+              (merchantDoc?.shop_name as string) ||
+              targetSession.shop;
+            const settings = merchantDoc?.notification_settings || null;
 
-            if (!settings) {
+            if (!merchantResolved || isTestMerchant) {
+               // Test merchant or unresolved store — never fire a real customer
+               // notification (already logged by the send-gate above).
+            } else if (!settings) {
                console.warn(`⚠️ No Notification Settings found for merchant ${targetSession.shop}. Skipping notifications.`);
             } else {
                const { NotificationService } = await import("../services/notifications.server");

@@ -80,6 +80,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     const merchantData = settingsSnap.docs[0].data();
+    // Never fire a real customer notification from a test/dev merchant (Bible §19).
+    if (merchantData.returns_test_mode || merchantData.is_test) {
+      console.log(`📧 Notifications SKIPPED (test-merchant: returns_test_mode/is_test) for ${shop}.`);
+      return new Response("OK", { status: 200 });
+    }
     const settings = merchantData.notification_settings;
     const merchantName = merchantData.shopName || shop;
 
