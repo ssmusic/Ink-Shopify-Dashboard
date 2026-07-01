@@ -892,7 +892,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                 proofUrl: alanData.verify_url || `https://in.ink/verify/${alanData.proof_id}`,
                                 photoUrls: photoUrls,
                                 returnWindowDays: rWindow,
-                                merchantName: session.shop.replace('.myshopify.com', ''),
+                                // Brand name, never the raw store handle: the subject
+                                // and body render this ("Your Order … from X"), and a
+                                // handle like sm-test-hhawzn52 mismatching the branded
+                                // From is both spam-filter bait and broken-looking in
+                                // a demo. Same precedence as the From-name.
+                                merchantName:
+                                    senderFromName ||
+                                    session.shop.replace('.myshopify.com', ''),
                                 productImageUrl: productImageUrl,
                                 subjectOverride: outreachSubject,
                                 bodyOverride: outreachBody,
