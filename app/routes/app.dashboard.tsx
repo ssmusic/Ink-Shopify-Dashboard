@@ -133,8 +133,8 @@ const Dashboard = () => {
                   Your ink. dashboard
                 </Text>
                 <Text as="p" tone="subdued">
-                  Open the post-purchase surface where your enrolled orders, tap
-                  pages, and returns live. You'll be signed in automatically — no
+                  Open the INK surface — where your enrolled orders, tap pages,
+                  and returns live. You'll be signed in automatically — no
                   password needed.
                 </Text>
               </BlockStack>
@@ -179,8 +179,8 @@ const Dashboard = () => {
                     Advanced — operational analytics
                   </Text>
                   <Text as="p" tone="subdued">
-                    Detailed operational metrics. The full post-purchase dashboard
-                    lives in your ink. app.
+                    Detailed operational metrics. The full ink. dashboard lives
+                    in your ink. app.
                   </Text>
                 </BlockStack>
                 <Button
