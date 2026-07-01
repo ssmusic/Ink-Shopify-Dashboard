@@ -80,19 +80,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     const merchantData = settingsSnap.docs[0].data();
-    // Never fire a real customer notification from a test/dev merchant (Bible §19).
-    if (merchantData.returns_test_mode || merchantData.is_test) {
-      console.log(`📧 Notifications SKIPPED (test-merchant: returns_test_mode/is_test) for ${shop}.`);
-      return new Response("OK", { status: 200 });
-    }
     const settings = merchantData.notification_settings;
     const merchantName = merchantData.shopName || shop;
 
     // ── Mark the proof DELIVERED at the REAL carrier-delivered moment. This is
     // now the authoritative delivered_at (orders/fulfilled no longer marks at
-    // ship time). Runs BEFORE the notification-settings gate so delivery is
-    // recorded even for merchants with no notifications configured. Best-effort:
-    // a failure must never block the notification or the 200. ──
+    // ship time). Runs BEFORE the test-merchant and notification-settings gates:
+    // delivery is a FACT and must be recorded for every merchant — test-flagged
+    // ones included (as of 2026-07-01 ALL merchants are test-flagged, so gating
+    // this would kill delivery detection platform-wide). The gates below only
+    // suppress customer NOTIFICATIONS. Best-effort: a failure must never block
+    // the notification or the 200. ──
     if (shipmentStatus === "delivered" && order.proofMetafield?.value) {
       const merchantApiKey = merchantData.ink_api_key;
       if (merchantApiKey) {
@@ -109,6 +107,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       } else {
         console.log(`⚠️ No ink_api_key for ${shop}; cannot mark proof delivered.`);
       }
+    }
+
+    // Never fire a real customer notification from a test/dev merchant (Bible
+    // §19/§20). Sits AFTER mark-delivered on purpose: it gates only the
+    // notification dispatch below, never the delivered_at record.
+    if (merchantData.returns_test_mode || merchantData.is_test) {
+      console.log(`📧 Notifications SKIPPED (test-merchant: returns_test_mode/is_test) for ${shop}.`);
+      return new Response("OK", { status: 200 });
     }
 
     if (!settings) {
