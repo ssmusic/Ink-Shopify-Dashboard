@@ -21,7 +21,11 @@ api_version = "2025-10"
 
   [[webhooks.subscriptions]]
   topics = [ "orders/create" ]
-  uri = "/webhooks/orders/create"
+  # Must match the flat-route handler file webhooks.orders_create.ts → the path
+  # is /webhooks/orders_create (underscore). The old "/webhooks/orders/create"
+  # (slash) routed to a non-existent handler → a re-register would 404 and break
+  # enroll. The live subscription already uses the underscore.
+  uri = "/webhooks/orders_create"
 
   [[webhooks.subscriptions]]
   topics = [ "orders/fulfilled" ]
