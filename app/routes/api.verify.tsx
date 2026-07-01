@@ -534,10 +534,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         for (const doc of allMerchants.docs) {
                             const data = doc.data();
                             if (
+                                doc.id === proofShopId ||
                                 data.shop_id === proofShopId ||
                                 data.ink_shop_id === proofShopId
                             ) {
-                                targetShopDomain = data.shopDomain || "";
+                                // snake_case shop_domain is ink-backend's field (the
+                                // only one on Steve/sm-test); camelCase shopDomain is
+                                // the embed's. Read both or the resolution silently
+                                // misses and we fall back to the WRONG shop's session.
+                                targetShopDomain = data.shopDomain || data.shop_domain || "";
                                 if (targetShopDomain) break;
                             }
                         }
