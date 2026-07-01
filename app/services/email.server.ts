@@ -116,7 +116,7 @@ export const EmailService = {
       customerName,
       orderName,
       proofUrl,
-      merchantName = "InInk Verified Merchant",
+      merchantName = "your store",
       photoUrls = [],
       returnWindowDays = 30,
       returnUrl,
@@ -155,7 +155,7 @@ export const EmailService = {
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-        <title>Delivery Unlocked - ${orderName}</title>
+        <title>Your order has arrived — ${orderName}</title>
         <style type="text/css">
           @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600&display=swap');
           
@@ -302,9 +302,9 @@ export const EmailService = {
           <div class="content">
             <div class="order-badge">Order ${orderName}</div>
             
-            <h2 class="main-heading">Delivery Unlocked</h2>
+            <h2 class="main-heading">Your order has arrived</h2>
             <p class="sub-heading">
-              Hi ${customerName}, your package from <strong>${merchantName}</strong> has been successfully verified and unlocked.
+              Hi ${customerName}, your order from <strong>${merchantName}</strong> has arrived. Delivery confirmed.
             </p>
 
             ${productImageUrl ? `
@@ -331,11 +331,11 @@ export const EmailService = {
             <!-- Photos Section (if needed) -->
             ${photoUrls.length > 0 ? `
               <div style="margin-top: 40px; text-align: left;">
-                <p style="font-size: 13px; font-weight: 600; color: #000; margin-bottom: 12px;">ENROLLMENT PHOTOS</p>
+                <p style="font-size: 13px; font-weight: 600; color: #000; margin-bottom: 12px;">PACKED FOR SHIPMENT</p>
                 <div style="white-space: nowrap; overflow-x: auto; padding-bottom: 10px;">
                   ${photoUrls.slice(0, 3).map(url => `
                     <div style="display: inline-block; width: 80px; height: 80px; margin-right: 8px; border-radius: 4px; background-color: #eee; overflow: hidden; vertical-align: top;">
-                        <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" alt="Enrollment Photo" />
+                        <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" alt="Packing photo" />
                     </div>
                   `).join('')}
                 </div>
@@ -358,7 +358,7 @@ export const EmailService = {
                  <tr>
                     <td valign="top" width="50%">
                         <div class="info-label">Status</div>
-                        <div class="info-value">Verified & Unlocked</div>
+                        <div class="info-value">Confirmed on arrival</div>
                     </td>
                     <td valign="top" width="50%">
                         <div class="info-label">Date</div>
@@ -372,7 +372,7 @@ export const EmailService = {
 
           <!-- Footer -->
           <div class="footer">
-            <p style="margin: 0 0 10px 0;">Secured by ink.</p>
+            <p style="margin: 0 0 10px 0;">Delivered with ink.</p>
             <p style="margin: 0;">&copy; ${new Date().getFullYear()} ink. All rights reserved.</p>
           </div>
         </div>
@@ -386,7 +386,7 @@ export const EmailService = {
     // author full HTML in the Outreach panel.
     const finalSubject = subjectOverride && subjectOverride.trim()
       ? fillTemplate(subjectOverride, tplVars)
-      : `Your Order ${orderName} from ${merchantName} is Verified`;
+      : `Your ${merchantName} order ${orderName} is here`;
 
     const filledBody = bodyOverride && bodyOverride.trim()
       ? fillTemplate(bodyOverride, tplVars)
@@ -410,7 +410,7 @@ export const EmailService = {
       : htmlContent;
     const finalText = filledBody
       ? filledBody + `\n\nOpen your order: ${returnButtonUrl}`
-      : `Your delivery for order ${orderName} from ${merchantName} has been verified! Use this link to manage returns: ${returnButtonUrl}`;
+      : `Your ${merchantName} order ${orderName} has arrived. Delivery confirmed. Your receipt + returns: ${returnButtonUrl}`;
 
     try {
       await sendgrid.send({
