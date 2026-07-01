@@ -33,7 +33,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const { admin } = await authenticate.admin(request);
 
   const webhooks = [
-    { topic: "ORDERS_CREATE",    path: "/webhooks/orders/create" },
+    { topic: "ORDERS_CREATE",    path: "/webhooks/orders_create" }, // must match webhooks.orders_create.ts (underscore)
     { topic: "ORDERS_FULFILLED", path: "/webhooks/orders_fulfilled" },
   ];
 
