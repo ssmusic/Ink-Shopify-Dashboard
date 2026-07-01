@@ -367,6 +367,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 let foundOrderGid: string | null = null;
                 let foundSession: any = null;
 
+                // Deterministic per-store lookup by the proof's own order_id. The
+                // old code searched `metafield.ink.proof_reference:` — a filter
+                // Shopify's order search silently IGNORES, so it "matched" the
+                // first order of the first responsive store and stamped
+                // verified/GPS/verify_url metafields onto an UNRELATED order in an
+                // unrelated store on every tap (cross-tenant pollution, Clare-V
+                // class). A wrong-store GID lookup just returns null, so iterating
+                // sessions with order(id:) is safe. No order_id → fail closed:
+                // better to skip the redundant fallback than write to a guess.
+                const fallbackNumericOrderId = alanData.order_id
+                    ? String(alanData.order_id).replace(/\D/g, "")
+                    : "";
+                if (!fallbackNumericOrderId) {
+                    console.warn("⚠️ Proof has no order_id — skipping fallback metafield update (refusing to guess an order).");
+                    return;
+                }
+
                 for (const sess of offlineSessions) {
                     if (!sess.accessToken) continue;
 
@@ -382,22 +399,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         return response.json();
                     };
 
-                    const searchQuery = `#graphql
-                        query SearchOrderByProof($query: String!) {
-                            orders(first: 1, query: $query) {
-                                edges { node { id name } }
-                            }
+                    const directQuery = `#graphql
+                        query CheckOrderForMetafields($id: ID!) {
+                            order(id: $id) { id name }
                         }
                     `;
-                    console.log(`🔍 Searching in ${sess.shop} for proof_id: ${alanData.proof_id}`);
-                    const searchResult = await adminGraphql(searchQuery, { 
-                        query: `metafield.ink.proof_reference:${alanData.proof_id}` 
-                    });
-                    
-                    if (searchResult?.data?.orders?.edges?.length > 0) {
-                        foundOrderGid = searchResult.data.orders.edges[0].node.id;
+                    console.log(`🔍 Looking up order gid://shopify/Order/${fallbackNumericOrderId} in ${sess.shop}`);
+                    let searchResult: any = null;
+                    try {
+                        searchResult = await adminGraphql(directQuery, {
+                            id: `gid://shopify/Order/${fallbackNumericOrderId}`,
+                        });
+                    } catch (e: any) {
+                        // A dead/uninstalled store must not kill the whole loop.
+                        console.warn(`⚠️ Order lookup failed in ${sess.shop} (skipping):`, e?.message);
+                        continue;
+                    }
+
+                    if (searchResult?.data?.order?.id) {
+                        foundOrderGid = searchResult.data.order.id;
                         foundSession = sess;
-                        console.log(`✅ Found order ${searchResult.data.orders.edges[0].node.name} in ${sess.shop}`);
+                        console.log(`✅ Found order ${searchResult.data.order.name} in ${sess.shop}`);
                         break;
                     }
                 }
@@ -624,26 +646,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   }
                 `;
 
-                // 1. First try by Proof ID (Deterministic)
+                // 1. Direct GID lookup FIRST — the proof carries the order_id, so
+                // this is the only truly deterministic path. (The old order tried
+                // a `metafield.ink.proof_reference:` search first, but Shopify's
+                // order search silently IGNORES that filter and returns the
+                // store's first orders — observed live: a proof for #1008
+                // "matched" #1001, which would put the wrong order — and on a
+                // real store the wrong CUSTOMER — in the email.)
                 let searchResult = null;
-                console.log(`🔍 Searching for order with proof_id: ${alanData.proof_id}`);
-                const proofQuery = `#graphql
-                    query SearchOrderByProof($query: String!) {
-                        orders(first: 1, query: $query) {
-                            ${queryFields}
-                        }
-                    }
-                `;
-                const proofResult = await adminGraphql(proofQuery, { 
-                    query: `metafield.ink.proof_reference:${alanData.proof_id}` 
-                });
-
-                if (proofResult?.data?.orders?.edges?.length > 0) {
-                    searchResult = proofResult;
-                    console.log("✅ Found order via proof_reference");
-                } 
-                // 2. Fallback to direct GID
-                else if (numericOrderId && numericOrderId.length > 10) {
+                if (numericOrderId && numericOrderId.length > 10) {
                     const directQuery = `#graphql
                       query CheckOrder($id: ID!) {
                         order(id: $id) {
@@ -656,11 +667,48 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         }
                       }
                     `;
-                    console.log("🔍 Trying direct ID search:", `gid://shopify/Order/${numericOrderId}`);
+                    console.log("🔍 Direct ID lookup:", `gid://shopify/Order/${numericOrderId}`);
                     const checkResult = await adminGraphql(directQuery, { id: `gid://shopify/Order/${numericOrderId}` });
                     if (checkResult?.data?.order?.id) {
                         searchResult = { data: { orders: { edges: [ { node: checkResult.data.order } ] } } };
                         console.log("✅ Found order via direct ID");
+                    }
+                }
+                // 2. Metafield search fallback — only accept a hit whose
+                // proof_reference metafield ACTUALLY matches this proof, since the
+                // search filter itself is unreliable.
+                if (!searchResult) {
+                    console.log(`🔍 Searching for order with proof_id: ${alanData.proof_id}`);
+                    const proofQuery = `#graphql
+                        query SearchOrderByProof($query: String!) {
+                            orders(first: 10, query: $query) {
+                                edges {
+                                    node {
+                                        id
+                                        name
+                                        customer { email firstName }
+                                        lineItems(first: 1) {
+                                            edges { node { title image { url } } }
+                                        }
+                                        metafield(namespace: "ink", key: "proof_reference") { value }
+                                    }
+                                }
+                            }
+                        }
+                    `;
+                    const proofResult = await adminGraphql(proofQuery, {
+                        query: `metafield.ink.proof_reference:${alanData.proof_id}`,
+                    });
+                    const verifiedEdge = proofResult?.data?.orders?.edges?.find(
+                        (e: any) => e?.node?.metafield?.value === alanData.proof_id,
+                    );
+                    if (verifiedEdge) {
+                        searchResult = { data: { orders: { edges: [verifiedEdge] } } };
+                        console.log("✅ Found order via proof_reference (metafield value verified)");
+                    } else if (proofResult?.data?.orders?.edges?.length > 0) {
+                        console.warn(
+                            `⚠️ proof_reference search returned ${proofResult.data.orders.edges.length} order(s) but NONE actually carry this proof_id — refusing the false match.`,
+                        );
                     }
                 }
 
