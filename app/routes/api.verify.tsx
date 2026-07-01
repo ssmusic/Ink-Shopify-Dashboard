@@ -630,7 +630,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     
                     const productImageUrl = order.lineItems?.edges?.[0]?.node?.image?.url;
 
-                    if (order.customer?.email) {
+                    // Gated OFF by default: this fired a Return Passport email on
+                    // EVERY verify/scan (a customer scanning twice got two emails).
+                    // Production customer notifications are the fulfillments/update
+                    // webhook → NotificationService. Set SEND_VERIFY_EMAIL=true only
+                    // for manual testing.
+                    if (order.customer?.email && process.env.SEND_VERIFY_EMAIL === "true") {
                         const { EmailService } = await import("../services/email.server");
                         
                         // Fetch settings
