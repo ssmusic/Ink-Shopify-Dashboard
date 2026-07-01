@@ -2,6 +2,7 @@ import { type ActionFunctionArgs } from "react-router";
 import { serialNumberToToken } from "../utils/nfc-conversion.server";
 import { INK_NAMESPACE } from "../utils/metafields.server";
 import { getProof } from "../services/ink-api.server";
+import { brandSlugFromDomain } from "../services/email.server";
 import firestore from "../firestore.server";
 
 const CORS_HEADERS = {
@@ -703,6 +704,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         let emailEnabled = true;
                         let deliveredOn = true;
                         let isTestMerchant = false;
+                        // Branded sender: {brand}@in.ink + shop_name + support reply-to,
+                        // resolved from the merchant doc below.
+                        let senderFromEmail: string | undefined;
+                        let senderFromName: string | undefined;
+                        let senderReplyTo: string | undefined;
                         // FAIL-CLOSED guard: only send once we've POSITIVELY loaded
                         // the proof's merchant doc. If the lookup misses or throws,
                         // we can't confirm the merchant isn't a test store or hasn't
@@ -755,6 +761,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                 // Either → no real send. Kept independent of the SEND_VERIFY_EMAIL env
                                 // gate: env=true + merchant=test still → NO send, loudly logged.
                                 isTestMerchant = Boolean(mDoc.returns_test_mode || mDoc.is_test);
+
+                                // Branded sender — {brand}@in.ink via the same slug
+                                // resolver that mints {brand}.in.ink. Prefer the
+                                // merchant's own shop_domain (snake first), then the
+                                // Shopify session host. Name = shop_name; reply-to =
+                                // support/owner email. Unresolvable slug → undefined,
+                                // so email.server falls back to notifications@in.ink.
+                                const brandDomain =
+                                    (mDoc.shop_domain as string | undefined) ||
+                                    (mDoc.shopDomain as string | undefined) ||
+                                    session.shop;
+                                const brandSlug = brandSlugFromDomain(brandDomain);
+                                if (brandSlug && brandSlug.length >= 2) {
+                                    senderFromEmail = `${brandSlug}@in.ink`;
+                                }
+                                senderFromName =
+                                    (mDoc.shop_name as string | undefined) ||
+                                    (mDoc.name as string | undefined) ||
+                                    undefined;
+                                senderReplyTo =
+                                    (mDoc.support_email as string | undefined) ||
+                                    (mDoc.owner_email as string | undefined) ||
+                                    undefined;
                             }
                         } catch (e) {
                             console.warn("Could not fetch outreach settings:", e);
@@ -786,6 +815,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                 subjectOverride: outreachSubject,
                                 bodyOverride: outreachBody,
                                 productName: productName,
+                                fromEmail: senderFromEmail,
+                                fromName: senderFromName,
+                                replyTo: senderReplyTo,
                             });
                         }
                         // (send-success log is emitted inside EmailService.sendReturnPassportEmail;

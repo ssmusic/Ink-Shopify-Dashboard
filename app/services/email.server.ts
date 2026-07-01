@@ -1,14 +1,36 @@
 
 import sendgrid from "@sendgrid/mail";
 
-// SendGrid credentials from environment variables
+// SendGrid credentials from environment variables. FROM defaults to a NEUTRAL
+// notifications@in.ink — the merchant-branded {brand}@in.ink From is passed in
+// per-send (payload.fromEmail); this env value is only the no-merchant-context
+// fallback. in.ink is SendGrid domain-authenticated, so any {x}@in.ink sends.
 const apiKey = process.env.SENDGRID_API_KEY;
-const fromEmail = process.env.SENDGRID_FROM_EMAIL;
+const fromEmail = process.env.SENDGRID_FROM_EMAIL || "notifications@in.ink";
 
 if (apiKey) {
   sendgrid.setApiKey(apiKey);
 } else {
   console.warn("⚠️ SendGrid API Key missing. Email service will be disabled.");
+}
+
+// Derive the {brand} slug for a {brand}@in.ink sender — mirrors the ink-backend
+// brandSlugFromDomain() (utils/resolveMerchantForAnimation.js) which mints
+// {brand}.in.ink: strip protocol/www, take the first DNS label, slugify.
+// e.g. "stevemadden.myshopify.com" → "stevemadden" → stevemadden@in.ink.
+export function brandSlugFromDomain(domain?: string | null): string {
+  const host = String(domain || "")
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .split("/")[0];
+  return (host.split(".")[0] || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
 }
 
 interface ReturnPassportEmailPayload {
@@ -29,6 +51,12 @@ interface ReturnPassportEmailPayload {
   subjectOverride?: string;
   bodyOverride?: string;
   productName?: string; // template variable for {product}
+  // Dynamic branded sender. When set, the email comes FROM the merchant's brand
+  // ({brand}@in.ink) with their name + support reply-to, instead of the neutral
+  // notifications@in.ink default. Computed by the caller from the merchant doc.
+  fromEmail?: string;
+  fromName?: string;
+  replyTo?: string;
 }
 
 // One-pass template substitution. The TEMPLATE is trusted (merchant-authored),
@@ -96,7 +124,16 @@ export const EmailService = {
       subjectOverride,
       bodyOverride,
       productName,
+      fromEmail: fromEmailOverride,
+      fromName,
+      replyTo,
     } = payload;
+
+    // Branded sender: {brand}@in.ink + shop_name when provided, else the neutral
+    // notifications@in.ink env default. Reply-to = merchant support (omitted if
+    // unset). Display name defaults to the merchant name we already show.
+    const senderEmail = fromEmailOverride || fromEmail;
+    const senderName = fromName || merchantName;
 
     // Determine return button URL
     const returnButtonUrl = returnUrl || proofUrl;
@@ -378,13 +415,14 @@ export const EmailService = {
     try {
       await sendgrid.send({
         to,
-        from: fromEmail,
+        from: { email: senderEmail, name: senderName },
+        ...(replyTo ? { replyTo } : {}),
         subject: finalSubject,
         text: finalText,
         html: finalHtml,
       });
 
-      console.log(`✅ Return Passport email sent to ${to}`);
+      console.log(`✅ Return Passport email sent to ${to} (from ${senderEmail})`);
       return true;
     } catch (error: any) {
       console.error("❌ Failed to send email:", error.response?.body || error.message);
