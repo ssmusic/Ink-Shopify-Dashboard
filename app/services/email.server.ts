@@ -21,6 +21,26 @@ interface ReturnPassportEmailPayload {
   returnWindowDays?: number;  // Return window (e.g., 30 days)
   returnUrl?: string;  // URL to start return
   productImageUrl?: string; // Main product image
+  // Merchant-authored overrides from the Outreach panel (parallelreturns
+  // Settings.tsx → merchant.outreach.messages.return_unlocked_{subject,email}).
+  // Templated with {order_no}, {product}, {return_url}, {merchant_name},
+  // {customer_name} before send. Unset ⇒ hardcoded defaults (today's shape).
+  subjectOverride?: string;
+  bodyOverride?: string;
+  productName?: string; // for template substitution
+}
+
+// One-pass template substitution. Deliberately dumb: no conditionals, no
+// escaping, just token replacement. Merchant writes in the Outreach panel
+// with e.g. "Ready when you are — {order_no}" and the send rail fills it in.
+function fillTemplate(
+  tpl: string,
+  vars: Record<string, string | undefined | null>,
+): string {
+  return tpl.replace(/\{(\w+)\}/g, (m, key) => {
+    const v = vars[key];
+    return v == null ? "" : String(v);
+  });
 }
 
 // Legacy interface for backward compatibility
@@ -43,20 +63,33 @@ export const EmailService = {
       return false;
     }
 
-    const { 
-      to, 
-      customerName, 
-      orderName, 
-      proofUrl, 
+    const {
+      to,
+      customerName,
+      orderName,
+      proofUrl,
       merchantName = "InInk Verified Merchant",
       photoUrls = [],
       returnWindowDays = 30,
       returnUrl,
-      productImageUrl
+      productImageUrl,
+      subjectOverride,
+      bodyOverride,
+      productName,
     } = payload;
 
     // Determine return button URL
     const returnButtonUrl = returnUrl || proofUrl;
+
+    // Merchant-authored template variables. Same names in subject + body.
+    const tplVars: Record<string, string> = {
+      order_no: orderName,
+      product: productName || "your order",
+      return_url: returnButtonUrl,
+      merchant_name: merchantName,
+      customer_name: customerName,
+      return_window: String(returnWindowDays),
+    };
 
     // Premium HTML Template
     const htmlContent = `
@@ -290,13 +323,38 @@ export const EmailService = {
       </html>
     `;
 
+    // Apply merchant-authored overrides when present. Body override, when set,
+    // wraps a minimal HTML frame so a plain-text merchant template still ships
+    // as a readable email (no need to hand-author full HTML).
+    const finalSubject = subjectOverride && subjectOverride.trim()
+      ? fillTemplate(subjectOverride, tplVars)
+      : `Your Order ${orderName} from ${merchantName} is Verified`;
+
+    const filledBody = bodyOverride && bodyOverride.trim()
+      ? fillTemplate(bodyOverride, tplVars)
+      : "";
+    const finalHtml = filledBody
+      ? `<div style="font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#0a0a0a;background:#f5f4ef;padding:32px;line-height:1.55;">
+           <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6e4dd;padding:32px;">
+             <div style="font-family:'Courier New',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#6b6864;margin-bottom:16px;">ink. &middot; ${merchantName}</div>
+             ${filledBody.replace(/\n/g, "<br>")}
+             <div style="margin-top:24px;padding-top:16px;border-top:1px solid #eeece5;">
+               <a href="${returnButtonUrl}" style="display:inline-block;background:#0a0a0a;color:#fff;text-decoration:none;padding:14px 24px;font-weight:700;">Open your order &rarr;</a>
+             </div>
+           </div>
+         </div>`
+      : htmlContent;
+    const finalText = filledBody
+      ? filledBody + `\n\nOpen your order: ${returnButtonUrl}`
+      : `Your delivery for order ${orderName} from ${merchantName} has been verified! Use this link to manage returns: ${returnButtonUrl}`;
+
     try {
       await sendgrid.send({
         to,
         from: fromEmail,
-        subject: `Your Order ${orderName} from ${merchantName} is Verified`,
-        text: `Your delivery for order ${orderName} from ${merchantName} has been verified! Use this link to manage returns: ${returnButtonUrl}`, // Fallback plain text
-        html: htmlContent,
+        subject: finalSubject,
+        text: finalText,
+        html: finalHtml,
       });
 
       console.log(`✅ Return Passport email sent to ${to}`);

@@ -512,9 +512,73 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 console.log("📧 =================================================");
                 
                 const { getOfflineSession } = await import("../session-utils.server");
-                
-                const session = await getOfflineSession();
-                
+
+                // ── Shop-scope the session lookup ─────────────────────────────
+                // Without this, `getOfflineSession()` returned the FIRST offline
+                // shopify_session in Firestore (e.g. dmg4mi-8i.myshopify.com), so
+                // a proof for a different merchant was searched in the wrong
+                // shop's orders, silently missed, and the passport email never
+                // fired. Worse — on an order-number collision it could email the
+                // wrong merchant's customer. Resolve the proof's shop_id →
+                // shop_domain via the merchants collection first, then load THAT
+                // shop's offline session.
+                //
+                // Field naming caveat: ink-backend writes `shop_domain` (snake),
+                // the Shopify app writes `shopDomain` (camel). We read both.
+                const proofShopId: string = alanData.shop_id || "";
+                let targetShopDomain: string = alanData.shop_domain || "";
+
+                if (!targetShopDomain && proofShopId) {
+                    try {
+                        let merchantDoc: Record<string, any> | null = null;
+                        const docRef = await firestore
+                            .collection("merchants")
+                            .doc(proofShopId)
+                            .get();
+                        if (docRef.exists) {
+                            merchantDoc = docRef.data() || null;
+                        } else {
+                            const bySnap = await firestore
+                                .collection("merchants")
+                                .where("shop_id", "==", proofShopId)
+                                .limit(1)
+                                .get();
+                            if (!bySnap.empty) merchantDoc = bySnap.docs[0].data();
+                        }
+                        if (merchantDoc) {
+                            targetShopDomain =
+                                merchantDoc.shop_domain ||
+                                merchantDoc.shopDomain ||
+                                "";
+                        }
+                    } catch (e) {
+                        console.warn(
+                            "⚠️ Failed to resolve shop_id → shop_domain for email session:",
+                            e,
+                        );
+                    }
+                }
+
+                let session = targetShopDomain
+                    ? await getOfflineSession(targetShopDomain)
+                    : null;
+
+                if (session) {
+                    console.log(
+                        `✅ Loaded shop-scoped session for ${session.shop} (proof shop_id="${proofShopId}")`,
+                    );
+                } else {
+                    // Loud fallback: this may email the WRONG customer. Kept so a
+                    // misconfigured merchant still gets *some* email fired during
+                    // testing, but never silently — every fire logs a warning.
+                    console.warn(
+                        `⚠️⚠️⚠️ FALLBACK: no offline session for proof shop ` +
+                        `(shop_id="${proofShopId}", shop_domain="${targetShopDomain}"). ` +
+                        `Falling back to first available offline session — this may email the WRONG customer.`,
+                    );
+                    session = await getOfflineSession();
+                }
+
                 if (!session) {
                     console.warn("⚠️ No session found for email");
                     return;
@@ -557,6 +621,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                           lineItems(first: 1) {
                               edges {
                                   node {
+                                      title
                                       image {
                                           url
                                       }
@@ -594,7 +659,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                           name
                           customer { email firstName }
                           lineItems(first: 1) {
-                            edges { node { image { url } } }
+                            edges { node { title image { url } } }
                           }
                         }
                       }
@@ -637,33 +702,77 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     // for manual testing.
                     if (order.customer?.email && process.env.SEND_VERIFY_EMAIL === "true") {
                         const { EmailService } = await import("../services/email.server");
-                        
-                        // Fetch settings
-                        const { default: firestore } = await import("../firestore.server");
+
+                        // Load merchant Outreach config so the email respects
+                        // merchant-authored subject/body templates + toggles.
+                        // Same doc as the shop-scope lookup above; try snake_case
+                        // (`shop_domain`) first, camel (`shopDomain`) fallback.
                         let rWindow = 30;
+                        let outreachSubject: string | undefined;
+                        let outreachBody: string | undefined;
+                        let emailEnabled = true;
+                        let deliveredOn = true;
                         try {
-                            const settingsSnap = await firestore.collection("merchants").where("shopDomain", "==", session.shop).limit(1).get();
-                            if (!settingsSnap.empty) {
-                                const settings = settingsSnap.docs[0].data().notification_settings;
-                                if (settings?.returnWindow) {
-                                    rWindow = parseInt(settings.returnWindow) || 30;
+                            let mDoc: Record<string, any> | null = null;
+                            if (proofShopId) {
+                                const d = await firestore.collection("merchants").doc(proofShopId).get();
+                                if (d.exists) mDoc = d.data() || null;
+                            }
+                            if (!mDoc) {
+                                const bySnap = await firestore
+                                    .collection("merchants")
+                                    .where("shop_domain", "==", session.shop)
+                                    .limit(1)
+                                    .get();
+                                if (!bySnap.empty) mDoc = bySnap.docs[0].data();
+                                else {
+                                    const bySnap2 = await firestore
+                                        .collection("merchants")
+                                        .where("shopDomain", "==", session.shop)
+                                        .limit(1)
+                                        .get();
+                                    if (!bySnap2.empty) mDoc = bySnap2.docs[0].data();
+                                }
+                            }
+                            if (mDoc) {
+                                const outreach = (mDoc.outreach as Record<string, any> | undefined) || {};
+                                const messages = (outreach.messages as Record<string, any> | undefined) || {};
+                                const notifications = (outreach.notifications as Record<string, any> | undefined) || {};
+                                outreachSubject = messages.return_unlocked_subject as string | undefined;
+                                outreachBody = messages.return_unlocked_email as string | undefined;
+                                if (typeof notifications.email_enabled === "boolean") emailEnabled = notifications.email_enabled;
+                                if (typeof notifications.delivered_on === "boolean") deliveredOn = notifications.delivered_on;
+                                const nwd = notifications.return_window_days ?? mDoc.return_window_days;
+                                if (nwd) rWindow = parseInt(String(nwd)) || 30;
+                                // Legacy fallback for older docs that used notification_settings.returnWindow
+                                if (!nwd && mDoc.notification_settings?.returnWindow) {
+                                    rWindow = parseInt(mDoc.notification_settings.returnWindow) || 30;
                                 }
                             }
                         } catch (e) {
-                            console.warn("Could not fetch return window settings:", e);
+                            console.warn("Could not fetch outreach settings:", e);
                         }
-                        
-                        // Send Return Passport email with photos
-                        await EmailService.sendReturnPassportEmail({
-                            to: order.customer.email,
-                            customerName: order.customer.firstName || "Customer",
-                            orderName: order.name,
-                            proofUrl: alanData.verify_url || `https://in.ink/verify/${alanData.proof_id}`,
-                            photoUrls: photoUrls,
-                            returnWindowDays: rWindow,
-                            merchantName: session.shop.replace('.myshopify.com', ''),
-                            productImageUrl: productImageUrl,
-                        });
+
+                        if (!emailEnabled || !deliveredOn) {
+                            console.log(
+                                `📧 Skipping email — merchant outreach flags: email_enabled=${emailEnabled}, delivered_on=${deliveredOn}`,
+                            );
+                        } else {
+                            const productName = order.lineItems?.edges?.[0]?.node?.title || undefined;
+                            await EmailService.sendReturnPassportEmail({
+                                to: order.customer.email,
+                                customerName: order.customer.firstName || "Customer",
+                                orderName: order.name,
+                                proofUrl: alanData.verify_url || `https://in.ink/verify/${alanData.proof_id}`,
+                                photoUrls: photoUrls,
+                                returnWindowDays: rWindow,
+                                merchantName: session.shop.replace('.myshopify.com', ''),
+                                productImageUrl: productImageUrl,
+                                subjectOverride: outreachSubject,
+                                bodyOverride: outreachBody,
+                                productName: productName,
+                            });
+                        }
                         
                         console.log(`✅ Return Passport email sent to ${order.customer.email}`);
                     } else {
