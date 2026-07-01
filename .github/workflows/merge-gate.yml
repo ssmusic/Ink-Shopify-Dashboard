@@ -1,0 +1,72 @@
+name: Merge gate
+
+# A plain-English safety check for Sam (non-technical) before merging.
+# Merging to main here AUTO-DEPLOYS the live Shopify embed app to Cloud Run,
+# so every PR gets an automatic GO / NO-GO / ASK-SAM verdict comment.
+#
+# INACTIVE until the repo secret ANTHROPIC_API_KEY is set — until then this
+# job just prints a note and stays green (no red X on PRs).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+jobs:
+  merge-gate:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - name: Note if not configured
+        if: env.HAS_KEY != 'true'
+        run: echo "Merge gate inactive — add the repo secret ANTHROPIC_API_KEY to turn it on."
+
+      - name: Checkout
+        if: env.HAS_KEY == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Review
+        if: env.HAS_KEY == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            You are the MERGE GATE for the Shopify embed app (repo
+            `Ink-Shopify-Dashboard`). Merging a PR here AUTO-DEPLOYS to Cloud Run —
+            the live app inside merchants' Shopify admin. You are the LAST safety
+            check for Sam — a non-technical founder who decides whether to merge and
+            CANNOT read code. Review this PR's actual diff and post ONE short,
+            plain-English comment. No jargon, no code.
+
+            Begin the comment with EXACTLY one verdict line:
+              ✅ GO — safe to merge.
+              ⚠️ NO-GO — do not merge. One plain sentence: what's wrong + what to fix.
+              🟡 ASK-SAM — needs Sam's explicit decision; explain the choice simply.
+
+            Then 1–3 plain sentences a non-coder can act on. Keep it under ~6 lines.
+
+            Judge against these risks (this is the whole reason you exist):
+            1. FEATURE WIPE / wrong base — does the PR DELETE or remove any existing
+               route, component, webhook handler, or big block of working code that
+               isn't clearly the stated point of the PR? Compare to the base branch.
+               Unexpected removals ⇒ NO-GO ("this removes X").
+            2. SHOPIFY SCOPES / RE-CONSENT — does it change `access_scopes` in any
+               `shopify.app*.toml`? Added scopes force EVERY merchant to re-consent on
+               next load ⇒ ASK-SAM ("this makes all merchants re-approve — your call").
+            3. SCOPE SPRAWL — does it change only what its title/description says, or
+               wander into unrelated files? Sprawl ⇒ ASK-SAM.
+            4. MONEY / PROOF / BILLING — does it touch billing, usage charges, pricing,
+               or anything that moves money? ⇒ ASK-SAM.
+            5. BUILD — if a build check on this PR failed (red) ⇒ NO-GO ("the build is
+               red — it won't deploy").
+
+            Be conservative: if unsure, say ASK-SAM — never GO. You are the only check
+            Sam gets; make the risk and the next step obvious.
