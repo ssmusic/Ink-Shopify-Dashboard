@@ -512,9 +512,59 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 console.log("📧 =================================================");
                 
                 const { getOfflineSession } = await import("../session-utils.server");
-                
-                const session = await getOfflineSession();
-                
+
+                // CRITICAL: scope the Shopify session lookup to the PROOF's shop.
+                // Using getOfflineSession() unfiltered returns the FIRST offline
+                // session in Firestore (e.g. dmg4mi-8i.myshopify.com), so a proof
+                // for a different merchant would search the wrong shop's orders,
+                // silently miss the order, and never fire the email. Worse — on
+                // an order-number collision it could email the wrong merchant's
+                // customer. Resolve shop_id → shopDomain via the merchants
+                // collection first, then load that shop's offline session.
+                const proofShopDomain: string = alanData.shop_domain || "";
+                const proofShopId: string = alanData.shop_id || "";
+
+                let targetShopDomain = proofShopDomain;
+                if (!targetShopDomain && proofShopId) {
+                    try {
+                        const allMerchants = await firestore
+                            .collection("merchants")
+                            .get();
+                        for (const doc of allMerchants.docs) {
+                            const data = doc.data();
+                            if (
+                                data.shop_id === proofShopId ||
+                                data.ink_shop_id === proofShopId
+                            ) {
+                                targetShopDomain = data.shopDomain || "";
+                                if (targetShopDomain) break;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(
+                            "⚠️ Failed to resolve shop_id → shopDomain for email session:",
+                            e,
+                        );
+                    }
+                }
+
+                let session = targetShopDomain
+                    ? await getOfflineSession(targetShopDomain)
+                    : null;
+
+                if (session) {
+                    console.log(
+                        `✅ Loaded shop-scoped session for ${session.shop} (proof shop_id="${proofShopId}")`,
+                    );
+                } else {
+                    console.warn(
+                        `⚠️⚠️⚠️ FALLBACK: no offline session for proof shop ` +
+                        `(shop_id="${proofShopId}", shop_domain="${targetShopDomain || proofShopDomain}"). ` +
+                        `Falling back to first available offline session — this may email the WRONG customer.`,
+                    );
+                    session = await getOfflineSession();
+                }
+
                 if (!session) {
                     console.warn("⚠️ No session found for email");
                     return;
