@@ -31,10 +31,14 @@ interface ReturnPassportEmailPayload {
   productName?: string; // template variable for {product}
 }
 
-// One-pass template substitution. Deliberately dumb — no conditionals, no
-// escaping (merchant text is trusted authored copy, not user-generated).
-// Missing keys collapse to empty string so a merchant's stray `{typo}` doesn't
-// leak into the sent email.
+// One-pass template substitution. The TEMPLATE is trusted (merchant-authored),
+// but the VALUES are NOT — {customer_name} and {product} come straight from the
+// Shopify order (buyer-controlled firstName / line-item title), so they can
+// carry markup. This fn stays raw and is safe ONLY where the output lands in a
+// plain-text context (the SendGrid subject line + the text/plain part). For the
+// HTML body, escape the assembled string with escapeHtml() before it goes in a
+// tag. Missing keys collapse to empty string so a merchant's stray `{typo}`
+// doesn't leak into the sent email.
 function fillTemplate(
   tpl: string,
   vars: Record<string, string | undefined | null>,
@@ -43,6 +47,20 @@ function fillTemplate(
     const v = vars[key];
     return v == null ? "" : String(v);
   });
+}
+
+// Escape a plain-text string for safe interpolation into HTML. The merchant
+// Outreach body is authored as plain text (a textarea, not an HTML editor), so
+// escaping the WHOLE assembled string — template + injected values — is correct
+// AND kills the XSS from buyer-controlled {customer_name}/{product}. Newlines
+// are converted to <br> by the caller AFTER escaping, so those tags survive.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // Legacy interface for backward compatibility
@@ -336,11 +354,17 @@ export const EmailService = {
     const filledBody = bodyOverride && bodyOverride.trim()
       ? fillTemplate(bodyOverride, tplVars)
       : "";
+    // HTML-safe versions: the body + merchant name may carry buyer-controlled
+    // markup (via {customer_name}/{product} or the shop domain), so escape
+    // before they land in a tag. Newlines → <br> AFTER escaping so the breaks
+    // survive. The plain-text part (finalText) stays raw — no HTML context.
+    const htmlSafeBody = escapeHtml(filledBody).replace(/\n/g, "<br>");
+    const htmlSafeMerchant = escapeHtml(merchantName);
     const finalHtml = filledBody
       ? `<div style="font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#0a0a0a;background:#f5f4ef;padding:32px;line-height:1.55;">
            <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6e4dd;padding:32px;">
-             <div style="font-family:'Courier New',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#6b6864;margin-bottom:16px;">ink. &middot; ${merchantName}</div>
-             ${filledBody.replace(/\n/g, "<br>")}
+             <div style="font-family:'Courier New',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#6b6864;margin-bottom:16px;">ink. &middot; ${htmlSafeMerchant}</div>
+             ${htmlSafeBody}
              <div style="margin-top:24px;padding-top:16px;border-top:1px solid #eeece5;">
                <a href="${returnButtonUrl}" style="display:inline-block;background:#0a0a0a;color:#fff;text-decoration:none;padding:14px 24px;font-weight:700;letter-spacing:0.02em;">Open your order &rarr;</a>
              </div>

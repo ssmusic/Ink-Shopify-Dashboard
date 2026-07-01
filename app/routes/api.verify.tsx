@@ -703,6 +703,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         let emailEnabled = true;
                         let deliveredOn = true;
                         let isTestMerchant = false;
+                        // FAIL-CLOSED guard: only send once we've POSITIVELY loaded
+                        // the proof's merchant doc. If the lookup misses or throws,
+                        // we can't confirm the merchant isn't a test store or hasn't
+                        // disabled email — so we skip rather than blast a customer on
+                        // an unresolved merchant. Flips true only inside `if (mDoc)`.
+                        let merchantDocLoaded = false;
                         try {
                             let mDoc: Record<string, any> | null = null;
                             const proofShopIdForOutreach = alanData.shop_id || "";
@@ -727,6 +733,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                 if (!bySnap2.empty) mDoc = bySnap2.docs[0].data();
                             }
                             if (mDoc) {
+                                merchantDocLoaded = true;
                                 const outreach = (mDoc.outreach as Record<string, any> | undefined) || {};
                                 const messages = (outreach.messages as Record<string, any> | undefined) || {};
                                 const notifications = (outreach.notifications as Record<string, any> | undefined) || {};
@@ -753,7 +760,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             console.warn("Could not fetch outreach settings:", e);
                         }
 
-                        if (isTestMerchant) {
+                        if (!merchantDocLoaded) {
+                            console.warn(
+                                `📧 SKIP (no merchant doc): could not resolve a merchant for proof shop_id="${alanData.shop_id || ""}" / shop="${session.shop}". Failing closed — refusing to send to ${order.customer.email}.`,
+                            );
+                        } else if (isTestMerchant) {
                             console.log(
                                 `📧 SKIP (test-mode): merchant returns_test_mode=true or is_test=true — refusing to send real customer email for ${order.customer.email}`,
                             );
