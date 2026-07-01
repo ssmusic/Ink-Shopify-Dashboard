@@ -2,6 +2,7 @@ import { type ActionFunctionArgs } from "react-router";
 import { serialNumberToToken } from "../utils/nfc-conversion.server";
 import { INK_NAMESPACE } from "../utils/metafields.server";
 import { getProof } from "../services/ink-api.server";
+import { brandSlugFromDomain } from "../services/email.server";
 import firestore from "../firestore.server";
 
 const CORS_HEADERS = {
@@ -607,6 +608,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                           lineItems(first: 1) {
                               edges {
                                   node {
+                                      title
                                       image {
                                           url
                                       }
@@ -644,7 +646,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                           name
                           customer { email firstName }
                           lineItems(first: 1) {
-                            edges { node { image { url } } }
+                            edges { node { title image { url } } }
                           }
                         }
                       }
@@ -687,35 +689,139 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     // for manual testing.
                     if (order.customer?.email && process.env.SEND_VERIFY_EMAIL === "true") {
                         const { EmailService } = await import("../services/email.server");
-                        
-                        // Fetch settings
                         const { default: firestore } = await import("../firestore.server");
+
+                        // Load the merchant's Outreach config + settings from
+                        // the same doc. Reads snake_case first (ink-backend's
+                        // `shop_domain` — the only field Steve Madden's doc has;
+                        // the merged shop-scope fix in #30 reads camelCase only,
+                        // which is why the fallback path fires on Steve). This
+                        // ALSO lets us gate on merchant.returns_test_mode so a
+                        // testing merchant never blasts real customers.
                         let rWindow = 30;
+                        let outreachSubject: string | undefined;
+                        let outreachBody: string | undefined;
+                        let emailEnabled = true;
+                        let deliveredOn = true;
+                        let isTestMerchant = false;
+                        // Branded sender: {brand}@in.ink + shop_name + support reply-to,
+                        // resolved from the merchant doc below.
+                        let senderFromEmail: string | undefined;
+                        let senderFromName: string | undefined;
+                        let senderReplyTo: string | undefined;
+                        // FAIL-CLOSED guard: only send once we've POSITIVELY loaded
+                        // the proof's merchant doc. If the lookup misses or throws,
+                        // we can't confirm the merchant isn't a test store or hasn't
+                        // disabled email — so we skip rather than blast a customer on
+                        // an unresolved merchant. Flips true only inside `if (mDoc)`.
+                        let merchantDocLoaded = false;
                         try {
-                            const settingsSnap = await firestore.collection("merchants").where("shopDomain", "==", session.shop).limit(1).get();
-                            if (!settingsSnap.empty) {
-                                const settings = settingsSnap.docs[0].data().notification_settings;
-                                if (settings?.returnWindow) {
-                                    rWindow = parseInt(settings.returnWindow) || 30;
+                            let mDoc: Record<string, any> | null = null;
+                            const proofShopIdForOutreach = alanData.shop_id || "";
+                            if (proofShopIdForOutreach) {
+                                const d = await firestore.collection("merchants").doc(proofShopIdForOutreach).get();
+                                if (d.exists) mDoc = d.data() || null;
+                            }
+                            if (!mDoc) {
+                                const bySnap = await firestore
+                                    .collection("merchants")
+                                    .where("shop_domain", "==", session.shop)
+                                    .limit(1)
+                                    .get();
+                                if (!bySnap.empty) mDoc = bySnap.docs[0].data();
+                            }
+                            if (!mDoc) {
+                                const bySnap2 = await firestore
+                                    .collection("merchants")
+                                    .where("shopDomain", "==", session.shop)
+                                    .limit(1)
+                                    .get();
+                                if (!bySnap2.empty) mDoc = bySnap2.docs[0].data();
+                            }
+                            if (mDoc) {
+                                merchantDocLoaded = true;
+                                const outreach = (mDoc.outreach as Record<string, any> | undefined) || {};
+                                const messages = (outreach.messages as Record<string, any> | undefined) || {};
+                                const notifications = (outreach.notifications as Record<string, any> | undefined) || {};
+                                outreachSubject = messages.return_unlocked_subject as string | undefined;
+                                outreachBody = messages.return_unlocked_email as string | undefined;
+                                if (typeof notifications.email_enabled === "boolean") emailEnabled = notifications.email_enabled;
+                                if (typeof notifications.delivered_on === "boolean") deliveredOn = notifications.delivered_on;
+                                // Legacy notification_settings.returnWindow, then modern
+                                // outreach.notifications.return_window_days, then merchant.return_window_days.
+                                const nwd = notifications.return_window_days ?? mDoc.return_window_days;
+                                if (nwd) rWindow = parseInt(String(nwd)) || 30;
+                                if (!nwd && mDoc.notification_settings?.returnWindow) {
+                                    rWindow = parseInt(mDoc.notification_settings.returnWindow) || 30;
                                 }
+                                // Test merchants (Steve Madden dev store, seed merchants) must NEVER
+                                // fire real customer emails. Gates on:
+                                //   merchant.returns_test_mode (existing test-gate for return labels)
+                                //   merchant.is_test         (dev-only marker)
+                                // Either → no real send. Kept independent of the SEND_VERIFY_EMAIL env
+                                // gate: env=true + merchant=test still → NO send, loudly logged.
+                                isTestMerchant = Boolean(mDoc.returns_test_mode || mDoc.is_test);
+
+                                // Branded sender — {brand}@in.ink via the same slug
+                                // resolver that mints {brand}.in.ink. Prefer the
+                                // merchant's own shop_domain (snake first), then the
+                                // Shopify session host. Name = shop_name; reply-to =
+                                // support/owner email. Unresolvable slug → undefined,
+                                // so email.server falls back to notifications@in.ink.
+                                const brandDomain =
+                                    (mDoc.shop_domain as string | undefined) ||
+                                    (mDoc.shopDomain as string | undefined) ||
+                                    session.shop;
+                                const brandSlug = brandSlugFromDomain(brandDomain);
+                                if (brandSlug && brandSlug.length >= 2) {
+                                    senderFromEmail = `${brandSlug}@in.ink`;
+                                }
+                                senderFromName =
+                                    (mDoc.shop_name as string | undefined) ||
+                                    (mDoc.name as string | undefined) ||
+                                    undefined;
+                                senderReplyTo =
+                                    (mDoc.support_email as string | undefined) ||
+                                    (mDoc.owner_email as string | undefined) ||
+                                    undefined;
                             }
                         } catch (e) {
-                            console.warn("Could not fetch return window settings:", e);
+                            console.warn("Could not fetch outreach settings:", e);
                         }
-                        
-                        // Send Return Passport email with photos
-                        await EmailService.sendReturnPassportEmail({
-                            to: order.customer.email,
-                            customerName: order.customer.firstName || "Customer",
-                            orderName: order.name,
-                            proofUrl: alanData.verify_url || `https://in.ink/verify/${alanData.proof_id}`,
-                            photoUrls: photoUrls,
-                            returnWindowDays: rWindow,
-                            merchantName: session.shop.replace('.myshopify.com', ''),
-                            productImageUrl: productImageUrl,
-                        });
-                        
-                        console.log(`✅ Return Passport email sent to ${order.customer.email}`);
+
+                        if (!merchantDocLoaded) {
+                            console.warn(
+                                `📧 SKIP (no merchant doc): could not resolve a merchant for proof shop_id="${alanData.shop_id || ""}" / shop="${session.shop}". Failing closed — refusing to send to ${order.customer.email}.`,
+                            );
+                        } else if (isTestMerchant) {
+                            console.log(
+                                `📧 SKIP (test-mode): merchant returns_test_mode=true or is_test=true — refusing to send real customer email for ${order.customer.email}`,
+                            );
+                        } else if (!emailEnabled || !deliveredOn) {
+                            console.log(
+                                `📧 SKIP (merchant outreach off): email_enabled=${emailEnabled}, delivered_on=${deliveredOn}`,
+                            );
+                        } else {
+                            const productName = order.lineItems?.edges?.[0]?.node?.title || undefined;
+                            await EmailService.sendReturnPassportEmail({
+                                to: order.customer.email,
+                                customerName: order.customer.firstName || "Customer",
+                                orderName: order.name,
+                                proofUrl: alanData.verify_url || `https://in.ink/verify/${alanData.proof_id}`,
+                                photoUrls: photoUrls,
+                                returnWindowDays: rWindow,
+                                merchantName: session.shop.replace('.myshopify.com', ''),
+                                productImageUrl: productImageUrl,
+                                subjectOverride: outreachSubject,
+                                bodyOverride: outreachBody,
+                                productName: productName,
+                                fromEmail: senderFromEmail,
+                                fromName: senderFromName,
+                                replyTo: senderReplyTo,
+                            });
+                        }
+                        // (send-success log is emitted inside EmailService.sendReturnPassportEmail;
+                        // this outer log used to fire even on skip which was misleading.)
                     } else {
                         console.warn("⚠️ Order found but no customer email");
                     }
