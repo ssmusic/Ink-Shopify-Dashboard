@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { NotificationService } from "../services/notifications.server";
+import { NFSService } from "../services/nfs.server";
 import firestore from "../firestore.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -74,8 +75,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return new Response("OK", { status: 200 });
     }
 
-    const settings = settingsSnap.docs[0].data().notification_settings;
-    const merchantName = settingsSnap.docs[0].data().shopName || shop;
+    const merchantData = settingsSnap.docs[0].data();
+    const settings = merchantData.notification_settings;
+    const merchantName = merchantData.shopName || shop;
+
+    // ── Mark the proof DELIVERED at the REAL carrier-delivered moment. This is
+    // now the authoritative delivered_at (orders/fulfilled no longer marks at
+    // ship time). Runs BEFORE the notification-settings gate so delivery is
+    // recorded even for merchants with no notifications configured. Best-effort:
+    // a failure must never block the notification or the 200. ──
+    if (shipmentStatus === "delivered" && order.proofMetafield?.value) {
+      const merchantApiKey = merchantData.ink_api_key;
+      if (merchantApiKey) {
+        try {
+          const deliveredAt = fulfillment.updated_at || new Date().toISOString();
+          await NFSService.markDelivered(order.proofMetafield.value, merchantApiKey, {
+            delivered_at: deliveredAt,
+            carrier: fulfillment.tracking_company || undefined,
+          });
+          console.log(`✅ Marked proof ${order.proofMetafield.value} delivered at REAL carrier delivery (${deliveredAt}).`);
+        } catch (e: any) {
+          console.error(`❌ mark-delivered failed (non-fatal):`, e?.message);
+        }
+      } else {
+        console.log(`⚠️ No ink_api_key for ${shop}; cannot mark proof delivered.`);
+      }
+    }
 
     if (!settings) {
       console.log(`⚠️ Merchant has no Notification Settings configured. Exiting.`);
