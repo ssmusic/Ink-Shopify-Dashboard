@@ -3,6 +3,7 @@ import { authenticate } from "../shopify.server";
 import { NotificationService } from "../services/notifications.server";
 import { NFSService } from "../services/nfs.server";
 import firestore from "../firestore.server";
+import { findMerchantDoc } from "../services/merchant-doc.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   console.log("\n📦 ================================================");
@@ -66,16 +67,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return new Response("OK", { status: 200 });
     }
 
-    // 2. Fetch Merchant Notification Settings from Firestore
+    // 2. Fetch Merchant Notification Settings — convention-proof resolver.
+    //    The old shopDomain-only query silently exited here on shop/shop_domain
+    //    docs, which meant REAL CARRIER DELIVERIES never marked proofs
+    //    delivered on those shops (Phase-1 rehearsal finding, 2026-07-02).
     console.log(`📦 Fetching Merchant Settings for ${shop}...`);
-    const settingsSnap = await firestore.collection("merchants").where("shopDomain", "==", shop).limit(1).get();
-    
-    if (settingsSnap.empty) {
+    const merchantHit = await findMerchantDoc(firestore, shop);
+
+    if (!merchantHit) {
       console.log(`⚠️ No merchant document found for ${shop}. Exiting.`);
       return new Response("OK", { status: 200 });
     }
 
-    const merchantData = settingsSnap.docs[0].data();
+    const merchantData = merchantHit.data;
     const settings = merchantData.notification_settings;
     const merchantName = merchantData.shopName || shop;
 

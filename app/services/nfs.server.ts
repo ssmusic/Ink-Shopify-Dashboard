@@ -204,6 +204,39 @@ export const NFSService = {
   },
 
   /**
+   * Attaches fulfillment-time tracking to a proof (the tracking hop).
+   * The backend stores carrier/tracking and registers the number with the
+   * Shippo feed so carrier scans drive the delivery journey. No delivered
+   * semantics. Called from the fulfillments/create Shopify webhook.
+   */
+  async updateTracking(
+    proofId: string,
+    apiKey: string,
+    payload: { carrier_name?: string; tracking_number: string; tracking_url?: string },
+  ): Promise<any> {
+    console.log(`📦 Forwarding tracking for proof ${proofId}:`, payload);
+
+    const response = await fetch(`${NFS_API_URL}/api/proofs/${proofId}/tracking`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ ink. Tracking Update Failed [${response.status}]:`, errorText);
+      throw new Error(`ink. Tracking Update failed: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("✅ ink. Tracking Update Success:", data);
+    return data;
+  },
+
+  /**
    * Verifies the HMAC signature of an incoming webhook.
    */
   verifyWebhookSignature(payload: string, signature: string): boolean {
