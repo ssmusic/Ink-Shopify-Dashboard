@@ -75,7 +75,10 @@ export async function fetchBrandEmailKit(shopId: string): Promise<BrandEmailKit 
 
     return {
       brandName: null, // caller already resolves the display name (From-name precedence)
-      logoUrl: httpsImage(logo?.primary_logo_candidate),
+      // .svg excluded: Gmail refuses SVG images, leaving an empty band.
+      logoUrl: /\.svg(\?|$)/i.test(String(logo?.primary_logo_candidate ?? ""))
+        ? null
+        : httpsImage(logo?.primary_logo_candidate),
       ink: pickHex(colors?.primary, "#111111"),
       paper: pickHex(colors?.surface, "#FAF8F4"),
       heroUrl:
