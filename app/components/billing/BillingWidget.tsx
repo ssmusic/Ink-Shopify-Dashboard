@@ -3,16 +3,11 @@ import { useFetcher } from "react-router";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
-interface BillingWidgetProps {
-  // Plan cap is config, not engagement data — still a placeholder until billing is wired.
-  cap?: number;
-}
-
-const BillingWidget = ({ cap = 500 }: BillingWidgetProps) => {
+const BillingWidget = () => {
   const navigate = useNavigate();
 
-  // Real enrollment + tap counts (replaces the old 47/31 mock), shared source
-  // with CurrentPlanCard + EngagementFunnel.
+  // Real enrollment + tap counts (shared source with CurrentPlanCard +
+  // EngagementFunnel). Engagement is informational, not billable.
   const fetcher = useFetcher<{ totalTaps: number; enrollments: number; engaged: number }>();
   useEffect(() => {
     if (fetcher.state === "idle" && !fetcher.data) {
@@ -24,18 +19,14 @@ const BillingWidget = ({ cap = 500 }: BillingWidgetProps) => {
   const enrollments = fetcher.data?.enrollments ?? 0;
   const taps = fetcher.data?.totalTaps ?? 0;
 
-  // Tap + enrollment charges at the published rates ($0.99 / $2.99). Tags
-  // pass-through is billed separately and not included in this quick strip.
-  const total = enrollments * 0.99 + taps * 2.99;
-  const used = total;
-  const pct = Math.min(Math.round((used / cap) * 100), 100);
-
-  const fmt = (n: number) =>
-    `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
   return (
     <div
       onClick={() => navigate("/billing")}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") navigate("/billing");
+      }}
+      role="button"
+      tabIndex={0}
       className="relative bg-card border border-border rounded-sm p-5 cursor-pointer hover:border-muted-foreground transition-colors"
     >
       {isLoading && (
@@ -45,18 +36,13 @@ const BillingWidget = ({ cap = 500 }: BillingWidgetProps) => {
       )}
       <p className="text-sm font-medium text-foreground">This Cycle</p>
       <p className="text-sm text-muted-foreground mt-1">
-        {enrollments} enrollments · {taps} taps · {fmt(total)}
+        {enrollments} enrollments · {taps} taps
       </p>
-
-      <div className="mt-3 h-1.5 w-full rounded bg-border overflow-hidden">
-        <div
-          className="h-full rounded bg-foreground transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-
-      <p className="mt-1.5 text-xs text-muted-foreground">
-        {pct}% of {fmt(cap)} cap
+      {/* Real pricing model: a flat monthly plan billed by Shopify (managed
+          pricing) + $2.50 per COMPLETED return. Engagement (taps/scans) is free,
+          so this strip shows engagement, never a fabricated per-tap charge. */}
+      <p className="mt-2.5 text-xs text-muted-foreground">
+        Plan billed monthly by Shopify · $2.50 per completed return
       </p>
     </div>
   );
