@@ -340,9 +340,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           }
           proofReference = inkData?.proof_id || "";
           verificationStatus = proofReference ? "enrolled" : "pending";
-          console.log(
-            `✅ [orders/create] Auto-enrolled ${orderName} → proof ${proofReference}, token ${inkToken}`
-          );
+          if (inkData?.already_enrolled && inkData?.nfc_token) {
+            // Backend deduped on (shop_id, order_id) — this delivery was a
+            // duplicate (Shopify is at-least-once). Stamp the EXISTING
+            // proof's token, not the fresh one minted above, or the
+            // ink_token metafield would point at a token that was never
+            // enrolled.
+            inkToken = inkData.nfc_token;
+            console.log(
+              `[orders/create] ${orderName} already enrolled on backend (proof ${proofReference}); aligned token`
+            );
+          } else {
+            console.log(
+              `✅ [orders/create] Auto-enrolled ${orderName} → proof ${proofReference}, token ${inkToken}`
+            );
+          }
         }
       }
     } catch (enrollErr: any) {
