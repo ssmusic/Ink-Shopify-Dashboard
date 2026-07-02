@@ -412,22 +412,31 @@ export const EmailService = {
       ? filledBody + `\n\nOpen your order: ${returnButtonUrl}`
       : `Your ${merchantName} order ${orderName} has arrived. Delivery confirmed. Your receipt + returns: ${returnButtonUrl}`;
 
-    try {
-      await sendgrid.send({
-        to,
-        from: { email: senderEmail, name: senderName },
-        ...(replyTo ? { replyTo } : {}),
-        subject: finalSubject,
-        text: finalText,
-        html: finalHtml,
-      });
-
-      console.log(`✅ Return Passport email sent to ${to} (from ${senderEmail})`);
-      return true;
-    } catch (error: any) {
-      console.error("❌ Failed to send email:", error.response?.body || error.message);
-      return false;
+    // One retry on transient transport failures (undici "fetch failed",
+    // ECONNRESET, SendGrid 5xx). The first live send for order #1012
+    // (2026-07-02) failed exactly this way and succeeded on the manual
+    // retry — the delivered email is the product's front door; it doesn't
+    // get to lose a coin flip.
+    const message = {
+      to,
+      from: { email: senderEmail, name: senderName },
+      ...(replyTo ? { replyTo } : {}),
+      subject: finalSubject,
+      text: finalText,
+      html: finalHtml,
+    };
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await sendgrid.send(message);
+        console.log(`✅ Return Passport email sent to ${to} (from ${senderEmail})${attempt > 1 ? " (on retry)" : ""}`);
+        return true;
+      } catch (error: any) {
+        console.error(`❌ Email send attempt ${attempt}/2 failed:`, error.response?.body || error.message);
+        if (attempt === 2) return false;
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
     }
+    return false;
   },
 
   /**
