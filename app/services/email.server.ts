@@ -153,6 +153,15 @@ export const EmailService = {
     // and the buyer's aimed section — the SAME campaign the tap page shows
     // for this proof — renders after the primary CTA, links stamped
     // utm_medium=email for attribution.
+    // Logo images render on a WHITE band: brand logo assets are authored for
+    // light ground (Steve Madden ships "SM_logo_…_Black.png" — on the brand's
+    // near-black ink band it disappeared into an empty black box, caught in
+    // Sam's inbox 2026-07-02). Text fallbacks keep the ink-colored band.
+    const headerBandStyle = brand
+      ? brand.logoUrl
+        ? ` style="background:#ffffff;border-bottom:1px solid #ececec;"`
+        : ` style="background:${brand.ink};"`
+      : "";
     const headerHtml = brand
       ? brand.logoUrl
         ? `<img src="${brand.logoUrl}" alt="${escapeHtml(merchantName)}" style="max-height:30px;max-width:240px;" />`
@@ -334,7 +343,7 @@ export const EmailService = {
       <body>
         <div class="email-container">
           <!-- Header -->
-          <div class="header"${brand ? ` style="background:${brand.ink};"` : ""}>
+          <div class="header"${headerBandStyle}>
             ${headerHtml}
           </div>
 
