@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { NFSService } from "../services/nfs.server";
 import firestore from "../firestore.server";
+import { findMerchantDoc } from "../services/merchant-doc.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { payload, shop, topic, admin } = await authenticate.webhook(request);
@@ -24,18 +25,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   // Fetch the proof_reference metafield to see if this order was enrolled in INK
   try {
-    // 1. Look up the merchant's ink_api_key from Firestore using the shop domain.
-    //    The API spec requires Bearer <api_key> for PATCH /api/proofs/:proof_id/delivered.
-    let merchantApiKey: string | null = null;
-    const merchantSnap = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shop)
-      .limit(1)
-      .get();
-
-    if (!merchantSnap.empty) {
-      merchantApiKey = merchantSnap.docs[0].data()?.ink_api_key || null;
-    }
+    // 1. Look up the merchant's ink_api_key — convention-proof resolver
+    //    (doc-id first, then shop/shopDomain/shop_domain fields). The old
+    //    shopDomain-only query 500'd on every shop whose doc uses the other
+    //    conventions (Phase-1 rehearsal, order #1015, 2026-07-02).
+    const merchantHit = await findMerchantDoc(firestore, shop);
+    const merchantApiKey: string | null = merchantHit?.apiKey ?? null;
 
     if (!merchantApiKey) {
       console.error(`[${topic}] No ink_api_key found in Firestore for shop: ${shop}. Cannot mark delivered.`);
