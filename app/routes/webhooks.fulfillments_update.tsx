@@ -61,9 +61,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return new Response("OK", { status: 200 });
     }
 
-    // Is it an INK order?
-    if (!order.tags.includes("INK")) {
-      console.log(`ℹ️ Order ${order.name} is not tagged with INK. Skipping.`);
+    // Is it an INK order? The proof_reference metafield is the enrollment
+    // marker — the old exact-tag check (`tags.includes("INK")`) failed on
+    // every real enrollment, which tags orders "INK-Verified-Delivery", so
+    // delivered events were silently skipped (Phase-1 rehearsal finding #4,
+    // order #1015, 2026-07-02).
+    if (!order.proofMetafield?.value) {
+      console.log(`ℹ️ Order ${order.name} has no ink.proof_reference — not an enrolled order. Skipping.`);
       return new Response("OK", { status: 200 });
     }
 
