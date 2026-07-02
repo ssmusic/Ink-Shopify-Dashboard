@@ -147,45 +147,87 @@ export const EmailService = {
     // Determine return button URL
     const returnButtonUrl = returnUrl || proofUrl;
 
-    // ── Email-as-tap-page pieces (all optional, all inline-styled) ──────
-    // The header band wears the brand (logo image > brand name in caps >
-    // today's "ink."), the page's own hero media rides under the heading,
-    // and the buyer's aimed section — the SAME campaign the tap page shows
-    // for this proof — renders after the primary CTA, links stamped
-    // utm_medium=email for attribution.
-    // Logo images render on a WHITE band: brand logo assets are authored for
-    // light ground (Steve Madden ships "SM_logo_…_Black.png" — on the brand's
-    // near-black ink band it disappeared into an empty black box, caught in
-    // Sam's inbox 2026-07-02). Text fallbacks keep the ink-colored band.
-    const headerBandStyle = brand
-      ? brand.logoUrl
-        ? ` style="background:#ffffff;border-bottom:1px solid #ececec;"`
-        : ` style="background:${brand.ink};"`
+    // ── Email-as-tap-page, full-bleed (Sam, 2026-07-02: "make the pic take
+    // up the whole page — not a phone screen in a sea of white"). The email
+    // wears the PAGE's dark theme: edge-to-edge hero, dark ground, light
+    // type, the bought product's thumb overlapping the hero corner (same
+    // corner-stamp idea as the page; negative margin degrades gracefully in
+    // clients that ignore it). Neutral no-book sends keep the legacy light
+    // template untouched.
+    const hexLuma = (hex: string): number => {
+      const m = hex.replace("#", "");
+      const f = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
+      const n = parseInt(f, 16);
+      if (Number.isNaN(n)) return 0;
+      return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+    };
+    // Ground = the brand's ink when it's genuinely deep; otherwise a neutral
+    // near-black. Light type on top either way.
+    const ground = brand && hexLuma(brand.ink) < 0.5 ? brand.ink : "#101010";
+    const mut = (a: number) => `rgba(255,255,255,${a})`;
+    // Logos are authored for light ground (Steve ships SM_logo_…_Black.png —
+    // on a dark band it vanished, caught in Sam's inbox): logo ⇒ white band.
+    const bandRow = brand?.logoUrl
+      ? `<tr><td style="background:#ffffff;padding:16px 24px;text-align:center;line-height:0;"><img src="${brand.logoUrl}" alt="${escapeHtml(merchantName)}" style="max-height:28px;max-width:240px;" /></td></tr>`
+      : `<tr><td style="padding:18px 24px;text-align:center;border-bottom:1px solid ${mut(0.12)};"><span style="font-size:15px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#ffffff;">${escapeHtml(merchantName)}</span></td></tr>`;
+    const heroRow = brand?.heroUrl
+      ? `<tr><td style="padding:0;line-height:0;"><img src="${brand.heroUrl}" alt="" width="100%" style="width:100%;display:block;" /></td></tr>`
       : "";
-    const headerHtml = brand
-      ? brand.logoUrl
-        ? `<img src="${brand.logoUrl}" alt="${escapeHtml(merchantName)}" style="max-height:30px;max-width:240px;" />`
-        : `<h1 class="header-title" style="letter-spacing:.12em;text-transform:uppercase;">${escapeHtml(merchantName)}</h1>`
-      : `<h1 class="header-title">ink.</h1>`;
-    const heroHtml = brand?.heroUrl
-      ? `<img src="${brand.heroUrl}" alt="" width="100%" style="width:100%;border-radius:6px;display:block;margin:16px 0 4px;" />`
+    const productThumb = productImageUrl
+      ? `<img src="${productImageUrl}" alt="${escapeHtml(productName || "")}" width="88" style="width:88px;height:88px;object-fit:cover;float:right;margin:${brand?.heroUrl ? "-72px" : "0"} 0 10px 14px;border:3px solid ${ground};border-radius:6px;background:#ffffff;" />`
       : "";
     const campaignCta = campaign ? stampEmailUtm(campaign.cta_url, campaign.id) : "";
-    const campaignHtml = campaign
-      ? `
-            <div style="text-align:left;border-top:1px solid #ececec;margin-top:28px;padding-top:20px;">
-              <p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#888;margin:0 0 8px;">From ${escapeHtml(merchantName)}</p>
-              <h3 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;line-height:1.2;margin:0 0 8px;color:#111;">${escapeHtml(campaign.headline)}</h3>
-              ${campaign.body ? `<p style="font-size:14px;line-height:1.55;color:#555;margin:0 0 12px;">${escapeHtml(campaign.body)}</p>` : ""}
+    const campaignRow = campaign
+      ? `<tr><td style="padding:6px 24px 6px;">
+            <div style="border-top:1px solid ${mut(0.14)};padding-top:20px;">
+              <p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:${mut(0.55)};margin:0 0 8px;">From ${escapeHtml(merchantName)}</p>
+              <h3 style="font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:24px;line-height:1.2;margin:0 0 8px;color:#ffffff;">${escapeHtml(campaign.headline)}</h3>
+              ${campaign.body ? `<p style="font-size:14px;line-height:1.55;color:${mut(0.72)};margin:0 0 14px;">${escapeHtml(campaign.body)}</p>` : ""}
               ${Array.isArray(campaign.images) && campaign.images.length
-                ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 12px;"><tr>
+                ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:2px 0 14px;"><tr>
                     ${campaign.images.slice(0, 3).map((u) => `<td style="padding-right:6px;width:33%;"><a href="${campaignCta}"><img src="${u}" alt="" width="100%" style="width:100%;border-radius:4px;display:block;" /></a></td>`).join("")}
                   </tr></table>`
                 : ""}
-              ${campaign.code ? `<p style="font-family:'Courier New',monospace;font-size:14px;letter-spacing:.08em;border:1px dashed #999;display:inline-block;padding:8px 12px;margin:0 0 12px;color:#111;">${escapeHtml(campaign.code)}</p>` : ""}
-              <div><a href="${campaignCta}" style="display:inline-block;background:${brand?.ink || "#111111"};color:#ffffff;text-decoration:none;padding:12px 22px;font-weight:700;font-size:14px;">${escapeHtml(campaign.cta_label || "Take a look")}</a></div>
-            </div>`
+              ${campaign.code ? `<p style="font-family:'Courier New',monospace;font-size:14px;letter-spacing:.08em;border:1px dashed ${mut(0.5)};display:inline-block;padding:8px 12px;margin:0 0 14px;color:#ffffff;">${escapeHtml(campaign.code)}</p>` : ""}
+              <div><a href="${campaignCta}" style="display:inline-block;background:#ffffff;color:${ground};text-decoration:none;padding:12px 22px;font-weight:700;font-size:14px;">${escapeHtml(campaign.cta_label || "Take a look")}</a></div>
+            </div>
+          </td></tr>`
       : "";
+    const brandedHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Your order has arrived — ${orderName}</title>
+      </head>
+      <body style="margin:0;padding:0;background:${ground};">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${ground};"><tr><td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:${ground};font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
+            ${bandRow}
+            ${heroRow}
+            <tr><td style="padding:24px 24px 6px;">
+              ${productThumb}
+              <p style="font-family:'Courier New',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:${mut(0.55)};margin:0 0 12px;">Order ${escapeHtml(orderName)} · Delivery confirmed</p>
+              <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:30px;line-height:1.15;color:#ffffff;margin:0 0 20px;">${escapeHtml(customerName)}, your ${escapeHtml(productName || "order")} is here.</h1>
+              <a href="${proofUrl}" style="display:inline-block;background:#ffffff;color:${ground};text-decoration:none;padding:14px 26px;font-weight:700;font-size:14px;letter-spacing:.02em;">See your order &rarr;</a>
+            </td></tr>
+            ${campaignRow}
+            <tr><td style="padding:16px 24px 30px;">
+              <a href="${returnButtonUrl}" style="display:inline-block;border:1px solid ${mut(0.5)};color:#ffffff;text-decoration:none;padding:11px 20px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;">Start return &rarr;</a>
+              <p style="font-size:11px;color:${mut(0.4)};margin:22px 0 6px;">Return window ${returnWindowDays} days &middot; Delivered with <span style="font-weight:700;color:${mut(0.7)};">ink.</span></p>
+              <p style="font-size:11px;margin:0;word-break:break-all;"><a href="${proofUrl}" style="color:${mut(0.35)};">${proofUrl}</a></p>
+            </td></tr>
+          </table>
+        </td></tr></table>
+      </body>
+      </html>`;
+    // Legacy-template hooks (neutral no-book path only — brand/campaign are
+    // null there, so these all collapse to today's exact output).
+    const headerBandStyle = "";
+    const headerHtml = `<h1 class="header-title">ink.</h1>`;
+    const heroHtml = "";
+    const campaignHtml = "";
 
     // Template variables shared by merchant-authored subject + body.
     const tplVars: Record<string, string> = {
@@ -458,7 +500,9 @@ export const EmailService = {
              </div>
            </div>
          </div>`
-      : htmlContent;
+      : brand
+        ? brandedHtml
+        : htmlContent;
     const finalText = filledBody
       ? filledBody + `\n\nOpen your order: ${returnButtonUrl}`
       : `Your ${merchantName} order ${orderName} has arrived. Delivery confirmed. Your receipt + returns: ${returnButtonUrl}`;
