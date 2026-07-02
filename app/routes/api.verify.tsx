@@ -898,7 +898,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                 );
                             }
                             const productName = order.lineItems?.edges?.[0]?.node?.title || undefined;
+                            // Email-as-tap-page: pull the brand's public book
+                            // (logo, colors, hero, campaigns) and run the SAME
+                            // aimed-section selection the tap page runs for this
+                            // buyer — the email and the page always agree.
+                            // Fail-soft: any miss ⇒ neutral template, send goes out.
+                            const { fetchBrandEmailKit, selectEmailCampaign } = await import(
+                                "../services/brand-email.server"
+                            );
+                            const brandKit = await fetchBrandEmailKit(String(alanData.shop_id || ""));
+                            const emailCampaign = brandKit
+                                ? selectEmailCampaign(brandKit.campaigns, {
+                                      tier: (alanData.customer_tier as string | undefined) || null,
+                                      productTitles: [productName || ""],
+                                  })
+                                : null;
                             await EmailService.sendReturnPassportEmail({
+                                brand: brandKit,
+                                campaign: emailCampaign,
                                 to: order.customer.email,
                                 customerName: order.customer.firstName || "Customer",
                                 orderName: order.name,
