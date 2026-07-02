@@ -64,6 +64,13 @@ interface ReturnPassportEmailPayload {
   // exactly as before — the send never depends on the brand-book fetch.
   brand?: import("./brand-email.server").BrandEmailKit | null;
   campaign?: import("./brand-email.server").EmailCampaign | null;
+  // State-aware copy (Phase-1, 2026-07-02). "shipped" = the order left the
+  // building but the carrier hasn't said delivered: the email says ON ITS
+  // WAY and the CTA is "track it" — it must NOT claim arrival or cite a
+  // return window (the old always-arrival copy lied whenever a pre-delivery
+  // page open fired a send). "delivered" keeps today's arrival copy exactly.
+  // Callers derive this from the proof's carrier-authoritative delivered_at.
+  state?: "shipped" | "delivered";
 }
 
 // One-pass template substitution. The TEMPLATE is trusted (merchant-authored),
@@ -136,7 +143,9 @@ export const EmailService = {
       replyTo,
       brand,
       campaign,
+      state = "delivered",
     } = payload;
+    const shipped = state === "shipped";
 
     // Branded sender: {brand}@in.ink + shop_name when provided, else the neutral
     // notifications@in.ink env default. Reply-to = merchant support (omitted if
@@ -193,13 +202,32 @@ export const EmailService = {
             </div>
           </td></tr>`
       : "";
+    // State copy: the shipped email is the tracking page's herald — same
+    // headline register as StatusHero ("On its way."), CTA = track. No
+    // arrival claim, no return button (eligibility is NOT_YET_DELIVERED
+    // until the carrier says otherwise), no return-window arithmetic.
+    const eyebrowText = shipped ? "On its way" : "Delivery confirmed";
+    const brandedH1 = shipped
+      ? `${escapeHtml(customerName)}, your ${escapeHtml(productName || "order")} is on its way.`
+      : `${escapeHtml(customerName)}, your ${escapeHtml(productName || "order")} is here.`;
+    const brandedCtaLabel = shipped ? "Track your order &rarr;" : "See your order &rarr;";
+    const brandedFooterRow = shipped
+      ? `<tr><td style="padding:16px 24px 30px;">
+              <p style="font-size:11px;color:${mut(0.4)};margin:0 0 6px;">This page tracks your delivery live &middot; with <span style="font-weight:700;color:${mut(0.7)};">ink.</span></p>
+              <p style="font-size:11px;margin:0;word-break:break-all;"><a href="${proofUrl}" style="color:${mut(0.35)};">${proofUrl}</a></p>
+            </td></tr>`
+      : `<tr><td style="padding:16px 24px 30px;">
+              <a href="${returnButtonUrl}" style="display:inline-block;border:1px solid ${mut(0.5)};color:#ffffff;text-decoration:none;padding:11px 20px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;">Start return &rarr;</a>
+              <p style="font-size:11px;color:${mut(0.4)};margin:22px 0 6px;">Return window ${returnWindowDays} days &middot; Delivered with <span style="font-weight:700;color:${mut(0.7)};">ink.</span></p>
+              <p style="font-size:11px;margin:0;word-break:break-all;"><a href="${proofUrl}" style="color:${mut(0.35)};">${proofUrl}</a></p>
+            </td></tr>`;
     const brandedHtml = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-        <title>Your order has arrived — ${orderName}</title>
+        <title>${shipped ? "On its way" : "Your order has arrived"} — ${orderName}</title>
       </head>
       <body style="margin:0;padding:0;background:${ground};">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${ground};"><tr><td align="center">
@@ -208,16 +236,12 @@ export const EmailService = {
             ${heroRow}
             <tr><td style="padding:24px 24px 6px;">
               ${productThumb}
-              <p style="font-family:'Courier New',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:${mut(0.55)};margin:0 0 12px;">Order ${escapeHtml(orderName)} · Delivery confirmed</p>
-              <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:30px;line-height:1.15;color:#ffffff;margin:0 0 20px;">${escapeHtml(customerName)}, your ${escapeHtml(productName || "order")} is here.</h1>
-              <a href="${proofUrl}" style="display:inline-block;background:#ffffff;color:${ground};text-decoration:none;padding:14px 26px;font-weight:700;font-size:14px;letter-spacing:.02em;">See your order &rarr;</a>
+              <p style="font-family:'Courier New',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:${mut(0.55)};margin:0 0 12px;">Order ${escapeHtml(orderName)} · ${eyebrowText}</p>
+              <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:30px;line-height:1.15;color:#ffffff;margin:0 0 20px;">${brandedH1}</h1>
+              <a href="${proofUrl}" style="display:inline-block;background:#ffffff;color:${ground};text-decoration:none;padding:14px 26px;font-weight:700;font-size:14px;letter-spacing:.02em;">${brandedCtaLabel}</a>
             </td></tr>
             ${campaignRow}
-            <tr><td style="padding:16px 24px 30px;">
-              <a href="${returnButtonUrl}" style="display:inline-block;border:1px solid ${mut(0.5)};color:#ffffff;text-decoration:none;padding:11px 20px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;">Start return &rarr;</a>
-              <p style="font-size:11px;color:${mut(0.4)};margin:22px 0 6px;">Return window ${returnWindowDays} days &middot; Delivered with <span style="font-weight:700;color:${mut(0.7)};">ink.</span></p>
-              <p style="font-size:11px;margin:0;word-break:break-all;"><a href="${proofUrl}" style="color:${mut(0.35)};">${proofUrl}</a></p>
-            </td></tr>
+            ${brandedFooterRow}
           </table>
         </td></tr></table>
       </body>
@@ -246,7 +270,7 @@ export const EmailService = {
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-        <title>Your order has arrived — ${orderName}</title>
+        <title>${shipped ? "On its way" : "Your order has arrived"} — ${orderName}</title>
         <style type="text/css">
           @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600&display=swap');
           
@@ -393,9 +417,11 @@ export const EmailService = {
           <div class="content">
             <div class="order-badge">Order ${orderName}</div>
             
-            <h2 class="main-heading">Your order has arrived</h2>
+            <h2 class="main-heading">${shipped ? "Your order is on its way" : "Your order has arrived"}</h2>
             <p class="sub-heading">
-              Hi ${customerName}, your order from <strong>${merchantName}</strong> has arrived. Delivery confirmed.
+              ${shipped
+                ? `Hi ${customerName}, your order from <strong>${merchantName}</strong> is with the carrier. This page tracks it as it moves.`
+                : `Hi ${customerName}, your order from <strong>${merchantName}</strong> has arrived. Delivery confirmed.`}
             </p>
             ${heroHtml}
 
@@ -406,8 +432,8 @@ export const EmailService = {
             <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
               <tr>
                 <td align="center">
-                   <a href="${returnButtonUrl}" class="cta-button" style="color: #ffffff !important;">
-                     Start Return
+                   <a href="${shipped ? proofUrl : returnButtonUrl}" class="cta-button" style="color: #ffffff !important;">
+                     ${shipped ? "Track Your Order" : "Start Return"}
                    </a>
                 </td>
               </tr>
@@ -451,7 +477,7 @@ export const EmailService = {
                  <tr>
                     <td valign="top" width="50%">
                         <div class="info-label">Status</div>
-                        <div class="info-value">Confirmed on arrival</div>
+                        <div class="info-value">${shipped ? "With the carrier" : "Confirmed on arrival"}</div>
                     </td>
                     <td valign="top" width="50%">
                         <div class="info-label">Date</div>
@@ -479,7 +505,9 @@ export const EmailService = {
     // author full HTML in the Outreach panel.
     const finalSubject = subjectOverride && subjectOverride.trim()
       ? fillTemplate(subjectOverride, tplVars)
-      : `Your ${merchantName} order ${orderName} is here`;
+      : shipped
+        ? `Your ${merchantName} order ${orderName} is on its way`
+        : `Your ${merchantName} order ${orderName} is here`;
 
     const filledBody = bodyOverride && bodyOverride.trim()
       ? fillTemplate(bodyOverride, tplVars)
@@ -505,7 +533,9 @@ export const EmailService = {
         : htmlContent;
     const finalText = filledBody
       ? filledBody + `\n\nOpen your order: ${returnButtonUrl}`
-      : `Your ${merchantName} order ${orderName} has arrived. Delivery confirmed. Your receipt + returns: ${returnButtonUrl}`;
+      : shipped
+        ? `Your ${merchantName} order ${orderName} is on its way. Track it live: ${proofUrl}`
+        : `Your ${merchantName} order ${orderName} has arrived. Delivery confirmed. Your receipt + returns: ${returnButtonUrl}`;
 
     // One retry on transient transport failures (undici "fetch failed",
     // ECONNRESET, SendGrid 5xx). The first live send for order #1012
