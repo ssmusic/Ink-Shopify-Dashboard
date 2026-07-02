@@ -52,6 +52,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       `query GetOrderMetafield($id: ID!) {
         order(id: $id) {
           name
+          customer { email firstName }
           metafield(namespace: "ink", key: "proof_reference") { value }
         }
       }`,
@@ -60,6 +61,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const orderJson = await response.json();
     const proofId: string | undefined = orderJson.data?.order?.metafield?.value;
     const orderName: string = orderJson.data?.order?.name ?? String(orderId);
+    const customer = orderJson.data?.order?.customer;
 
     if (!proofId) {
       console.log(`[${topic}] Order ${orderName} has no ink.proof_reference — not an enrolled order. Ignoring.`);
@@ -79,6 +81,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       tracking_url: trackingUrl || undefined,
     });
     console.log(`✅ [${topic}] Tracking forwarded for ${orderName}: ${trackingCompany ?? "?"} ${trackingNumber} → ${proofId}`);
+
+    // The SHIPPED email belongs to this moment — tracking just landed on
+    // the proof, so the page is live as a tracker. "On its way — track it",
+    // CTA = the customer's own page. Gated + deduped inside (one per order);
+    // never blocks the 200.
+    try {
+      const { sendStateEmailOnce } = await import("../services/state-email.server");
+      await sendStateEmailOnce({
+        state: "shipped",
+        admin,
+        shop,
+        orderGid: `gid://shopify/Order/${orderId}`,
+        orderName,
+        customerEmail: customer?.email,
+        customerName: customer?.firstName || "Customer",
+        proofId,
+        merchantData: merchantHit?.data ?? {},
+      });
+    } catch (e: any) {
+      console.error(`❌ shipped email failed (non-fatal):`, e?.message);
+    }
   } catch (error: any) {
     console.error(`❌ [${topic}] Tracking hop failed (webhook still 200s):`, error?.message ?? error);
   }

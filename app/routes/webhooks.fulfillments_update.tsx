@@ -108,6 +108,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       } else {
         console.log(`⚠️ No ink_api_key for ${shop}; cannot mark proof delivered.`);
       }
+
+      // The ARRIVAL email belongs to this moment — the carrier said
+      // delivered — not to page-open (api.verify), which used to claim
+      // arrival whenever it fired. Gated + deduped inside; never blocks
+      // the 200. Sent even if our mark-delivered write hiccuped above:
+      // the carrier event, not our ledger, makes the claim true.
+      try {
+        const { sendStateEmailOnce } = await import("../services/state-email.server");
+        await sendStateEmailOnce({
+          state: "delivered",
+          admin,
+          shop,
+          orderGid,
+          orderName: order.name,
+          customerEmail: order.customer?.email,
+          customerName: order.customer?.firstName || "Customer",
+          proofId: order.proofMetafield.value,
+          merchantData,
+        });
+      } catch (e: any) {
+        console.error(`❌ arrival email failed (non-fatal):`, e?.message);
+      }
     }
 
     if (!settings) {

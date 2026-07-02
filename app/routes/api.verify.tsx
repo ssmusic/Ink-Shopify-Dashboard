@@ -627,11 +627,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 };
                 
                 const queryFields = `
-                  edges { 
-                      node { 
+                  edges {
+                      node {
                           id
                           name
                           customer { email firstName }
+                          arrivalEmailSent: metafield(namespace: "ink", key: "arrival_email_sent") { value }
                           lineItems(first: 1) {
                               edges {
                                   node {
@@ -642,7 +643,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                   }
                               }
                           }
-                      } 
+                      }
                   }
                 `;
 
@@ -661,6 +662,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                           id
                           name
                           customer { email firstName }
+                          arrivalEmailSent: metafield(namespace: "ink", key: "arrival_email_sent") { value }
                           lineItems(first: 1) {
                             edges { node { title image { url } } }
                           }
@@ -687,6 +689,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                         id
                                         name
                                         customer { email firstName }
+                                        arrivalEmailSent: metafield(namespace: "ink", key: "arrival_email_sent") { value }
                                         lineItems(first: 1) {
                                             edges { node { title image { url } } }
                                         }
@@ -740,7 +743,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     // Production customer notifications are the fulfillments/update
                     // webhook → NotificationService. Set SEND_VERIFY_EMAIL=true only
                     // for manual testing.
-                    if (order.customer?.email && process.env.SEND_VERIFY_EMAIL === "true") {
+                    // State-aware (Phase-1, 2026-07-02): a page-open send may only
+                    // claim arrival when the CARRIER said delivered — the proof's
+                    // delivered_at, stamped by fulfillments/update. Pre-delivery
+                    // opens get the "on its way — track it" copy instead of the
+                    // old unconditional arrival lie.
+                    const emailState: "shipped" | "delivered" = alanData.delivered_at
+                        ? "delivered"
+                        : "shipped";
+                    // The REAL arrival email now fires from the delivered webhook
+                    // (arrival-email.server.ts) and stamps ink.arrival_email_sent.
+                    // A later tap must not repeat the arrival claim into the inbox.
+                    const arrivalAlreadySent = Boolean(order.arrivalEmailSent?.value);
+                    if (emailState === "delivered" && arrivalAlreadySent) {
+                        console.log(
+                            `📧 SKIP tap-triggered email: arrival email already sent (${order.arrivalEmailSent.value}) for ${order.name}.`,
+                        );
+                    } else if (order.customer?.email && process.env.SEND_VERIFY_EMAIL === "true") {
                         const { EmailService } = await import("../services/email.server");
                         const { default: firestore } = await import("../firestore.server");
 
@@ -916,6 +935,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             await EmailService.sendReturnPassportEmail({
                                 brand: brandKit,
                                 campaign: emailCampaign,
+                                state: emailState,
                                 to: order.customer.email,
                                 customerName: order.customer.firstName || "Customer",
                                 orderName: order.name,
@@ -941,8 +961,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                     senderFromName ||
                                     session.shop.replace('.myshopify.com', ''),
                                 productImageUrl: productImageUrl,
-                                subjectOverride: outreachSubject,
-                                bodyOverride: outreachBody,
+                                // Merchant-authored Outreach copy is written for the
+                                // ARRIVAL moment ("return unlocked") — applying it to
+                                // a pre-delivery send would re-introduce the lie in
+                                // the merchant's own words. Shipped sends use the
+                                // state template.
+                                subjectOverride: emailState === "delivered" ? outreachSubject : undefined,
+                                bodyOverride: emailState === "delivered" ? outreachBody : undefined,
                                 productName: productName,
                                 fromEmail: senderFromEmail,
                                 fromName: senderFromName,
