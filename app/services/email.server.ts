@@ -1,5 +1,6 @@
 
 import sendgrid from "@sendgrid/mail";
+import { stampEmailUtm } from "./brand-email.server";
 
 // SendGrid credentials from environment variables. FROM defaults to a NEUTRAL
 // notifications@in.ink — the merchant-branded {brand}@in.ink From is passed in
@@ -57,6 +58,12 @@ interface ReturnPassportEmailPayload {
   fromEmail?: string;
   fromName?: string;
   replyTo?: string;
+  // Email-as-tap-page (2026-07-02): pre-resolved brand kit + the buyer's
+  // aimed section, resolved by the CALLER (which knows shop_id and the
+  // proof's customer_tier). Absent/null ⇒ the neutral template renders
+  // exactly as before — the send never depends on the brand-book fetch.
+  brand?: import("./brand-email.server").BrandEmailKit | null;
+  campaign?: import("./brand-email.server").EmailCampaign | null;
 }
 
 // One-pass template substitution. The TEMPLATE is trusted (merchant-authored),
@@ -127,6 +134,8 @@ export const EmailService = {
       fromEmail: fromEmailOverride,
       fromName,
       replyTo,
+      brand,
+      campaign,
     } = payload;
 
     // Branded sender: {brand}@in.ink + shop_name when provided, else the neutral
@@ -137,6 +146,37 @@ export const EmailService = {
 
     // Determine return button URL
     const returnButtonUrl = returnUrl || proofUrl;
+
+    // ── Email-as-tap-page pieces (all optional, all inline-styled) ──────
+    // The header band wears the brand (logo image > brand name in caps >
+    // today's "ink."), the page's own hero media rides under the heading,
+    // and the buyer's aimed section — the SAME campaign the tap page shows
+    // for this proof — renders after the primary CTA, links stamped
+    // utm_medium=email for attribution.
+    const headerHtml = brand
+      ? brand.logoUrl
+        ? `<img src="${brand.logoUrl}" alt="${escapeHtml(merchantName)}" style="max-height:30px;max-width:240px;" />`
+        : `<h1 class="header-title" style="letter-spacing:.12em;text-transform:uppercase;">${escapeHtml(merchantName)}</h1>`
+      : `<h1 class="header-title">ink.</h1>`;
+    const heroHtml = brand?.heroUrl
+      ? `<img src="${brand.heroUrl}" alt="" width="100%" style="width:100%;border-radius:6px;display:block;margin:16px 0 4px;" />`
+      : "";
+    const campaignCta = campaign ? stampEmailUtm(campaign.cta_url, campaign.id) : "";
+    const campaignHtml = campaign
+      ? `
+            <div style="text-align:left;border-top:1px solid #ececec;margin-top:28px;padding-top:20px;">
+              <p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#888;margin:0 0 8px;">From ${escapeHtml(merchantName)}</p>
+              <h3 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;line-height:1.2;margin:0 0 8px;color:#111;">${escapeHtml(campaign.headline)}</h3>
+              ${campaign.body ? `<p style="font-size:14px;line-height:1.55;color:#555;margin:0 0 12px;">${escapeHtml(campaign.body)}</p>` : ""}
+              ${Array.isArray(campaign.images) && campaign.images.length
+                ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 12px;"><tr>
+                    ${campaign.images.slice(0, 3).map((u) => `<td style="padding-right:6px;width:33%;"><a href="${campaignCta}"><img src="${u}" alt="" width="100%" style="width:100%;border-radius:4px;display:block;" /></a></td>`).join("")}
+                  </tr></table>`
+                : ""}
+              ${campaign.code ? `<p style="font-family:'Courier New',monospace;font-size:14px;letter-spacing:.08em;border:1px dashed #999;display:inline-block;padding:8px 12px;margin:0 0 12px;color:#111;">${escapeHtml(campaign.code)}</p>` : ""}
+              <div><a href="${campaignCta}" style="display:inline-block;background:${brand?.ink || "#111111"};color:#ffffff;text-decoration:none;padding:12px 22px;font-weight:700;font-size:14px;">${escapeHtml(campaign.cta_label || "Take a look")}</a></div>
+            </div>`
+      : "";
 
     // Template variables shared by merchant-authored subject + body.
     const tplVars: Record<string, string> = {
@@ -294,8 +334,8 @@ export const EmailService = {
       <body>
         <div class="email-container">
           <!-- Header -->
-          <div class="header">
-            <h1 class="header-title">ink.</h1>
+          <div class="header"${brand ? ` style="background:${brand.ink};"` : ""}>
+            ${headerHtml}
           </div>
 
           <!-- Main Content -->
@@ -306,6 +346,7 @@ export const EmailService = {
             <p class="sub-heading">
               Hi ${customerName}, your order from <strong>${merchantName}</strong> has arrived. Delivery confirmed.
             </p>
+            ${heroHtml}
 
             ${productImageUrl ? `
               <img src="${productImageUrl}" alt="Product" class="product-image" />
@@ -327,6 +368,7 @@ export const EmailService = {
                 ${proofUrl}
               </a>
             </div>
+            ${campaignHtml}
 
             <!-- Photos Section (if needed) -->
             ${photoUrls.length > 0 ? `
