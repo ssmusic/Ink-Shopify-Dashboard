@@ -128,22 +128,58 @@ export async function sendStateEmailOnce(args: StateEmailArgs): Promise<void> {
   }
 
   // ── Branded sender + the same live link the physical tag resolves to ──
+  // Brand identity fields (brand_slug, shop_name, support_email) live on the
+  // BACKEND-provisioned merchant doc (merchants/{shop_id}); the embed's own
+  // doc (keyed by the myshopify domain) carries the api key but not the
+  // brand. Caught live on #1016's shipped email: it went out as
+  // sm-test-hhawzn52@in.ink instead of stevemadden@in.ink. Merge the backend
+  // doc over the embed doc for brand resolution, same as api.verify does.
+  let brandDoc: Record<string, any> = merchantData;
+  if (proofShopId) {
+    try {
+      const { default: firestore } = await import("../firestore.server");
+      const d = await firestore.collection("merchants").doc(proofShopId).get();
+      if (d.exists) brandDoc = { ...merchantData, ...(d.data() || {}) };
+    } catch (e: any) {
+      console.warn(`📧 ${label}: backend merchant doc fetch failed (${e?.message}) — using embed doc for branding.`);
+    }
+  }
   const brandDomain =
-    (merchantData.shop_domain as string | undefined) ||
-    (merchantData.shopDomain as string | undefined) ||
+    (brandDoc.shop_domain as string | undefined) ||
+    (brandDoc.shopDomain as string | undefined) ||
     shop;
   const brandSlug =
-    brandSlugFromDomain(merchantData.brand_slug as string | undefined) ||
+    brandSlugFromDomain(brandDoc.brand_slug as string | undefined) ||
     brandSlugFromDomain(brandDomain);
   const senderFromEmail = brandSlug && brandSlug.length >= 2 ? `${brandSlug}@in.ink` : undefined;
   const senderFromName =
-    (merchantData.shop_name as string | undefined) ||
-    (merchantData.name as string | undefined) ||
+    (brandDoc.shop_name as string | undefined) ||
+    (brandDoc.name as string | undefined) ||
     undefined;
   const senderReplyTo =
-    (merchantData.support_email as string | undefined) ||
-    (merchantData.owner_email as string | undefined) ||
+    (brandDoc.support_email as string | undefined) ||
+    (brandDoc.owner_email as string | undefined) ||
     undefined;
+
+  // Outreach toggles live on the backend doc too (the Outreach panel writes
+  // there) — re-check against the merged doc so a merchant's email_enabled=
+  // false actually turns the rail off. The pre-merge check above only saw
+  // the embed doc's (usually absent) settings.
+  const mergedOutreach = (brandDoc.outreach as Record<string, any> | undefined) || {};
+  const mergedNotifications = (mergedOutreach.notifications as Record<string, any> | undefined) || {};
+  const mergedEmailEnabled =
+    typeof mergedNotifications.email_enabled === "boolean" ? mergedNotifications.email_enabled : true;
+  const mergedDeliveredOn =
+    typeof mergedNotifications.delivered_on === "boolean" ? mergedNotifications.delivered_on : true;
+  if (!mergedEmailEnabled || (state === "delivered" && !mergedDeliveredOn)) {
+    console.log(`📧 SKIP ${label} (merchant outreach off, backend doc): email_enabled=${mergedEmailEnabled}, delivered_on=${mergedDeliveredOn}.`);
+    return;
+  }
+  const mergedTestMerchant = Boolean(brandDoc.returns_test_mode || brandDoc.is_test);
+  if (mergedTestMerchant && !recipientAllowlisted) {
+    console.log(`📧 SKIP ${label} (test-mode merchant, backend doc): refusing real customer send for ${customerEmail}.`);
+    return;
+  }
   const proofUrl =
     brandSlug && nfcToken
       ? `https://${brandSlug}.in.ink/r/${nfcToken}`
