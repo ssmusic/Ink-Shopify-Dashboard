@@ -44,6 +44,13 @@ export interface NotificationPayload {
   merchantName: string;
   verifyUrl?: string; // Tap link / Verification link
   returnWindowDays?: number;
+  /**
+   * Whether the customer has AFFIRMATIVELY opted in to SMS (Shopify
+   * smsMarketingConsent === SUBSCRIBED). SMS is default-deny: it is sent only
+   * when this is explicitly true. A phone number being present is NOT consent
+   * (Twilio toll-free reason 30475 / TCPA).
+   */
+  smsConsent?: boolean;
 }
 
 export const NotificationService = {
@@ -62,9 +69,14 @@ export const NotificationService = {
     let emailSent = false;
     let smsSent = false;
 
-    // 2. Dispatch SMS if channel is enabled
-    if (channels?.sms && toPhone) {
+    // 2. Dispatch SMS — HARD default-deny consent gate. We only text customers
+    // who have affirmatively opted in to SMS (Shopify smsMarketingConsent ===
+    // SUBSCRIBED, surfaced as payload.smsConsent). A phone number being present
+    // is NOT consent (Twilio toll-free reason 30475 / TCPA).
+    if (channels?.sms && payload.smsConsent === true && toPhone) {
       smsSent = await this.sendSms(payload);
+    } else if (channels?.sms && payload.smsConsent !== true) {
+      console.log(`[NotificationService] SMS skipped for ${payload.orderName} — customer has not opted in to SMS (no consent).`);
     } else if (channels?.sms && !toPhone) {
       console.warn(`[NotificationService] SMS channel enabled but no phone number provided for order ${payload.orderName}`);
     }

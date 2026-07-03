@@ -358,6 +358,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   email
                   phone
                   firstName
+                  smsMarketingConsent { marketingState }
                 }
                 shippingAddress {
                   phone
@@ -378,6 +379,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             const customerEmail = orderData.data.order.customer.email;
             // Shopify often nulls customer.phone but keeps shippingAddress.phone.
             const customerPhone = orderData.data.order.customer.phone ?? orderData.data.order.shippingAddress?.phone;
+            // SMS consent gate (Twilio 30475 / TCPA): only text customers who
+            // AFFIRMATIVELY opted in via Shopify's SMS marketing consent.
+            const smsConsent = orderData.data.order.customer.smsMarketingConsent?.marketingState === "SUBSCRIBED";
             const customerName = orderData.data.order.customer.firstName || "Customer";
             const orderName = orderData.data.order.name;
             
@@ -504,6 +508,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                    type: notificationType,
                    toEmail: customerEmail,
                    toPhone: customerPhone,
+                   smsConsent,
                    customerName,
                    orderName,
                    merchantName,

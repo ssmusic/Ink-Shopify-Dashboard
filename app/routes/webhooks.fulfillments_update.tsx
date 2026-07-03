@@ -43,6 +43,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             email
             phone
             firstName
+            smsMarketingConsent { marketingState }
           }
           shippingAddress {
             phone
@@ -95,6 +96,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const customerEmail = order.customer?.email;
       // Shopify often nulls customer.phone but keeps shippingAddress.phone.
       const customerPhone = order.customer?.phone ?? order.shippingAddress?.phone;
+      // SMS consent gate (Twilio 30475 / TCPA): only text customers who have
+      // AFFIRMATIVELY opted in via Shopify's SMS marketing consent. A shipping
+      // phone number is NOT consent. Email is unaffected.
+      const smsConsent = order.customer?.smsMarketingConsent?.marketingState === "SUBSCRIBED";
       const customerName = order.customer?.firstName || "Customer";
       // Use the REAL verify_url that Alan's /ink/update webhook stored on the
       // order (canonical {brand}.in.ink/r/{token}). The old code built
@@ -111,6 +116,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         type: notificationType,
         toEmail: customerEmail,
         toPhone: customerPhone,
+        smsConsent,
         customerName: customerName,
         orderName: order.name,
         merchantName: merchantName,
