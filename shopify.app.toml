@@ -74,6 +74,3 @@ redirect_urls = [
   "https://app.in.ink/auth/shopify/callback"
 ]
 
-# Checkout UI Extension for INK disclosure
-[[extensions.paths]]
-path = "extensions/ink-checkout-disclosure"
