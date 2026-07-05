@@ -1,6 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
-import crypto from "crypto";
+import { verifyProxyToken } from "../services/token-verify.server";
 
 /**
  * Public endpoint (authenticated by warehouse JWT only).
@@ -28,38 +28,9 @@ const INK_API_URL =
   process.env.NFS_API_URL ||
   "https://us-central1-inink-c76d3.cloudfunctions.net/api";
 
-const JWT_SECRET =
-  process.env.WAREHOUSE_JWT_SECRET ||
-  process.env.SHOPIFY_API_SECRET ||
-  "fallback-dev-secret";
-
-function extractTokenPayload(token: string): { shop?: string; merchant_id?: string } | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const [header, body, signature] = parts;
-
-    // 1. Try strict HMAC verification (our own issued tokens)
-    const expectedSig = crypto
-      .createHmac("sha256", JWT_SECRET)
-      .update(`${header}.${body}`)
-      .digest("base64url");
-
-    let payload: any;
-    if (signature === expectedSig) {
-      payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-      return { shop: payload.shop, merchant_id: payload.merchant_id };
-    }
-
-    // 2. Fall back to decode-without-verify (Alan's JWTs)
-    payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return { shop: payload.shop, merchant_id: payload.merchant_id };
-  } catch {
-    return null;
-  }
-}
+// Token verification now lives in services/token-verify.server.ts —
+// local HMAC for our own tokens, REMOTE /auth/validate for ink-backend
+// JWTs. The old decode-without-verify fallback is gone (fix-list #2).
 
 import { createMerchant, enrollOrder, getShopIdByDomain, adjustMerchantInventory, getInventoryByShopDomain } from "../services/ink-api.server";
 
@@ -147,7 +118,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log("[ENROLL] ❌ Missing or malformed Authorization header");
     return json({ error: "Unauthorized" }, { status: 401 });
   }
-  const tokenPayload = extractTokenPayload(authHeader.slice(7));
+  const tokenPayload = await verifyProxyToken(authHeader.slice(7));
   console.log("[ENROLL] Token payload decoded:", tokenPayload ? JSON.stringify(tokenPayload) : "NULL (invalid/expired)");
   if (!tokenPayload) {
     console.log("[ENROLL] ❌ Token rejected");

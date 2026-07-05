@@ -1,4 +1,5 @@
 import { type ActionFunctionArgs } from "react-router";
+import { allowRequest, clientIp, rateLimitResponse } from "../services/rate-limit.server";
 import { serialNumberToToken } from "../utils/nfc-conversion.server";
 import { INK_NAMESPACE } from "../utils/metafields.server";
 import { getProof } from "../services/ink-api.server";
@@ -20,6 +21,9 @@ export const loader = async () => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // Public endpoint — per-IP rate limit (services/rate-limit.server.ts).
+  if (!allowRequest(`verify:${clientIp(request)}`, 60)) return rateLimitResponse();
+
     // CRITICAL: Log EVERY request that hits this endpoint
     console.log("\n🚨 =================================================");
     console.log("🚨 /api/verify ENDPOINT HIT");

@@ -1,6 +1,6 @@
 import { type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
-import crypto from "crypto";
+import { verifyProxyToken } from "../services/token-verify.server";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const json = (data: any, init?: ResponseInit) =>
@@ -14,35 +14,7 @@ const json = (data: any, init?: ResponseInit) =>
     ...init,
   });
 
-const JWT_SECRET =
-  process.env.WAREHOUSE_JWT_SECRET ||
-  process.env.SHOPIFY_API_SECRET ||
-  "fallback-dev-secret";
-
-// Verify our HMAC-based token from app.api.auth.login.tsx
-function verifyToken(token: string): { sub: string; shop: string; email: string; name: string } | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-
-    const [header, body, signature] = parts;
-    const expectedSig = crypto
-      .createHmac("sha256", JWT_SECRET)
-      .update(`${header}.${body}`)
-      .digest("base64url");
-
-    if (signature !== expectedSig) return null;
-
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-
-    // Check expiry
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-
-    return payload;
-  } catch {
-    return null;
-  }
-}
+// Token verification: services/token-verify.server.ts (shared, fail-closed).
 
 // ─── Shopify GraphQL helper ────────────────────────────────────────────────────
 async function fetchShopifyOrders(shopDomain: string, search: string): Promise<any[]> {
@@ -240,7 +212,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const token = authHeader.slice(7);
-  const payload = verifyToken(token);
+  const payload = await verifyProxyToken(token);
   if (!payload) {
     return json({ error: "Invalid or expired token" }, { status: 401 });
   }

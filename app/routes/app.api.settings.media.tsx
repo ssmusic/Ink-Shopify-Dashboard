@@ -1,6 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
-import crypto from "crypto";
+import { verifyProxyToken } from "../services/token-verify.server";
 import { authenticate } from "../shopify.server";
 
 const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
@@ -22,11 +22,6 @@ function toMerchantSlug(shopDomain: string): string {
   return shopDomain.replace('.myshopify.com', '').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
 }
 
-const JWT_SECRET =
-  process.env.WAREHOUSE_JWT_SECRET ||
-  process.env.SHOPIFY_API_SECRET ||
-  "fallback-dev-secret";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, PATCH, OPTIONS",
@@ -39,54 +34,24 @@ const json = (data: any, init?: ResponseInit) =>
     ...init,
   });
 
-function decodeToken(token: string): { shop?: string; merchant_id?: string } | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const [header, body, signature] = parts;
-
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-    console.log(`[settings/media] Decoding token payload keys: ${Object.keys(payload).join(", ")}`);
-
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      console.warn(`[settings/media] Token expired at ${new Date(payload.exp * 1000).toISOString()}`);
-      return null;
-    }
-
-    // Case 1: Our own HMAC-signed warehouse JWT (has 'shop' or 'merchant_id')
-    const expectedSig = crypto
-      .createHmac("sha256", JWT_SECRET)
-      .update(`${header}.${body}`)
-      .digest("base64url");
-
-    if (signature === expectedSig) {
-      console.log(`[settings/media] Token verified as our own HMAC JWT. shop=${payload.shop}, merchant_id=${payload.merchant_id}`);
-      return { shop: payload.shop, merchant_id: payload.merchant_id };
-    }
-
-    // Case 2: Shopify App Bridge session token.
-    // These have: iss (store URL), dest (store URL), sub (user gid), aud (api_key)
-    // The 'dest' field contains the full store URL like https://taimoor1-2.myshopify.com
-    if (payload.dest) {
-      // Extract the myshopify domain from the dest URL
-      const destUrl = payload.dest as string;
-      const shopDomain = destUrl.replace("https://", "").replace("http://", "").replace(/\/$/, "");
-      console.log(`[settings/media] Token is Shopify App Bridge session token. Extracted shop domain: ${shopDomain}`);
-      return { shop: shopDomain };
-    }
-
-    // Case 3: Unknown JWT but has shop or merchant_id - accept with warning
-    if (payload.shop || payload.merchant_id) {
-      console.warn(`[settings/media] Token not HMAC-verified but has shop/merchant_id. shop=${payload.shop}, merchant_id=${payload.merchant_id}`);
-      return { shop: payload.shop, merchant_id: payload.merchant_id };
-    }
-
-    console.warn(`[settings/media] Token has none of: dest, shop, merchant_id. Cannot identify merchant.`);
-    return null;
-  } catch (e: any) {
-    console.error(`[settings/media] Failed to decode token:`, e.message);
-    return null;
+// Verified token → merchant identity. All three legit token kinds now verify:
+// our HMAC tokens + App Bridge session tokens verify locally in
+// verifyProxyToken (App Bridge tokens are HS256-signed with the app's client
+// secret), ink-backend JWTs verify remotely via /auth/validate. The old
+// Case 3 ("not HMAC-verified but has shop/merchant_id — accept with
+// warning") let any crafted JWT write another merchant's media — gone.
+async function decodeToken(token: string): Promise<{ shop?: string; merchant_id?: string } | null> {
+  const payload = await verifyProxyToken(token);
+  if (!payload) return null;
+  // App Bridge session token: shop domain lives in the dest URL.
+  if (!payload.shop && !payload.merchant_id && payload.dest) {
+    const shopDomain = String(payload.dest)
+      .replace("https://", "")
+      .replace("http://", "")
+      .replace(/\/$/, "");
+    return { shop: shopDomain };
   }
+  return { shop: payload.shop as string | undefined, merchant_id: payload.merchant_id as string | undefined };
 }
 
 async function getMerchantDoc(shopDomain?: string, merchantId?: string) {
@@ -134,7 +99,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
       const rawToken = authHeader.slice(7);
       console.log(`[settings/media] GET auth: Attempting to decode Bearer token (length=${rawToken.length})...`);
-      const tokenPayload = decodeToken(rawToken);
+      const tokenPayload = await decodeToken(rawToken);
       if (!tokenPayload) {
         console.error(`[settings/media] GET auth: Bearer token could not be decoded or has no shop identifier. Returning 401.`);
         return json({ error: "Invalid or expired token" }, { status: 401 });
@@ -198,7 +163,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
       const rawToken = authHeader.slice(7);
       console.log(`[settings/media] ${request.method} auth: Decoding Bearer token (length=${rawToken.length})...`);
-      const tokenPayload = decodeToken(rawToken);
+      const tokenPayload = await decodeToken(rawToken);
       if (!tokenPayload) {
         console.error(`[settings/media] ${request.method} auth: Token invalid or no shop identifier. Returning 401.`);
         return json({ error: "Invalid or expired token" }, { status: 401 });

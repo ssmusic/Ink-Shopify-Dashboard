@@ -11,11 +11,6 @@ import crypto from "crypto";
  * POST /app/api/settings/notifications → update settings
  */
 
-const JWT_SECRET =
-  process.env.WAREHOUSE_JWT_SECRET ||
-  process.env.SHOPIFY_API_SECRET ||
-  "fallback-dev-secret";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -28,20 +23,8 @@ const json = (data: any, init?: ResponseInit) =>
     ...init,
   });
 
-function decodeToken(token: string): { shop?: string; merchant_id?: string } | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const [header, body] = parts;
-
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-
-    return { shop: payload.shop, merchant_id: payload.merchant_id };
-  } catch {
-    return null;
-  }
-}
+// Token verification: services/token-verify.server.ts (fail-closed; the old
+// decodeToken computed an HMAC and then never checked it — pure decode).
 
 async function getMerchantDocRef(shopDomain?: string, merchantId?: string) {
   if (merchantId) {
@@ -79,7 +62,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tokenPayload = decodeToken(authHeader.slice(7));
+  const tokenPayload = await verifyProxyToken(authHeader.slice(7));
   if (!tokenPayload) {
     return json({ error: "Invalid or expired token" }, { status: 401 });
   }
@@ -113,7 +96,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tokenPayload = decodeToken(authHeader.slice(7));
+  const tokenPayload = await verifyProxyToken(authHeader.slice(7));
   if (!tokenPayload) {
     return json({ error: "Invalid or expired token" }, { status: 401 });
   }

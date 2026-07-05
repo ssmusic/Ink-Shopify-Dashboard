@@ -1,4 +1,5 @@
 import { type ActionFunctionArgs } from "react-router";
+import { allowRequest, clientIp, rateLimitResponse } from "../services/rate-limit.server";
 import { NFSService } from "../services/nfs.server";
 import { INK_NAMESPACE } from "../utils/metafields.server";
 import { serialNumberToToken } from "../utils/nfc-conversion.server";
@@ -18,6 +19,9 @@ export const loader = async () => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // Public endpoint — per-IP rate limit (services/rate-limit.server.ts).
+  if (!allowRequest(`enroll:${clientIp(request)}`, 30)) return rateLimitResponse();
+
   const { getOfflineSession } = await import("../session-utils.server");
 
   try {

@@ -4,11 +4,6 @@ import { adminCreateUser, getShopIdByDomain, getMerchantUsers, deleteMerchantUse
 import sgMail from "@sendgrid/mail";
 import crypto from "crypto";
 
-const JWT_SECRET =
-  process.env.WAREHOUSE_JWT_SECRET ||
-  process.env.SHOPIFY_API_SECRET ||
-  "fallback-dev-secret";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -21,23 +16,7 @@ const json = (data: any, init?: ResponseInit) =>
     ...init,
   });
 
-function verifyToken(token: string): { shop: string } | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const [header, body, signature] = parts;
-    const expectedSig = crypto
-      .createHmac("sha256", JWT_SECRET)
-      .update(`${header}.${body}`)
-      .digest("base64url");
-    if (signature !== expectedSig) return null;
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload;
-  } catch {
-    return null;
-  }
-}
+// Token verification: services/token-verify.server.ts (shared, fail-closed).
 
 // ─── GET: list all users for this shop ───────────────────────────────────────
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -57,7 +36,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       const authHeader = request.headers.get("Authorization");
       if (authHeader && authHeader.startsWith("Bearer ")) {
         const token = authHeader.split(" ")[1];
-        const payload = verifyToken(token);
+        const payload = await verifyProxyToken(token);
         shopDomain = payload?.shop || "";
         
         if (!shopDomain) {
@@ -124,7 +103,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const authHeader = request.headers.get("Authorization");
       if (authHeader && authHeader.startsWith("Bearer ")) {
         const token = authHeader.split(" ")[1];
-        const payload = verifyToken(token);
+        const payload = await verifyProxyToken(token);
         shopDomain = payload?.shop || "";
         
         if (!shopDomain) {
