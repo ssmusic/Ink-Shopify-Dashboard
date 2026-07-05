@@ -107,7 +107,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const proofId = metafields.proof_reference;
         const link = proofId ? `https://in.ink/verify/${proofId}` : "https://in.ink";
 
-        const message = `🔓 Unlock your ${order.name} delivery! Tap the INK sticker on your package or click here to access your Return Passport: ${link}`;
+        const message = `Your ${order.name} has arrived. Your order page — delivery record and returns — is here: ${link}`;
 
         const success = await SMSService.sendSMS(customerPhone, message);
 

@@ -7,9 +7,7 @@ import {
   Text,
   Button,
   InlineStack,
-  EmptyState,
   Banner,
-  Layout,
   Collapsible,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
@@ -17,14 +15,16 @@ import { mintMagicToken } from "../services/ink-api.server";
 import PolarisAppLayout from "~/components/PolarisAppLayout";
 import RecentActivity from "~/components/RecentActivity";
 import EngagementFunnel from "~/components/EngagementFunnel";
+// NFC hardware lane — tabled behind FEATURE_NFC (see app/flags.ts), never deleted.
 import NFCTagInventory from "~/components/NFCTagInventory";
 import RevenueThisPeriod from "~/components/RevenueThisPeriod";
-import TimeToEngagement from "~/components/TimeToEngagement";
-import CurrentPlanCard from "~/components/CurrentPlanCard";
-import BillingWidget from "~/components/billing/BillingWidget";
-import CommunicationsUsage from "~/components/CommunicationsUsage";
+import PlanCard from "~/components/billing/PlanCard";
 import AdvancedAnalytics from "~/components/AdvancedAnalytics";
-import { toast } from "sonner"; // Replaced with Sonner to match previous setup
+import { FEATURE_NFC } from "~/flags";
+// Removed from render (kept in tree, unreferenced): TimeToEngagement +
+// CommunicationsUsage rendered hardcoded fictional numbers; BillingWidget +
+// CurrentPlanCard priced real counts at fictional NFC-era rates. Nothing on
+// this dashboard may show a number that isn't the merchant's own.
 
 // Mint a single-use magic-login token for this shop and hand back a
 // www.in.ink/welcome URL the merchant can open already signed in.
@@ -49,8 +49,6 @@ export const action = async ({
 };
 
 const Dashboard = () => {
-  const [hasOrders, setHasOrders] = useState(true);
-  const [isTransitioning, setIsTransitioning] = useState(false);
   // The full operational-analytics BI lives in the standalone ink. dashboard;
   // here it's tucked behind an Advanced disclosure (collapsed by default) so the
   // embed leads with the lightweight engagement cards + handoff, not a second
@@ -85,38 +83,6 @@ const Dashboard = () => {
     }
   }, [fetcher.data]);
 
-  const handleViewDemo = () => {
-    setIsTransitioning(true);
-    toast("Loading demo data", { description: "Showing sample orders and verification data." });
-    setTimeout(() => {
-      setHasOrders(true);
-      setIsTransitioning(false);
-    }, 1000);
-  };
-
-  const handleDownloadGuide = () => {
-    toast("Downloading guide", { description: "Your warehouse setup guide is being prepared." });
-  };
-
-  if (!hasOrders) {
-    return (
-      <PolarisAppLayout>
-        <Page title="Dashboard">
-          <Card>
-            <EmptyState
-              heading="Your setup is complete! 🎉"
-              action={{ content: "View Demo", onAction: handleViewDemo, loading: isTransitioning }}
-              secondaryAction={{ content: "Download Setup Guide", onAction: handleDownloadGuide }}
-              image=""
-            >
-              <p>Your NFC tags will arrive in 3-5 business days. In the meantime, explore the app or read our warehouse setup guide.</p>
-            </EmptyState>
-          </Card>
-        </Page>
-      </PolarisAppLayout>
-    );
-  }
-
   return (
     <PolarisAppLayout>
       <Page title="Dashboard">
@@ -133,7 +99,7 @@ const Dashboard = () => {
                   Your ink. dashboard
                 </Text>
                 <Text as="p" tone="subdued">
-                  Open the INK surface — where your enrolled orders, tap pages,
+                  Open the INK studio — where your enrolled orders, pages,
                   and returns live. You'll be signed in automatically — no
                   password needed.
                 </Text>
@@ -144,29 +110,24 @@ const Dashboard = () => {
             </InlineStack>
           </Card>
 
-          {/* Row 1: Time to Engagement + Engagement Funnel */}
+          {/* Row 1: Open funnel + Enrolled Order Value — real numbers only */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <TimeToEngagement />
             <EngagementFunnel />
-          </div>
-
-          {/* Row 2: Tag Inventory + Enrolled Order Value */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <NFCTagInventory />
             <RevenueThisPeriod />
           </div>
 
-          {/* Row 3: Recent Activity + Billing Widget */}
+          {/* NFC hardware lane — tabled behind the flag, not deleted */}
+          {FEATURE_NFC && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <NFCTagInventory />
+            </div>
+          )}
+
+          {/* Row 2: Recent Activity + the honest plan card */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <RecentActivity />
-            <div className="flex flex-col gap-4">
-              <BillingWidget />
-              <CurrentPlanCard />
-            </div>
+            <PlanCard />
           </div>
-
-          {/* Row 4: Communications — full width */}
-          <CommunicationsUsage />
 
           {/* Advanced — the full operational-analytics BI, collapsed by default.
               Relocated here (not deleted) so the embed stays lean; the rich

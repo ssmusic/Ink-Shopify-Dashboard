@@ -1,8 +1,11 @@
-import type { LoaderFunctionArgs } from "react-router";
+import { redirect, type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import { FEATURE_NFC } from "../flags";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
+  // NFC hardware lane tabled (app/flags.ts) — page returns when the flag does.
+  if (!FEATURE_NFC) return redirect("/app/dashboard");
   return null;
 };
 

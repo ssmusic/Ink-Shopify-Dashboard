@@ -1,139 +1,104 @@
 import { useState } from "react";
-import { z } from "zod";
 import {
   Page,
   Card,
   BlockStack,
   Text,
-  TextField,
-  Select,
-  Button,
   Collapsible,
-  InlineStack,
   Layout,
+  Button,
 } from "@shopify/polaris";
 import PolarisAppLayout from "../components/PolarisAppLayout";
-import { useToast } from "../hooks/use-toast";
 
-const contactSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, "Name is required")
-    .max(100, "Name must be less than 100 characters"),
-  email: z
-    .string()
-    .trim()
-    .email("Please enter a valid email")
-    .max(255, "Email must be less than 255 characters"),
-  category: z.string().min(1, "Please select a category"),
-  message: z
-    .string()
-    .trim()
-    .min(10, "Message must be at least 10 characters")
-    .max(2000, "Message must be less than 2000 characters"),
-});
-
-type ContactFormData = z.infer<typeof contactSchema>;
+// Comms-first FAQ (2026-07-05 pivot). The NFC-era FAQ (stickers, tag
+// inventory, "ink. Drop", per-tap pricing) is gone — none of it described
+// the shipping product. The fake contact form (it validated, slept 1s, and
+// claimed "Message sent" without sending anything) is replaced by a real
+// mailto card. Rule: this page promises nothing the installed app doesn't do.
 
 const faqSections = [
   {
-    title: "Getting Started",
+    title: "Getting started",
     items: [
       {
-        question: "How do I get stickers?",
+        question: "What does INK do?",
         answer:
-          "Order NFC stickers through the Tag Inventory tab in Settings. Stickers are pre-encoded and ship to your warehouse. Apply one to each package before shipping.",
+          "Every order gets its own page — your brand, the order, and live delivery tracking in one place. Your customer gets a link by email or text when the order ships and when it arrives. The page is also where they can start a return.",
       },
       {
-        question: "How does enrollment work?",
+        question: "What do I have to set up?",
         answer:
-          "Open the ink. enrollment app, scan the order barcode, photograph the contents, and apply the sticker. The record is created before the package leaves your warehouse.",
+          "Almost nothing. Orders enroll automatically as they're placed. Your page is built from your existing brand and can be tuned any time from the INK studio. Email and text notifications are controlled in Settings.",
       },
       {
         question: "Do I need to change my shipping or carrier?",
         answer:
-          "No. ink. sits on top of your existing infrastructure. Your carrier, your warehouse workflow, your returns portal — nothing changes.",
+          "No. INK sits on top of your existing setup. Your carrier, your warehouse workflow, your returns policy — nothing changes.",
+      },
+      {
+        question: "Do I need any hardware or stickers?",
+        answer:
+          "No. INK is software only — every order gets its page automatically the moment it's placed.",
       },
     ],
   },
   {
-    title: "Customer Experience",
+    title: "Your customer's experience",
     items: [
       {
-        question: "What does my customer see when they tap?",
+        question: "What does my customer see?",
         answer:
-          "A branded full-screen experience — your logo, your colors, your message. Then a simple delivery confirmation. No app download, no login required.",
+          "A page in your brand — their order, where it is right now, and what you want them to see next. It opens in the browser from a link in their email or text. No app download, no login, no account creation.",
       },
       {
-        question: "What if my customer doesn't tap?",
+        question: "What emails and texts go out?",
         answer:
-          "The pre-shipment photos still exist. That record was created at enrollment regardless of whether the customer ever touches the sticker.",
-      },
-      {
-        question: "Does my customer need to download an app?",
-        answer:
-          "No. The tap opens directly in the phone's browser. No app, no login, no account creation.",
+          "Shipping and delivery updates, sent in your name. You control which notifications are on, and the wording, in Settings → Communications.",
       },
     ],
   },
   {
-    title: "Verification & Evidence",
+    title: "The delivery record",
     items: [
       {
-        question: "What data is captured on tap?",
+        question: "What does INK record about a delivery?",
         answer:
-          "GPS coordinates, timestamp, device model and OS, network type, and distance from the shipping address. All cryptographically signed and stored.",
+          "The carrier's delivery confirmation, timestamps, and — when your customer opens their page and allows location — where the order was opened. The record is cryptographically signed when it's created.",
       },
       {
         question: "How does this help with disputes?",
         answer:
-          "When a customer files a chargeback or claim, you have pre-shipment photos proving what was packed, and if they tapped, GPS-verified proof of delivery.",
-      },
-      {
-        question: "What is the verification window?",
-        answer:
-          "The period after delivery during which you send tap reminders. Default is 72 hours. The sticker itself stays active through the full return window.",
+          "When a customer files a chargeback or claim, you have a signed record of the delivery, and pre-shipment photos if you use them — evidence of what was packed and that it arrived.",
       },
     ],
   },
   {
-    title: "Returns & ink. Drop",
+    title: "Returns",
     items: [
       {
-        question: "What is ink. Drop?",
+        question: "How do returns work?",
         answer:
-          "ink. Drop is our return system. Customers who tap at delivery unlock an extended return window and the ability to return at any FedEx, UPS, or USPS location with a carrier-native QR code. Coming soon.",
+          "Your customer starts a return from their order page after delivery. They get a QR code — no printer needed — and you see the return's status live on the order.",
       },
       {
-        question: "Do customers who don't tap still get returns?",
+        question: "Does this replace my returns policy?",
         answer:
-          "Yes, through your standard return process. The tap unlocks the faster, frictionless return path.",
-      },
-      {
-        question: "What is a Return Passport?",
-        answer:
-          "A verified return credential generated when a customer walks into a participating retail location. GPS confirms they're in the store. Coming soon.",
+          "No. Your policy and your rules stay yours — INK handles the customer-facing flow and keeps the status visible to you and to them.",
       },
     ],
   },
   {
-    title: "Pricing & Billing",
+    title: "Pricing & billing",
     items: [
       {
         question: "How much does it cost?",
         answer:
-          "$0.99 per enrollment, $2.99 per verified tap, $0.80 per sticker. No monthly fee, no tiers, no minimums.",
+          "INK is free during the pilot. Paid plans will be flat monthly tiers based on your order volume — billed through Shopify, no per-order fees.",
       },
       {
-        question: "When am I charged for a tap?",
+        question: "How am I billed?",
         answer:
-          "Only when a customer successfully taps the sticker and the system captures a verified tap. You'll be billed monthly.",
-      },
-      {
-        question: "How do I order more stickers?",
-        answer:
-          "Through the Tag Inventory tab in Settings. You can set auto-refill thresholds so you never run out.",
+          "Through Shopify. Any plan appears on your regular Shopify invoice, you approve it inside Shopify before it starts, and uninstalling ends it automatically.",
       },
     ],
   },
@@ -183,45 +148,6 @@ const FAQItem = ({
 };
 
 const Help = () => {
-  const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<
-    Partial<Record<keyof ContactFormData, string>>
-  >({});
-  const [formData, setFormData] = useState<ContactFormData>({
-    name: "",
-    email: "",
-    category: "",
-    message: "",
-  });
-
-  const handleChange = (field: keyof ContactFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
-  };
-
-  const handleSubmit = async () => {
-    setErrors({});
-    const result = contactSchema.safeParse(formData);
-    if (!result.success) {
-      const fieldErrors: Partial<Record<keyof ContactFormData, string>> = {};
-      result.error.issues.forEach((err) => {
-        fieldErrors[err.path[0] as keyof ContactFormData] = err.message;
-      });
-      setErrors(fieldErrors);
-      return;
-    }
-
-    setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    toast({
-      title: "Message sent",
-      description: "We'll get back to you within 24 hours.",
-    });
-    setFormData({ name: "", email: "", category: "", message: "" });
-    setIsSubmitting(false);
-  };
-
   return (
     <PolarisAppLayout>
       <Page title="Help & Support">
@@ -248,69 +174,23 @@ const Help = () => {
           <Layout.Section variant="oneThird">
             <BlockStack gap="400">
               <Text as="h2" variant="headingSm">
-                Contact Us
+                Contact us
               </Text>
               <Card>
-                <BlockStack gap="400">
-                  <TextField
-                    label="Name"
-                    value={formData.name}
-                    onChange={(v) => handleChange("name", v)}
-                    error={errors.name}
-                    autoComplete="name"
-                  />
-                  <TextField
-                    label="Email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(v) => handleChange("email", v)}
-                    error={errors.email}
-                    autoComplete="email"
-                  />
-                  <Select
-                    label="Category"
-                    value={formData.category}
-                    onChange={(v) => handleChange("category", v)}
-                    error={errors.category}
-                    options={[
-                      { label: "Select a topic", value: "" },
-                      { label: "General Inquiry", value: "general" },
-                      { label: "Technical Support", value: "technical" },
-                      { label: "Billing & Subscription", value: "billing" },
-                      { label: "Verification Issues", value: "verification" },
-                      { label: "Integration Help", value: "integration" },
-                      { label: "Feedback & Suggestions", value: "feedback" },
-                    ]}
-                  />
-                  <TextField
-                    label="Message"
-                    value={formData.message}
-                    onChange={(v) => handleChange("message", v)}
-                    error={errors.message}
-                    multiline={5}
-                    autoComplete="off"
-                    helpText={`${formData.message.length}/2000 characters`}
-                  />
-                  <InlineStack align="end">
-                    <Button
-                      variant="primary"
-                      onClick={handleSubmit}
-                      loading={isSubmitting}
-                    >
-                      Send Message
-                    </Button>
-                  </InlineStack>
+                <BlockStack gap="300">
+                  <Text as="p" tone="subdued" variant="bodySm">
+                    Questions, problems, or a feature you need? Email us —
+                    a person reads every message.
+                  </Text>
+                  <Button
+                    url="mailto:support@in.ink"
+                    external
+                    variant="primary"
+                  >
+                    Email support@in.ink
+                  </Button>
                 </BlockStack>
               </Card>
-              <Text as="p" tone="subdued" variant="bodySm">
-                Need immediate assistance? Email us at{" "}
-                <a
-                  href="mailto:support@in.ink"
-                  style={{ color: "inherit", textDecoration: "underline" }}
-                >
-                  support@in.ink
-                </a>
-              </Text>
             </BlockStack>
           </Layout.Section>
         </Layout>

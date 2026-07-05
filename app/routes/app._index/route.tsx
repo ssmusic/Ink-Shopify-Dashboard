@@ -15,7 +15,7 @@ export default function LandingPage() {
       showSignIn={false}
       headline="Your dashboard is ready."
       sub="A surface that opens on every Shopify order. You communicate in ink; you sign in ink — the brand half and the signature half, on every order."
-      footnote="New here? Open the dashboard to set up your brand and order your first stickers."
+      footnote="New here? Open the dashboard to set up your brand and turn on delivery notifications."
     />
   );
 }
