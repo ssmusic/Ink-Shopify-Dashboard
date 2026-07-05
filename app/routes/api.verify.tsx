@@ -635,7 +635,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                       node {
                           id
                           name
-                          customer { email firstName }
+                          customer { email firstName emailMarketingConsent { marketingState } }
                           arrivalEmailSent: metafield(namespace: "ink", key: "arrival_email_sent") { value }
                           lineItems(first: 1) {
                               edges {
@@ -665,7 +665,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         order(id: $id) {
                           id
                           name
-                          customer { email firstName }
+                          customer { email firstName emailMarketingConsent { marketingState } }
                           arrivalEmailSent: metafield(namespace: "ink", key: "arrival_email_sent") { value }
                           lineItems(first: 1) {
                             edges { node { title image { url } } }
@@ -692,7 +692,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                     node {
                                         id
                                         name
-                                        customer { email firstName }
+                                        customer { email firstName emailMarketingConsent { marketingState } }
                                         arrivalEmailSent: metafield(namespace: "ink", key: "arrival_email_sent") { value }
                                         lineItems(first: 1) {
                                             edges { node { title image { url } } }
@@ -929,13 +929,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             const { fetchBrandEmailKit, selectEmailCampaign } = await import(
                                 "../services/brand-email.server"
                             );
+                            // Marketing-consent gate (Phase 5): the state email is
+                            // TRANSACTIONAL and sends regardless; only the embedded
+                            // aimed section is marketing. Missing/unknown consent
+                            // fails CLOSED (email goes out without the section).
+                            const { mayIncludeMarketing } = await import(
+                                "../services/consent.server"
+                            );
+                            const buyerEmailConsent = order.customer?.emailMarketingConsent ?? null;
+                            const aimedSectionAllowed = mayIncludeMarketing(
+                                "aimed_section",
+                                "email",
+                                buyerEmailConsent,
+                            );
                             const brandKit = await fetchBrandEmailKit(String(alanData.shop_id || ""));
-                            const emailCampaign = brandKit
+                            const emailCampaign = brandKit && aimedSectionAllowed
                                 ? selectEmailCampaign(brandKit.campaigns, {
                                       tier: (alanData.customer_tier as string | undefined) || null,
                                       productTitles: [productName || ""],
                                   })
                                 : null;
+                            if (!aimedSectionAllowed && brandKit?.campaigns?.length) {
+                                console.log(
+                                    `📧 aimed section WITHHELD (buyer email marketing consent=${buyerEmailConsent?.marketingState || "unknown"}) — transactional content only.`,
+                                );
+                            }
                             await EmailService.sendReturnPassportEmail({
                                 brand: brandKit,
                                 campaign: emailCampaign,

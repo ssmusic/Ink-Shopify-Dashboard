@@ -21,6 +21,7 @@
 import { EmailService, brandSlugFromDomain } from "./email.server";
 import { fetchBrandEmailKit, selectEmailCampaign } from "./brand-email.server";
 import { getProof } from "./ink-api.server";
+import { CUSTOMER_CONSENT_FRAGMENT, mayIncludeMarketing } from "./consent.server";
 
 const INK_NAMESPACE = "ink";
 const SENT_KEYS = {
@@ -98,6 +99,7 @@ export async function sendStateEmailOnce(args: StateEmailArgs): Promise<void> {
       order(id: $id) {
         metafield(namespace: "${INK_NAMESPACE}", key: "${SENT_KEY}") { value }
         lineItems(first: 1) { edges { node { title image { url } } } }
+        customer { ${CUSTOMER_CONSENT_FRAGMENT} }
       }
     }`,
     { variables: { id: orderGid } },
@@ -110,6 +112,11 @@ export async function sendStateEmailOnce(args: StateEmailArgs): Promise<void> {
   const firstItem = checkJson.data?.order?.lineItems?.edges?.[0]?.node;
   const productName: string | undefined = firstItem?.title || undefined;
   const productImageUrl: string | undefined = firstItem?.image?.url || undefined;
+  // Marketing-consent gate (Phase 5): the state email itself is TRANSACTIONAL
+  // and always sends; only the embedded aimed section is marketing. Missing/
+  // unknown consent fails CLOSED (transactional-only email).
+  const buyerEmailConsent = checkJson.data?.order?.customer?.emailMarketingConsent ?? null;
+  const aimedSectionAllowed = mayIncludeMarketing("aimed_section", "email", buyerEmailConsent);
 
   // ── Proof (authoritative): nfc_token for the page link, tier for aiming ──
   const merchantApiKey: string | undefined = merchantData.ink_api_key;
@@ -187,12 +194,17 @@ export async function sendStateEmailOnce(args: StateEmailArgs): Promise<void> {
 
   // ── Email-as-tap-page: brand kit + the buyer's aimed section (fail-soft) ──
   const brandKit = await fetchBrandEmailKit(proofShopId);
-  const emailCampaign = brandKit
+  const emailCampaign = brandKit && aimedSectionAllowed
     ? selectEmailCampaign(brandKit.campaigns, {
         tier: customerTier,
         productTitles: [productName || ""],
       })
     : null;
+  if (!aimedSectionAllowed && brandKit?.campaigns?.length) {
+    console.log(
+      `📧 ${label}: aimed section WITHHELD (buyer email marketing consent=${buyerEmailConsent?.marketingState || "unknown"}) — transactional content only.`,
+    );
+  }
 
   if (isTestMerchant) {
     console.log(`📧 DEV-MODE ${label} send: test-flagged merchant but ${customerEmail} is allowlisted — sending (from ${senderFromEmail || "notifications@in.ink"}).`);
