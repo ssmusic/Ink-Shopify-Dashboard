@@ -29,7 +29,7 @@ export const action = async ({ request }: LoaderFunctionArgs) => {
     }`,
     {
       variables: {
-        name: "ink — Tap Pages",
+        name: "INK — Order Tracking Pages",
         returnUrl: `${process.env.SHOPIFY_APP_URL}/app/payment/callback`,
         lineItems: [
           {
@@ -92,9 +92,9 @@ export default function Payment() {
                   </Text>
                   
                   <List type="bullet">
-                    <List.Item>Automated Shipping Rates</List.Item>
-                    <List.Item>NFC Tag Enrollment</List.Item>
-                    <List.Item>Tap pages for every order</List.Item>
+                    <List.Item>A branded order page for every order</List.Item>
+                    <List.Item>Email &amp; text delivery notifications</List.Item>
+                    <List.Item>Printerless QR returns</List.Item>
                   </List>
 
                   <div style={{ padding: "20px", background: "#f1f1f1", borderRadius: "8px" }}>

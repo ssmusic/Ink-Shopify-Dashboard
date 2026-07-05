@@ -6,11 +6,14 @@ import {
   Collapsible,
 } from "@shopify/polaris";
 import VerificationSettings from "./VerificationSettings";
-import WebhooksSettings from "./WebhooksSettings";
+// WebhooksSettings removed from render (kept in tree, unreferenced): it was
+// pure mock theater — a fake secret, a fake "Test webhook" that slept 1.5s
+// and claimed success, a fabricated activity log. Real webhook registration
+// is automatic (app.tsx registerWebhooks); there is nothing for a merchant
+// to configure here.
 
 const AdvancedSettings = () => {
   const [verificationOpen, setVerificationOpen] = useState(false);
-  const [webhooksOpen, setWebhooksOpen] = useState(false);
 
   return (
     <BlockStack gap="400">
@@ -43,30 +46,6 @@ const AdvancedSettings = () => {
         </BlockStack>
       </Card>
 
-      <Card>
-        <BlockStack gap="400">
-          <button
-            onClick={() => setWebhooksOpen(!webhooksOpen)}
-            style={{
-              width: "100%",
-              textAlign: "left",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: 0,
-            }}
-          >
-            <Text as="h3" variant="headingSm">Webhooks</Text>
-            <Text as="span" tone="subdued">{webhooksOpen ? "−" : "+"}</Text>
-          </button>
-          <Collapsible open={webhooksOpen} id="webhooks-section">
-            <WebhooksSettings />
-          </Collapsible>
-        </BlockStack>
-      </Card>
     </BlockStack>
   );
 };

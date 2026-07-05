@@ -206,9 +206,8 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
               )}
               <Divider />
               <Text as="p" variant="bodySm" tone="subdued">
-                The full delivery record — tap history, location, and the signed
-                cryptographic proof — lives in your ink. dashboard. Open it from the
-                Dashboard.
+                The full delivery record — open history, location, and the signed
+                record — lives in your ink. studio. Open it from the Dashboard.
               </Text>
             </BlockStack>
           </Card>

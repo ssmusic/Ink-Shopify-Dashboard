@@ -1,3 +1,6 @@
+// ⚠️ TABLED 2026-07-05 — NOT RENDERED ANYWHERE. This component shows mock/
+// hardcoded numbers (never real merchant data end-to-end). Kept in the tree
+// per consolidate≠delete; do not re-mount without wiring real data first.
 interface BillingCycleCardProps {
   enrollments?: number;
   taps?: number;

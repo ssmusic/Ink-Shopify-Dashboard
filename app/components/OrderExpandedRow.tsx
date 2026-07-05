@@ -203,8 +203,8 @@ const OrderExpandedRow = ({ order, onCollapse, onViewFull }: OrderExpandedRowPro
             )}
             <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
               <Text as="p" variant="bodySm" tone="subdued">
-                Tap history, location, and the signed cryptographic proof live in your
-                ink. dashboard.
+                Open history, location, and the signed delivery record live in your
+                ink. studio.
               </Text>
             </div>
           </BlockStack>

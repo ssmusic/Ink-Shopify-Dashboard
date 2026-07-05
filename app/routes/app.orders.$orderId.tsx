@@ -752,7 +752,7 @@ export default function OrderDetails() {
 
     const eventTabs = [
         { id: "write", content: "Write" },
-        { id: "tap", content: "Tap" },
+        { id: "tap", content: "Open" },
     ];
 
     const verificationStatusRaw = order.metafields.verification_status?.toLowerCase() || "pending";
@@ -923,7 +923,7 @@ export default function OrderDetails() {
                                         {/* NFC Tag & Proof ID */}
                                         <InlineStack gap="400" wrap={false}>
                                             <div style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", padding: "12px", borderRadius: "8px" }}>
-                                                <Text as="p" tone="subdued" variant="bodySm">NFC Tag UID</Text>
+                                                <Text as="p" tone="subdued" variant="bodySm">Tag UID</Text>
                                                 <Text as="p" variant="bodySm" fontWeight="medium">
                                                     <code style={{ fontFamily: "monospace" }}>{order.metafields.nfc_uid || "—"}</code>
                                                 </Text>
@@ -1022,7 +1022,7 @@ export default function OrderDetails() {
                                                                 <InlineStack gap="300" blockAlign="start">
                                                                     <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--p-color-text)", marginTop: "4px", flexShrink: 0 }} />
                                                                     <BlockStack gap="100">
-                                                                        <Text as="p" variant="bodySm" fontWeight="medium">Tapped</Text>
+                                                                        <Text as="p" variant="bodySm" fontWeight="medium">Opened</Text>
                                                                         <Text as="p" tone="subdued" variant="bodySm">{order.localProof.verification_updated_at}</Text>
                                                                     </BlockStack>
                                                                 </InlineStack>
@@ -1061,7 +1061,7 @@ export default function OrderDetails() {
                                                 {deliveryCoords && (
                                                     <div style={{ flex: 1 }}>
                                                         <BlockStack gap="200">
-                                                            <Text as="p" tone="subdued" variant="bodySm" fontWeight="medium">Tap Location</Text>
+                                                            <Text as="p" tone="subdued" variant="bodySm" fontWeight="medium">Open location</Text>
                                                             <TapLocationCard
                                                                 lat={deliveryCoords.lat}
                                                                 lng={deliveryCoords.lng}
@@ -1075,8 +1075,8 @@ export default function OrderDetails() {
                                             </InlineStack>
                                         ) : (
                                             <BlockStack gap="200" inlineAlign="center">
-                                                <Text as="p" variant="bodySm" fontWeight="medium" tone="subdued">No tap has been recorded</Text>
-                                                <Text as="p" variant="bodySm" tone="subdued">Waiting for customer to tap the NFC tag</Text>
+                                                <Text as="p" variant="bodySm" fontWeight="medium" tone="subdued">No open recorded yet</Text>
+                                                <Text as="p" variant="bodySm" tone="subdued">Waiting for the customer to open their order page</Text>
                                             </BlockStack>
                                         )}
                                     </>
