@@ -7,9 +7,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   console.log(`Received ${topic} webhook for ${shop}`);
   
   // CUSTOMERS/REDACT
-  // We don't store customer PII in our App's database (Firestore only stores Merchant config).
-  // The customer data is either in Shopify (which handles this) or passed to INK API (which is external).
-  // So we just acknowledge.
+  // This app's own DB (Firestore) stores merchant config only — no customer
+  // PII to erase here. But proofs in the ink-backend DO carry order_details
+  // (name/email/address), so full compliance forwards this redaction there.
+  // TODO(Phase 5 — PCD): call the ink-backend redaction endpoint once it
+  // exists (RUNBOOK_SHOPIFY_APP_OVERHAUL.md, parallelreturns), keyed on
+  // payload.customer.id + payload.orders_to_redact.
 
   return new Response("OK", { status: 200 });
 };
