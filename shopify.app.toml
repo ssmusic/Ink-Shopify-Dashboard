@@ -4,7 +4,13 @@ client_id = "8da1addef3dcd4251db5057cda3c85fa"
 # Working title per the 2026-07-05 overhaul decision ("Dynamic Receipts" is
 # banned copy). Goes live only on the next gated `shopify app deploy`.
 name = "INK — Order Tracking Pages"
-application_url = "https://shopify-app-250065525755.us-central1.run.app"
+# app.in.ink = the Worker front door (parallelreturns #359, VERIFIED live +
+# byte-identical to Cloud Run 2026-07-05). The App Store checker rejects app
+# URLs whose DOMAIN contains "shopify" — shopify-app-…run.app does. Goes live
+# on the gated `shopify app deploy` TOGETHER with the env flip:
+#   gcloud run services update shopify-app --region us-central1 \
+#     --project inink-c76d3 --update-env-vars SHOPIFY_APP_URL=https://app.in.ink
+application_url = "https://app.in.ink"
 embedded = true
 
 [build]
@@ -13,13 +19,19 @@ automatically_update_urls_on_dev = true
 [webhooks]
 api_version = "2025-10"
 
+# Webhook URIs are ABSOLUTE to Cloud Run on purpose: with application_url now
+# app.in.ink, relative URIs would resolve through the Worker proxy — adding a
+# hop (and a failure domain) to the enroll/delivery heart. The URL checker
+# targets app/redirect URLs; if review ever flags webhook hosts too, flip
+# these to https://app.in.ink/... (the proxy passes raw bodies, HMAC survives).
+
   [[webhooks.subscriptions]]
   topics = [ "app/uninstalled" ]
-  uri = "/webhooks/app/uninstalled"
+  uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/app/uninstalled"
 
   [[webhooks.subscriptions]]
   topics = [ "app/scopes_update" ]
-  uri = "/webhooks/app/scopes_update"
+  uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/app/scopes_update"
 
   [[webhooks.subscriptions]]
   topics = [ "orders/create" ]
@@ -27,11 +39,11 @@ api_version = "2025-10"
   # is /webhooks/orders_create (underscore). The old "/webhooks/orders/create"
   # (slash) routed to a non-existent handler → a re-register would 404 and break
   # enroll. The live subscription already uses the underscore.
-  uri = "/webhooks/orders_create"
+  uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/orders_create"
 
   [[webhooks.subscriptions]]
   topics = [ "orders/fulfilled" ]
-  uri = "/webhooks/orders_fulfilled"
+  uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/orders_fulfilled"
 
   # GDPR compliance topics — MANDATORY for App Store review (auto-fail if
   # missing). Handlers already existed; this registers them. HMAC is verified
@@ -40,15 +52,15 @@ api_version = "2025-10"
   # deploying, audit shops for duplicate shop-level subs + delivery counts).
   [[webhooks.subscriptions]]
   compliance_topics = [ "customers/data_request" ]
-  uri = "/webhooks/customers/data_request"
+  uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/customers/data_request"
 
   [[webhooks.subscriptions]]
   compliance_topics = [ "customers/redact" ]
-  uri = "/webhooks/customers/redact"
+  uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/customers/redact"
 
   [[webhooks.subscriptions]]
   compliance_topics = [ "shop/redact" ]
-  uri = "/webhooks/shop/redact"
+  uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/shop/redact"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
@@ -58,8 +70,8 @@ use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
-  "https://shopify-app-250065525755.us-central1.run.app/auth/callback",
-  "https://shopify-app-250065525755.us-central1.run.app/auth/shopify/callback"
+  "https://app.in.ink/auth/callback",
+  "https://app.in.ink/auth/shopify/callback"
 ]
 
 # Checkout UI Extension for INK disclosure
