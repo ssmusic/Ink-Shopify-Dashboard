@@ -562,3 +562,37 @@ export const verifyProofSignature = async (proof: any): Promise<boolean> => {
         return false;
     }
 };
+
+// GDPR: forward a Shopify customers/redact to the ink-backend, which scrubs
+// the buyer's PII from proofs + return docs and deletes their raw tap/click
+// event rows (backend route: POST /admin/redact-customer, admin-secret
+// guarded). Never throws — callers get {ok,status,body} and decide the
+// webhook's retry semantics.
+export const redactCustomerInInk = async (params: {
+  shopDomain: string;
+  customerId?: string | number | null;
+  customerEmail?: string | null;
+  orderIds?: Array<string | number> | null;
+}): Promise<{ ok: boolean; status: number; body: any }> => {
+  const url = getAlanUrl("/admin/redact-customer");
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Secret": INK_ADMIN_SECRET as string,
+      },
+      body: JSON.stringify({
+        shop_domain: params.shopDomain,
+        customer_id: params.customerId ?? null,
+        customer_email: params.customerEmail ?? null,
+        order_ids: Array.isArray(params.orderIds) ? params.orderIds : [],
+        source: "shopify_customers_redact",
+      }),
+    });
+    const body = await response.json().catch(() => null);
+    return { ok: response.ok, status: response.status, body };
+  } catch (e) {
+    return { ok: false, status: 0, body: { error: String(e) } };
+  }
+};
