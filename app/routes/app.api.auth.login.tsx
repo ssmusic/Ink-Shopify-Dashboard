@@ -17,13 +17,15 @@ const json = (data: any, init?: ResponseInit) =>
   });
 
 const COLLECTION = "warehouse_users";
+// No dev-secret fallback: a token signed with a published constant would
+// fail verification anyway (services/token-verify.server.ts) — better to
+// fail loudly at mint time than mint tokens that 401 downstream.
 const JWT_SECRET =
-  process.env.WAREHOUSE_JWT_SECRET ||
-  process.env.SHOPIFY_API_SECRET ||
-  "fallback-dev-secret";
+  process.env.WAREHOUSE_JWT_SECRET || process.env.SHOPIFY_API_SECRET;
 
 // Simple JWT-like token using HMAC-SHA256
 function createToken(payload: object): string {
+  if (!JWT_SECRET) throw new Error("WAREHOUSE_JWT_SECRET / SHOPIFY_API_SECRET not configured — cannot mint tokens");
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const signature = crypto

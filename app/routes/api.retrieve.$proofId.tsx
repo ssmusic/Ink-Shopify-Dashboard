@@ -1,4 +1,5 @@
 import { type LoaderFunctionArgs } from "react-router";
+import { allowRequest, clientIp, rateLimitResponse } from "../services/rate-limit.server";
 import { getProof } from "../services/ink-api.server";
 
 const CORS_HEADERS = {
@@ -16,6 +17,9 @@ export const action = async () => {
 };
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
+  // Public endpoint — per-IP rate limit (services/rate-limit.server.ts).
+  if (!allowRequest(`retrieve:${clientIp(request)}`, 60)) return rateLimitResponse();
+
     console.log("\n🔍 =================================================");
     console.log("🔍 /api/retrieve ENDPOINT HIT");
     console.log("🔍 Time:", new Date().toISOString());

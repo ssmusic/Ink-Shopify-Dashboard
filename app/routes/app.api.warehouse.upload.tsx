@@ -1,7 +1,7 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
 import { uploadMedia, createMerchant, adjustMerchantInventory, getShopIdByDomain } from "../services/ink-api.server";
-import crypto from "crypto";
+import { verifyProxyToken } from "../services/token-verify.server";
 
 /**
  * Public endpoint (authenticated by warehouse JWT only).
@@ -11,11 +11,6 @@ import crypto from "crypto";
  * Headers: Authorization: Bearer <warehouse_token>
  * Body: multipart/form-data with fields: proof_id, media_type, file
  */
-
-const JWT_SECRET =
-  process.env.WAREHOUSE_JWT_SECRET ||
-  process.env.SHOPIFY_API_SECRET ||
-  "fallback-dev-secret";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,42 +24,9 @@ const json = (data: any, init?: ResponseInit) =>
     ...init,
   });
 
-/**
- * Extracts a shop identifier from either our HMAC-signed JWT or Alan's JWT.
- * Returns { shop, merchant_id } — at least one will be set on success.
- */
-function extractTokenPayload(token: string): { shop?: string; merchant_id?: string } | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const [header, body, signature] = parts;
-
-    // 1. Try strict HMAC verification (our own issued tokens)
-    const expectedSig = crypto
-      .createHmac("sha256", JWT_SECRET)
-      .update(`${header}.${body}`)
-      .digest("base64url");
-
-    let payload: any;
-    if (signature === expectedSig) {
-      payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-      return { shop: payload.shop, merchant_id: payload.merchant_id };
-    }
-
-    // 2. Fall back to decode-without-verify (Alan's JWTs)
-    payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-
-    // Alan JWT contains: merchant_id, user_id, email, role
-    return {
-      shop: payload.shop,
-      merchant_id: payload.merchant_id,
-    };
-  } catch {
-    return null;
-  }
-}
+// Token verification now lives in services/token-verify.server.ts —
+// local HMAC for our own tokens, REMOTE /auth/validate for ink-backend
+// JWTs. The old decode-without-verify fallback is gone (fix-list #2).
 
 async function getMerchantApiKey(shopDomain?: string, merchantId?: string): Promise<string | null> {
   // 1. Try matching by Firestore document ID (=== merchant_id from Alan JWT)
@@ -136,7 +98,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tokenPayload = extractTokenPayload(authHeader.slice(7));
+  const tokenPayload = await verifyProxyToken(authHeader.slice(7));
   console.log("[UPLOAD] Token decoded:", tokenPayload ? JSON.stringify(tokenPayload) : "NULL");
   if (!tokenPayload) {
     console.log("[UPLOAD] ❌ Token rejected");

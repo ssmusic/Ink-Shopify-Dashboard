@@ -1,4 +1,5 @@
 import { type LoaderFunctionArgs } from "react-router";
+import { allowRequest, clientIp, rateLimitResponse } from "../services/rate-limit.server";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +19,10 @@ export const action = async ({ request }: any) => {
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (request.method !== "OPTIONS" && !allowRequest(`ordersfetch:${clientIp(request)}`, 60)) {
+    return rateLimitResponse(CORS_HEADERS);
+  }
+
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
@@ -39,19 +44,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     const token = authHeader.slice(7);
-    let shopDomain = "";
-    try {
-      const payloadBase64 = token.split(".")[1];
-      const decoded = JSON.parse(Buffer.from(payloadBase64, "base64url").toString("utf8"));
-      shopDomain = decoded.shop || decoded.shop_id || decoded.merchant_id;
-      console.log("🔍 [orders/fetch] Step 3: Decoded token. shopDomain:", shopDomain, "| decoded keys:", Object.keys(decoded).join(", "));
-    } catch (err) {
-      console.error("🔍 [orders/fetch] Step 3 FAILED: Token decode error:", err);
-      return new Response(JSON.stringify({ error: "Invalid token format" }), {
+    // Verified (local HMAC or remote /auth/validate) — the previous raw
+    // decode accepted ANY well-formed JWT and handed back the shop's orders.
+    const { verifyProxyToken } = await import("../services/token-verify.server");
+    const verified = await verifyProxyToken(token);
+    if (!verified) {
+      return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
         status: 401,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
       });
     }
+    const shopDomain = (verified.shop || verified.shop_id || verified.merchant_id || "") as string;
 
     if (!shopDomain) {
       console.error("🔍 [orders/fetch] Step 3 FAILED: shopDomain is empty/null");

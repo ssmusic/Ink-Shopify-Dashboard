@@ -12,11 +12,6 @@ import crypto from "crypto";
  * Response: { current_count, recent_transactions }
  */
 
-const JWT_SECRET =
-  process.env.WAREHOUSE_JWT_SECRET ||
-  process.env.SHOPIFY_API_SECRET ||
-  "fallback-dev-secret";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -29,23 +24,7 @@ const json = (data: any, init?: ResponseInit) =>
     ...init,
   });
 
-function verifyToken(token: string): { shop: string } | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const [header, body, signature] = parts;
-    const expectedSig = crypto
-      .createHmac("sha256", JWT_SECRET)
-      .update(`${header}.${body}`)
-      .digest("base64url");
-    if (signature !== expectedSig) return null;
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload;
-  } catch {
-    return null;
-  }
-}
+// Token verification: services/token-verify.server.ts (shared, fail-closed).
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // 1. Handle CORS preflight
@@ -61,7 +40,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     const token = authHeader.split(" ")[1];
-    const payload = verifyToken(token);
+    const payload = await verifyProxyToken(token);
     
     let shopDomain = payload?.shop;
     
