@@ -1,4 +1,5 @@
 import { authenticate } from "../shopify.server";
+import { assertDevRoutesEnabled } from "../flags.server";
 import type { ActionFunctionArgs } from "react-router";
 
 const APP_URL = "https://shopify-app-250065525755.us-central1.run.app";
@@ -55,6 +56,7 @@ const WEBHOOK_SUBSCRIPTION_CREATE = `
  * fulfillments topics, which the toml does not declare, stay imperative.
  */
 export async function action({ request }: ActionFunctionArgs) {
+  assertDevRoutesEnabled();
   const { admin } = await authenticate.admin(request);
 
   const webhooks = [

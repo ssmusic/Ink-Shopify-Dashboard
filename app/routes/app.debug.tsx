@@ -1,6 +1,8 @@
 import { type LoaderFunctionArgs, type ActionFunctionArgs } from "react-router";
 import { useLoaderData, useFetcher } from "react-router";
+import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
+import { ENABLE_DEV_ROUTES } from "../flags.server";
 import { 
   Card, 
   Page, 
@@ -13,6 +15,7 @@ import {
 import { ensureCarrierServiceRegistered } from "../services/carrier-service.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (!ENABLE_DEV_ROUTES) return redirect("/app/dashboard");
   const { admin } = await authenticate.admin(request);
   
   try {

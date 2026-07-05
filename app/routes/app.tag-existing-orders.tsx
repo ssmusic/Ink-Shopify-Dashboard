@@ -1,4 +1,5 @@
 import { authenticate } from "../shopify.server";
+import { assertDevRoutesEnabled } from "../flags.server";
 
 /**
  * Manual script to tag existing orders with INK Premium Delivery shipping method
@@ -22,6 +23,7 @@ mutation SetInkMetafields($metafields: [MetafieldsSetInput!]!) {
 `;
 
 export async function action({ request }: any) {
+  assertDevRoutesEnabled();
   const { admin } = await authenticate.admin(request);
 
   console.log("🔍 Searching for orders with INK Premium Delivery shipping method...");

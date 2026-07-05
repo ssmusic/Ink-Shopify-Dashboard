@@ -7,3 +7,5 @@
 // flag just keeps them off merchant surfaces. Flip to true to bring the
 // hardware lane back.
 export const FEATURE_NFC = false;
+// Dev/ops-route gate lives in flags.server.ts (reads process.env — must never
+// be bundled client-side, unlike this compile-time flag).
