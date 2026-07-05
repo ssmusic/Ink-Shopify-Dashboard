@@ -20,6 +20,7 @@ import NFCTagInventory from "~/components/NFCTagInventory";
 import RevenueThisPeriod from "~/components/RevenueThisPeriod";
 import PlanCard from "~/components/billing/PlanCard";
 import CommsCard from "~/components/CommsCard";
+import OnboardingChecklist from "~/components/OnboardingChecklist";
 import AdvancedAnalytics from "~/components/AdvancedAnalytics";
 import { FEATURE_NFC } from "~/flags";
 // Removed from render (kept in tree, unreferenced): TimeToEngagement +
@@ -91,6 +92,9 @@ const Dashboard = () => {
           {fetcher.data?.error && (
             <Banner tone="critical">{fetcher.data.error}</Banner>
           )}
+
+          {/* First-run setup — self-hides once complete (real state). */}
+          <OnboardingChecklist onOpenStudio={openParallel} studioOpening={opening} />
 
           {/* Open the merchant's ink. dashboard, auto-signed-in. */}
           <Card>
