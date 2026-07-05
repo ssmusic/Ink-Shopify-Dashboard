@@ -13,7 +13,7 @@ const EngagementFunnel = () => {
   // Enrolled = all proofs, Opened = proofs the buyer opened at least once
   // (the backend still calls an open a "tap" — API field names are load-bearing,
   // merchant-facing copy says "opened").
-  const fetcher = useFetcher<{ totalTaps: number; enrollments: number; engaged: number }>();
+  const fetcher = useFetcher<{ totalTaps: number; enrollments: number; engaged: number; delivered: number }>();
   useEffect(() => {
     if (fetcher.state === "idle" && !fetcher.data) {
       fetcher.load(`/app/api/dashboard/tap-stats?_t=${Date.now()}`);
@@ -23,9 +23,11 @@ const EngagementFunnel = () => {
   const isLoading = fetcher.state === "loading" || !fetcher.data;
   const enrollments = fetcher.data?.enrollments ?? 0;
   const engaged = fetcher.data?.engaged ?? 0;
+  const delivered = fetcher.data?.delivered ?? 0;
 
   const steps: FunnelStep[] = [
     { label: "Enrolled", count: enrollments, color: "bg-amber-500" },
+    { label: "Delivered", count: delivered, color: "bg-sky-500" },
     { label: "Opened", count: engaged, color: "bg-emerald-500" },
   ];
   const maxCount = steps[0]?.count || 1;

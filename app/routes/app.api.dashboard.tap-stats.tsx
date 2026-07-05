@@ -20,6 +20,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // App Bridge can recover; only swallow real errors to zeros.
     if (err instanceof Response) throw err;
     console.error("[tap-stats] error:", err?.message || err);
-    return json({ totalTaps: 0, enrollments: 0 });
+    return json({ totalTaps: 0, enrollments: 0, engaged: 0, delivered: 0 });
   }
 };

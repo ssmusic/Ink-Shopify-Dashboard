@@ -100,7 +100,7 @@ export const getShopIdByDomain = async (shopDomain: string): Promise<string> => 
 // 843/1247 mock. Degrades to zeros on any failure so the card never throws.
 export const getMerchantTapStats = async (
     shopDomain: string,
-): Promise<{ totalTaps: number; enrollments: number; engaged: number }> => {
+): Promise<{ totalTaps: number; enrollments: number; engaged: number; delivered: number }> => {
     try {
         const shopId = await getShopIdByDomain(shopDomain);
         const res = await fetch(
@@ -109,17 +109,19 @@ export const getMerchantTapStats = async (
         );
         if (!res.ok) {
             console.warn(`[ink-api] getMerchantTapStats ${res.status} for ${shopDomain}`);
-            return { totalTaps: 0, enrollments: 0, engaged: 0 };
+            return { totalTaps: 0, enrollments: 0, engaged: 0, delivered: 0 };
         }
         const body = await res.json();
         const proofs: any[] = Array.isArray(body) ? body : (body.proofs ?? []);
         const totalTaps = proofs.reduce((sum, p) => sum + (Number(p.tap_count) || 0), 0);
         // "engaged" = proofs tapped at least once (tap_count > 0) — the Engagement Funnel's "Tapped" bucket.
         const engaged = proofs.reduce((n, p) => n + ((Number(p.tap_count) || 0) > 0 ? 1 : 0), 0);
-        return { totalTaps, enrollments: proofs.length, engaged };
+        // delivered = proofs with a real delivered_at (the list carries it — admin.js:1095).
+        const delivered = proofs.reduce((n, p) => n + (p.delivered_at ? 1 : 0), 0);
+        return { totalTaps, enrollments: proofs.length, engaged, delivered };
     } catch (e: any) {
         console.error("[ink-api] getMerchantTapStats error:", e?.message || e);
-        return { totalTaps: 0, enrollments: 0, engaged: 0 };
+        return { totalTaps: 0, enrollments: 0, engaged: 0, delivered: 0 };
     }
 };
 
