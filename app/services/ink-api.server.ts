@@ -596,3 +596,31 @@ export const redactCustomerInInk = async (params: {
     return { ok: false, status: 0, body: { error: String(e) } };
   }
 };
+
+// GDPR: forward a Shopify shop/redact to the ink-backend whole-shop purge
+// (POST /admin/purge-shop) — deletes the shop's proofs, per-proof event/
+// return rows, enroll locks, and backend merchant docs. `confirm` echoes the
+// shop domain (the endpoint's fat-finger guard). Never throws.
+export const purgeShopInInk = async (
+  shopDomain: string,
+): Promise<{ ok: boolean; status: number; body: any }> => {
+  const url = getAlanUrl("/admin/purge-shop");
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Secret": INK_ADMIN_SECRET as string,
+      },
+      body: JSON.stringify({
+        shop_domain: shopDomain,
+        confirm: shopDomain,
+        source: "shopify_shop_redact",
+      }),
+    });
+    const body = await response.json().catch(() => null);
+    return { ok: response.ok, status: response.status, body };
+  } catch (e) {
+    return { ok: false, status: 0, body: { error: String(e) } };
+  }
+};
