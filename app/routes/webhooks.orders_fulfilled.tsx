@@ -7,16 +7,24 @@ import { findMerchantDoc } from "../services/merchant-doc.server";
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { payload, shop, topic, admin } = await authenticate.webhook(request);
 
+  // Webhook discipline: once authenticate.webhook() validates the HMAC this is
+  // a REAL Shopify delivery — every downstream condition (missing admin, bad
+  // payload, unprovisioned merchant, transient read error) ALWAYS returns 200.
+  // A non-2xx just makes Shopify retry something a retry can't fix, inflates the
+  // dashboard failure rate, and risks Shopify auto-disabling the subscription.
+  // This handler is now a read-only shipped-logger anyway (delivery is marked on
+  // the real carrier event in webhooks.fulfillments_update).
   if (!admin) {
-    return new Response("Unauthorized", { status: 401 });
+    console.warn(`[${topic}] No admin context for ${shop}; acking.`);
+    return new Response("OK", { status: 200 });
   }
 
   // Payload for orders/fulfilled webhook is an Order object.
   const orderId = payload.id;
-  
+
   if (!orderId) {
-    console.error(`[${topic}] No order payload found.`);
-    return new Response("Bad Request", { status: 400 });
+    console.error(`[${topic}] No order payload found; acking.`);
+    return new Response("OK", { status: 200 });
   }
 
   const orderGid = `gid://shopify/Order/${orderId}`;
@@ -33,8 +41,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const merchantApiKey: string | null = merchantHit?.apiKey ?? null;
 
     if (!merchantApiKey) {
-      console.error(`[${topic}] No ink_api_key found in Firestore for shop: ${shop}. Cannot mark delivered.`);
-      return new Response("Merchant API key not found", { status: 500 });
+      // Not fatal + not retryable: an unprovisioned merchant won't provision by
+      // Shopify retrying this webhook. Ack and skip. (This handler doesn't even
+      // use the key anymore — delivery marking moved to fulfillments_update.)
+      console.warn(`[${topic}] No ink_api_key for shop ${shop}; acking + skipping.`);
+      return new Response("OK", { status: 200 });
     }
     console.log(`[${topic}] Found ink_api_key for ${shop} (prefix: ${merchantApiKey.slice(0, 12)}...)`);
 
@@ -79,8 +90,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
   } catch (error) {
-    console.error(`[${topic}] Error processing fulfilled webhook:`, error);
-    return new Response("Internal Server Error", { status: 500 });
+    // Read-only logger — nothing to retry. Swallow + ack (see discipline note above).
+    console.error(`[${topic}] Error processing fulfilled webhook (acked):`, error);
+    return new Response("OK", { status: 200 });
   }
 
   return new Response("OK", { status: 200 });

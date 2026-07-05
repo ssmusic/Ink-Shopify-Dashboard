@@ -152,8 +152,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const orderName = data?.name || data?.order_number || "Unknown";
 
   if (!orderGid) {
-    console.error("[orders/create] Missing order id in payload");
-    return new Response("Missing order id", { status: 400 });
+    // Malformed payload — a Shopify retry can't fix it, so ack (200) instead of
+    // 400. (A genuine processing error below still returns 500 on purpose, so
+    // Shopify retries and the idempotent enroll — backend #23 — eventually lands.)
+    console.error("[orders/create] Missing order id in payload; acking.");
+    return new Response("ok - missing order id", { status: 200 });
   }
 
   console.log(`\n📦 [orders/create] Processing order ${orderName} (${shop})`);

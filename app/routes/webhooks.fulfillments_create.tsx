@@ -21,8 +21,11 @@ import { findMerchantDoc } from "../services/merchant-doc.server";
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { topic, shop, payload, admin } = await authenticate.webhook(request);
 
+  // "ALWAYS 200 once authenticated" (the discipline noted above): admin missing
+  // here is a post-HMAC edge case a Shopify retry can't fix — ack it, don't 401.
   if (!admin) {
-    return new Response("Unauthorized", { status: 401 });
+    console.warn(`[${topic}] No admin context for ${shop}; acking.`);
+    return new Response("OK", { status: 200 });
   }
 
   try {
