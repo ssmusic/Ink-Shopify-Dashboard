@@ -7,9 +7,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   console.log(`Received ${topic} webhook for ${shop}`);
 
   // CUSTOMERS/DATA_REQUEST
-  // We don't store customer PII in our App's database.
-  // If we did, we would email the data to the merchant or customer.
-  // Since we don't, we just acknowledge.
+  // This app's own DB stores merchant config only. Customer data lives on the
+  // proof in the ink-backend; the merchant can already read it there. The
+  // 30-day obligation is on the merchant; we acknowledge receipt and log.
+  // TODO(Phase 5 — PCD): surface a proof-data export keyed on
+  // payload.customer.id so merchants can answer these requests in one click.
 
   return new Response("OK", { status: 200 });
 };

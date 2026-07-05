@@ -1,7 +1,9 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "8da1addef3dcd4251db5057cda3c85fa"
-name = "INK — Dynamic Receipts"
+# Working title per the 2026-07-05 overhaul decision ("Dynamic Receipts" is
+# banned copy). Goes live only on the next gated `shopify app deploy`.
+name = "INK — Order Tracking Pages"
 application_url = "https://shopify-app-250065525755.us-central1.run.app"
 embedded = true
 
@@ -31,7 +33,22 @@ api_version = "2025-10"
   topics = [ "orders/fulfilled" ]
   uri = "/webhooks/orders_fulfilled"
 
+  # GDPR compliance topics — MANDATORY for App Store review (auto-fail if
+  # missing). Handlers already existed; this registers them. HMAC is verified
+  # by authenticate.webhook(), which 401s invalid signatures (also required).
+  # Takes effect on the next gated `shopify app deploy` (§17.7/§17.8: after
+  # deploying, audit shops for duplicate shop-level subs + delivery counts).
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request" ]
+  uri = "/webhooks/customers/data_request"
 
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/redact" ]
+  uri = "/webhooks/customers/redact"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "shop/redact" ]
+  uri = "/webhooks/shop/redact"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
