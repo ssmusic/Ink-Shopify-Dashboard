@@ -19,6 +19,7 @@ import EngagementFunnel from "~/components/EngagementFunnel";
 import NFCTagInventory from "~/components/NFCTagInventory";
 import RevenueThisPeriod from "~/components/RevenueThisPeriod";
 import PlanCard from "~/components/billing/PlanCard";
+import CommsCard from "~/components/CommsCard";
 import AdvancedAnalytics from "~/components/AdvancedAnalytics";
 import { FEATURE_NFC } from "~/flags";
 // Removed from render (kept in tree, unreferenced): TimeToEngagement +
@@ -123,10 +124,13 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Row 2: Recent Activity + the honest plan card */}
+          {/* Row 2: Recent Activity + comms state + the honest plan card */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <RecentActivity />
-            <PlanCard />
+            <div className="flex flex-col gap-4">
+              <CommsCard />
+              <PlanCard />
+            </div>
           </div>
 
           {/* Advanced — the full operational-analytics BI, collapsed by default.

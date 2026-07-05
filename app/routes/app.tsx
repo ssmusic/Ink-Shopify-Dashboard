@@ -51,7 +51,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   (async () => {
     const existing = await getMerchant(session.shop);
     if (!existing?.ink_api_key) {
-      const inkData = await createMerchant(session.shop, session.shop, `admin@${session.shop}`);
+      // Real owner identity, not the old admin@{domain} placeholder — that
+      // placeholder made the magic link the ONLY door into in.ink (the
+      // merchant could never log in with their real email).
+      let shopName = session.shop;
+      let ownerEmail = `admin@${session.shop}`;
+      try {
+        const res = await admin.graphql(`#graphql
+          query ShopIdentity { shop { name email contactEmail } }`);
+        const shopData = (await res.json())?.data?.shop;
+        if (shopData?.name) shopName = shopData.name;
+        const realEmail = shopData?.email || shopData?.contactEmail;
+        if (realEmail) ownerEmail = realEmail;
+      } catch (e) {
+        console.warn("[App] shop identity fetch failed, using placeholders:", e);
+      }
+      const inkData = await createMerchant(session.shop, shopName, ownerEmail);
       if (inkData?.api_key) {
         await updateMerchant(session.shop, {
           ink_api_key: inkData.api_key,
