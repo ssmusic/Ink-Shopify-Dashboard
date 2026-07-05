@@ -100,7 +100,7 @@ export const getShopIdByDomain = async (shopDomain: string): Promise<string> => 
 // 843/1247 mock. Degrades to zeros on any failure so the card never throws.
 export const getMerchantTapStats = async (
     shopDomain: string,
-): Promise<{ totalTaps: number; enrollments: number; engaged: number; delivered: number }> => {
+): Promise<{ totalTaps: number; enrollments: number; engaged: number; delivered: number; clicked: number; totalClicks: number }> => {
     try {
         const shopId = await getShopIdByDomain(shopDomain);
         const res = await fetch(
@@ -109,7 +109,7 @@ export const getMerchantTapStats = async (
         );
         if (!res.ok) {
             console.warn(`[ink-api] getMerchantTapStats ${res.status} for ${shopDomain}`);
-            return { totalTaps: 0, enrollments: 0, engaged: 0, delivered: 0 };
+            return { totalTaps: 0, enrollments: 0, engaged: 0, delivered: 0, clicked: 0, totalClicks: 0 };
         }
         const body = await res.json();
         const proofs: any[] = Array.isArray(body) ? body : (body.proofs ?? []);
@@ -118,10 +118,14 @@ export const getMerchantTapStats = async (
         const engaged = proofs.reduce((n, p) => n + ((Number(p.tap_count) || 0) > 0 ? 1 : 0), 0);
         // delivered = proofs with a real delivered_at (the list carries it — admin.js:1095).
         const delivered = proofs.reduce((n, p) => n + (p.delivered_at ? 1 : 0), 0);
-        return { totalTaps, enrollments: proofs.length, engaged, delivered };
+        // clicked = proofs with an outbound click (click_count on the row);
+        // totalClicks = all outbound clicks. The "Clicked" funnel stage.
+        const clicked = proofs.reduce((n, p) => n + ((Number(p.click_count) || 0) > 0 ? 1 : 0), 0);
+        const totalClicks = proofs.reduce((sum, p) => sum + (Number(p.click_count) || 0), 0);
+        return { totalTaps, enrollments: proofs.length, engaged, delivered, clicked, totalClicks };
     } catch (e: any) {
         console.error("[ink-api] getMerchantTapStats error:", e?.message || e);
-        return { totalTaps: 0, enrollments: 0, engaged: 0, delivered: 0 };
+        return { totalTaps: 0, enrollments: 0, engaged: 0, delivered: 0, clicked: 0, totalClicks: 0 };
     }
 };
 

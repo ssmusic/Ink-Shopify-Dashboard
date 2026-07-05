@@ -115,9 +115,10 @@ const Dashboard = () => {
             </InlineStack>
           </Card>
 
-          {/* Row 1: Open funnel + Enrolled Order Value — real numbers only */}
+          {/* Row 1: Open funnel + Enrolled Order Value — real numbers only.
+              The funnel ends with the pull to the in.ink studio (full insights). */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <EngagementFunnel />
+            <EngagementFunnel onOpenStudio={openParallel} studioOpening={opening} />
             <RevenueThisPeriod />
           </div>
 
