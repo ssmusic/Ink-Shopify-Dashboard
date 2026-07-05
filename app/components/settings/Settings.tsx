@@ -4,6 +4,7 @@ import { Page, Tabs } from "@shopify/polaris";
 import PolarisAppLayout from "../PolarisAppLayout";
 import AccountSettings from "./AccountSettings";
 import TagsSettings from "./TagsSettings";
+import { FEATURE_NFC } from "../../flags";
 import BrandingSettings from "./BrandingSettings";
 import CommunicationSettings from "./CommunicationSettings";
 import UserManagementSettings from "./UserManagementSettings";
@@ -12,7 +13,8 @@ import DeliveryModeSettings from "./DeliveryModeSettings";
 const tabs = [
   { id: "account", content: "Account" },
   { id: "delivery", content: "Delivery" },
-  { id: "tags", content: "Inventory" },
+  // NFC tag inventory — tabled behind FEATURE_NFC (app/flags.ts)
+  ...(FEATURE_NFC ? [{ id: "tags", content: "Inventory" }] : []),
   { id: "branding", content: "Media" },
   { id: "communication", content: "Notifications" },
   { id: "users", content: "Users" },

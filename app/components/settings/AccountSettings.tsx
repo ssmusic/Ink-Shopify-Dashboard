@@ -60,10 +60,10 @@ const AccountSettings = () => {
           <Card>
             <BlockStack gap="300">
               <Text as="p" variant="bodyMd">
-                View your current billing cycle, usage history, and pricing details.
+                View your plan and how billing works.
               </Text>
               <div>
-                <Button onClick={() => navigate("/app/billing")}>View Usage & Billing</Button>
+                <Button onClick={() => navigate("/app/billing")}>View billing</Button>
               </div>
             </BlockStack>
           </Card>
@@ -71,11 +71,10 @@ const AccountSettings = () => {
           <Card>
             <BlockStack gap="300">
               <Text as="p" variant="bodyMd" fontWeight="semibold">Pricing</Text>
-              <Text as="p" variant="bodyMd">$2.99 per enrollment — sticker included</Text>
-              <Text as="p" variant="bodyMd">$2.99 per verified tap</Text>
-              <Text as="p" variant="bodyMd" fontWeight="semibold">$5.98 per verified shipment (enrollment + tap)</Text>
-              <Text as="p" variant="bodySm" tone="subdued">
-                No monthly fee. Billed through your Shopify invoice.
+              <Text as="p" variant="bodyMd">
+                INK is free during the pilot. Paid plans will be flat monthly
+                tiers based on your order volume — billed through Shopify, no
+                per-order fees.
               </Text>
             </BlockStack>
           </Card>
