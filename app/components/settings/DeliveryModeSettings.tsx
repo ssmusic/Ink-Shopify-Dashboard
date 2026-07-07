@@ -124,13 +124,13 @@ const DeliveryModeSettings = () => {
     <Layout>
       <Layout.AnnotatedSection
         title="Delivery mode"
-        description="Choose how ink. shows up to your customers at checkout."
+        description="Choose how ink. appears in the buyer delivery flow."
       >
         <Card>
           <BlockStack gap="400">
             <RadioButton
               label="Optional add-on"
-              helpText="Customers see an ink. delivery option as a paid checkout choice alongside their other shipping methods. They choose whether to opt in."
+              helpText="Customers see an ink. delivery option alongside their other shipping methods. They choose whether to opt in."
               checked={mode === "addon"}
               id="delivery-mode-addon"
               name="delivery-mode"
@@ -139,7 +139,7 @@ const DeliveryModeSettings = () => {
             />
             <RadioButton
               label="Automatic (background)"
-              helpText="Customers see only your standard shipping methods. ink. is silently applied to every order. You absorb the per-sticker cost (or price it into your products)."
+              helpText="Customers see only your standard shipping methods. ink. is applied to eligible orders in the background."
               checked={mode === "background"}
               id="delivery-mode-background"
               name="delivery-mode"

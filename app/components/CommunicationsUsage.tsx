@@ -49,7 +49,7 @@ const CommunicationsUsage = ({
       </div>
 
       <p className="text-xs text-muted-foreground mb-4">
-        Messages and notifications this billing period
+        Messages and notifications this period
       </p>
 
       {/* Channel breakdown */}

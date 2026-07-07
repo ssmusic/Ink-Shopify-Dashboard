@@ -73,6 +73,8 @@ Do not use Stripe or any Worker checkout/portal route for app charges.
 - No internal `payment_status: active` as a billing truth.
 - No fake card, invoice, plan, cap, trial, or usage rows.
 - No Stripe path reachable or inferable from the Shopify app.
+- No buyer/merchant copy implying INK is sold as a paid off-platform checkout
+  add-on or physical sticker purchase from inside the Shopify app.
 - Billing UI inside the app should either:
   - be removed, or
   - reflect Shopify's granted plan read-only.
@@ -95,3 +97,28 @@ Before resubmission, verify on `sm-test-hhawzn52`:
    `Stripe`, `shop.in.ink`, `payment_status`, `Visa`, `$49`, `Invoices`,
    `Payment method`, `Premium upgrade`, `Upgrade`, `appSubscriptionCreate`.
 
+## Second-Pass Audit Notes
+
+After the first cleanup, a broader search found a few non-primary but confusing
+surfaces:
+
+- Embedded Delivery Mode copy still described an optional paid checkout choice
+  and per-sticker cost. This was removed.
+- A tabled `CommunicationsUsage` component still said `billing period`. It is
+  not rendered, but the copy was neutralized anyway.
+- The standalone Account page title still said `Account & billing`. It now says
+  `Account`.
+- The password-gated `/admin/codes` operator page still showed pilot credit as
+  trial/metered-event language. This was neutralized in the standalone PR.
+
+Backend audit:
+
+- `ink-backend` was scanned for `Stripe`, subscription, invoice, billing, and
+  plan/payment markers. No app-charge path was changed or deployed. Remaining
+  hits are Shopify plan metadata, privacy copy, and unrelated cleanup/test code.
+
+Residual checks that code cannot prove:
+
+- Partner Dashboard App Pricing must match the locked pricing.
+- Shopify must show approval on paid-plan selection.
+- Decline and uninstall/reinstall behavior must be tested on the dev store.
