@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
 import { useFetcher } from "react-router";
 import { Button } from "~/components/ui/button";
 import { AlertTriangle } from "lucide-react";
@@ -107,19 +106,18 @@ const NFCTagInventory = () => {
           </p>
         </div>
 
-        {/* Reorder Button */}
         <Button
-          asChild
           variant="outline"
           className={`w-full mt-4 text-sm font-medium py-5 rounded-[4px] transition-colors focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${
             isLowInventory || isCriticalInventory
               ? "bg-foreground text-background hover:bg-foreground/90 border-foreground"
               : "border-border hover:border-foreground"
           }`}
+          onClick={() => {
+            window.location.href = "mailto:support@in.ink?subject=INK sticker inventory";
+          }}
         >
-          <a href="https://shop.in.ink" target="_blank" rel="noopener noreferrer">
-            {isCriticalInventory ? "Reorder Now" : "Reorder Tags"}
-          </a>
+          {isCriticalInventory ? "Contact INK Support" : "Request Inventory Support"}
         </Button>
       </div>
     </>
@@ -127,4 +125,3 @@ const NFCTagInventory = () => {
 };
 
 export default NFCTagInventory;
-

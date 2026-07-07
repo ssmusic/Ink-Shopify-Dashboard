@@ -1,9 +1,5 @@
-// The honest plan card. Replaces the mock billing widgets (BillingWidget /
-// CurrentPlanCard / UsageCapCard / BillingCycleCard / UsageHistoryCard —
-// all hardcoded fiction, tabled unreferenced) with the only true statement:
-// billing runs through Shopify's Managed Pricing, and during the pilot the
-// app is free. When paid tiers go live in the Partner Dashboard, this card
-// gains the current-plan readout — until then it shows NO invented numbers.
+// Billing runs through Shopify App Pricing. Until paid tiers go live in the
+// Partner Dashboard, this card must show no invented prices or usage charges.
 import { CreditCard } from "lucide-react";
 
 const PlanCard = () => {

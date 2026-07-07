@@ -24,9 +24,8 @@ import OnboardingChecklist from "~/components/OnboardingChecklist";
 import AdvancedAnalytics from "~/components/AdvancedAnalytics";
 import { FEATURE_NFC } from "~/flags";
 // Removed from render (kept in tree, unreferenced): TimeToEngagement +
-// CommunicationsUsage rendered hardcoded fictional numbers; BillingWidget +
-// CurrentPlanCard priced real counts at fictional NFC-era rates. Nothing on
-// this dashboard may show a number that isn't the merchant's own.
+// CommunicationsUsage rendered hardcoded fictional numbers. Nothing on this
+// dashboard may show a number that isn't the merchant's own.
 
 // Mint a single-use magic-login token for this shop and hand back a
 // www.in.ink/welcome URL the merchant can open already signed in.

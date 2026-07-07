@@ -146,7 +146,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const customerEmail = order.customer?.email;
       const customerPhone = order.customer?.phone;
       const customerName = order.customer?.firstName || "Customer";
-      const verifyUrl = order.proofMetafield?.value ? `https://shop.in.ink/t/${order.proofMetafield.value}` : undefined;
+      const verifyUrl = order.proofMetafield?.value ? `https://www.in.ink/r/${order.proofMetafield.value}` : undefined;
 
       console.log(`\n📨 Dispatching immediate [${notificationType}] notification via NotificationService...`);
       console.log(`   - To: ${customerName}`);
