@@ -72,9 +72,8 @@ const AccountSettings = () => {
             <BlockStack gap="300">
               <Text as="p" variant="bodyMd" fontWeight="semibold">Pricing</Text>
               <Text as="p" variant="bodyMd">
-                INK is free during the pilot. Paid plans will be flat monthly
-                tiers based on your order volume — billed through Shopify, no
-                per-order fees.
+                INK pricing is managed in Shopify. Plan approval, invoices,
+                cancellation, and any usage billing all stay inside Shopify.
               </Text>
             </BlockStack>
           </Card>
