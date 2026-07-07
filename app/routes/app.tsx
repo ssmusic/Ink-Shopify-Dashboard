@@ -22,16 +22,10 @@ const queryClient = new QueryClient();
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
 
-  // Billing gate temporarily disabled while the app is configured as a
-  // Managed Pricing app in Shopify Partners. Managed Pricing handles
-  // subscriptions through the App Store listing — calling
-  // `appSubscriptionCreate` from /app/payment errors out with
-  // "Managed Pricing Apps cannot use the Billing API (to create charges)".
-  //
-  // Until billing is reconciled (either switch off Managed Pricing in
-  // Partners, or rewrite this app to read activeSubscriptions only), we
-  // let every authenticated merchant through. Re-enable the fast/slow
-  // path below by reverting this commit.
+  // Billing is owned by Shopify App Pricing / the Shopify Billing API, never
+  // by INK's internal merchant provisioning. This loader may create the
+  // operational merchant record needed for orders/pages, but it must not mark
+  // a merchant as subscribed or paid.
   const appUrl = process.env.SHOPIFY_APP_URL || "";
   if (appUrl) {
     ensureCarrierServiceRegistered(admin, appUrl).catch((err) =>
@@ -71,7 +65,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         await updateMerchant(session.shop, {
           ink_api_key: inkData.api_key,
           verified_delivery_mode: "background",
-          payment_status: "active",
         });
       }
     }

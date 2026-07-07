@@ -1,5 +1,5 @@
 /**
- * LowInventoryAlert — sticker reorder prompt for the Shopify embedded app.
+ * LowInventoryAlert — sticker inventory warning for the Shopify embedded app.
  *
  * Thresholds:
  *   critical : remaining ≤ 0   → full-screen modal
@@ -9,9 +9,9 @@
 
 import { useState } from "react";
 
-const REORDER_URL = "https://shop.in.ink";
 const LOW_THRESHOLD = 20;
 const CRITICAL_THRESHOLD = 0;
+const SUPPORT_EMAIL = "support@in.ink";
 
 interface LowInventoryAlertProps {
   remaining: number;
@@ -28,7 +28,9 @@ export function LowInventoryAlert({ remaining, total, isLoading = false }: LowIn
   if (isLoading || remaining >= LOW_THRESHOLD) return null;
   if (isCritical && modalDismissed) return null;
 
-  const handleReorder = () => window.open(REORDER_URL, "_blank", "noopener");
+  const handleContactSupport = () => {
+    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=INK sticker inventory`;
+  };
 
   if (isCritical) {
     return (
@@ -46,16 +48,16 @@ export function LowInventoryAlert({ remaining, total, isLoading = false }: LowIn
             Your inventory has reached <strong style={{ color:"#EF4444" }}>{remaining} / {total}</strong>.
           </p>
           <p style={{ fontSize:"14px", color:"#666", marginBottom:"28px" }}>
-            Enrolling new shipments is blocked until you reorder. Place an order now to keep your warehouse running.
+            Enrolling new shipments is blocked until INK refreshes your sticker inventory.
           </p>
-          <button onClick={handleReorder} style={{ width:"100%", padding:"14px", background:"#111", color:"#fff", border:"none", borderRadius:"10px", fontSize:"15px", fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", marginBottom:"12px" }}>
+          <button onClick={handleContactSupport} style={{ width:"100%", padding:"14px", background:"#111", color:"#fff", border:"none", borderRadius:"10px", fontSize:"15px", fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", marginBottom:"12px" }}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+              <path d="M4 4h16v16H4z"/>
+              <path d="m22 6-10 7L2 6"/>
             </svg>
-            Reorder Stickers at shop.in.ink
+            Contact INK support
           </button>
-          <p style={{ fontSize:"12px", color:"#999" }}>Opens <strong>shop.in.ink</strong> in a new tab</p>
+          <p style={{ fontSize:"12px", color:"#999" }}>{SUPPORT_EMAIL}</p>
         </div>
       </div>
     );
@@ -74,9 +76,9 @@ export function LowInventoryAlert({ remaining, total, isLoading = false }: LowIn
           Low sticker inventory — {remaining} / {total} remaining
         </p>
         <p style={{ fontSize:"12px", color:"#B45309", margin:"2px 0 0" }}>
-          Reorder soon to avoid delays.{" "}
-          <button onClick={handleReorder} style={{ background:"none", border:"none", color:"#B45309", fontWeight:700, cursor:"pointer", textDecoration:"underline", padding:0, fontSize:"12px" }}>
-            Order at shop.in.ink →
+          Contact INK before enrolling more packages.{" "}
+          <button onClick={handleContactSupport} style={{ background:"none", border:"none", color:"#B45309", fontWeight:700, cursor:"pointer", textDecoration:"underline", padding:0, fontSize:"12px" }}>
+            Email support
           </button>
         </p>
       </div>

@@ -4,7 +4,6 @@ const COLLECTION = "merchants";
 
 export interface MerchantData {
   shop: string;
-  payment_status?: string;
   ink_api_key?: string;
   verified_delivery_mode?: "addon" | "background";
   updatedAt?: string;

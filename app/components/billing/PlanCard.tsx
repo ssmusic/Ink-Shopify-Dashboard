@@ -1,9 +1,5 @@
-// The honest plan card. Replaces the mock billing widgets (BillingWidget /
-// CurrentPlanCard / UsageCapCard / BillingCycleCard / UsageHistoryCard —
-// all hardcoded fiction, tabled unreferenced) with the only true statement:
-// billing runs through Shopify's Managed Pricing, and during the pilot the
-// app is free. When paid tiers go live in the Partner Dashboard, this card
-// gains the current-plan readout — until then it shows NO invented numbers.
+// Billing runs through Shopify App Pricing. This card must not invent current
+// plan state; Shopify owns plan approval, charges, invoices, and cancellation.
 import { CreditCard } from "lucide-react";
 
 const PlanCard = () => {
@@ -14,9 +10,9 @@ const PlanCard = () => {
         <p className="text-sm font-medium text-foreground">Your plan</p>
       </div>
       <p className="text-sm text-muted-foreground">
-        INK is free during the pilot. When paid plans launch they'll be flat
-        monthly tiers, billed through your Shopify invoice — no per-order
-        fees, and you'll approve any charge inside Shopify before it starts.
+        Your INK plan is selected and approved in Shopify. Charges appear on
+        your Shopify invoice, and any plan or usage billing starts only after
+        Shopify asks you to approve it.
       </p>
     </div>
   );

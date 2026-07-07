@@ -9,7 +9,7 @@ const json = (data: any, init?: ResponseInit) =>
   });
 
 // GET /app/api/dashboard/tap-stats — real verified-tap + enrollment totals for the
-// authenticated merchant, summed from their proofs. Consumed by CurrentPlanCard.
+// authenticated merchant, summed from their proofs.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const { session } = await authenticate.admin(request);

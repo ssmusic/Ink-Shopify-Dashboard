@@ -93,7 +93,7 @@ const faqSections = [
       {
         question: "How much does it cost?",
         answer:
-          "INK is free during the pilot. Paid plans will be flat monthly tiers based on your order volume — billed through Shopify, no per-order fees.",
+          "INK pricing is managed in Shopify. Choose and approve your plan there; any usage billing also appears on your Shopify invoice.",
       },
       {
         question: "How am I billed?",

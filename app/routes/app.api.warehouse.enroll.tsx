@@ -178,7 +178,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (currentCount <= 0) {
         console.log("[ENROLL] ❌ Enrollment blocked: inventory is zero or negative:", currentCount);
         return json(
-          { error: "Insufficient sticker inventory. Please reorder at shop.in.ink before enrolling new packages." },
+          { error: "Insufficient sticker inventory. Contact INK before enrolling new packages." },
           { status: 400 }
         );
       }
@@ -472,4 +472,3 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     enrolled_at: inkData.enrolled_at,
   });
 };
-
