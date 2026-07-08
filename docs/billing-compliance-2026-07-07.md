@@ -116,9 +116,49 @@ Backend audit:
 - `ink-backend` was scanned for `Stripe`, subscription, invoice, billing, and
   plan/payment markers. No app-charge path was changed or deployed. Remaining
   hits are Shopify plan metadata, privacy copy, and unrelated cleanup/test code.
+- The live `/admin/merchants` create/reinstall path stores operational merchant
+  state (`status: active`, `shopify_plan: null`) and an API key. It does not
+  create `plan`, `trial_credit_dollars`, `shipment_cap`, `payment_status`, or an
+  app subscription. The similarly named `plan`/`trial_credit_dollars` defaults
+  are in the standalone Worker's password-gated pilot-code admin flow, not in the
+  Shopify install path.
+
+## Final Smoke - 2026-07-07 PT
+
+Merged and deployed:
+
+- Embed PR #64 merged to `origin/main` at `964ab56`; Cloud Run deploy
+  `28907185187` succeeded.
+- Standalone dashboard/Worker PR #394 merged at `ce452f5`; Firebase live deploy
+  `28907175867` and Worker deploy `28907175855` succeeded.
+- Standalone wording follow-up PR #397 merged at `36a9a2f`; Firebase live deploy
+  `28907541745` succeeded.
+
+Live endpoint checks returned 200:
+
+- `https://app.in.ink/`
+- `https://shopify-app-3ijhzmtboa-uc.a.run.app/`
+- `https://www.in.ink/`
+- `https://www.in.ink/settings/account`
+
+Deployed standalone bundle grep was clean for the reviewer-facing stale strings:
+`stripe/checkout-session`, `stripe/portal-session`, `Visa`, `Payment method`,
+`Invoices`, `$49`, `Studio plan`, `Premium upgrade`, `Upgrade to Premium`,
+`premium add-on`, `shop.in.ink`, `$2.50`, `$2.99`, `paid checkout`,
+`per-sticker`, `billing period`, and `original payment method`.
+
+Shopify CLI check:
+
+- `shopify app info --json --client-id 8da1addef3dcd4251db5057cda3c85fa`
+  confirmed the intended Partner app, `https://app.in.ink` application URL, and
+  the existing scope list. No `shopify app deploy` was run because the remote
+  config already matched and there was no scope/config change to ship.
 
 Residual checks that code cannot prove:
 
 - Partner Dashboard App Pricing must match the locked pricing.
 - Shopify must show approval on paid-plan selection.
 - Decline and uninstall/reinstall behavior must be tested on the dev store.
+- Browser automation reached a Shopify login wall for
+  `sm-test-hhawzn52`; finish the hosted approval/decline/reinstall check in a
+  signed-in Shopify admin session before resubmitting.
