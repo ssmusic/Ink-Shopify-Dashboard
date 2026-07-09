@@ -5,8 +5,8 @@ import { enrollOrder, createMerchant } from "../services/ink-api.server";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
- * Defaults to "addon" (current behavior — only INK-shipped orders are tagged)
- * if no preference is stored yet.
+ * Defaults to "background" so a missing preference never implies a
+ * customer-paid checkout add-on.
  */
 async function getMerchantDeliveryMode(
   shopDomain: string
@@ -23,14 +23,14 @@ async function getMerchantDeliveryMode(
       if (direct.exists) docData = direct.data() ?? null;
     }
     const mode = docData?.verified_delivery_mode;
-    if (mode === "addon" || mode === "background") return mode;
-    return "addon";
+    if (mode === "background") return mode;
+    return "background";
   } catch (e) {
     console.warn(
-      `[orders/create] Failed to read delivery mode for ${shopDomain}, defaulting to addon:`,
+      `[orders/create] Failed to read delivery mode for ${shopDomain}, defaulting to background:`,
       e
     );
-    return "addon";
+    return "background";
   }
 }
 

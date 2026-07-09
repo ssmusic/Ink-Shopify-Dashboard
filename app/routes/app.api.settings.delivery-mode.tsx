@@ -1,16 +1,14 @@
 /**
  * Verified Delivery Mode — merchant preference endpoint.
  *
- * GET   → returns { mode: "addon" | "background" }
- * PATCH → accepts { mode } and persists to merchants/{shopDomain}.verified_delivery_mode
+ * GET   → returns { mode: "background" }
+ * PATCH → accepts { mode: "background" } and persists to
+ * merchants/{shopDomain}.verified_delivery_mode
  *
  * Mode meaning:
- *   - "addon"      (default): INK shows as a customer-facing checkout option,
- *                  the customer chooses + pays. Current behavior.
  *   - "background":            INK is hidden from checkout. Every order on
  *                  this shop is silently tagged for INK enrollment regardless
- *                  of which shipping method the customer picked. Merchant
- *                  absorbs the cost.
+ *                  of which shipping method the customer picked.
  *
  * Reads/writes are gated by `authenticate.admin(request)` from Shopify.
  */
@@ -19,7 +17,7 @@ import firestore from "../firestore.server";
 import { authenticate } from "../shopify.server";
 import { setCarrierServiceActive } from "../services/carrier-service.server";
 
-const VALID_MODES = ["addon", "background"] as const;
+const VALID_MODES = ["background"] as const;
 type DeliveryMode = (typeof VALID_MODES)[number];
 
 const corsHeaders = {
@@ -57,7 +55,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   try {
     const doc = await getMerchantDoc(shopDomain);
-    const mode: DeliveryMode = doc?.data()?.verified_delivery_mode || "addon";
+    const mode: DeliveryMode = "background";
     return json({ mode });
   } catch (err: any) {
     console.error("[settings/delivery-mode] GET error:", err.message);
@@ -104,17 +102,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       updatedAt: new Date(),
     });
 
-    // Propagate to Shopify: when mode is "addon", Shopify should call our
-    // shipping-rates callback at checkout (active=true). When "background",
-    // we want Shopify to stop calling it so the customer no longer sees INK
-    // among their shipping options (active=false). Failure to propagate is
-    // logged but doesn't fail the save — the mode persists in Firestore and
-    // can be re-synced on next app load.
-    const carrierActive = mode === "addon";
-    await setCarrierServiceActive(admin, carrierActive);
+    // Propagate to Shopify: INK should not appear as a customer-paid checkout
+    // carrier option during App Store review. Failure is logged by the helper
+    // but doesn't fail the save.
+    await setCarrierServiceActive(admin, false);
 
     console.log(
-      `[settings/delivery-mode] ${shopDomain} → mode=${mode}, carrier active=${carrierActive}`
+      `[settings/delivery-mode] ${shopDomain} → mode=${mode}, carrier active=false`
     );
 
     return json({ mode });
