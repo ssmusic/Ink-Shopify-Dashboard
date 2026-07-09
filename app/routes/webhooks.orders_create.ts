@@ -10,7 +10,7 @@ import { enrollOrder, createMerchant } from "../services/ink-api.server";
  */
 async function getMerchantDeliveryMode(
   shopDomain: string
-): Promise<"addon" | "background"> {
+): Promise<"background"> {
   try {
     const snapshot = await firestore
       .collection("merchants")
@@ -175,18 +175,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const hasPremiumDelivery = hasInkPremiumShipping(shippingLines);
 
-  // Mode-aware enrollment decision:
-  //   • addon mode: only enroll if the customer chose the INK shipping option
-  //   • background mode: enroll every order on this shop regardless of
-  //     shipping (INK is hidden from checkout in this mode anyway).
+  // Background enrollment: INK is hidden from checkout and never appears as a
+  // customer-paid shipping option, so every order on this shop is eligible.
   const deliveryMode = await getMerchantDeliveryMode(shop);
   const shouldEnroll = hasPremiumDelivery || deliveryMode === "background";
 
   if (!shouldEnroll) {
-    console.log(
-      `📦 [orders/create] Order ${orderName} skipped — addon mode, no INK shipping selected`
-    );
-    return new Response("ok - addon mode, not INK");
+    console.log(`[orders/create] Order ${orderName} skipped — not eligible`);
+    return new Response("ok - not eligible");
   }
 
   if (deliveryMode === "background") {
