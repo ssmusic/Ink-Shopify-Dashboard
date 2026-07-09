@@ -1,8 +1,12 @@
 /**
  * Shipping Rates Callback Endpoint
  * 
- * Shopify POSTs to this URL at checkout to get available shipping rates.
- * This is called by the Carrier Service API — NOT through Shopify auth.
+ * Legacy Carrier Service callback.
+ *
+ * App Store review posture: INK does not expose a customer-paid checkout
+ * delivery add-on. Keep the endpoint healthy for any stale Shopify callback,
+ * but return no rates so Shopify falls back to the merchant's own shipping
+ * methods.
  * 
  * Shopify sends: { rate: { origin, destination, items, currency, locale } }
  * We respond with: { rates: [...] }
@@ -26,43 +30,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
     }
 
-    const currency = rate.currency || "USD";
-
-    // Calculate delivery dates (2-day for premium, 5-7 for standard)
-    const now = new Date();
-    const premiumMin = new Date(now);
-    premiumMin.setDate(premiumMin.getDate() + 1);
-    const premiumMax = new Date(now);
-    premiumMax.setDate(premiumMax.getDate() + 2);
-    const standardMin = new Date(now);
-    standardMin.setDate(standardMin.getDate() + 5);
-    const standardMax = new Date(now);
-    standardMax.setDate(standardMax.getDate() + 7);
-
-    const formatDate = (d: Date) => d.toISOString().split("T")[0];
-
-    const rates = [
-      {
-        service_name: "ink. Verified Delivery",
-        service_code: "INK_VERIFIED",
-        total_price: "1000", // $10.00 in cents
-        description: "2-day delivery with verification, Priority handling and Delivery confirmation",
-        currency,
-        min_delivery_date: formatDate(premiumMin),
-        max_delivery_date: formatDate(premiumMax),
-      },
-      {
-        service_name: "Standard Free Delivery",
-        service_code: "STANDARD_FREE",
-        total_price: "0", // Free
-        description: "5-7 business days",
-        currency,
-        min_delivery_date: formatDate(standardMin),
-        max_delivery_date: formatDate(standardMax),
-      },
-    ];
-
-    console.log(`[ShippingRates] Returning ${rates.length} rates for ${rate.destination?.city || "unknown"}, ${rate.destination?.province || ""}`);
+    const rates: any[] = [];
+    console.log(`[ShippingRates] Background mode: returning no INK rates for ${rate.destination?.city || "unknown"}, ${rate.destination?.province || ""}`);
 
     return new Response(JSON.stringify({ rates }), {
       status: 200,

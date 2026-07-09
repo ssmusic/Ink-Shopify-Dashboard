@@ -4,10 +4,9 @@
  * Registers the app as a Carrier Service so Shopify calls our
  * /api/shipping-rates endpoint at checkout to provide shipping options.
  *
- * The carrier service can be toggled active/inactive per-shop via
- * `setCarrierServiceActive`. When a merchant switches to "background"
- * delivery mode, we set active=false so Shopify stops calling our
- * callback and the customer no longer sees INK at checkout.
+ * App Store review posture: INK runs in background mode. The carrier service
+ * remains registered only so legacy installs can be deactivated; it must not
+ * expose a customer-paid checkout option.
  */
 
 const CARRIER_SERVICE_NAME = "ink. Verified Delivery";
@@ -131,10 +130,11 @@ export async function ensureCarrierServiceRegistered(admin: any, appUrl: string)
     );
 
     if (existingInk) {
-      // Already registered — check if callback URL needs updating
+      // Already registered — check if callback URL needs updating and force
+      // inactive so no customer-paid INK delivery option appears at checkout.
       const currentCallbackUrl = `${appUrl}/api/shipping-rates`;
-      if (existingInk.node.callbackUrl !== currentCallbackUrl) {
-        console.log(`[CarrierService] Updating callback URL to ${currentCallbackUrl}`);
+      if (existingInk.node.callbackUrl !== currentCallbackUrl || existingInk.node.active) {
+        console.log(`[CarrierService] Updating callback URL to ${currentCallbackUrl} and deactivating`);
         await admin.graphql(`
           mutation carrierServiceUpdate($input: DeliveryCarrierServiceUpdateInput!) {
             carrierServiceUpdate(input: $input) {
@@ -142,6 +142,7 @@ export async function ensureCarrierServiceRegistered(admin: any, appUrl: string)
                 id
                 name
                 callbackUrl
+                active
               }
               userErrors {
                 field
@@ -154,6 +155,7 @@ export async function ensureCarrierServiceRegistered(admin: any, appUrl: string)
             input: {
               id: existingInk.node.id,
               callbackUrl: currentCallbackUrl,
+              active: false,
             }
           }
         });
@@ -187,7 +189,7 @@ export async function ensureCarrierServiceRegistered(admin: any, appUrl: string)
           name: CARRIER_SERVICE_NAME,
           callbackUrl,
           supportsServiceDiscovery: true,
-          active: true,
+          active: false,
         }
       }
     });

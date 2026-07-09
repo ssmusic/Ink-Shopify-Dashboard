@@ -3,19 +3,14 @@ import {
   Layout,
   Card,
   BlockStack,
-  RadioButton,
   Text,
   Banner,
   Spinner,
 } from "@shopify/polaris";
 import { toast } from "../../hooks/use-toast";
 
-type DeliveryMode = "addon" | "background";
-
 const DeliveryModeSettings = () => {
-  const [mode, setMode] = useState<DeliveryMode>("addon");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   // App-Bridge-aware fetch (mirrors the pattern used in BrandingSettings).
   const fetchSecure = async (path: string, options: RequestInit = {}) => {
@@ -54,10 +49,7 @@ const DeliveryModeSettings = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await fetchSecure("/app/api/settings/delivery-mode");
-        if (data?.mode === "addon" || data?.mode === "background") {
-          setMode(data.mode);
-        }
+        await fetchSecure("/app/api/settings/delivery-mode");
       } catch (err: any) {
         console.error("Failed to load delivery mode:", err);
         toast({
@@ -72,36 +64,6 @@ const DeliveryModeSettings = () => {
     };
     load();
   }, []);
-
-  const handleChange = async (next: DeliveryMode) => {
-    if (next === mode || saving) return;
-
-    const previous = mode;
-    setMode(next); // optimistic
-    setSaving(true);
-
-    try {
-      await fetchSecure("/app/api/settings/delivery-mode", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: next }),
-      });
-      toast({
-        description: `Delivery mode set to ${next === "addon" ? "Optional add-on" : "Automatic (background)"}`,
-        duration: 2000,
-      });
-    } catch (err: any) {
-      setMode(previous); // revert
-      toast({
-        title: "Couldn't save delivery mode",
-        description: err.message,
-        variant: "destructive",
-        duration: 3000,
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -124,39 +86,22 @@ const DeliveryModeSettings = () => {
     <Layout>
       <Layout.AnnotatedSection
         title="Delivery mode"
-        description="Choose how ink. appears in the buyer delivery flow."
+        description="ink. works behind your existing Shopify delivery methods."
       >
         <Card>
           <BlockStack gap="400">
-            <RadioButton
-              label="Optional add-on"
-              helpText="Customers see an ink. delivery option alongside their other shipping methods. They choose whether to opt in."
-              checked={mode === "addon"}
-              id="delivery-mode-addon"
-              name="delivery-mode"
-              onChange={() => handleChange("addon")}
-              disabled={saving}
-            />
-            <RadioButton
-              label="Automatic (background)"
-              helpText="Customers see only your standard shipping methods. ink. is applied to eligible orders in the background."
-              checked={mode === "background"}
-              id="delivery-mode-background"
-              name="delivery-mode"
-              onChange={() => handleChange("background")}
-              disabled={saving}
-            />
-
-            {mode === "background" && (
-              <Banner tone="info">
-                <Text as="p" variant="bodySm">
-                  Background mode hides ink. from your checkout the next time
-                  Shopify polls our carrier service (usually within a few
-                  minutes). Existing in-flight checkouts may still show the
-                  option until then.
-                </Text>
-              </Banner>
-            )}
+            <Text as="p" variant="bodyMd">
+              Automatic background mode is active. Buyers see only your standard
+              Shopify shipping methods, and ink. creates order pages for
+              eligible orders after purchase.
+            </Text>
+            <Banner tone="info">
+              <Text as="p" variant="bodySm">
+                INK does not add a customer-paid checkout delivery option. Any
+                legacy carrier-service callback returns no rates while the app
+                runs in background mode.
+              </Text>
+            </Banner>
           </BlockStack>
         </Card>
       </Layout.AnnotatedSection>
