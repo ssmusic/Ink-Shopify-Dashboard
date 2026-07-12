@@ -624,3 +624,42 @@ export const purgeShopInInk = async (
     return { ok: false, status: 0, body: { error: String(e) } };
   }
 };
+
+// ─── M3 redemptions (RUNBOOK_CAMPAIGNS §6.3) ────────────────────────────
+// A campaign's code coming back inside orders/create is the first dollar-
+// number in the funnel. This reporter is deliberately dumb: it forwards the
+// order's discount codes to the backend and lets ATTRIBUTION live there
+// (exact-match against book.campaigns, one doc per order, idempotent set) —
+// the embed never decides which campaign earned it. Fire-and-forget: a
+// failure logs and the webhook proceeds; counting revenue must NEVER break
+// the enroll heart.
+export const reportCampaignRedemption = async (
+  apiKey: string,
+  redemption: {
+    order_id: string | number;
+    order_number?: string;
+    /** Raw REST-payload discount codes, shape-preserved: [{code, amount, type}]. */
+    discount_codes: Array<{ code?: string; amount?: string; type?: string }>;
+    order_total?: string;
+    currency?: string;
+    order_created_at?: string;
+  },
+): Promise<void> => {
+  try {
+    const res = await fetch(getAlanUrl("/api/redemptions"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(redemption),
+    });
+    if (!res.ok) {
+      console.warn(`[redemptions] backend said ${res.status} for order ${redemption.order_id} — ignored`);
+    } else {
+      console.log(`[redemptions] reported order ${redemption.order_id} (${redemption.discount_codes.length} code(s))`);
+    }
+  } catch (error) {
+    console.warn(`[redemptions] report failed for order ${redemption.order_id} — ignored:`, error);
+  }
+};
