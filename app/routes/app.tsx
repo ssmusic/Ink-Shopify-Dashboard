@@ -49,7 +49,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       // placeholder made the magic link the ONLY door into in.ink (the
       // merchant could never log in with their real email).
       let shopName = session.shop;
-      let ownerEmail = `admin@${session.shop}`;
+      let ownerEmail = "";
       try {
         const res = await admin.graphql(`#graphql
           query ShopIdentity { shop { name email contactEmail } }`);
@@ -58,7 +58,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const realEmail = shopData?.email || shopData?.contactEmail;
         if (realEmail) ownerEmail = realEmail;
       } catch (e) {
-        console.warn("[App] shop identity fetch failed, using placeholders:", e);
+        console.warn("[App] shop identity fetch failed; provisioning will retry:", e);
+      }
+      if (!ownerEmail) {
+        console.warn(`[App] No Shopify owner/contact email for ${session.shop}; provisioning will retry on the next app load`);
+        return;
       }
       const inkData = await createMerchant(session.shop, shopName, ownerEmail);
       if (inkData?.api_key) {
@@ -72,7 +76,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[App] INK self-provision error (non-blocking):", err)
   );
 
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  const storeHandle = session.shop.replace(/\.myshopify\.com$/i, "");
+  const appHandle = process.env.SHOPIFY_APP_HANDLE || "ink-verified-delivery";
+  const pricingUrl = `https://admin.shopify.com/store/${encodeURIComponent(storeHandle)}/charges/${encodeURIComponent(appHandle)}/pricing_plans`;
+
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", pricingUrl };
 };
 
 

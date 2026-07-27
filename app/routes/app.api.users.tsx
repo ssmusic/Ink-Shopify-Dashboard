@@ -1,8 +1,8 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { adminCreateUser, getShopIdByDomain, getMerchantUsers, deleteMerchantUser } from "../services/ink-api.server";
+import { verifyProxyToken } from "../services/token-verify.server";
 import sgMail from "@sendgrid/mail";
-import crypto from "crypto";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,13 +38,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         const token = authHeader.split(" ")[1];
         const payload = await verifyProxyToken(token);
         shopDomain = payload?.shop || "";
-        
-        if (!shopDomain) {
-          try {
-            const decodedBody = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
-            shopDomain = decodedBody.merchant_id || decodedBody.shop;
-          } catch (e) {}
-        }
       }
     }
 
@@ -105,13 +98,6 @@ export async function action({ request }: ActionFunctionArgs) {
         const token = authHeader.split(" ")[1];
         const payload = await verifyProxyToken(token);
         shopDomain = payload?.shop || "";
-        
-        if (!shopDomain) {
-          try {
-            const decodedBody = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
-            shopDomain = decodedBody.merchant_id || decodedBody.shop;
-          } catch (e) {}
-        }
       }
     }
 

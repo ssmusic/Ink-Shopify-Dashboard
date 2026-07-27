@@ -18,9 +18,9 @@ const AccountSettings = () => {
   // Dynamic data from the `app.settings` route loader
   const shopData = useRouteLoaderData("routes/app.settings") as any;
 
-  const storeEmail = shopData?.contactEmail || "sam@in.ink";
-  const installedDate = shopData?.installedDate || "Jan 15, 2024";
-  const displayDomain = shopData?.primaryDomain || shopData?.shopDomain || currentShop?.domain || "music-official.myshopify.com";
+  const storeEmail = shopData?.contactEmail || "Not available";
+  const installedDate = shopData?.installedDate || "Not available";
+  const displayDomain = shopData?.primaryDomain || shopData?.shopDomain || currentShop?.domain || "Not available";
 
   if (loading) {
     return (

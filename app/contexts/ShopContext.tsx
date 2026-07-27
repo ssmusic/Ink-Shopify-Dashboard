@@ -15,11 +15,7 @@ interface ShopContextType {
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 export function ShopProvider({ children }: { children: ReactNode }) {
-  const [currentShop, setShop] = useState<Shop | null>({
-    id: "1",
-    name: "Music Official",
-    domain: "music-official.myshopify.com",
-  });
+  const [currentShop, setShop] = useState<Shop | null>(null);
   const [loading, setLoading] = useState(false);
 
   return (
