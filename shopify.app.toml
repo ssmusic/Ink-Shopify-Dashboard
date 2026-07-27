@@ -1,9 +1,9 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "8da1addef3dcd4251db5057cda3c85fa"
-# Working title per the 2026-07-05 overhaul decision ("Dynamic Receipts" is
-# banned copy). Goes live only on the next gated `shopify app deploy`.
-name = "INK — Order Tracking Pages"
+# Settled lowercase product name. Goes live only on the next gated
+# `shopify app deploy`; never regenerate this app's credentials.
+name = "ritualist"
 # app.in.ink = the Worker front door (parallelreturns #359, VERIFIED live +
 # byte-identical to Cloud Run 2026-07-05). The App Store checker rejects app
 # URLs whose DOMAIN contains "shopify" — shopify-app-…run.app does. Goes live
@@ -73,4 +73,3 @@ redirect_urls = [
   "https://app.in.ink/auth/callback",
   "https://app.in.ink/auth/shopify/callback"
 ]
-
