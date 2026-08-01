@@ -143,7 +143,7 @@ export async function action({ request }: ActionFunctionArgs) {
       console.log(`[UserManagement] Successfully created user in INK Backend: ${inkUserId}`);
     } catch (inkError: any) {
       console.error("[UserManagement] Failed to create user in INK:", inkError);
-      return json({ error: inkError.message || "Failed to create user in INK System" }, { status: 400 });
+      return json({ error: inkError.message || "Failed to create user in the Ritualist system" }, { status: 400 });
     }
 
     // Send welcome email
@@ -187,7 +187,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === "update") {
      // NOTE: The INK API specs provided do not document an update endpoint right now.
      // Returning 501 Not Implemented until the INK backend supports it.
-     return json({ error: "Updating users is currently not supported by the INK API." }, { status: 501 });
+     return json({ error: "Updating users is currently not supported by the Ritualist API." }, { status: 501 });
   }
 
   // ── Delete ──

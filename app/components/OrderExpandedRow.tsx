@@ -204,7 +204,7 @@ const OrderExpandedRow = ({ order, onCollapse, onViewFull }: OrderExpandedRowPro
             <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
               <Text as="p" variant="bodySm" tone="subdued">
                 Open history, location, and the signed delivery record live in your
-                ink. studio.
+                Ritualist studio.
               </Text>
             </div>
           </BlockStack>

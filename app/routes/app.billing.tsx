@@ -34,7 +34,7 @@ export default function BillingPage() {
                 How billing works
               </Text>
               <Text as="p" tone="subdued">
-                All INK charges run through Shopify — they appear on your
+                All Ritualist charges run through Shopify — they appear on your
                 regular Shopify invoice, and no charge ever starts without
                 your approval inside Shopify. There is no separate card on
                 file and nothing to cancel outside Shopify: uninstalling the

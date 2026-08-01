@@ -77,7 +77,7 @@ const OnboardingChecklist = ({
         <InlineStack align="space-between" blockAlign="center" wrap={false} gap="400">
           <BlockStack gap="100">
             <Text as="h2" variant="headingMd">
-              Set up INK
+              Set up the Ritualist
             </Text>
             <Text as="p" tone="subdued">
               {doneCount} of {steps.length} done

@@ -92,7 +92,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         `[settings/delivery-mode] Merchant doc not found for ${shopDomain}; cannot persist mode`
       );
       return json(
-        { error: "Merchant not registered with INK backend yet" },
+        { error: "Merchant not registered with the Ritualist backend yet" },
         { status: 404 }
       );
     }

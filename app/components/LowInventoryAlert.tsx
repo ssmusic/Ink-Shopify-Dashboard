@@ -29,7 +29,7 @@ export function LowInventoryAlert({ remaining, total, isLoading = false }: LowIn
   if (isCritical && modalDismissed) return null;
 
   const handleContactSupport = () => {
-    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=INK sticker inventory`;
+    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=Ritualist sticker inventory`;
   };
 
   if (isCritical) {
@@ -48,14 +48,14 @@ export function LowInventoryAlert({ remaining, total, isLoading = false }: LowIn
             Your inventory has reached <strong style={{ color:"#EF4444" }}>{remaining} / {total}</strong>.
           </p>
           <p style={{ fontSize:"14px", color:"#666", marginBottom:"28px" }}>
-            Enrolling new shipments is blocked until INK refreshes your sticker inventory.
+            Enrolling new shipments is blocked until the Ritualist refreshes your sticker inventory.
           </p>
           <button onClick={handleContactSupport} style={{ width:"100%", padding:"14px", background:"#111", color:"#fff", border:"none", borderRadius:"10px", fontSize:"15px", fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", marginBottom:"12px" }}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 4h16v16H4z"/>
               <path d="m22 6-10 7L2 6"/>
             </svg>
-            Contact INK support
+            Contact Ritualist support
           </button>
           <p style={{ fontSize:"12px", color:"#999" }}>{SUPPORT_EMAIL}</p>
         </div>
@@ -76,7 +76,7 @@ export function LowInventoryAlert({ remaining, total, isLoading = false }: LowIn
           Low sticker inventory — {remaining} / {total} remaining
         </p>
         <p style={{ fontSize:"12px", color:"#B45309", margin:"2px 0 0" }}>
-          Contact INK before enrolling more packages.{" "}
+          Contact the Ritualist before enrolling more packages.{" "}
           <button onClick={handleContactSupport} style={{ background:"none", border:"none", color:"#B45309", fontWeight:700, cursor:"pointer", textDecoration:"underline", padding:0, fontSize:"12px" }}>
             Email support
           </button>

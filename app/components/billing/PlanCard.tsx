@@ -10,7 +10,7 @@ const PlanCard = () => {
         <p className="text-sm font-medium text-foreground">Your plan</p>
       </div>
       <p className="text-sm text-muted-foreground">
-        Your INK plan is selected and approved in Shopify. Charges appear on
+        Your Ritualist plan is selected and approved in Shopify. Charges appear on
         your Shopify invoice, and any plan or usage billing starts only after
         Shopify asks you to approve it.
       </p>
