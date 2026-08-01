@@ -22,10 +22,15 @@ const PlanCard = () => {
       <p className="text-sm font-medium text-foreground mb-1">
         You&rsquo;re a founding merchant.
       </p>
+      {/* PROSE, not the mark: parallelreturns #644 is the naming authority —
+          "The Ritualist" sentence-initial, "the Ritualist" mid-sentence, bare
+          "Ritualist" adjectival. Only the app-name field and the wordmark are
+          lowercase `the ritualist`. The two cases are both correct and must
+          not be flattened into each other. */}
       <p className="text-sm text-muted-foreground">
-        ritualist is free while we build it with a small group of brands. If we
-        introduce paid plans later, you&rsquo;ll choose and approve one inside
-        Shopify &mdash; nothing will ever start on its own.
+        The Ritualist is free while we build it with a small group of brands.
+        If we introduce paid plans later, you&rsquo;ll choose and approve one
+        inside Shopify &mdash; nothing will ever start on its own.
       </p>
     </div>
   );

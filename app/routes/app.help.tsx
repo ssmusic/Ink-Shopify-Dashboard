@@ -93,7 +93,7 @@ const faqSections = [
       {
         question: "How much does it cost?",
         answer:
-          "Nothing. You're a founding merchant — ritualist is free while we build it with a small group of brands.",
+          "Nothing. You're a founding merchant — the Ritualist is free while we build it with a small group of brands.",
       },
       {
         question: "Will I be charged later?",
