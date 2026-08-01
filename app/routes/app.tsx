@@ -76,11 +76,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[App] INK self-provision error (non-blocking):", err)
   );
 
-  const storeHandle = session.shop.replace(/\.myshopify\.com$/i, "");
-  const appHandle = process.env.SHOPIFY_APP_HANDLE || "ink-verified-delivery";
-  const pricingUrl = `https://admin.shopify.com/store/${encodeURIComponent(storeHandle)}/charges/${encodeURIComponent(appHandle)}/pricing_plans`;
-
-  return { apiKey: process.env.SHOPIFY_API_KEY || "", pricingUrl };
+  // No pricingUrl: the app is free and the Partner Dashboard has no plans, so
+  // there is nothing for a plan picker to show. The previous version built
+  // `…/charges/${SHOPIFY_APP_HANDLE || "ink-verified-delivery"}/pricing_plans`
+  // — but SHOPIFY_APP_HANDLE is set in NO environment (verified against Cloud
+  // Run 2026-08-01), so that fallback was always what shipped, and it is not
+  // this app's handle. It would have put a Shopify 404 in front of the
+  // reviewer on the one screen the rejection was about.
+  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
 

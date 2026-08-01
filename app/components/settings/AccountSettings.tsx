@@ -56,25 +56,21 @@ const AccountSettings = () => {
           </Card>
         </Layout.AnnotatedSection>
 
-        <Layout.AnnotatedSection title="Usage & Billing">
+        <Layout.AnnotatedSection title="Cost">
           <Card>
             <BlockStack gap="300">
+              <Text as="p" variant="bodyMd" fontWeight="semibold">
+                You&rsquo;re a founding merchant.
+              </Text>
               <Text as="p" variant="bodyMd">
-                View your plan and how billing works.
+                ritualist is free while we build it with a small group of
+                brands. If we introduce paid plans later, you&rsquo;ll choose
+                and approve one inside Shopify &mdash; nothing will ever start
+                on its own.
               </Text>
               <div>
-                <Button onClick={() => navigate("/app/billing")}>View billing</Button>
+                <Button onClick={() => navigate("/app/billing")}>View details</Button>
               </div>
-            </BlockStack>
-          </Card>
-          <div style={{ marginTop: '16px' }} />
-          <Card>
-            <BlockStack gap="300">
-              <Text as="p" variant="bodyMd" fontWeight="semibold">Pricing</Text>
-              <Text as="p" variant="bodyMd">
-                INK pricing is managed in Shopify. Plan approval, invoices,
-                cancellation, and any usage billing all stay inside Shopify.
-              </Text>
             </BlockStack>
           </Card>
         </Layout.AnnotatedSection>
