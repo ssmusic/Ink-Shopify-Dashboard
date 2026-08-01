@@ -63,8 +63,9 @@ const AccountSettings = () => {
                 You&rsquo;re a founding merchant.
               </Text>
               <Text as="p" variant="bodyMd">
-                The Ritualist is free while we build it with a small group of
-                brands. If we introduce paid plans later, you&rsquo;ll choose
+                We&rsquo;re building this with a small group of brands, and
+                you&rsquo;re one of them. Founding merchants aren&rsquo;t
+                billed. If we introduce paid plans later, you&rsquo;ll choose
                 and approve one inside Shopify &mdash; nothing will ever start
                 on its own.
               </Text>

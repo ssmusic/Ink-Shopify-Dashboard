@@ -27,10 +27,16 @@ const PlanCard = () => {
           "Ritualist" adjectival. Only the app-name field and the wordmark are
           lowercase `the ritualist`. The two cases are both correct and must
           not be flattened into each other. */}
+      {/* "The Ritualist is free" was the wrong sentence and Sam killed it: it
+          makes the PRODUCT the subject of "is free", which is a claim about
+          what it's worth. The arrangement is what costs nothing, so selection
+          leads and cost is subordinate — and "aren't billed" is a status the
+          merchant holds, not a property of the software. */}
       <p className="text-sm text-muted-foreground">
-        The Ritualist is free while we build it with a small group of brands.
-        If we introduce paid plans later, you&rsquo;ll choose and approve one
-        inside Shopify &mdash; nothing will ever start on its own.
+        We&rsquo;re building this with a small group of brands, and you&rsquo;re
+        one of them. Founding merchants aren&rsquo;t billed. If we introduce
+        paid plans later, you&rsquo;ll choose and approve one inside Shopify
+        &mdash; nothing will ever start on its own.
       </p>
     </div>
   );
