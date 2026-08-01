@@ -151,11 +151,11 @@ export async function action({ request }: ActionFunctionArgs) {
       await sgMail.send({
         to: email,
         from: process.env.SENDGRID_FROM_EMAIL || "noreply@in.ink",
-        subject: "You've been added to the INK Warehouse App",
+        subject: "You've been added to the Ritualist Warehouse App",
         html: `
           <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 32px;">
-            <h2 style="margin-bottom: 8px;">Welcome to INK Warehouse, ${name}!</h2>
-            <p style="color: #555;">You've been granted access to the INK Warehouse App. Here are your login credentials:</p>
+            <h2 style="margin-bottom: 8px;">Welcome to Ritualist Warehouse, ${name}!</h2>
+            <p style="color: #555;">You've been granted access to the Ritualist Warehouse App. Here are your login credentials:</p>
             <table style="border-collapse: collapse; width: 100%; margin: 24px 0;">
               <tr>
                 <td style="padding: 10px; font-weight: bold; background: #f4f4f5; border: 1px solid #e4e4e7;">User ID (Email)</td>

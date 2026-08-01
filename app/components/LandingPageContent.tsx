@@ -26,7 +26,7 @@ export const LandingPageContent = ({
   signInLink = "/app",
   showSignIn = true,
   headline = "A surface that opens when the order arrives.",
-  sub = "You communicate in ink. You sign in ink. Now you do both on every order — the loud half is the brand; the quiet half is the signature that closes the loop with the buyer.",
+  sub = "Every order opens a page you own — the loud half is your brand, the quiet half is the delivery, confirmed underneath. Your space. Your URL.",
   footnote,
 }: LandingPageContentProps) => {
   return (
@@ -41,7 +41,7 @@ export const LandingPageContent = ({
             to="/"
             className="text-[13px] font-semibold uppercase tracking-[0.18em] hover:opacity-70 transition-opacity"
           >
-            ink.
+            the ritualist.
           </Link>
           {showSignIn && (
             <Link
@@ -94,7 +94,7 @@ export const LandingPageContent = ({
             className="text-[10px] uppercase tracking-[0.22em] text-neutral-400"
             style={{ fontFamily: FONT_MONO }}
           >
-            © 2026 ink.
+            © 2026 the ritualist.
           </div>
         </div>
       </footer>
