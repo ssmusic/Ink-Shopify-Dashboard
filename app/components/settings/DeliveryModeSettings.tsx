@@ -86,18 +86,18 @@ const DeliveryModeSettings = () => {
     <Layout>
       <Layout.AnnotatedSection
         title="Delivery mode"
-        description="ink. works behind your existing Shopify delivery methods."
+        description="The Ritualist works behind your existing Shopify delivery methods."
       >
         <Card>
           <BlockStack gap="400">
             <Text as="p" variant="bodyMd">
               Automatic background mode is active. Buyers see only your standard
-              Shopify shipping methods, and ink. creates order pages for
+              Shopify shipping methods, and the Ritualist creates order pages for
               eligible orders after purchase.
             </Text>
             <Banner tone="info">
               <Text as="p" variant="bodySm">
-                INK does not add a customer-paid checkout delivery option. Any
+                The Ritualist does not add a customer-paid checkout delivery option. Any
                 legacy carrier-service callback returns no rates while the app
                 runs in background mode.
               </Text>

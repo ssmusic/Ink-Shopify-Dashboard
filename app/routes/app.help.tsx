@@ -21,24 +21,24 @@ const faqSections = [
     title: "Getting started",
     items: [
       {
-        question: "What does INK do?",
+        question: "What does the Ritualist do?",
         answer:
           "Every order gets its own page — your brand, the order, and live delivery tracking in one place. Your customer gets a link by email or text when the order ships and when it arrives. The page is also where they can start a return.",
       },
       {
         question: "What do I have to set up?",
         answer:
-          "Almost nothing. Orders enroll automatically as they're placed. Your page is built from your existing brand and can be tuned any time from the INK studio. Email and text notifications are controlled in Settings.",
+          "Almost nothing. Orders enroll automatically as they're placed. Your page is built from your existing brand and can be tuned any time from the Ritualist studio. Email and text notifications are controlled in Settings.",
       },
       {
         question: "Do I need to change my shipping or carrier?",
         answer:
-          "No. INK sits on top of your existing setup. Your carrier, your warehouse workflow, your returns policy — nothing changes.",
+          "No. The Ritualist sits on top of your existing setup. Your carrier, your warehouse workflow, your returns policy — nothing changes.",
       },
       {
         question: "Do I need any hardware or stickers?",
         answer:
-          "No. INK is software only — every order gets its page automatically the moment it's placed.",
+          "No. The Ritualist is software only — every order gets its page automatically the moment it's placed.",
       },
     ],
   },
@@ -61,7 +61,7 @@ const faqSections = [
     title: "The delivery record",
     items: [
       {
-        question: "What does INK record about a delivery?",
+        question: "What does the Ritualist record about a delivery?",
         answer:
           "The carrier's delivery confirmation, timestamps, and — when your customer opens their page and allows location — where the order was opened. The record is cryptographically signed when it's created.",
       },
@@ -83,7 +83,7 @@ const faqSections = [
       {
         question: "Does this replace my returns policy?",
         answer:
-          "No. Your policy and your rules stay yours — INK handles the customer-facing flow and keeps the status visible to you and to them.",
+          "No. Your policy and your rules stay yours — the Ritualist handles the customer-facing flow and keeps the status visible to you and to them.",
       },
     ],
   },

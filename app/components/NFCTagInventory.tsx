@@ -114,10 +114,10 @@ const NFCTagInventory = () => {
               : "border-border hover:border-foreground"
           }`}
           onClick={() => {
-            window.location.href = "mailto:support@in.ink?subject=INK sticker inventory";
+            window.location.href = "mailto:support@in.ink?subject=Ritualist sticker inventory";
           }}
         >
-          {isCriticalInventory ? "Contact INK Support" : "Request Inventory Support"}
+          {isCriticalInventory ? "Contact Ritualist Support" : "Request Inventory Support"}
         </Button>
       </div>
     </>
