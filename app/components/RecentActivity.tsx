@@ -88,7 +88,13 @@ const RecentActivity = () => {
             </div>
 
             {/* Desktop Layout */}
-            <div className="hidden sm:flex items-center justify-between">
+            {/* gap-4 on the ROW, not just inside each group. `flex-1` on the
+                left group makes it grow to fill, which defeats
+                justify-between — so with a wide amount the date and the money
+                collided into "Jul 6, 1:06 AMUSD 5010.0". Seen on the live
+                dashboard 2026-08-02; it only shows once an order is big
+                enough, which is why it survived. */}
+            <div className="hidden sm:flex items-center justify-between gap-4">
               {/* Order & Customer Info */}
               <div className="flex items-center gap-6 flex-1 min-w-0">
                 <span className="font-semibold text-foreground whitespace-nowrap">
