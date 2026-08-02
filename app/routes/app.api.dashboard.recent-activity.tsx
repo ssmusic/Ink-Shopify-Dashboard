@@ -7,6 +7,26 @@ const json = (data: any, init?: ResponseInit) =>
     ...init,
   });
 
+/** Shopify money → something a merchant recognises as money.
+ *
+ *  `shopMoney.amount` arrives as a raw decimal STRING ("5010.0", "175.0"), so
+ *  interpolating it produced "USD 5010.0" on the dashboard's first screen.
+ *  Falls back to the plain concatenation if the currency code is one Intl
+ *  doesn't know — a wrong-looking price beats a thrown loader. */
+export function formatMoney(amount: string | number, currencyCode: string): string {
+  const value = typeof amount === "number" ? amount : Number.parseFloat(amount);
+  if (!Number.isFinite(value)) return `${currencyCode} ${amount}`;
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: currencyCode,
+      currencyDisplay: "narrowSymbol",
+    }).format(value);
+  } catch {
+    return `${currencyCode} ${value.toFixed(2)}`;
+  }
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
 
@@ -114,7 +134,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           hour: "numeric",
           minute: "2-digit",
         }),
-        amount: `${order.totalPriceSet.shopMoney.currencyCode} ${order.totalPriceSet.shopMoney.amount}`,
+        // MONEY IS FORMATTED, NOT CONCATENATED. Shopify returns `amount` as a
+        // raw decimal string — "5010.0", "175.0" — so the old template put
+        // "USD 5010.0" on the merchant's first screen, which reads as broken
+        // data rather than as money. Intl gives two decimals, thousands
+        // separators, and the shop's own currency symbol.
+        amount: formatMoney(
+          order.totalPriceSet.shopMoney.amount,
+          order.totalPriceSet.shopMoney.currencyCode,
+        ),
         status: verificationStatus === "active" ? "enrolled" : verificationStatus,
       };
     }).filter(Boolean);
