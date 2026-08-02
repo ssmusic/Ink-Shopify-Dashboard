@@ -309,8 +309,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       nfc_uid: serial_number,
       order_details: {
         order_number: numericOrderId,
-        customer_email: orderData?.data?.order?.customer?.email || "unknown@example.com",
-        customer_phone: customer_phone_last4 || "1234",
+        customer_email: orderData?.data?.order?.customer?.email || "",
+        customer_phone: customer_phone_last4,
         shipping_address,
         product_details,
         ...(total_price ? { total_price } : {}),
