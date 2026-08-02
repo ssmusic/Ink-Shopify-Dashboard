@@ -101,7 +101,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           order(id: $id) {
             id
             name
+            # WHEN THE CUSTOMER BOUGHT. Distinct from ink's enrolled_at, which
+            # is when ink SAW the order — install day for a merchant's whole
+            # back catalogue. Every gap between a person's purchases is
+            # measured on this. processedAt is the payment moment and is the
+            # truer "bought"; createdAt is the fallback.
+            createdAt
+            processedAt
             customer {
+              # The DURABLE join key: a Shopify customer id survives an email
+              # change, where an email does not.
+              id
               phone
               email
             }
@@ -300,6 +310,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       : "Not Provided";
 
+    // processedAt is the payment moment — the truer "when they bought";
+    // createdAt is the fallback for an order that never processed.
+    const orderPlacedAt =
+      orderData?.data?.order?.processedAt || orderData?.data?.order?.createdAt || null;
+    const shopifyCustomerId = orderData?.data?.order?.customer?.id || null;
+    const shopifyCustomerEmail = orderData?.data?.order?.customer?.email || null;
+
     const total_price = orderData?.data?.order?.totalPriceSet?.shopMoney?.amount;
     const currency = orderData?.data?.order?.totalPriceSet?.shopMoney?.currencyCode;
 
@@ -307,9 +324,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       order_id,
       nfc_token: token,
       nfc_uid: serial_number,
+      // The order's own date, straight off Shopify.
+      ...(orderPlacedAt ? { order_created_at: orderPlacedAt } : {}),
+      // The buyer's identity as Shopify knows them. customer_id is what the
+      // person join keys on first.
+      ...(shopifyCustomerId || shopifyCustomerEmail
+        ? {
+            customer_profile: {
+              ...(shopifyCustomerId ? { customer_id: shopifyCustomerId } : {}),
+              ...(shopifyCustomerEmail ? { email: shopifyCustomerEmail } : {}),
+            },
+          }
+        : {}),
       order_details: {
         order_number: numericOrderId,
-        customer_email: orderData?.data?.order?.customer?.email || "unknown@example.com",
+        // NO "unknown@example.com" FALLBACK. A constant stand-in email is a
+        // collision by construction: every guest checkout in a shop becomes
+        // the SAME person, forever. Measured 2026-08-02, one such fake person
+        // was already holding nine unrelated orders. An order with no email
+        // is an island, and an island is the honest answer.
+        ...(shopifyCustomerEmail ? { customer_email: shopifyCustomerEmail } : {}),
         customer_phone: customer_phone_last4 || "1234",
         shipping_address,
         product_details,

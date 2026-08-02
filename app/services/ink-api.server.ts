@@ -254,7 +254,19 @@ export const enrollOrder = async (
     photoHashes?: string[],
     carrierName?: string | null,
     trackingNumber?: string | null,
-    customerPhone?: string | null
+    customerPhone?: string | null,
+    /** Everything the person join needs, added as one bag so existing
+     *  positional callers keep working. */
+    identity?: {
+        /** Shopify Order.processedAt ?? createdAt — WHEN THE CUSTOMER BOUGHT.
+         *  Distinct from ink's enrolled_at, which is when ink saw the order:
+         *  install day for a merchant's entire back catalogue. Every gap
+         *  between a person's purchases is measured on this. */
+        orderCreatedAt?: string | null;
+        /** Shopify customer id — the durable join key. It survives an email
+         *  change, where an email does not. */
+        customerId?: string | null;
+    }
 ) => {
     // Alan's API was changed to require order details nested in an
     // `order_details` JSON object rather than as separate top-level fields.
@@ -275,7 +287,13 @@ export const enrollOrder = async (
                 (shippingAddress && typeof shippingAddress === "object"
                     ? shippingAddress.name
                     : "") || "",
-            customer_email: customerEmail || "unknown@email.com",
+            // NO CONSTANT FALLBACK EMAIL. "unknown@email.com" is a collision
+            // by construction: every guest checkout in a shop becomes the SAME
+            // person, forever, and their rhythms get averaged into one
+            // meaningless row. Measured 2026-08-02 — one such fake person was
+            // already holding nine unrelated orders. An order with no email is
+            // an island, and an island is the honest answer.
+            ...(customerEmail ? { customer_email: customerEmail } : {}),
             customer_phone: customerPhone || "",
             shipping_address: shippingAddress,
             product_details: productDetails,
@@ -288,6 +306,13 @@ export const enrollOrder = async (
     if (photoHashes && photoHashes.length > 0) payload.photo_hashes = photoHashes;
     if (carrierName) payload.carrier_name = carrierName;
     if (trackingNumber) payload.tracking_number = trackingNumber;
+    if (identity?.orderCreatedAt) payload.order_created_at = identity.orderCreatedAt;
+    if (identity?.customerId || customerEmail) {
+        payload.customer_profile = {
+            ...(identity?.customerId ? { customer_id: identity.customerId } : {}),
+            ...(customerEmail ? { email: customerEmail } : {}),
+        };
+    }
 
     const enrollUrl = getAlanUrl('/api/enroll');
     console.log("[ink-api] enrollOrder →", enrollUrl);

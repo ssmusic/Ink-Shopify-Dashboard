@@ -294,7 +294,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               numericOrderId,
               inkToken,
               order.name || numericOrderId,
-              order.customer?.email || "unknown@example.com",
+              // No constant stand-in — see enrollOrder. An order with no
+              // email is an island, not everybody.
+              order.customer?.email || "",
               shipping_address,
               product_details,
               undefined, // warehouse_location — none at order time
@@ -303,7 +305,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               undefined, // photo_hashes
               carrier_name,
               tracking_number,
-              finalPhone || order.customer?.phone || null
+              finalPhone || order.customer?.phone || null,
+              {
+                // WHEN THEY BOUGHT, and WHO they are, straight off Shopify.
+                orderCreatedAt: order.processed_at || order.created_at || null,
+                customerId: order.customer?.id != null ? String(order.customer.id) : null,
+              }
             );
 
           let inkData: any;
