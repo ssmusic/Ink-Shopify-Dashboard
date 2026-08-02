@@ -205,8 +205,16 @@ const statusBadgeProps: Record<
   { tone: BadgeProps["tone"]; label: string }
 > = {
   enrolled: { tone: "warning", label: "Enrolled" },
-  active: { tone: "info", label: "Active" },
-  verified: { tone: "success", label: "Active" },
+  // `active` is remapped to `enrolled` before it ever reaches a badge (see the
+  // loader), so this entry is unreachable today. Kept as a defensive default
+  // in case a raw status ever surfaces — but it must NOT share a word with
+  // `verified`, which is what produced two badges reading "Active".
+  active: { tone: "info", label: "Enrolled" },
+  // WAS ALSO "Active". Two distinct states wearing one word means a merchant
+  // cannot tell them apart, and the filter bar rendered "Active (0)" beside
+  // "Active (3)" (TECH_BIBLE law 5: no two causes share a sentence).
+  // "Verified" is the word the dashboard already uses for this state.
+  verified: { tone: "success", label: "Verified" },
   expired: { tone: undefined, label: "Expired" },
   cooldown: { tone: "attention", label: "Cooldown" },
   pending: { tone: undefined, label: "Pending" },
@@ -240,14 +248,14 @@ export default function ShipmentsIndex() {
       content: `Enrolled (${counts?.enrolled || 0})`,
       panelID: "enrolled",
     },
-    {
-      id: "active",
-      content: `Active (${counts?.active || 0})`,
-      panelID: "active",
-    },
+    // The "Active" tab is GONE, not renamed. Its count filtered
+    // `status === "active"`, but the loader rewrites "active" to "enrolled"
+    // before the counts run — so it was structurally always 0 and could never
+    // be anything else. A filter that can only ever say (0) is not a filter,
+    // and it sat directly beside a second tab also called "Active".
     {
       id: "verified",
-      content: `Active (${counts?.verified || 0})`,
+      content: `Verified (${counts?.verified || 0})`,
       panelID: "verified",
     },
     {
