@@ -157,16 +157,29 @@ const Help = () => {
               <Text as="h2" variant="headingSm">
                 Frequently Asked Questions
               </Text>
+              {/* THE SECTION TITLE WAS ONLY EVER A REACT KEY. Every section
+                  carried a heading — "Getting started", "The delivery record",
+                  "Returns", "Cost" — and none of them reached the page, so the
+                  FAQ rendered as five unlabelled boxes and "How much does it
+                  cost?" floated with nothing saying it was about cost. A field
+                  that reaches the data and not the page is invisible to tsc
+                  and to the suite (TECH_BIBLE law 9); only an eye on the
+                  rendered screen catches it. */}
               {faqSections.map((section) => (
-                <Card key={section.title} padding="0">
-                  {section.items.map((item, i) => (
-                    <FAQItem
-                      key={i}
-                      question={item.question}
-                      answer={item.answer}
-                    />
-                  ))}
-                </Card>
+                <BlockStack key={section.title} gap="200">
+                  <Text as="h3" variant="headingSm">
+                    {section.title}
+                  </Text>
+                  <Card padding="0">
+                    {section.items.map((item, i) => (
+                      <FAQItem
+                        key={i}
+                        question={item.question}
+                        answer={item.answer}
+                      />
+                    ))}
+                  </Card>
+                </BlockStack>
               ))}
             </BlockStack>
           </Layout.Section>

@@ -18,9 +18,13 @@ const AccountSettings = () => {
   // Dynamic data from the `app.settings` route loader
   const shopData = useRouteLoaderData("routes/app.settings") as any;
 
-  const storeEmail = shopData?.contactEmail || "Not available";
-  const installedDate = shopData?.installedDate || "Not available";
-  const displayDomain = shopData?.primaryDomain || shopData?.shopDomain || currentShop?.domain || "Not available";
+  // A ROW WE CANNOT FILL IS HIDDEN, NOT LABELLED "Not available". Printing
+  // that beside a field name reads as a broken page; omitting the row reads as
+  // a page with nothing to say. (The install date was un-fillable by
+  // construction until the merchant record started stamping createdAt.)
+  const storeEmail = shopData?.contactEmail || "";
+  const installedDate = shopData?.installedDate || "";
+  const displayDomain = shopData?.primaryDomain || shopData?.shopDomain || currentShop?.domain || "";
 
   if (loading) {
     return (
@@ -44,14 +48,18 @@ const AccountSettings = () => {
               <Text as="p" variant="bodyMd" fontWeight="semibold">
                 {displayDomain}
               </Text>
+              {storeEmail && (
               <InlineStack gap="200">
                 <Text as="span" tone="subdued" variant="bodySm">Contact:</Text>
                 <Text as="span" variant="bodySm">{storeEmail}</Text>
               </InlineStack>
+              )}
+              {installedDate && (
               <InlineStack gap="200">
                 <Text as="span" tone="subdued" variant="bodySm">Installed:</Text>
                 <Text as="span" variant="bodySm">{installedDate}</Text>
               </InlineStack>
+              )}
             </BlockStack>
           </Card>
         </Layout.AnnotatedSection>

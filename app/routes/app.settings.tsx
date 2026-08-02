@@ -26,18 +26,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const shop = shopData.data?.shop;
   
   // 2. Get Merchant details from Firestore to get accurate install date and api_key
-  let installedDate = "Not available";
+  // Empty, not "Not available" — the component hides the row when there is no
+  // date, and a field reading "Not available" looks like a failure rather than
+  // an absence.
+  let installedDate = "";
   let inventoryStr = "0";
   let usedStr = "0";
 
   try {
-    const merchantDocs = await firestore.collection("merchants").where("shopDomain", "==", session.shop).limit(1).get();
-    if (!merchantDocs.empty) {
-        const data = merchantDocs.docs[0].data();
-        if (data.createdAt) {
-            const date = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
-            installedDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
-        }
+    // BY DOCUMENT ID FIRST. The embedded app provisions with
+    // `merchants.doc(shop).set({ shop, … })`, so `where("shopDomain", …)` never
+    // matched it — which is why this read "Not available" for every merchant,
+    // permanently, no matter how long ago they installed. The query is kept as
+    // a fallback: the standalone auth path creates docs with random ids and a
+    // `shopDomain` field.
+    let data: Record<string, any> | undefined;
+    const byId = await firestore.collection("merchants").doc(session.shop).get();
+    if (byId.exists) {
+      data = byId.data();
+    } else {
+      const merchantDocs = await firestore.collection("merchants").where("shopDomain", "==", session.shop).limit(1).get();
+      if (!merchantDocs.empty) data = merchantDocs.docs[0].data();
+    }
+    if (data?.createdAt) {
+      const date = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+      if (!Number.isNaN(date.getTime())) {
+        installedDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+      }
     }
 
     // 3. Fetch real inventory — use admin-level Firestore lookup (no API key needed)

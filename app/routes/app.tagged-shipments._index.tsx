@@ -438,6 +438,26 @@ export default function ShipmentsIndex() {
               <IndexTable
                 resourceName={resourceName}
                 itemCount={sortedOrders.length}
+                // A FRESH INSTALL HAS NO SHIPMENTS, AND THAT IS ONE OF THE
+                // FIRST SCREENS A REVIEWER SEES. Without this, Polaris renders
+                // the column headings over blank space — "Order · Customer ·
+                // Date" and nothing beneath — which reads as a page that
+                // failed to load, not as an account with no orders yet.
+                // Observed on the live app 2026-08-02.
+                emptyState={
+                  <div style={{ padding: "40px 20px", textAlign: "center" }}>
+                    <BlockStack gap="200" inlineAlign="center">
+                      <Text as="h3" variant="headingSm">
+                        No shipments yet
+                      </Text>
+                      <Text as="p" tone="subdued">
+                        Orders enroll automatically as they come in. When your
+                        next one ships, it appears here with its page and its
+                        delivery status.
+                      </Text>
+                    </BlockStack>
+                  </div>
+                }
                 headings={[
                   { title: "Order" },
                   { title: "Customer" },
