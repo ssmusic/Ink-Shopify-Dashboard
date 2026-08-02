@@ -59,6 +59,24 @@ const shopify = shopifyApp({
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
     : {}),
+
+  // EXPIRING OFFLINE ACCESS TOKENS. Shopify requires these of every public app
+  // from 2027-01-01; after that date a non-expiring token gets authentication
+  // errors instead of data. The app's API health report flagged us with "Calls
+  // made with deprecated offline tokens detected in the last 14 days".
+  //
+  // The point is blast radius: a non-expiring token that leaks is valid
+  // forever, an expiring one for sixty minutes, and it rotates itself. This
+  // codebase has already leaked one token into a transcript, so that is not a
+  // hypothetical.
+  //
+  // Merchants do NOT reinstall — the library exchanges existing tokens in
+  // place and refreshes them before expiry. FirestoreSessionStorage already
+  // persists and rehydrates `expires` as a Date (it was written for the
+  // framework's refresh path), so the storage half needed no change.
+  future: {
+    expiringOfflineAccessTokens: true,
+  },
 });
 
 export default shopify;
