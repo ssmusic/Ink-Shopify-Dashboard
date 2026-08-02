@@ -133,7 +133,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const apiKey = await getMerchantApiKey(shopDomain, merchantId);
   if (!apiKey) {
     console.log("[ENROLL] ❌ No ink_api_key found for merchant");
-    return json({ error: "Merchant not found or not linked to INK" }, { status: 404 });
+    return json({ error: "Merchant not found or not linked to the Ritualist" }, { status: 404 });
   }
   console.log("[ENROLL] ✅ ink_api_key found, prefix:", apiKey.slice(0, 12) + "...");
 
@@ -178,7 +178,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (currentCount <= 0) {
         console.log("[ENROLL] ❌ Enrollment blocked: inventory is zero or negative:", currentCount);
         return json(
-          { error: "Insufficient sticker inventory. Contact INK before enrolling new packages." },
+          { error: "Insufficient sticker inventory. Contact the Ritualist before enrolling new packages." },
           { status: 400 }
         );
       }

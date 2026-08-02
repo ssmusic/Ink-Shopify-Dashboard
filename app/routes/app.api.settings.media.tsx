@@ -221,7 +221,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (!alanMerchantId) {
         return json(
-          { error: "Could not resolve merchant_id for Alan upload — is the merchant registered in INK?" },
+          { error: "Could not resolve merchant_id for Alan upload — is the merchant registered with the Ritualist?" },
           { status: 500 }
         );
       }

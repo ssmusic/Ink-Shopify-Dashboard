@@ -44,7 +44,7 @@ export const action = async ({
     console.error("[dashboard] mint magic token failed:", err);
     return {
       url: null,
-      error: "Couldn't open your ink. dashboard. Try again in a moment.",
+      error: "Couldn't open your Ritualist dashboard. Try again in a moment.",
     };
   }
 };
@@ -100,16 +100,16 @@ const Dashboard = () => {
             <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
               <BlockStack gap="100">
                 <Text as="h2" variant="headingMd">
-                  Your ink. dashboard
+                  Your Ritualist dashboard
                 </Text>
                 <Text as="p" tone="subdued">
-                  Open the INK studio — where your enrolled orders, pages,
+                  Open the Ritualist studio — where your enrolled orders, pages,
                   and returns live. You'll be signed in automatically — no
                   password needed.
                 </Text>
               </BlockStack>
               <Button variant="primary" loading={opening} onClick={openParallel}>
-                Open your ink. dashboard
+                Open your Ritualist dashboard
               </Button>
             </InlineStack>
           </Card>
@@ -148,8 +148,8 @@ const Dashboard = () => {
                     Advanced — operational analytics
                   </Text>
                   <Text as="p" tone="subdued">
-                    Detailed operational metrics. The full ink. dashboard lives
-                    in your ink. app.
+                    Detailed operational metrics. The full Ritualist dashboard
+                    lives in your Ritualist app.
                   </Text>
                 </BlockStack>
                 <Button

@@ -113,7 +113,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const apiKey = await getMerchantApiKey(shopDomain, merchantId);
   if (!apiKey) {
     console.log("[UPLOAD] ❌ No ink_api_key found for merchant");
-    return json({ error: "Merchant not found or not linked to INK" }, { status: 404 });
+    return json({ error: "Merchant not found or not linked to the Ritualist" }, { status: 404 });
   }
   console.log("[UPLOAD] ✅ ink_api_key found, prefix:", apiKey.slice(0, 12) + "...");
 
