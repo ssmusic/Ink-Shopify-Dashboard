@@ -245,7 +245,7 @@ export const enrollOrder = async (
     orderId: string, 
     nfcToken: string, 
     orderNumber: string,
-    customerEmail: string,
+    customerEmail: string | null,
     shippingAddress: any,
     productDetails: any[],
     warehouseLocation?: { lat: number; lng: number },
@@ -275,7 +275,7 @@ export const enrollOrder = async (
                 (shippingAddress && typeof shippingAddress === "object"
                     ? shippingAddress.name
                     : "") || "",
-            customer_email: customerEmail || "unknown@email.com",
+            customer_email: customerEmail || "",
             customer_phone: customerPhone || "",
             shipping_address: shippingAddress,
             product_details: productDetails,

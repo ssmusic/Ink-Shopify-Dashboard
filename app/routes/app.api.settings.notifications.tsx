@@ -1,6 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
-import crypto from "crypto";
+import { verifyProxyToken } from "../services/token-verify.server";
 
 /**
  * Notification Settings endpoint (authenticated by warehouse JWT).

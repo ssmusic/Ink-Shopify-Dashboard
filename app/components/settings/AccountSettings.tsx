@@ -18,9 +18,9 @@ const AccountSettings = () => {
   // Dynamic data from the `app.settings` route loader
   const shopData = useRouteLoaderData("routes/app.settings") as any;
 
-  const storeEmail = shopData?.contactEmail || "sam@in.ink";
-  const installedDate = shopData?.installedDate || "Jan 15, 2024";
-  const displayDomain = shopData?.primaryDomain || shopData?.shopDomain || currentShop?.domain || "music-official.myshopify.com";
+  const storeEmail = shopData?.contactEmail || "Not available";
+  const installedDate = shopData?.installedDate || "Not available";
+  const displayDomain = shopData?.primaryDomain || shopData?.shopDomain || currentShop?.domain || "Not available";
 
   if (loading) {
     return (
@@ -56,25 +56,22 @@ const AccountSettings = () => {
           </Card>
         </Layout.AnnotatedSection>
 
-        <Layout.AnnotatedSection title="Usage & Billing">
+        <Layout.AnnotatedSection title="Cost">
           <Card>
             <BlockStack gap="300">
+              <Text as="p" variant="bodyMd" fontWeight="semibold">
+                You&rsquo;re a founding merchant.
+              </Text>
               <Text as="p" variant="bodyMd">
-                View your plan and how billing works.
+                We&rsquo;re building this with a small group of brands, and
+                you&rsquo;re one of them. Founding merchants aren&rsquo;t
+                billed. If we introduce paid plans later, you&rsquo;ll choose
+                and approve one inside Shopify &mdash; nothing will ever start
+                on its own.
               </Text>
               <div>
-                <Button onClick={() => navigate("/app/billing")}>View billing</Button>
+                <Button onClick={() => navigate("/app/billing")}>View details</Button>
               </div>
-            </BlockStack>
-          </Card>
-          <div style={{ marginTop: '16px' }} />
-          <Card>
-            <BlockStack gap="300">
-              <Text as="p" variant="bodyMd" fontWeight="semibold">Pricing</Text>
-              <Text as="p" variant="bodyMd">
-                Ritualist pricing is managed in Shopify. Plan approval, invoices,
-                cancellation, and any usage billing all stay inside Shopify.
-              </Text>
             </BlockStack>
           </Card>
         </Layout.AnnotatedSection>

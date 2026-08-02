@@ -1,6 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import { getInventoryByShopDomain } from "../services/ink-api.server";
-import crypto from "crypto";
+import { verifyProxyToken } from "../services/token-verify.server";
 
 /**
  * Public endpoint (authenticated by warehouse JWT only).
@@ -41,18 +41,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const token = authHeader.split(" ")[1];
     const payload = await verifyProxyToken(token);
-    
-    let shopDomain = payload?.shop;
-    
-    if (!shopDomain) {
-      // Decode without verification (if it's an INK JWT token)
-      try {
-        const decodedBody = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
-        shopDomain = decodedBody.merchant_id || decodedBody.shop;
-      } catch (e) {
-        console.error("Failed to decode token", e);
-      }
-    }
+    const shopDomain = payload?.shop;
 
     if (!shopDomain) {
       return json({ error: "Invalid token or missing shop domain" }, { status: 401 });

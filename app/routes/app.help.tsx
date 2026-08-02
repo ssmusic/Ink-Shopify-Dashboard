@@ -88,17 +88,17 @@ const faqSections = [
     ],
   },
   {
-    title: "Pricing & billing",
+    title: "Cost",
     items: [
       {
         question: "How much does it cost?",
         answer:
-          "Ritualist pricing is managed in Shopify. Choose and approve your plan there; any usage billing also appears on your Shopify invoice.",
+          "Nothing. You're a founding merchant: we're building this with a small group of brands, and you're one of them. Founding merchants aren't billed.",
       },
       {
-        question: "How am I billed?",
+        question: "Will I be charged later?",
         answer:
-          "Through Shopify. Any plan appears on your regular Shopify invoice, you approve it inside Shopify before it starts, and uninstalling ends it automatically.",
+          "Not without your say-so. If we introduce paid plans later, Shopify offers them, you approve one inside Shopify, and it appears on your regular Shopify invoice. Nothing starts on its own, and there is no card on file.",
       },
     ],
   },

@@ -41,8 +41,8 @@ const OnboardingChecklist = ({
       title: "Build your page",
       done: s.brandBuilt,
       body: s.brandBuilt
-        ? "Your branded page is live — every order opens on it."
-        : "Open the studio and enter your website — your page builds itself from your brand in about a minute.",
+        ? "Your approved page collection is ready — INK can choose the best fit for each order."
+        : "Open the studio and enter your website — INK builds a reviewable page collection from your brand.",
       cta: s.brandBuilt ? undefined : { label: "Open studio to build", onOpenStudio: true },
     },
     {

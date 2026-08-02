@@ -18,6 +18,7 @@ import {
 import { PlusIcon, DeleteIcon, SearchIcon, ClipboardIcon } from "@shopify/polaris-icons";
 import { useShop } from "../../contexts/ShopContext";
 import { Copy, Download, ExternalLink } from "lucide-react";
+import { FEATURE_NFC } from "../../flags";
 
 interface WarehouseUser {
   id: string;
@@ -94,8 +95,8 @@ const UserManagementSettings = () => {
   const getInitials = (name: string) =>
     name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 
-  const merchantId = shopData?.shopId || "MID-7X92KF";
-  const storeName = shopData?.shopName || currentShop?.name || "Luminary Goods";
+  const merchantId = shopData?.shopId || "Not available";
+  const storeName = shopData?.shopName || currentShop?.name || "Not available";
 
   const isSubmitting = mutateFetcher.state !== "idle";
 
@@ -172,8 +173,7 @@ const UserManagementSettings = () => {
         </BlockStack>
       </Layout.AnnotatedSection>
 
-      {/* Warehouse App */}
-      <Layout.AnnotatedSection
+      {FEATURE_NFC && <Layout.AnnotatedSection
         title="Warehouse App"
         description="Download the Ritualist enrollment app for your packing stations."
       >
@@ -229,7 +229,7 @@ const UserManagementSettings = () => {
             </BlockStack>
           </InlineStack>
         </Card>
-      </Layout.AnnotatedSection>
+      </Layout.AnnotatedSection>}
 
       {/* Invite Modal */}
       <Modal

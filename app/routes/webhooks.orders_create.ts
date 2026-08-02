@@ -294,7 +294,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               numericOrderId,
               inkToken,
               order.name || numericOrderId,
-              order.customer?.email || "unknown@example.com",
+              order.customer?.email || "",
               shipping_address,
               product_details,
               undefined, // warehouse_location — none at order time
@@ -316,7 +316,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               console.warn(
                 `[orders/create] ink_api_key rejected for ${shop}; re-provisioning + retrying…`
               );
-              const fresh = await createMerchant(shop, shop, `admin@${shop}`);
+              const shopIdentityRes = await admin.graphql(`#graphql
+                query ShopIdentity { shop { name email contactEmail } }
+              `);
+              const shopIdentity = (await shopIdentityRes.json())?.data?.shop;
+              const ownerEmail = shopIdentity?.email || shopIdentity?.contactEmail || "";
+              if (!ownerEmail) {
+                console.warn(`[orders/create] Cannot re-provision ${shop} without a real Shopify contact email`);
+                throw e;
+              }
+              const fresh = await createMerchant(shop, shopIdentity?.name || shop, ownerEmail);
               const freshKey = fresh?.api_key;
               if (!freshKey) throw e;
               const snap = await firestore

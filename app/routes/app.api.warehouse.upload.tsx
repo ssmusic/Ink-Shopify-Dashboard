@@ -1,6 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
-import { uploadMedia, createMerchant, adjustMerchantInventory, getShopIdByDomain } from "../services/ink-api.server";
+import { uploadMedia, adjustMerchantInventory, getShopIdByDomain } from "../services/ink-api.server";
 import { verifyProxyToken } from "../services/token-verify.server";
 
 /**
@@ -50,29 +50,6 @@ async function getMerchantApiKey(shopDomain?: string, merchantId?: string): Prom
       const data = snapshot.docs[0].data();
       const apiKey = data?.ink_api_key;
       if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
-    }
-  }
-
-  // 3. Auto-provision merchant if neither lookup worked
-  const identifier = shopDomain || merchantId;
-  if (identifier) {
-    console.log(`[Warehouse Upload] Key not found for ${identifier}. Auto-provisioning...`);
-    try {
-      const inkRes = await createMerchant(identifier, identifier, `admin@${identifier}`);
-      const apiKey = inkRes.api_key;
-      // CRITICAL: Use doc(identifier) with set() so the document has a predictable ID.
-      // Using .add() creates a random ID that can never be found by the next request.
-      const docId = merchantId || identifier;
-      await firestore.collection("merchants").doc(docId).set({
-        shopDomain: identifier,
-        ink_api_key: apiKey,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }, { merge: true });
-      console.log(`[Warehouse Upload] ✅ Provisioned and saved under merchants/${docId}`);
-      return apiKey;
-    } catch (e: any) {
-      console.error("[Warehouse Upload] Auto-provision failed:", e.message);
     }
   }
 

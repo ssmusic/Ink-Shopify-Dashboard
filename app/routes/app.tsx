@@ -49,7 +49,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       // placeholder made the magic link the ONLY door into in.ink (the
       // merchant could never log in with their real email).
       let shopName = session.shop;
-      let ownerEmail = `admin@${session.shop}`;
+      let ownerEmail = "";
       try {
         const res = await admin.graphql(`#graphql
           query ShopIdentity { shop { name email contactEmail } }`);
@@ -58,7 +58,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const realEmail = shopData?.email || shopData?.contactEmail;
         if (realEmail) ownerEmail = realEmail;
       } catch (e) {
-        console.warn("[App] shop identity fetch failed, using placeholders:", e);
+        console.warn("[App] shop identity fetch failed; provisioning will retry:", e);
+      }
+      if (!ownerEmail) {
+        console.warn(`[App] No Shopify owner/contact email for ${session.shop}; provisioning will retry on the next app load`);
+        return;
       }
       const inkData = await createMerchant(session.shop, shopName, ownerEmail);
       if (inkData?.api_key) {
@@ -72,6 +76,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[App] INK self-provision error (non-blocking):", err)
   );
 
+  // No pricingUrl: the app is free and the Partner Dashboard has no plans, so
+  // there is nothing for a plan picker to show. The previous version built
+  // `…/charges/${SHOPIFY_APP_HANDLE || "ink-verified-delivery"}/pricing_plans`
+  // — but SHOPIFY_APP_HANDLE is set in NO environment (verified against Cloud
+  // Run 2026-08-01), so that fallback was always what shipped, and it is not
+  // this app's handle. It would have put a Shopify 404 in front of the
+  // reviewer on the one screen the rejection was about.
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 

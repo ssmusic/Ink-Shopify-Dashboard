@@ -9,10 +9,14 @@ import PlanCard from "../components/billing/PlanCard";
 // The honest billing page. The previous version rendered three mock cards
 // (hardcoded $233.22/$500 cap, a fabricated 47/31 cycle, and a fake usage
 // ledger of orders that never existed) — all tabled unreferenced in
-// components/billing/. Billing truth lives with Shopify (Managed Pricing):
-// the merchant approves any plan inside Shopify, sees charges on their
-// Shopify invoice, and changes plans from the app's App Store listing.
-// This page states exactly that and invents nothing.
+// components/billing/.
+//
+// The app is FREE at App Store submission: no plans exist in the Partner
+// Dashboard, so nothing can be charged. This page says that in as many words.
+// It is deliberately kept (rather than deleted) because /app/payment and
+// /app/payment/callback redirect here, and because an explicit "there is
+// nothing to pay" screen is the cheapest possible proof of requirement 1.2.1
+// for a reviewer who goes looking for billing.
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await authenticate.admin(request);
@@ -31,14 +35,13 @@ export default function BillingPage() {
           <Card>
             <BlockStack gap="200">
               <Text as="h2" variant="headingSm">
-                How billing works
+                If that ever changes
               </Text>
               <Text as="p" tone="subdued">
-                All Ritualist charges run through Shopify — they appear on your
-                regular Shopify invoice, and no charge ever starts without
-                your approval inside Shopify. There is no separate card on
-                file and nothing to cancel outside Shopify: uninstalling the
-                app ends any subscription automatically.
+                Any future plan would be offered, approved, and invoiced by
+                Shopify itself — on your regular Shopify invoice, only after
+                you approve it there. There is no card on file, nothing to
+                cancel outside Shopify, and no billing of any kind today.
               </Text>
             </BlockStack>
           </Card>

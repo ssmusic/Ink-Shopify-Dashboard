@@ -35,6 +35,7 @@ import {
 import PolarisAppLayout from "../components/PolarisAppLayout";
 import TapLocationCard from "../components/TapLocationCard";
 import { Copy } from "lucide-react";
+import { FEATURE_NFC } from "../flags";
 
 // Local interface for Proof since we define the structure locally
 interface Proof {
@@ -751,7 +752,7 @@ export default function OrderDetails() {
     const isEnrolled = order.metafields.verification_status?.toLowerCase() === "enrolled";
 
     const eventTabs = [
-        { id: "write", content: "Write" },
+        { id: "record", content: "Record" },
         { id: "tap", content: "Open" },
     ];
 
@@ -917,17 +918,17 @@ export default function OrderDetails() {
 
                             {/* Tab content */}
                             <div style={{ padding: "16px", background: "var(--p-color-bg-surface)" }}>
-                                {/* Write Tab */}
+                                {/* Record Tab */}
                                 {selectedTab === 0 && (
                                     <BlockStack gap="400">
-                                        {/* NFC Tag & Proof ID */}
+                                        {/* Proof ID; NFC metadata stays hidden with the hardware lane. */}
                                         <InlineStack gap="400" wrap={false}>
-                                            <div style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", padding: "12px", borderRadius: "8px" }}>
+                                            {FEATURE_NFC && <div style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", padding: "12px", borderRadius: "8px" }}>
                                                 <Text as="p" tone="subdued" variant="bodySm">Tag UID</Text>
                                                 <Text as="p" variant="bodySm" fontWeight="medium">
                                                     <code style={{ fontFamily: "monospace" }}>{order.metafields.nfc_uid || "—"}</code>
                                                 </Text>
-                                            </div>
+                                            </div>}
                                             <div style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", padding: "12px", borderRadius: "8px" }}>
                                                 <Text as="p" tone="subdued" variant="bodySm">Proof ID</Text>
                                                 <InlineStack gap="200" blockAlign="center">
@@ -948,7 +949,7 @@ export default function OrderDetails() {
                                         </InlineStack>
 
                                         {/* Warehouse GPS */}
-                                        {(order.metafields as any).warehouse_gps && (
+                                        {FEATURE_NFC && (order.metafields as any).warehouse_gps && (
                                             <div style={{ background: "var(--p-color-bg-surface-secondary)", padding: "16px", borderRadius: "8px" }}>
                                                 <Text as="p" tone="subdued" variant="bodySm">Warehouse GPS</Text>
                                                 <Text as="p" variant="bodySm" fontWeight="medium">

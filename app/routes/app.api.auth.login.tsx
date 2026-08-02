@@ -171,7 +171,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!apiKey || apiKey === "sk_test_fallback") {
     console.log(`[Auth] Key missing or fallback for ${userData.shopDomain}. Calling INK Admin API...`);
     try {
-      const inkRes = await createMerchant(userData.shopDomain, userData.shopDomain, `admin@${userData.shopDomain}`);
+      const inkRes = await createMerchant(userData.shopDomain, userData.shopDomain, userData.email || email);
       apiKey = inkRes.api_key;
       
       if (docId) {
@@ -189,15 +189,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     } catch (e: any) {
       console.error("[Auth] Failed to auto-create merchant:", e.message);
-      apiKey = process.env.INK_API_KEY || "sk_test_fallback";
-      if (!docId) {
-         await firestore.collection("merchants").add({
-          shopDomain: userData.shopDomain,
-          ink_api_key: apiKey,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
     }
   }
 
