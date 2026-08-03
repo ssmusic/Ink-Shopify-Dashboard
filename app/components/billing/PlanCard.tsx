@@ -1,6 +1,6 @@
-// This app is FREE at App Store submission — no plans are configured in the
-// Partner Dashboard, so there is no plan to choose, no charge to approve, and
-// no invoice. This card must not imply otherwise: plan language rendered here
+// This app is FREE at App Store submission. The Partner Dashboard exposes one
+// public Free plan, so there is no charge to approve and no invoice. This card
+// must not imply otherwise: paid plan language rendered here
 // while the listing's pricing field reads "Free" is exactly the inconsistency
 // that got the app rejected (requirement 1.2.1).
 //
@@ -20,23 +20,18 @@ const PlanCard = () => {
         <p className="text-sm font-medium text-foreground">Cost</p>
       </div>
       <p className="text-sm font-medium text-foreground mb-1">
-        You&rsquo;re a founding merchant.
+        Your Shopify plan is Free.
       </p>
       {/* PROSE, not the mark: parallelreturns #644 is the naming authority —
           "The Ritualist" sentence-initial, "the Ritualist" mid-sentence, bare
           "Ritualist" adjectival. Only the app-name field and the wordmark are
           lowercase `the ritualist`. The two cases are both correct and must
           not be flattened into each other. */}
-      {/* "The Ritualist is free" was the wrong sentence and Sam killed it: it
-          makes the PRODUCT the subject of "is free", which is a claim about
-          what it's worth. The arrangement is what costs nothing, so selection
-          leads and cost is subordinate — and "aren't billed" is a status the
-          merchant holds, not a property of the software. */}
       <p className="text-sm text-muted-foreground">
-        We&rsquo;re building this with a small group of brands, and you&rsquo;re
-        one of them. Founding merchants aren&rsquo;t billed. If we introduce
-        paid plans later, you&rsquo;ll choose and approve one inside Shopify
-        &mdash; nothing will ever start on its own.
+        There is no subscription charge, trial, usage fee, or off-platform
+        invoice. Installing the app creates no charge. If paid plans are
+        introduced later, you&rsquo;ll choose and approve one inside Shopify
+        &mdash; nothing will start on its own.
       </p>
     </div>
   );

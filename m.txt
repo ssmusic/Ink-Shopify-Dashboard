@@ -21,7 +21,7 @@ Priority: blocks proof lifecycle. Required before billing is accurate.
 •	Proof transitions to ACTIVE after COOLDOWN expires
 
 M3 — Billing: Usage & Billing
-Billing model: $2.99 per enrollment + $2.99 per verification (Active). All charges via Shopify Billing API only — never Stripe.
+Billing model: Free at App Store submission. Any future paid pricing must use Shopify App Pricing — never Stripe.
 •	Wire current billing cycle — date range, Enrolled line item with count and amount, Active line item with count and amount, cycle total
 •	Wire Usage Cap — display cap amount, amount used, percentage used, progress bar
 •	Wire Usage History — per-order list showing order number, Enrolled or Active badge, timestamp, and charge amount

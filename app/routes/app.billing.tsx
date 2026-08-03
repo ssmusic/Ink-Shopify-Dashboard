@@ -11,8 +11,8 @@ import PlanCard from "../components/billing/PlanCard";
 // ledger of orders that never existed) — all tabled unreferenced in
 // components/billing/.
 //
-// The app is FREE at App Store submission: no plans exist in the Partner
-// Dashboard, so nothing can be charged. This page says that in as many words.
+// The app is FREE at App Store submission: the Partner Dashboard exposes one
+// public Free plan, so nothing can be charged. This page says that plainly.
 // It is deliberately kept (rather than deleted) because /app/payment and
 // /app/payment/callback redirect here, and because an explicit "there is
 // nothing to pay" screen is the cheapest possible proof of requirement 1.2.1
@@ -35,13 +35,14 @@ export default function BillingPage() {
           <Card>
             <BlockStack gap="200">
               <Text as="h2" variant="headingSm">
-                If that ever changes
+                Billing stays in Shopify
               </Text>
               <Text as="p" tone="subdued">
-                Any future plan would be offered, approved, and invoiced by
-                Shopify itself — on your regular Shopify invoice, only after
-                you approve it there. There is no card on file, nothing to
-                cancel outside Shopify, and no billing of any kind today.
+                Your current Shopify plan is Free. There is no subscription
+                charge, trial, usage fee, card on file, or off-platform
+                invoice. If paid plans are introduced later, Shopify will
+                present them for approval and add approved charges to your
+                regular Shopify invoice.
               </Text>
             </BlockStack>
           </Card>
