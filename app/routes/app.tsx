@@ -76,8 +76,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[App] INK self-provision error (non-blocking):", err)
   );
 
-  // No pricingUrl: the app is free and the Partner Dashboard has no plans, so
-  // there is nothing for a plan picker to show. The previous version built
+  // No pricingUrl: the Partner Dashboard exposes one public Free plan, so
+  // there is no paid charge or approval flow to launch. The previous version built
   // `…/charges/${SHOPIFY_APP_HANDLE || "ink-verified-delivery"}/pricing_plans`
   // — but SHOPIFY_APP_HANDLE is set in NO environment (verified against Cloud
   // Run 2026-08-01), so that fallback was always what shipped, and it is not

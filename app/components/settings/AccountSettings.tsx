@@ -68,14 +68,13 @@ const AccountSettings = () => {
           <Card>
             <BlockStack gap="300">
               <Text as="p" variant="bodyMd" fontWeight="semibold">
-                You&rsquo;re a founding merchant.
+                Your Shopify plan is Free.
               </Text>
               <Text as="p" variant="bodyMd">
-                We&rsquo;re building this with a small group of brands, and
-                you&rsquo;re one of them. Founding merchants aren&rsquo;t
-                billed. If we introduce paid plans later, you&rsquo;ll choose
-                and approve one inside Shopify &mdash; nothing will ever start
-                on its own.
+                There is no subscription charge, trial, usage fee, or
+                off-platform invoice. Installing the app creates no charge. If
+                paid plans are introduced later, you&rsquo;ll choose and approve
+                one inside Shopify &mdash; nothing will start on its own.
               </Text>
               <div>
                 <Button onClick={() => navigate("/app/billing")}>View details</Button>
