@@ -78,12 +78,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return new Response("OK", { status: 200 });
     }
 
-    await NFSService.updateTracking(proofId, merchantApiKey, {
+    const patched = await NFSService.updateTracking(proofId, merchantApiKey, {
       carrier_name: trackingCompany || undefined,
       tracking_number: trackingNumber,
       tracking_url: trackingUrl || undefined,
     });
     console.log(`✅ [${topic}] Tracking forwarded for ${orderName}: ${trackingCompany ?? "?"} ${trackingNumber} → ${proofId}`);
+
+    // THE AUTO-LINK. The backend has just told us whether the Shippo feed
+    // registered for this carrier (`shippo_registered`), which is the only
+    // honest gate on taking Shopify's tracking link over: a branded page that
+    // can never update is worse than the carrier's own. Gated, logged, and
+    // never fatal — see branded-tracking-link.server.ts.
+    try {
+      const { assertBrandedTrackingUrl } = await import("../services/branded-tracking-link.server");
+      await assertBrandedTrackingUrl({
+        admin,
+        shop,
+        payload,
+        proofId,
+        merchantApiKey,
+        merchantData: merchantHit?.data ?? {},
+        shippoRegistered: patched?.shippo_registered === true,
+        label: `[${topic}] branded-tracking-link`,
+      });
+    } catch (e: any) {
+      console.error(`❌ branded tracking link failed (non-fatal):`, e?.message);
+    }
 
     // The SHIPPED email belongs to this moment — tracking just landed on
     // the proof, so the page is live as a tracker. "On its way — track it",

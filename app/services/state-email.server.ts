@@ -18,9 +18,9 @@
 // ink.shipped_email_sent / ink.arrival_email_sent order metafields (Shopify
 // redelivers webhooks and carriers repeat scans; the customer gets ONE of each).
 
-import { EmailService, brandSlugFromDomain } from "./email.server";
+import { EmailService } from "./email.server";
 import { fetchBrandEmailKit, selectEmailCampaign } from "./brand-email.server";
-import { getProof } from "./ink-api.server";
+import { resolveBrandPageUrl } from "./brand-page-url.server";
 import { CUSTOMER_CONSENT_FRAGMENT, mayIncludeMarketing } from "./consent.server";
 
 const INK_NAMESPACE = "ink";
@@ -118,46 +118,30 @@ export async function sendStateEmailOnce(args: StateEmailArgs): Promise<void> {
   const buyerEmailConsent = checkJson.data?.order?.customer?.emailMarketingConsent ?? null;
   const aimedSectionAllowed = mayIncludeMarketing("aimed_section", "email", buyerEmailConsent);
 
-  // ── Proof (authoritative): nfc_token for the page link, tier for aiming ──
+  // ── Proof + branded sender + the same live link the physical tag resolves
+  // to. All of it resolved by ONE author (brand-page-url.server.ts), because
+  // the branded TRACKING link now needs the identical address on the identical
+  // order — and two copies of this resolution would eventually send the same
+  // buyer to two different pages from one email and one tracking button.
+  //
+  // What that author gets right, and why: brand identity (brand_slug,
+  // shop_name, support_email) lives on the BACKEND merchant doc
+  // (merchants/{shop_id}); the embed's own doc carries the api key but not the
+  // brand. #1016's shipped email went out as sm-test-hhawzn52@in.ink for
+  // exactly that reason, so the backend doc is merged OVER the embed doc.
   const merchantApiKey: string | undefined = merchantData.ink_api_key;
-  let nfcToken: string | undefined;
-  let customerTier: string | null = null;
-  let proofShopId = "";
-  if (merchantApiKey) {
-    try {
-      const proof = await getProof(merchantApiKey, proofId);
-      nfcToken = proof?.nfc_token || undefined;
-      customerTier = (proof?.customer_tier as string | undefined) || null;
-      proofShopId = String(proof?.shop_id || "");
-    } catch (e: any) {
-      console.warn(`📧 ${label}: proof fetch failed (${e?.message}) — sending with fallback link.`);
-    }
-  }
-
-  // ── Branded sender + the same live link the physical tag resolves to ──
-  // Brand identity fields (brand_slug, shop_name, support_email) live on the
-  // BACKEND-provisioned merchant doc (merchants/{shop_id}); the embed's own
-  // doc (keyed by the myshopify domain) carries the api key but not the
-  // brand. Caught live on #1016's shipped email: it went out as
-  // sm-test-hhawzn52@in.ink instead of stevemadden@in.ink. Merge the backend
-  // doc over the embed doc for brand resolution, same as api.verify does.
-  let brandDoc: Record<string, any> = merchantData;
-  if (proofShopId) {
-    try {
-      const { default: firestore } = await import("../firestore.server");
-      const d = await firestore.collection("merchants").doc(proofShopId).get();
-      if (d.exists) brandDoc = { ...merchantData, ...(d.data() || {}) };
-    } catch (e: any) {
-      console.warn(`📧 ${label}: backend merchant doc fetch failed (${e?.message}) — using embed doc for branding.`);
-    }
-  }
-  const brandDomain =
-    (brandDoc.shop_domain as string | undefined) ||
-    (brandDoc.shopDomain as string | undefined) ||
-    shop;
-  const brandSlug =
-    brandSlugFromDomain(brandDoc.brand_slug as string | undefined) ||
-    brandSlugFromDomain(brandDomain);
+  const brandPage = await resolveBrandPageUrl({
+    merchantApiKey,
+    proofId,
+    shop,
+    merchantData,
+    label,
+  });
+  const nfcToken = brandPage.nfcToken ?? undefined;
+  const customerTier = brandPage.customerTier;
+  const proofShopId = brandPage.proofShopId;
+  const brandDoc = brandPage.brandDoc;
+  const brandSlug = brandPage.brandSlug;
   const senderFromEmail = brandSlug && brandSlug.length >= 2 ? `${brandSlug}@in.ink` : undefined;
   const senderFromName =
     (brandDoc.shop_name as string | undefined) ||
@@ -187,10 +171,7 @@ export async function sendStateEmailOnce(args: StateEmailArgs): Promise<void> {
     console.log(`📧 SKIP ${label} (test-mode merchant, backend doc): refusing real customer send for ${customerEmail}.`);
     return;
   }
-  const proofUrl =
-    brandSlug && nfcToken
-      ? `https://${brandSlug}.in.ink/r/${nfcToken}`
-      : `https://www.in.ink/r/${nfcToken || proofId}`;
+  const proofUrl = brandPage.emailUrl;
 
   // ── Email-as-tap-page: brand kit + the buyer's aimed section (fail-soft) ──
   const brandKit = await fetchBrandEmailKit(proofShopId);
