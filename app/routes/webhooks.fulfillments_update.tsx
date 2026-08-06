@@ -28,14 +28,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log(`📦 Order ID: ${orderId}`);
     console.log(`📦 Shipment Status: ${shipmentStatus || "None/Unknown"}`);
 
-    // If it's not one of our targeted statuses, we ignore it.
-    if (shipmentStatus !== "out_for_delivery" && shipmentStatus !== "delivered") {
-      console.log(`📦 Status is not actionable for notifications. Exiting.`);
-      console.log("📦 ================================================\n");
-      return new Response("OK", { status: 200 });
-    }
-
-    // 1. Fetch the Order to check if it's an INK order and get customer info
+    // 1. Fetch the Order to check if it's an INK order and get customer info.
+    //    Memoized: this handler now has TWO jobs (the tracking hop below and
+    //    the delivery notifications after it) and they must not each spend an
+    //    API call on the same order.
     const orderQuery = `#graphql
       query GetOrderForFulfillmentEvent($id: ID!) {
         order(id: $id) {
@@ -51,10 +47,96 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     `;
 
-    console.log(`📦 Querying Shopify for Order details...`);
-    const orderData = await admin.graphql(orderQuery, { variables: { id: orderGid } });
-    const orderJson = await orderData.json();
-    const order = orderJson.data?.order;
+    let orderPromise: Promise<any> | null = null;
+    const loadOrder = () => {
+      if (!orderPromise) {
+        console.log(`📦 Querying Shopify for Order details...`);
+        orderPromise = admin
+          .graphql(orderQuery, { variables: { id: orderGid } })
+          .then((r) => r.json())
+          .then((j: any) => j.data?.order ?? null);
+      }
+      return orderPromise;
+    };
+
+    // 2. Fetch Merchant Notification Settings — convention-proof resolver.
+    //    The old shopDomain-only query silently exited here on shop/shop_domain
+    //    docs, which meant REAL CARRIER DELIVERIES never marked proofs
+    //    delivered on those shops (Phase-1 rehearsal finding, 2026-07-02).
+    let merchantPromise: ReturnType<typeof findMerchantDoc> | null = null;
+    const loadMerchant = () => {
+      if (!merchantPromise) {
+        console.log(`📦 Fetching Merchant Settings for ${shop}...`);
+        merchantPromise = findMerchantDoc(firestore, shop);
+      }
+      return merchantPromise;
+    };
+
+    // ── THE TRACKING-ADDED-LATER HOP (the 3PL gap) ──────────────────────────
+    // This handler used to ignore everything except out_for_delivery/delivered,
+    // which meant a fulfillment created EMPTY and given tracking a moment later
+    // — the normal 3PL and ShipStation shape — never reached the backend at
+    // all. fulfillments/create had already fired with nothing to forward, and
+    // nothing fired afterwards. Those orders' pages could never answer "where
+    // is it", however healthy the rest of the pipe was.
+    //
+    // Runs BEFORE the status gate, and only when there is tracking to forward.
+    // The backend PATCH is idempotent, so re-forwarding an unchanged number is
+    // harmless; our own branded-link mutation re-fires this webhook exactly
+    // once, and the loop guard inside assertBrandedTrackingUrl ends it there.
+    const trackingNumber =
+      (Array.isArray(fulfillment.tracking_numbers) && fulfillment.tracking_numbers[0]) ||
+      fulfillment.tracking_number ||
+      null;
+    if (trackingNumber) {
+      try {
+        const trackingOrder = await loadOrder();
+        const trackingProofId = trackingOrder?.proofMetafield?.value;
+        if (trackingProofId) {
+          const hit = await loadMerchant();
+          const apiKey = hit?.apiKey ?? hit?.data?.ink_api_key ?? null;
+          if (apiKey) {
+            const patched = await NFSService.updateTracking(trackingProofId, apiKey, {
+              carrier_name: fulfillment.tracking_company || undefined,
+              tracking_number: String(trackingNumber),
+              tracking_url:
+                (Array.isArray(fulfillment.tracking_urls) && fulfillment.tracking_urls[0]) ||
+                fulfillment.tracking_url ||
+                undefined,
+            });
+            console.log(
+              `✅ Tracking forwarded on UPDATE for ${trackingOrder?.name ?? orderId}: ` +
+                `${fulfillment.tracking_company ?? "?"} ${trackingNumber} → ${trackingProofId}`,
+            );
+
+            const { assertBrandedTrackingUrl } = await import("../services/branded-tracking-link.server");
+            await assertBrandedTrackingUrl({
+              admin,
+              shop,
+              payload: fulfillment,
+              proofId: trackingProofId,
+              merchantApiKey: apiKey,
+              merchantData: hit?.data ?? {},
+              shippoRegistered: patched?.shippo_registered === true,
+              label: `[${topic}] branded-tracking-link`,
+            });
+          } else {
+            console.log(`⚠️ No ink_api_key for ${shop}; cannot forward tracking added on update.`);
+          }
+        }
+      } catch (e: any) {
+        console.error(`❌ tracking hop on update failed (non-fatal):`, e?.message ?? e);
+      }
+    }
+
+    // If it's not one of our targeted statuses, we ignore the rest.
+    if (shipmentStatus !== "out_for_delivery" && shipmentStatus !== "delivered") {
+      console.log(`📦 Status is not actionable for notifications. Exiting.`);
+      console.log("📦 ================================================\n");
+      return new Response("OK", { status: 200 });
+    }
+
+    const order = await loadOrder();
 
     if (!order) {
       console.log(`❌ Order not found in Shopify. Exiting.`);
@@ -71,12 +153,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return new Response("OK", { status: 200 });
     }
 
-    // 2. Fetch Merchant Notification Settings — convention-proof resolver.
-    //    The old shopDomain-only query silently exited here on shop/shop_domain
-    //    docs, which meant REAL CARRIER DELIVERIES never marked proofs
-    //    delivered on those shops (Phase-1 rehearsal finding, 2026-07-02).
-    console.log(`📦 Fetching Merchant Settings for ${shop}...`);
-    const merchantHit = await findMerchantDoc(firestore, shop);
+    const merchantHit = await loadMerchant();
 
     if (!merchantHit) {
       console.log(`⚠️ No merchant document found for ${shop}. Exiting.`);
