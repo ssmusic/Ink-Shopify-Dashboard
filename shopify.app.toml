@@ -81,7 +81,29 @@ api_version = "2025-10"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_customers,read_files,write_files,read_fulfillments,write_fulfillments,read_metaobjects,write_metaobjects,read_online_store_pages,write_online_store_pages,read_orders,write_orders,write_shipping,write_themes"
+#
+# THE THREE FULFILLMENT-ORDER SCOPES ARE NOT INTERCHANGEABLE, and holding only
+# the first one is why the branded tracking link had never rewritten a single
+# real fulfillment. They partition by WHO FULFILLS:
+#
+#   · assigned         — fulfillment orders routed to US as a fulfillment
+#                        service. We are not one, so this covers nothing that
+#                        actually happens.
+#   · merchant_managed — the merchant fulfilling at their OWN location. This
+#                        is the ordinary case and it is most of Shopify.
+#   · third_party      — a 3PL / external service (ShipStation and friends).
+#
+# `fulfillmentTrackingInfoUpdate` accepts ANY ONE of the three, so with only
+# `assigned` every real rewrite came back:
+#     "The api_client does not have access to the fulfillment."
+# Measured live on Steve Madden order #1018, 2026-08-07, fulfilled by hand from
+# Shop location — the most ordinary fulfillment there is. Wave 2 shipped,
+# deployed green, and could not have worked for anyone.
+#
+# ADDING THESE COSTS MERCHANT RE-CONSENT. Shopify re-prompts every installed
+# store on a scope change. Doing it now, with two test stores installed, costs
+# nothing; doing it after real merchants install costs each of them a prompt.
+scopes = "read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders,read_customers,read_files,write_files,read_fulfillments,write_fulfillments,read_metaobjects,write_metaobjects,read_online_store_pages,write_online_store_pages,read_orders,write_orders,write_shipping,write_themes"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
