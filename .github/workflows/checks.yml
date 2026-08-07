@@ -1,0 +1,59 @@
+# Types and tests, on every PR and every push to main.
+#
+# THIS REPO HAD NO TEST GATE AT ALL. Its only automated checks were the deploy
+# workflow (which runs after main already moved) and the merge-gate comment.
+# `typecheck` and `build` cannot tell whether the Shopify outbox actually
+# rewrites a tracking link — so the promise that a buyer's shipping email
+# carries the brand's page had nothing watching it. The sibling repo learned
+# what that costs on 2026-07-20: a correct change turned the product off for
+# seventeen days, green the whole way, because every gate asked about code
+# shape and none asked whether the product still worked.
+#
+# So this runs the canary (app/services/branded-tracking-link.canary.test.ts)
+# on the commit that would break it.
+#
+# LINT IS DELIBERATELY NOT HERE YET. It reports ~397 pre-existing problems on
+# main by house convention; adding it now would make this workflow red on day
+# one and train everyone to ignore it. Land it as its own PR once the baseline
+# is driven to zero — the same order the sibling repo used.
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # A newer commit supersedes an in-flight check of an older one, but never
+  # cancels a deploy (that workflow owns its own group).
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the commit under test
+        run: echo "Testing ${{ github.sha }}"
+
+      # package.json engines allows >=20.19 <22 || >=22.12. Node 22 satisfies
+      # the upper branch and matches the sibling repo, so both CIs sit on the
+      # same side of the WebSocket/global line.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # From the committed lockfile, never a resolved-fresh tree: a canary that
+      # passes against different dependencies than production ships is not a
+      # canary.
+      - run: npm ci
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
