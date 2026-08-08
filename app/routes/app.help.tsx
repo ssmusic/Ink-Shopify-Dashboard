@@ -53,7 +53,7 @@ const faqSections = [
       {
         question: "What emails and texts go out?",
         answer:
-          "Shipping and delivery updates, sent in your name. You control which notifications are on, and the wording, in Settings → Communications.",
+          "Shipping and delivery updates, sent in your name. You choose which ones are on in Settings → Notifications. Shopify's own shipping emails can carry your page too — that tab shows you how.",
       },
     ],
   },

@@ -8,14 +8,15 @@ const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER;
 
 const twilioClient = TWILIO_SID && TWILIO_TOKEN ? twilio(TWILIO_SID, TWILIO_TOKEN) : null;
 
-export type NotificationType = 
-  | "outForDelivery" 
-  | "delivered" 
-  | "deliveryConfirmed" 
-  | "hours4" 
-  | "hours24" 
-  | "hours48" 
-  | "return7d" 
+// Tap-reminder events (hours4/24/48) removed 2026-08-07: NFC-era relics
+// (Sam: "tap reminders were from when this was nfc tags"), never scheduled,
+// never sent. return7d/return48h stay declared — the page shows them as
+// coming soon and the scheduler build will light them up.
+export type NotificationType =
+  | "outForDelivery"
+  | "delivered"
+  | "deliveryConfirmed"
+  | "return7d"
   | "return48h";
 
 export interface NotificationPayload {
@@ -29,10 +30,45 @@ export interface NotificationPayload {
   returnWindowDays?: number;
 }
 
+/** THE GATE the branded rail always had and this rail did not
+ *  (state-email.server.ts:60-80 semantics, shared verbatim):
+ *   · a test-flagged merchant never reaches a real customer;
+ *   · a non-empty SEND_ALLOWLIST excludes everyone not on it;
+ *   · an allowlisted recipient is reachable even from a test merchant
+ *     (that is how demos send to Sam);
+ *   · missing merchant data or missing recipient fails CLOSED.
+ *  Without this, a returns_test_mode store with delivery.delivered=true
+ *  would have plain-text-emailed a real buyer (audit 2026-08-07). */
+export function notificationSendAllowed(
+  merchantData: Record<string, any> | null | undefined,
+  recipient: string | null | undefined,
+): boolean {
+  if (!merchantData) return false;
+  const to = (recipient || "").trim().toLowerCase();
+  if (!to) return false;
+
+  const allowlist = (process.env.SEND_ALLOWLIST || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const allowlisted = allowlist.includes(to);
+
+  if (allowlist.length > 0 && !allowlisted) return false;
+
+  const isTestMerchant = Boolean(merchantData.returns_test_mode || merchantData.is_test);
+  if (isTestMerchant && !allowlisted) return false;
+
+  return true;
+}
+
 export const NotificationService = {
-  async dispatch(payload: NotificationPayload, settings: any) {
+  async dispatch(
+    payload: NotificationPayload,
+    settings: any,
+    merchantData: Record<string, any> | null | undefined,
+  ) {
     const { type, toEmail, toPhone } = payload;
-    
+
     // 1. Check if specific notification type is enabled in settings
     const isEnabled = this.isNotificationEnabled(type, settings);
     if (!isEnabled) {
@@ -41,20 +77,28 @@ export const NotificationService = {
     }
 
     const { channels } = settings;
-    
+
     let emailSent = false;
     let smsSent = false;
 
-    // 2. Dispatch SMS if channel is enabled
+    // 2. Dispatch SMS if channel is enabled — through the gate
     if (channels?.sms && toPhone) {
-      smsSent = await this.sendSms(payload);
+      if (notificationSendAllowed(merchantData, toPhone)) {
+        smsSent = await this.sendSms(payload);
+      } else {
+        console.log(`[NotificationService] GATED ${type} SMS for ${payload.orderName} (test merchant / allowlist).`);
+      }
     } else if (channels?.sms && !toPhone) {
       console.warn(`[NotificationService] SMS channel enabled but no phone number provided for order ${payload.orderName}`);
     }
 
-    // 3. Dispatch Email if channel is enabled
+    // 3. Dispatch Email if channel is enabled — through the gate
     if (channels?.email && toEmail) {
-      emailSent = await this.sendEmail(payload);
+      if (notificationSendAllowed(merchantData, toEmail)) {
+        emailSent = await this.sendEmail(payload);
+      } else {
+        console.log(`[NotificationService] GATED ${type} email for ${payload.orderName} (test merchant / allowlist).`);
+      }
     }
 
     return emailSent || smsSent;
@@ -62,15 +106,12 @@ export const NotificationService = {
 
   isNotificationEnabled(type: NotificationType, settings: any): boolean {
     if (!settings) return false;
-    const { delivery, reminders, returnReminders } = settings;
-    
+    const { delivery, returnReminders } = settings;
+
     switch (type) {
       case "outForDelivery": return !!delivery?.outForDelivery;
       case "delivered": return !!delivery?.delivered;
       case "deliveryConfirmed": return !!delivery?.deliveryConfirmed;
-      case "hours4": return !!reminders?.hours4;
-      case "hours24": return !!reminders?.hours24;
-      case "hours48": return !!reminders?.hours48;
       case "return7d": return !!returnReminders?.days7;
       case "return48h": return !!returnReminders?.hours48;
       default: return false;
@@ -97,15 +138,6 @@ export const NotificationService = {
         break;
       case "deliveryConfirmed":
         messageBody = `Delivery confirmed for your ${payload.merchantName} order ${payload.orderName}.${payload.verifyUrl ? ` Your receipt + returns: ${payload.verifyUrl}` : ""}`;
-        break;
-      case "hours4":
-        messageBody = `Hi ${payload.customerName}, your order ${payload.orderName} arrived today.${payload.verifyUrl ? ` Your receipt + returns: ${payload.verifyUrl}` : ""}`;
-        break;
-      case "hours24":
-        messageBody = `Your ${payload.returnWindowDays || 30}-day return window for order ${payload.orderName} is open.${payload.verifyUrl ? ` Start a return: ${payload.verifyUrl}` : ""}`;
-        break;
-      case "hours48":
-        messageBody = `A note from ${payload.merchantName}: your order ${payload.orderName} has arrived.${payload.verifyUrl ? ` Your receipt + returns: ${payload.verifyUrl}` : ""}`;
         break;
       case "return7d":
         messageBody = `Hi ${payload.customerName}, you have 7 days left to return order ${payload.orderName}. Need to start a return? Click here: ${payload.verifyUrl}`;
@@ -158,12 +190,6 @@ export const NotificationService = {
       case "delivered":
         subject = subjectPrefix + "Delivered";
         body = `Your package has arrived.${payload.verifyUrl ? `\n\nYour receipt + returns: ${payload.verifyUrl}` : ""}`;
-        break;
-      case "hours4":
-      case "hours24":
-      case "hours48":
-        subject = subjectPrefix + "Your order has arrived";
-        body = `Hi ${payload.customerName},\n\nYour package arrived recently.${payload.verifyUrl ? `\n\nYour receipt + returns: ${payload.verifyUrl}` : ""}`;
         break;
       case "return7d":
         subject = subjectPrefix + "7 Days Left to Return";

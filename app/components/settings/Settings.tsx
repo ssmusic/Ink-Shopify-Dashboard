@@ -39,7 +39,9 @@ const Settings = ({ initialData }: { initialData?: any }) => {
       case "delivery": return <DeliveryModeSettings />;
       case "tags": return <TagsSettings inventoryData={initialData?.inventoryData} />;
       case "branding": return <BrandingSettings />;
-      case "communication": return <CommunicationSettings />;
+      // shopDomain builds the deep link into THIS store's Shopify notification
+      // settings — the merchant shouldn't have to go find it.
+      case "communication": return <CommunicationSettings shopDomain={initialData?.shopDomain} />;
       case "users": return <UserManagementSettings />;
       default: return <AccountSettings />;
     }

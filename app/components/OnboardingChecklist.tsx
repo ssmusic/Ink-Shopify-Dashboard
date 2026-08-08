@@ -52,7 +52,9 @@ const OnboardingChecklist = ({
       body: s.notificationsOn
         ? "Shipping and delivery updates send in your brand's name."
         : "Let buyers know when their order ships and arrives — sent as you, by email or text.",
-      cta: s.notificationsOn ? undefined : { label: "Open Settings", to: "/app/settings" },
+      cta: s.notificationsOn
+        ? undefined
+        : { label: "Open Settings", to: "/app/settings?tab=communication" },
     },
     {
       key: "firstorder",

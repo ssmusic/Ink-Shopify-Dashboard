@@ -1,4 +1,5 @@
 import firestore from "../firestore.server";
+import type { NotificationSettings } from "./notification-settings";
 
 const COLLECTION = "merchants";
 
@@ -6,6 +7,10 @@ export interface MerchantData {
   shop: string;
   ink_api_key?: string;
   verified_delivery_mode?: "addon" | "background";
+  /** Seeded at provision. Every sender treats a MISSING value as "send
+   *  nothing", so a doc without one is a merchant whose toggles don't exist.
+   *  See services/notification-settings.ts. */
+  notification_settings?: NotificationSettings;
   updatedAt?: string;
   /** First provision. Settings renders this as the install date — it was
    *  never written, so that row read "Not available" forever. */
