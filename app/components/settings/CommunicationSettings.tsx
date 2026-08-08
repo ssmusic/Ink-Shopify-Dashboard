@@ -164,9 +164,13 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
     disabled?: boolean;
     suffix?: React.ReactNode;
   }) => (
-    <InlineStack align="space-between" blockAlign="start" wrap={false}>
+    <InlineStack align="space-between" blockAlign="start" wrap={false} gap="400">
+      {/* `align="start"` on the inner stack matters: without it the badge
+          drifts to the far right and reads as a label on the CHECKBOX rather
+          than on the row it qualifies (caught rendering the page, not in
+          review). */}
       <BlockStack gap="100">
-        <InlineStack gap="200" blockAlign="center">
+        <InlineStack gap="200" blockAlign="center" align="start">
           <Text as="p" variant="bodySm" fontWeight="medium">{title}</Text>
           {suffix}
         </InlineStack>
@@ -206,11 +210,22 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
 
             <Box background="bg-surface-secondary" padding="300" borderRadius="200">
               <BlockStack gap="200">
-                <Text as="p" variant="bodySm" tone="subdued">
-                  <code style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
+                {/* The snippet must stay COPYABLE and readable, so it never
+                    breaks mid-identifier (`fulfillment.trac / king_url` — what
+                    break-all did). It scrolls sideways inside its own box
+                    instead; a merchant copies with the button, not by hand. */}
+                <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+                  <code
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                      whiteSpace: "pre",
+                      display: "block",
+                    }}
+                  >
                     {LIQUID_SNIPPET}
                   </code>
-                </Text>
+                </div>
                 <InlineStack gap="200">
                   <Button onClick={copySnippet}>Copy the line</Button>
                   <Button url={notificationsUrl} target="_blank" variant="plain">
