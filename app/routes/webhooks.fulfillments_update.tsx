@@ -214,10 +214,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return new Response("OK", { status: 200 });
     }
 
-    // 3. Map to our NotificationType
-    let notificationType: "outForDelivery" | "delivered" | null = null;
+    // 3. Map to our NotificationType.
+    //
+    // "delivered" is DELIBERATELY absent. The arrival moment already has a
+    // rail above — sendStateEmailOnce("delivered") — branded, deduped, and
+    // gated on SEND_VERIFY_EMAIL / allowlist / test-merchant / the merchant's
+    // outreach toggles. Dispatching here too sent the SAME moment twice: once
+    // branded and gated, once plain-text and (until now) ungated, so a
+    // test-flagged store could reach a real buyer. One moment, one rail
+    // (audit 2026-08-07). Out-for-delivery has no branded equivalent, so it
+    // keeps this one — now behind the same guards, inside dispatch().
+    let notificationType: "outForDelivery" | null = null;
     if (shipmentStatus === "out_for_delivery") notificationType = "outForDelivery";
-    if (shipmentStatus === "delivered") notificationType = "delivered";
 
     if (notificationType) {
       const customerEmail = order.customer?.email;
@@ -237,7 +245,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         orderName: order.name,
         merchantName: merchantName,
         verifyUrl: verifyUrl,
-      }, settings);
+      }, settings, merchantData);
 
       if (sent) {
         console.log(`✅ Successfully dispatched ${notificationType} notification.`);

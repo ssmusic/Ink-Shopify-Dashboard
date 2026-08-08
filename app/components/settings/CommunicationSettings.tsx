@@ -1,129 +1,152 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
+  Badge,
   BlockStack,
+  Box,
+  Button,
   Card,
-  Text,
-  InlineStack,
   Checkbox,
-  Select,
   Divider,
+  InlineStack,
   Layout,
+  Link,
+  List,
+  Select,
+  Text,
 } from "@shopify/polaris";
 import { toast } from "../../hooks/use-toast";
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  TEMPLATE_KEYS,
+  type NotificationSettings,
+  type TemplateKey,
+} from "../../services/notification-settings";
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
-const SHOPIFY_APP_URL =
-  typeof window !== "undefined"
-    ? window.location.origin
-    : "";
+// App-Bridge-aware, mirroring DeliveryModeSettings/BrandingSettings. The old
+// version read localStorage["token"] ONLY — a key nothing in the embed ever
+// writes — so inside Shopify admin every load fell back to hardcoded defaults
+// and every save toasted "Failed to save settings" (audit 2026-08-07).
+async function secureFetch(path: string, options: RequestInit = {}) {
+  const appUrl = typeof window !== "undefined" ? window.location.origin : "";
 
-function getToken() {
-  return typeof window !== "undefined" ? localStorage.getItem("token") : null;
-}
-
-async function fetchNotificationSettings() {
+  let token = "";
   try {
-    const token = getToken();
-    if (!token) return { error: { message: "Not authenticated" } };
-    const res = await fetch(`${SHOPIFY_APP_URL}/app/api/settings/notifications`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return { error: { message: "Failed to load" } };
-    return { data: await res.json() };
-  } catch (e: any) {
-    return { error: { message: e.message } };
+    // @ts-ignore — App Bridge global
+    token = (await window.shopify?.idToken()) || "";
+  } catch (e) {
+    console.warn("Could not retrieve Shopify session token", e);
   }
-}
+  if (!token && typeof window !== "undefined") {
+    token = localStorage.getItem("token") || "";
+  }
+  if (!token) return { error: { message: "Not authenticated" } };
 
-async function updateNotificationSettings(payload: any) {
+  const headers = new Headers(options.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+
   try {
-    const token = getToken();
-    if (!token) return { error: { message: "Not authenticated" } };
-    const res = await fetch(`${SHOPIFY_APP_URL}/app/api/settings/notifications`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) return { error: { message: "Failed to save" } };
-    return { data: await res.json() };
+    const res = await fetch(`${appUrl}${path}`, { ...options, headers });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      return { error: { message: data?.error || `Error ${res.status}` } };
+    }
+    return { data };
   } catch (e: any) {
     return { error: { message: e.message } };
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CommunicationSettings = () => {
-  const [channels, setChannels] = useState({ email: true, sms: false });
-  const [delivery, setDelivery] = useState({
-    outForDelivery: true,
-    delivered: true,
-    deliveryConfirmed: false,
-  });
-  const [reminders, setReminders] = useState({
-    hours4: true,
-    hours24: true,
-    hours48: false,
-  });
-  const [returnReminders, setReturnReminders] = useState({
-    days7: true,
-    hours48: false,
-  });
-  const [returnWindow, setReturnWindow] = useState("30");
+// THE ONE LINE. Reassigns the variable Shopify's own buttons already use, so
+// every "View your order" in that template resolves to the brand's page. Same
+// approach AfterShip and Malomo ship to merchants, because no Shopify API can
+// edit a notification template — verified against Shopify's docs 2026-08-07.
+const LIQUID_SNIPPET =
+  "{% if fulfillment.tracking_url %}{% assign order_status_url = fulfillment.tracking_url %}{% endif %}";
 
-  // ── Load settings from Firestore on mount ────────────────────────────────
+const TEMPLATE_LABELS: Record<TemplateKey, string> = {
+  shipping_confirmation: "Shipping confirmation",
+  shipping_update: "Shipping update",
+  out_for_delivery: "Out for delivery",
+  delivered: "Delivered",
+};
+
+const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
+  const [settings, setSettings] = useState<NotificationSettings>(
+    DEFAULT_NOTIFICATION_SETTINGS,
+  );
+  const [loaded, setLoaded] = useState(false);
+
   useEffect(() => {
     let mounted = true;
-    fetchNotificationSettings().then(({ data, error }) => {
+    secureFetch("/app/api/settings/notifications").then(({ data, error }) => {
       if (!mounted) return;
       if (error) {
-        // Silently fall back to defaults — don't interrupt the page load
         console.warn("[CommunicationSettings] Could not load settings:", error.message);
       } else if (data?.settings) {
-        setChannels(data.settings.channels ?? { email: true, sms: false });
-        setDelivery(data.settings.delivery ?? { outForDelivery: true, delivered: true, deliveryConfirmed: false });
-        setReminders(data.settings.reminders ?? { hours4: true, hours24: true, hours48: false });
-        setReturnReminders(data.settings.returnReminders ?? { days7: true, hours48: false });
-        setReturnWindow(data.settings.returnWindow ?? "30");
+        setSettings(data.settings);
       }
+      setLoaded(true);
     });
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // ── Save full settings payload to backend ────────────────────────────────
-  const saveSettings = async (overrides: object) => {
-    const newSettings = {
-      channels,
-      delivery,
-      reminders,
-      returnReminders,
-      returnWindow,
-      ...overrides,
-    };
-    const { error } = await updateNotificationSettings(newSettings);
+  // Save from the NEXT state, never the closure's — a second toggle before
+  // React re-rendered used to write a stale sibling group.
+  const persist = useCallback(async (next: NotificationSettings, failMsg: string) => {
+    const { data, error } = await secureFetch("/app/api/settings/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(next),
+    });
     if (error) {
-      toast({ description: "Failed to save settings", variant: "destructive", duration: 2000 });
+      toast({ description: error.message || failMsg, variant: "destructive", duration: 3000 });
+      return false;
     }
+    if (data?.settings) setSettings(data.settings);
+    return true;
+  }, []);
+
+  const toggle = (
+    group: "channels" | "delivery" | "returnReminders",
+    key: string,
+    label: string,
+  ) => {
+    setSettings((prev) => {
+      const groupState = prev[group] as Record<string, boolean>;
+      const newVal = !groupState[key];
+      const next = { ...prev, [group]: { ...groupState, [key]: newVal } };
+      toast({ description: `${label} ${newVal ? "enabled" : "disabled"}`, duration: 1500 });
+      persist(next, "Failed to save settings");
+      return next;
+    });
   };
 
-  const toggle = <T extends Record<string, boolean>>(
-    setter: React.Dispatch<React.SetStateAction<T>>,
-    stateProp: "channels" | "delivery" | "reminders" | "returnReminders",
-    key: keyof T,
-    label: string
-  ) => {
-    setter((prev) => {
-      const newVal = !prev[key];
-      const updatedState = { ...prev, [key]: newVal };
-      toast({
-        description: `${label} ${newVal ? "enabled" : "disabled"}`,
-        duration: 1500,
-      });
-      saveSettings({ [stateProp]: updatedState });
-      return updatedState;
+  const markTemplate = (key: TemplateKey) => {
+    setSettings((prev) => {
+      const done = Boolean(prev.templatesPastedAt[key]);
+      const next = {
+        ...prev,
+        templatesPastedAt: {
+          ...prev.templatesPastedAt,
+          [key]: done ? null : new Date().toISOString(),
+        },
+      };
+      persist(next, "Couldn't record that");
+      return next;
     });
+  };
+
+  const copySnippet = async () => {
+    try {
+      await navigator.clipboard.writeText(LIQUID_SNIPPET);
+      toast({ description: "Copied. Paste it as a new first line.", duration: 2500 });
+    } catch {
+      toast({ description: "Couldn't copy — select the line and copy it manually.", variant: "destructive" });
+    }
   };
 
   const ToggleRow = ({
@@ -131,23 +154,108 @@ const CommunicationSettings = () => {
     onToggle,
     title,
     description,
+    disabled,
+    suffix,
   }: {
     checked: boolean;
     onToggle: () => void;
     title: string;
     description: string;
+    disabled?: boolean;
+    suffix?: React.ReactNode;
   }) => (
     <InlineStack align="space-between" blockAlign="start" wrap={false}>
       <BlockStack gap="100">
-        <Text as="p" variant="bodySm" fontWeight="medium">{title}</Text>
+        <InlineStack gap="200" blockAlign="center">
+          <Text as="p" variant="bodySm" fontWeight="medium">{title}</Text>
+          {suffix}
+        </InlineStack>
         <Text as="p" tone="subdued" variant="bodySm">{description}</Text>
       </BlockStack>
-      <Checkbox label="" checked={checked} onChange={onToggle} />
+      <Checkbox label="" checked={checked} onChange={onToggle} disabled={disabled} />
     </InlineStack>
   );
 
+  const templatesDone = TEMPLATE_KEYS.filter((k) => settings.templatesPastedAt[k]).length;
+  const notificationsUrl = shopDomain
+    ? `https://admin.shopify.com/store/${shopDomain.replace(".myshopify.com", "")}/settings/notifications`
+    : "https://admin.shopify.com";
+
   return (
     <Layout>
+      {/* ── The one merchant action that isn't automatic ───────────────── */}
+      <Layout.AnnotatedSection
+        title="Your page in Shopify's emails"
+        description="Shopify already links to your page from the tracking number on every shipment. This makes it the main button too."
+      >
+        <Card>
+          <BlockStack gap="400">
+            <InlineStack gap="200" blockAlign="center">
+              <Text as="p" variant="bodySm" fontWeight="medium">
+                Add one line to four email templates
+              </Text>
+              <Badge tone={templatesDone === TEMPLATE_KEYS.length ? "success" : "attention"}>
+                {`${templatesDone} of ${TEMPLATE_KEYS.length} done`}
+              </Badge>
+            </InlineStack>
+
+            <Text as="p" tone="subdued" variant="bodySm">
+              Shopify doesn&apos;t let apps edit these templates, so this part is yours —
+              about thirty seconds each.
+            </Text>
+
+            <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+              <BlockStack gap="200">
+                <Text as="p" variant="bodySm" tone="subdued">
+                  <code style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
+                    {LIQUID_SNIPPET}
+                  </code>
+                </Text>
+                <InlineStack gap="200">
+                  <Button onClick={copySnippet}>Copy the line</Button>
+                  <Button url={notificationsUrl} target="_blank" variant="plain">
+                    Open Shopify notifications
+                  </Button>
+                </InlineStack>
+              </BlockStack>
+            </Box>
+
+            <List type="number">
+              <List.Item>Open the template, then click <b>Edit code</b>.</List.Item>
+              <List.Item>
+                Put the cursor at the very top and press Enter to make a blank first line —
+                <b> don&apos;t replace the line that&apos;s already there</b>. Overwriting it
+                breaks the template and Shopify refuses to save.
+              </List.Item>
+              <List.Item>Paste the line, then Save.</List.Item>
+            </List>
+
+            <Divider />
+
+            <Text as="p" tone="subdued" variant="bodySm">
+              Tick each one as you go. We can&apos;t read your templates, so this list is
+              your own record.
+            </Text>
+
+            <BlockStack gap="300">
+              {TEMPLATE_KEYS.map((key) => (
+                <ToggleRow
+                  key={key}
+                  checked={Boolean(settings.templatesPastedAt[key])}
+                  onToggle={() => markTemplate(key)}
+                  title={TEMPLATE_LABELS[key]}
+                  description={
+                    settings.templatesPastedAt[key]
+                      ? `Marked done ${new Date(settings.templatesPastedAt[key]!).toLocaleDateString()}`
+                      : "Not done yet."
+                  }
+                />
+              ))}
+            </BlockStack>
+          </BlockStack>
+        </Card>
+      </Layout.AnnotatedSection>
+
       <Layout.AnnotatedSection
         title="Notification Channel"
         description="How customers receive notifications about their deliveries."
@@ -155,21 +263,20 @@ const CommunicationSettings = () => {
         <Card>
           <BlockStack gap="400">
             <ToggleRow
-              checked={channels.email}
-              onToggle={() => toggle(setChannels, "channels", "email", "Email notifications")}
+              checked={settings.channels.email}
+              onToggle={() => toggle("channels", "email", "Email notifications")}
               title="Email"
-              description="Send notifications via email."
+              description="Send notifications by email."
             />
             <Divider />
             <ToggleRow
-              checked={channels.sms}
-              onToggle={() => toggle(setChannels, "channels", "sms", "SMS notifications")}
+              checked={false}
+              onToggle={() => {}}
+              disabled
               title="SMS"
-              description="Send notifications via text message."
+              suffix={<Badge>Pending verification</Badge>}
+              description="Our sending number is going through carrier verification. Text notifications turn on here once it clears."
             />
-            <Text as="p" tone="subdued" variant="bodySm">
-              Requires customer phone number from Shopify order.
-            </Text>
           </BlockStack>
         </Card>
       </Layout.AnnotatedSection>
@@ -181,91 +288,58 @@ const CommunicationSettings = () => {
         <Card>
           <BlockStack gap="400">
             <ToggleRow
-              checked={delivery.outForDelivery}
-              onToggle={() =>
-                toggle(setDelivery, "delivery", "outForDelivery", "Out for delivery")
-              }
+              checked={settings.delivery.outForDelivery}
+              onToggle={() => toggle("delivery", "outForDelivery", "Out for delivery")}
               title="Out for delivery"
-              description="Notify when carrier scan shows package is out for delivery."
+              description="Sent when a carrier scan shows the package is out for delivery."
             />
             <Divider />
             <ToggleRow
-              checked={delivery.delivered}
-              onToggle={() =>
-                toggle(setDelivery, "delivery", "delivered", "Delivered notification")
-              }
+              checked={settings.delivery.delivered}
+              onToggle={() => toggle("delivery", "delivered", "Delivered notification")}
               title="Delivered"
-              description="Notify when carrier confirms delivery. Includes tap instructions."
+              description="Sent when the carrier confirms delivery. Carries the link to their page."
             />
             <Divider />
             <ToggleRow
-              checked={delivery.deliveryConfirmed}
-              onToggle={() =>
-                toggle(setDelivery, "delivery", "deliveryConfirmed", "Delivery confirmed")
-              }
+              checked={settings.delivery.deliveryConfirmed}
+              onToggle={() => toggle("delivery", "deliveryConfirmed", "Delivery confirmed")}
               title="Delivery confirmed"
-              description="Confirmation sent after customer taps."
+              description="Sent after the customer opens their page."
             />
           </BlockStack>
         </Card>
       </Layout.AnnotatedSection>
 
-      <Layout.AnnotatedSection
-        title="Tap Reminders"
-        description="Sent if the customer hasn't tapped. Reminders stop once the customer taps."
-      >
-        <Card>
-          <BlockStack gap="400">
-            <ToggleRow
-              checked={reminders.hours4}
-              onToggle={() => toggle(setReminders, "reminders", "hours4", "4-hour reminder")}
-              title="4 hours after delivery"
-              description="First reminder."
-            />
-            <Divider />
-            <ToggleRow
-              checked={reminders.hours24}
-              onToggle={() =>
-                toggle(setReminders, "reminders", "hours24", "24-hour reminder")
-              }
-              title="24 hours after delivery"
-              description="Second reminder."
-            />
-            <Divider />
-            <ToggleRow
-              checked={reminders.hours48}
-              onToggle={() =>
-                toggle(setReminders, "reminders", "hours48", "48-hour reminder")
-              }
-              title="48 hours after delivery"
-              description="Final tap reminder."
-            />
-          </BlockStack>
-        </Card>
-      </Layout.AnnotatedSection>
-
+      {/* Kept visible, plainly marked: the toggles round-trip but nothing
+          sends them yet — the scheduler is its own build. Showing them ON
+          while nothing sends is the exact dishonesty this page had. */}
       <Layout.AnnotatedSection
         title="Return Window Reminders"
-        description="Sent to verified customers as their return window approaches closing."
+        description="Sent as a customer's return window approaches closing."
       >
         <Card>
           <BlockStack gap="400">
+            <InlineStack gap="200" blockAlign="center">
+              <Badge>Coming soon</Badge>
+              <Text as="p" tone="subdued" variant="bodySm">
+                Not sending yet.
+              </Text>
+            </InlineStack>
             <ToggleRow
-              checked={returnReminders.days7}
-              onToggle={() =>
-                toggle(setReturnReminders, "returnReminders", "days7", "7-day return reminder")
-              }
-              title="7 days before return window closes"
-              description="Early reminder. Includes return link."
+              checked={settings.returnReminders.days7}
+              onToggle={() => {}}
+              disabled
+              title="7 days before the window closes"
+              description="Early reminder, with the return link."
             />
             <Divider />
             <ToggleRow
-              checked={returnReminders.hours48}
-              onToggle={() =>
-                toggle(setReturnReminders, "returnReminders", "hours48", "48-hour return reminder")
-              }
-              title="48 hours before return window closes"
-              description='"Your return window closes in 2 days."'
+              checked={settings.returnReminders.hours48}
+              onToggle={() => {}}
+              disabled
+              title="48 hours before the window closes"
+              description="Last call."
             />
           </BlockStack>
         </Card>
@@ -273,20 +347,22 @@ const CommunicationSettings = () => {
 
       <Layout.AnnotatedSection
         title="Return Window"
-        description="How long customers have to initiate a return after delivery."
+        description="How long customers have to start a return after delivery. This sets the real window."
       >
         <Card>
           <Select
             label=""
             labelHidden
-            value={returnWindow}
+            disabled={!loaded}
+            value={settings.returnWindow}
             onChange={(v) => {
-              setReturnWindow(v);
-              toast({
-                description: `Return window set to ${v} days`,
-                duration: 1500,
+              setSettings((prev) => {
+                const next = { ...prev, returnWindow: v as NotificationSettings["returnWindow"] };
+                persist(next, "Couldn't update the return window").then((ok) => {
+                  if (ok) toast({ description: `Return window set to ${v} days`, duration: 1500 });
+                });
+                return next;
               });
-              saveSettings({ returnWindow: v });
             }}
             options={[
               { label: "14 days", value: "14" },

@@ -8,6 +8,7 @@ import { ShopProvider } from "../contexts/ShopContext";
 import { ensureCarrierServiceRegistered } from "../services/carrier-service.server";
 import { createMerchant } from "../services/ink-api.server";
 import { getMerchant, updateMerchant } from "../services/merchant.server";
+import { DEFAULT_NOTIFICATION_SETTINGS } from "../services/notification-settings";
 
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
@@ -66,9 +67,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
       const inkData = await createMerchant(session.shop, shopName, ownerEmail);
       if (inkData?.api_key) {
+        // Seed notification_settings at provision. Every sender treats a
+        // MISSING notification_settings as "send nothing" — so a merchant
+        // without one had toggles that silently did not exist, while the
+        // Settings page rendered them all as ON (audit 2026-08-07). The
+        // Notifications GET backfills too, so installs predating this heal
+        // on their first visit to the tab.
         await updateMerchant(session.shop, {
           ink_api_key: inkData.api_key,
           verified_delivery_mode: "background",
+          notification_settings: DEFAULT_NOTIFICATION_SETTINGS,
         });
       }
     }

@@ -365,11 +365,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             console.log("   - Phone:", customerPhone);
             console.log("   - Email:", customerEmail);
 
-            // Fetch Merchant Settings from Firestore
+            // Fetch Merchant Settings from Firestore.
+            //
+            // findMerchantDoc, NOT where("shopDomain"==…): no merchant doc
+            // reliably carries that field — the embed keys its own docs by
+            // shop domain as the DOCUMENT ID, the backend uses snake_case
+            // shop_domain. The old query came back empty on both shapes, so
+            // this branch logged "no settings" and skipped EVERY
+            // delivery-confirmed notification (Bible §17.2, fourth appearance).
             const { default: firestore } = await import("../firestore.server");
-            const settingsSnap = await firestore.collection("merchants").where("shopDomain", "==", targetSession.shop).limit(1).get();
-            const merchantName = settingsSnap.empty ? targetSession.shop : (settingsSnap.docs[0].data().shopName || targetSession.shop);
-            const settings = settingsSnap.empty ? null : settingsSnap.docs[0].data().notification_settings;
+            const { findMerchantDoc } = await import("../services/merchant-doc.server");
+            const merchantHit = await findMerchantDoc(firestore, targetSession.shop);
+            const merchantData = merchantHit?.data ?? null;
+            const merchantName = merchantData?.shopName || targetSession.shop;
+            const settings = merchantData?.notification_settings ?? null;
 
             if (!settings) {
                console.warn(`⚠️ No Notification Settings found for merchant ${targetSession.shop}. Skipping notifications.`);
@@ -393,7 +402,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                    merchantName,
                    verifyUrl: verify_url,
                    returnWindowDays: settings.returnWindow ? parseInt(settings.returnWindow) : 30
-                 }, settings);
+                 }, settings, merchantData);
                }
             }
           } else {
