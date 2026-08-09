@@ -254,7 +254,12 @@ export const enrollOrder = async (
     photoHashes?: string[],
     carrierName?: string | null,
     trackingNumber?: string | null,
-    customerPhone?: string | null
+    customerPhone?: string | null,
+    // WHERE THE BUYER CAN SEE THIS ORDER ON THE MERCHANT'S OWN SITE.
+    // An options bag rather than two more positional args — this signature is
+    // already fourteen deep, and the two other enroll call sites (warehouse,
+    // tagged-shipments) simply don't pass it and are unaffected.
+    orderContext?: { orderStatusUrl?: string | null; shopDomain?: string | null }
 ) => {
     // Alan's API was changed to require order details nested in an
     // `order_details` JSON object rather than as separate top-level fields.
@@ -281,6 +286,26 @@ export const enrollOrder = async (
             product_details: productDetails,
         },
     };
+
+    // Shopify's orders/create body has always carried `order_status_url` — the
+    // buyer's own order-status page, no login required. We simply never read
+    // it, so no proof has ever held one and the tap page has had no honest way
+    // to say "view your order". Nothing downstream needs changing to accept it:
+    // the backend's validation spreads unknown keys and the serializer emits
+    // the whole object, so it reaches the customer wire for free.
+    //
+    // Only stamped when present — an absent field must stay absent rather than
+    // become an empty string, because the page hides the link on absence and
+    // "" would render a dead one (law 7).
+    if (orderContext?.orderStatusUrl) {
+        payload.order_details.order_status_url = orderContext.orderStatusUrl;
+    }
+    // The real shop domain, alongside it. `proof.merchant` and `proof.shop_id`
+    // are BOTH the merchant_id despite the comment on the former saying
+    // shop_domain, so nothing on the wire has ever carried the actual host.
+    if (orderContext?.shopDomain) {
+        payload.order_details.shop_domain = orderContext.shopDomain;
+    }
 
     if (warehouseLocation) payload.warehouse_location = warehouseLocation;
     if (nfcUid) payload.nfc_uid = nfcUid;
