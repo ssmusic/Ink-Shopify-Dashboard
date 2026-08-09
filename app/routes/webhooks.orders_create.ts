@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { enrollOrder, createMerchant } from "../services/ink-api.server";
+import { productDetailFromLineItem } from "../services/order-line-item";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -97,6 +98,11 @@ const ORDER_DETAIL_QUERY = `
             sku
             originalUnitPriceSet { shopMoney { amount } }
             image { url }
+            # The product's public storefront page. onlineStoreUrl is null for
+            # a product not published to the Online Store channel, which is the
+            # honest answer — the tap page hides the link rather than sending a
+            # buyer somewhere that 404s.
+            product { onlineStoreUrl }
           }
         }
       }
@@ -244,13 +250,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             String(data?.id ?? "").replace(/\D/g, "") ||
             String(order.name ?? "").replace(/\D/g, "");
           const lineItems = (order.lineItems?.edges || []).map((e: any) => e.node);
-          const product_details = lineItems.map((n: any) => ({
-            name: n.title,
-            sku: n.sku || "",
-            quantity: n.quantity ?? 1,
-            price: n.originalUnitPriceSet?.shopMoney?.amount ?? "0",
-            image_url: n.image?.url || null,
-          }));
+          const product_details = lineItems.map(productDetailFromLineItem);
           const addr = order.shippingAddress;
           // Recipient/customer name — Alan's order mapper reads
           // shipping_address.name as the customer name fallback, so carry it
@@ -303,7 +303,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               undefined, // photo_hashes
               carrier_name,
               tracking_number,
-              finalPhone || order.customer?.phone || null
+              finalPhone || order.customer?.phone || null,
+              // The buyer's own order-status page on the merchant's site.
+              // Shopify has always sent it in this body; we never read it.
+              { orderStatusUrl: data?.order_status_url || null, shopDomain: shop || null }
             );
 
           let inkData: any;
