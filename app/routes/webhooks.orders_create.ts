@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
-import { enrollOrder, createMerchant } from "../services/ink-api.server";
+import { enrollOrder, createMerchant, reportCampaignRedemption } from "../services/ink-api.server";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -160,6 +160,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   console.log(`\n📦 [orders/create] Processing order ${orderName} (${shop})`);
+
+  // ─── M3 redemption capture (RUNBOOK_CAMPAIGNS §6.3) ──────────────────
+  // Position is load-bearing: AFTER the no-admin/malformed-payload skips,
+  // BEFORE the addon-mode eligibility return below — a buyer who saw a
+  // campaign code on a previous order's page can redeem it on an order
+  // WITHOUT ink shipping, and counting only inside the enroll block would
+  // make the denominator lie. Independent of the proof_reference
+  // idempotency skip for the same reason (the backend doc-set is the
+  // idempotency for redemptions). Fire-and-forget: never fails the webhook.
+  const discountCodes = Array.isArray(data?.discount_codes) ? data.discount_codes : [];
+  if (discountCodes.length > 0) {
+    try {
+      const redemptionApiKey = await getMerchantApiKey(shop);
+      if (redemptionApiKey) {
+        await reportCampaignRedemption(redemptionApiKey, {
+          order_id: data?.id ?? orderGid,
+          order_number: String(orderName),
+          discount_codes: discountCodes,
+          order_total: data?.total_price,
+          currency: data?.currency,
+          order_created_at: data?.created_at,
+        });
+      } else {
+        console.log(`[redemptions] no ink_api_key for ${shop} — codes on ${orderName} not reported`);
+      }
+    } catch (error) {
+      console.warn(`[redemptions] capture failed for ${orderName} — ignored:`, error);
+    }
+  }
 
   // Phone selection (ship → order → customer fallback chain)
   const shippingPhone = data?.shipping_address?.phone;
