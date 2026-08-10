@@ -29,3 +29,32 @@ export function productDetailFromLineItem(n: any) {
     ...(n?.product?.onlineStoreUrl ? { product_url: n.product.onlineStoreUrl } : {}),
   };
 }
+
+/** Fold separately-fetched product URLs onto already-built line-item details.
+ *
+ *  WHY THIS EXISTS AS A SECOND STEP. `product { onlineStoreUrl }` needs the
+ *  `read_products` scope, and Shopify fails the ENTIRE query when a selection
+ *  is unauthorized — it does not omit the field. Riding the enroll-critical
+ *  query, that one selection took enrollment down for every order on every
+ *  install and reported success while doing it (real order #1019,
+ *  2026-08-09). So the URLs are fetched on their own wire and folded in here;
+ *  `urls` is `null` whenever that fetch failed or was refused.
+ *
+ *  ABSENT MEANS ABSENT. A null/blank entry leaves the detail byte-identical
+ *  rather than writing `product_url: ""` — the tap page hides the link on
+ *  absence (law 7), and an empty string would render a dead door.
+ *
+ *  Index-aligned: both come from the same `lineItems(first: 20)` selection on
+ *  the same order, so position is the join. A length mismatch (a line item
+ *  added between the two calls) simply leaves the unmatched tail unenriched.
+ */
+export function attachProductUrls<T extends Record<string, unknown>>(
+  details: T[],
+  urls: (string | null)[] | null,
+): T[] {
+  if (!urls) return details;
+  return details.map((detail, i) => {
+    const url = urls[i];
+    return url ? ({ ...detail, product_url: url } as T) : detail;
+  });
+}

@@ -2,7 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { enrollOrder, createMerchant } from "../services/ink-api.server";
-import { productDetailFromLineItem } from "../services/order-line-item";
+import { attachProductUrls, productDetailFromLineItem } from "../services/order-line-item";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -63,6 +63,44 @@ function genNfcToken(): string {
   return `nfc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** Ask for the line items' storefront URLs, and never let the answer matter.
+ *
+ *  Returns an index-aligned array, or `null` when the fetch failed for ANY
+ *  reason — most importantly a missing `read_products` scope, which is the
+ *  state of every install until the scope change ships and re-consent lands.
+ *
+ *  The refusal is LOGGED, not swallowed: a fallback that hides a failure makes
+ *  the outage permanent and silent (TECH_BIBLE law 32). One line, naming the
+ *  order and the reason, so "the product link is missing" is answerable from
+ *  the logs instead of from a rebuild.
+ */
+async function fetchProductUrls(
+  admin: any,
+  orderGid: string,
+  orderName: string,
+): Promise<(string | null)[] | null> {
+  try {
+    const res = await admin.graphql(PRODUCT_URLS_QUERY, {
+      variables: { id: orderGid },
+    });
+    const json = await res.json();
+    const edges = json?.data?.order?.lineItems?.edges;
+    if (!Array.isArray(edges)) {
+      console.warn(
+        `[orders/create] product URLs unavailable for ${orderName} — enroll continues without them (no lineItems in response)`,
+      );
+      return null;
+    }
+    return edges.map((e: any) => e?.node?.product?.onlineStoreUrl ?? null);
+  } catch (err: any) {
+    console.warn(
+      `[orders/create] product URLs unavailable for ${orderName} — enroll continues without them:`,
+      err?.message || err,
+    );
+    return null;
+  }
+}
+
 const TAG_MUTATION = `
 mutation AddOrderTag($id: ID!, $tags: [String!]!) {
   tagsAdd(id: $id, tags: $tags) {
@@ -82,7 +120,24 @@ mutation SetInkMetafields($metafields: [MetafieldsSetInput!]!) {
 // Order detail fetch for auto-enroll — line items (incl. product image),
 // customer, shipping address, total, and the existing proof_reference metafield
 // (for idempotency).
-const ORDER_DETAIL_QUERY = `
+//
+// NOTHING OPTIONAL MAY RIDE THIS QUERY. It is the enroll-critical fetch: order
+// name, customer, ship-to, line items, the idempotency metafield and the
+// fulfillments all come from here, and a proof cannot be created without them.
+//
+// Shopify does not drop a field it cannot authorize — it fails the WHOLE
+// query. So one selection the app lacks a scope for takes down enrollment for
+// every order on every install, silently. That is not theory: #82 added
+// `product { onlineStoreUrl }` here on 2026-08-09, the app has never held
+// `read_products`, and real order #1019 came back
+//     "Access denied for product field. Required access: `read_products`"
+// — no proof, no metafields, no tracking-link rewrite, and the handler still
+// logged ✅ and returned 200.
+//
+// Enrichment therefore lives in PRODUCT_URLS_QUERY below, fetched separately
+// and fail-open. Adding a field to THIS query is a scope decision; treat it as
+// one. (ENGINEERING_BIBLE §17; TECH_BIBLE laws 32 + 35.)
+export const ORDER_DETAIL_QUERY = `
   query AutoEnrollOrder($id: ID!) {
     order(id: $id) {
       id
@@ -98,16 +153,33 @@ const ORDER_DETAIL_QUERY = `
             sku
             originalUnitPriceSet { shopMoney { amount } }
             image { url }
-            # The product's public storefront page. onlineStoreUrl is null for
-            # a product not published to the Online Store channel, which is the
-            # honest answer — the tap page hides the link rather than sending a
-            # buyer somewhere that 404s.
-            product { onlineStoreUrl }
           }
         }
       }
       metafield(namespace: "ink", key: "proof_reference") { value }
       fulfillments { trackingInfo { company number } }
+    }
+  }
+`;
+
+// THE ENRICHMENT, ON ITS OWN WIRE. The product's public storefront page —
+// `onlineStoreUrl` is null for a product not published to the Online Store
+// channel, which is the honest answer; the tap page hides the link rather than
+// sending a buyer somewhere that 404s.
+//
+// Requires the `read_products` scope. It is asked for separately and its
+// failure is swallowed by design, so a missing or revoked scope costs exactly
+// this link and never the enrollment.
+export const PRODUCT_URLS_QUERY = `
+  query AutoEnrollProductUrls($id: ID!) {
+    order(id: $id) {
+      lineItems(first: 20) {
+        edges {
+          node {
+            product { onlineStoreUrl }
+          }
+        }
+      }
     }
   }
 `;
@@ -181,6 +253,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const hasPremiumDelivery = hasInkPremiumShipping(shippingLines);
 
+  // Set by the enroll catch. Non-null ⇒ suppress the success line and return
+  // 500 so Shopify retries. Declared out here because the success line lives
+  // outside the processing try/catch.
+  let enrollFailure: string | null = null;
+
   // Background enrollment: INK is hidden from checkout and never appears as a
   // customer-paid shipping option, so every order on this shop is eligible.
   const deliveryMode = await getMerchantDeliveryMode(shop);
@@ -250,7 +327,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             String(data?.id ?? "").replace(/\D/g, "") ||
             String(order.name ?? "").replace(/\D/g, "");
           const lineItems = (order.lineItems?.edges || []).map((e: any) => e.node);
-          const product_details = lineItems.map(productDetailFromLineItem);
+          // The enrichment, on its own wire and fail-open: a scope the app does
+          // not hold costs the product link and nothing else. See
+          // PRODUCT_URLS_QUERY.
+          const product_details = attachProductUrls(
+            lineItems.map(productDetailFromLineItem),
+            await fetchProductUrls(admin, orderGid, orderName),
+          );
           const addr = order.shippingAddress;
           // Recipient/customer name — Alan's order mapper reads
           // shipping_address.name as the customer name fallback, so carry it
@@ -369,9 +452,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       }
     } catch (enrollErr: any) {
-      console.warn(
-        `[orders/create] Auto-enroll soft-failed for ${orderName} (order still tagged):`,
-        enrollErr?.message || enrollErr
+      // NAME THE REFUSAL, AND MAKE IT COUNT. This branch used to warn and fall
+      // through to a `✅ Successfully processed` + 200, so a total enrollment
+      // failure was indistinguishable from success in the logs AND told
+      // Shopify never to retry. Order #1019 (2026-08-09) died exactly here:
+      // the order was tagged, the ✅ printed, and no proof has ever existed.
+      //
+      // `enrollFailure` is read below: it suppresses the success line and
+      // returns 500 so Shopify's at-least-once retry can land the enroll once
+      // the cause is fixed. Retry is safe — the backend dedupes on
+      // (shop_id, order_id) (ink-backend #23), and tagsAdd / metafieldsSet are
+      // both idempotent.
+      enrollFailure = enrollErr?.message || String(enrollErr);
+      console.error(
+        `❌ [orders/create] Auto-enroll FAILED for ${orderName} (order still tagged):`,
+        enrollFailure
       );
     }
 
@@ -439,6 +534,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       error?.message || error
     );
     return new Response("Error processing order", { status: 500 });
+  }
+
+  // A FAILED ENROLL IS NOT A PROCESSED ORDER. Saying so out loud, and asking
+  // for the retry, is the whole point: the order is tagged but has no proof,
+  // so the tap page, the receipt links and the branded tracking-link rewrite
+  // (which gates on the ink.proof_reference metafield) all have nothing to
+  // work with. 500 ⇒ Shopify redelivers; the backend's (shop_id, order_id)
+  // dedupe makes that safe.
+  if (enrollFailure) {
+    console.error(
+      `❌ [orders/create] ${orderName} NOT enrolled (mode=${deliveryMode}) — returning 500 so Shopify retries. Cause: ${enrollFailure}\n`
+    );
+    return new Response("enroll failed", { status: 500 });
   }
 
   console.log(

@@ -103,7 +103,19 @@ api_version = "2025-10"
 # ADDING THESE COSTS MERCHANT RE-CONSENT. Shopify re-prompts every installed
 # store on a scope change. Doing it now, with two test stores installed, costs
 # nothing; doing it after real merchants install costs each of them a prompt.
-scopes = "read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders,read_customers,read_files,write_files,read_fulfillments,write_fulfillments,read_metaobjects,write_metaobjects,read_online_store_pages,write_online_store_pages,read_orders,write_orders,write_shipping,write_themes"
+#
+# `read_products` — the product's public storefront page (`onlineStoreUrl`),
+# which is what makes "view this product" on the buyer's page possible. Added
+# 2026-08-09, after real order #1019 proved the cost of asking without it:
+# Shopify does not omit an unauthorized field, it FAILS THE WHOLE QUERY, so
+# one selection took auto-enrollment down for every order on every install
+# while the handler logged ✅ and returned 200.
+#
+# The handler no longer DEPENDS on this scope — product URLs are fetched
+# separately and fail open (webhooks.orders_create.ts, PRODUCT_URLS_QUERY), so
+# a store that has not re-consented still enrolls normally and simply carries
+# no product link. This scope is what turns that link on.
+scopes = "read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders,read_customers,read_files,write_files,read_fulfillments,write_fulfillments,read_metaobjects,write_metaobjects,read_online_store_pages,write_online_store_pages,read_orders,write_orders,read_products,write_shipping,write_themes"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
