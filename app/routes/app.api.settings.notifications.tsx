@@ -7,6 +7,12 @@ import {
   sanitizeNotificationSettings,
   resolveShopFromTokenPayload,
 } from "../services/notification-settings";
+import { brandSlugFromDoc } from "../services/brand-page-url.server";
+import { getShopIdByDomain } from "../services/ink-api.server";
+import {
+  notificationSnippet,
+  SNIPPET_TEMPLATES,
+} from "../services/notification-snippet";
 
 /**
  * Notification Settings endpoint.
@@ -92,7 +98,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       await hit.ref.set({ notification_settings: settings }, { merge: true });
     }
 
-    return json({ settings });
+    // THE SNIPPET IS BUILT SERVER-SIDE, from the same brand the tracking
+    // rewrite uses. The card used to hold a hardcoded constant, which is how
+    // it shipped a line that could only ever work after a fulfillment. The
+    // slug has to come from the BACKEND merchant doc (brand_slug) — deriving
+    // it from the myshopify domain yields `sm-test-hhawzn52.in.ink`, a host
+    // that looks right and 404s. Fail-soft: no slug ⇒ the www fallback, which
+    // resolves for every brand.
+    let brandSlug = "";
+    try {
+      const shopId = await getShopIdByDomain(auth.shop);
+      const backend = shopId
+        ? (await firestore.collection("merchants").doc(shopId).get()).data() ?? {}
+        : {};
+      brandSlug = brandSlugFromDoc({ ...hit.data, ...backend }, auth.shop);
+    } catch (e: any) {
+      console.warn(
+        `[settings/notifications] brand slug unresolved (${e?.message}) — snippet falls back to www.in.ink`,
+      );
+    }
+
+    return json({
+      settings,
+      snippet: notificationSnippet(brandSlug),
+      snippetTemplates: SNIPPET_TEMPLATES,
+    });
   } catch (err: any) {
     console.error("[settings/notifications] GET error:", err.message);
     return json({ error: "Failed to fetch notification settings" }, { status: 500 });

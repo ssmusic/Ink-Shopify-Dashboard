@@ -57,7 +57,7 @@ describe("sanitizeNotificationSettings — the API stops writing verbatim", () =
     );
   });
 
-  it("templatesPastedAt keeps only the four known templates, ISO string or null", () => {
+  it("templatesPastedAt keeps only the known templates, ISO string or null", () => {
     const clean = sanitizeNotificationSettings({
       templatesPastedAt: {
         shipping_confirmation: "2026-08-07T23:00:00.000Z",
@@ -84,6 +84,10 @@ describe("sanitizeNotificationSettings — the API stops writing verbatim", () =
     expect(DEFAULT_NOTIFICATION_SETTINGS.channels.sms).toBe(false);
     expect(DEFAULT_NOTIFICATION_SETTINGS).not.toHaveProperty("reminders");
     expect(TEMPLATE_KEYS).toEqual([
+      // order_confirmation joined 2026-08-10 with the metafield snippet —
+      // the token exists at enrollment, so the first email a buyer gets can
+      // finally carry the page.
+      "order_confirmation",
       "shipping_confirmation",
       "shipping_update",
       "out_for_delivery",

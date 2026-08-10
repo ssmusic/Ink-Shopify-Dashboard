@@ -13,6 +13,11 @@
 // their next save.
 
 export const TEMPLATE_KEYS = [
+  // Order confirmation joined 2026-08-10: the metafield snippet works there
+  // (the token exists at enrollment), where the old fulfillment-based line
+  // was blank forever. First in the list because it is the first email a
+  // buyer ever gets.
+  "order_confirmation",
   "shipping_confirmation",
   "shipping_update",
   "out_for_delivery",
@@ -42,6 +47,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   returnReminders: { days7: true, hours48: false },
   returnWindow: "30",
   templatesPastedAt: {
+    order_confirmation: null,
     shipping_confirmation: null,
     shipping_update: null,
     out_for_delivery: null,

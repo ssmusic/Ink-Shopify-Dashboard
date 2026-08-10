@@ -37,6 +37,33 @@ export interface BrandPageResolution {
   customerTier: string | null;
 }
 
+/** THE BRAND'S OWN SUBDOMAIN LABEL, from a merchant doc.
+ *
+ *  Split out of `resolveBrandPageUrl` so a caller that has no proof — the
+ *  Notifications snippet card — reads the brand the SAME way the tracking
+ *  rewrite does. It already drifted once: the verify webhook builds
+ *  `sm-test-hhawzn52.in.ink` off the myshopify domain while the rewrite
+ *  correctly builds `stevemadden.in.ink` off the backend doc, so the same
+ *  order carries two different hosts. This file's header calls that out as
+ *  the thing it exists to prevent; a second no-proof copy would have been
+ *  the third.
+ *
+ *  `brand_slug` on the merged doc wins; the shop domain is the last resort
+ *  and is exactly what produces a wrong-but-plausible host. */
+export function brandSlugFromDoc(
+  brandDoc: Record<string, any>,
+  shop: string,
+): string {
+  const brandDomain =
+    (brandDoc.shop_domain as string | undefined) ||
+    (brandDoc.shopDomain as string | undefined) ||
+    shop;
+  return (
+    brandSlugFromDomain(brandDoc.brand_slug as string | undefined) ||
+    brandSlugFromDomain(brandDomain)
+  );
+}
+
 /** Resolve the buyer page for one proof.
  *
  *  Fail-soft throughout: a proof fetch or merchant-doc read that fails leaves
@@ -84,13 +111,7 @@ export async function resolveBrandPageUrl({
     }
   }
 
-  const brandDomain =
-    (brandDoc.shop_domain as string | undefined) ||
-    (brandDoc.shopDomain as string | undefined) ||
-    shop;
-  const brandSlug =
-    brandSlugFromDomain(brandDoc.brand_slug as string | undefined) ||
-    brandSlugFromDomain(brandDomain);
+  const brandSlug = brandSlugFromDoc(brandDoc, shop);
 
   const pageUrl = brandSlug && nfcToken ? `https://${brandSlug}.in.ink/r/${nfcToken}` : null;
   const emailUrl = pageUrl ?? `https://www.in.ink/r/${nfcToken || proofId}`;
