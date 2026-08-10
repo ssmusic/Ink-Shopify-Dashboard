@@ -62,10 +62,19 @@ async function secureFetch(path: string, options: RequestInit = {}) {
 // every "View your order" in that template resolves to the brand's page. Same
 // approach AfterShip and Malomo ship to merchants, because no Shopify API can
 // edit a notification template — verified against Shopify's docs 2026-08-07.
-const LIQUID_SNIPPET =
-  "{% if fulfillment.tracking_url %}{% assign order_status_url = fulfillment.tracking_url %}{% endif %}";
+//
+// IT IS NO LONGER A CONSTANT. The server builds it per brand
+// (`notification-snippet.ts`), because the line needs the merchant's own
+// subdomain and because the old hardcoded version read
+// `fulfillment.tracking_url` — blank on order confirmation forever, and ~600ms
+// behind the shipping email by construction. This fallback is what renders
+// before the fetch lands; it is the neutral www host, never a guessed one.
+import { notificationSnippet } from "../../services/notification-snippet";
+
+const FALLBACK_SNIPPET = notificationSnippet(null);
 
 const TEMPLATE_LABELS: Record<TemplateKey, string> = {
+  order_confirmation: "Order confirmation",
   shipping_confirmation: "Shipping confirmation",
   shipping_update: "Shipping update",
   out_for_delivery: "Out for delivery",
@@ -76,6 +85,9 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
   const [settings, setSettings] = useState<NotificationSettings>(
     DEFAULT_NOTIFICATION_SETTINGS,
   );
+  // The brand-specific line, built server-side. Starts on the neutral www
+  // fallback so the card is never blank and never shows a guessed host.
+  const [snippet, setSnippet] = useState<string>(FALLBACK_SNIPPET);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -87,6 +99,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
       } else if (data?.settings) {
         setSettings(data.settings);
       }
+      if (data?.snippet) setSnippet(data.snippet);
       setLoaded(true);
     });
     return () => {
@@ -142,7 +155,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
 
   const copySnippet = async () => {
     try {
-      await navigator.clipboard.writeText(LIQUID_SNIPPET);
+      await navigator.clipboard.writeText(snippet);
       toast({ description: "Copied. Paste it as a new first line.", duration: 2500 });
     } catch {
       toast({ description: "Couldn't copy — select the line and copy it manually.", variant: "destructive" });
@@ -196,7 +209,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
           <BlockStack gap="400">
             <InlineStack gap="200" blockAlign="center">
               <Text as="p" variant="bodySm" fontWeight="medium">
-                Add one line to four email templates
+                Add one line to five email templates
               </Text>
               <Badge tone={templatesDone === TEMPLATE_KEYS.length ? "success" : "attention"}>
                 {`${templatesDone} of ${TEMPLATE_KEYS.length} done`}
@@ -223,7 +236,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
                       display: "block",
                     }}
                   >
-                    {LIQUID_SNIPPET}
+                    {snippet}
                   </code>
                 </div>
                 <InlineStack gap="200">
