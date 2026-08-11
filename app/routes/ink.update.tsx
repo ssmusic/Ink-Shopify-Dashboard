@@ -236,6 +236,55 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return response.json();
       };
 
+      // THE URL ARRIVES WEARING THE WRONG NAME, SO WE DO NOT TRUST ITS HOST.
+      //
+      // The backend builds `verify_url` from the myshopify domain, which for
+      // Clare V is `taimoor1-2` — an internal store handle, not a brand. Real
+      // order #1117, 2026-08-11:
+      //
+      //   sent:    https://taimoor1-2.in.ink/r/nfc_msov8f7f_zo0nma1c
+      //   correct: https://clarev.in.ink/r/nfc_msov8f7f_zo0nma1c
+      //
+      // Measured against the worker: `clarev` IS claimed (→ her shop_id);
+      // `taimoor1-2` returns 404. The *.in.ink wildcard still serves a page,
+      // so nothing looked broken — it just put a stranger's handle on the one
+      // link that is supposed to BE the brand. Sam, reading the email: "the
+      // email i got didnt have her."
+      //
+      // The embed already resolves this correctly for the branded tracking
+      // link (`resolveBrandPageUrl` → `brandSlugFromDoc`: backend merchant doc
+      // merged over the embed's, brand_slug first). Rather than wait on a
+      // gated backend deploy, the host is REBUILT here from that same author —
+      // one resolver, so an email and a tracking button can never send the
+      // same buyer to two different hosts (that file's founding law).
+      //
+      // Fail-soft both ways: no proof_ref, an unresolvable brand, or a throw
+      // all keep exactly what the backend sent. This can only improve the
+      // host — it can never blank the URL.
+      let brandedVerifyUrl = verify_url || "";
+      if (verify_url && proof_ref) {
+        try {
+          const { resolveBrandPageUrl } = await import("../services/brand-page-url.server");
+          const { findMerchantDoc } = await import("../services/merchant-doc.server");
+          const hit = await findMerchantDoc(firestore, targetSession.shop);
+          const resolved = await resolveBrandPageUrl({
+            merchantApiKey: hit?.data?.ink_api_key,
+            proofId: proof_ref,
+            shop: targetSession.shop,
+            merchantData: hit?.data ?? {},
+            label: "verify-url",
+          });
+          if (resolved.pageUrl) {
+            if (resolved.pageUrl !== verify_url) {
+              console.log(`🔗 verify_url rehosted: ${verify_url} -> ${resolved.pageUrl}`);
+            }
+            brandedVerifyUrl = resolved.pageUrl;
+          }
+        } catch (e: any) {
+          console.warn(`🔗 verify_url rehost skipped (${e?.message}) — keeping the backend's URL.`);
+        }
+      }
+
       const metafields = [
         {
           ownerId: orderGid,
@@ -263,7 +312,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           namespace: INK_NAMESPACE,
           key: "verify_url",
           type: "single_line_text_field",
-          value: verify_url || "",
+          value: brandedVerifyUrl,
         },
       ];
 
@@ -327,7 +376,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.log("\n📨 ================================================");
         console.log(`📨 STARTING IMMEDIATE NOTIFICATION PROCESS [${status.toUpperCase()}]`);
         console.log("📨 Order GID:", orderGid);
-        console.log("📨 Verify URL:", verify_url);
+        console.log("📨 Verify URL:", brandedVerifyUrl);
         console.log("📨 ================================================\n");
         
         try {
@@ -400,7 +449,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                    customerName,
                    orderName,
                    merchantName,
-                   verifyUrl: verify_url,
+                   verifyUrl: brandedVerifyUrl,
                    returnWindowDays: settings.returnWindow ? parseInt(settings.returnWindow) : 30
                  }, settings, merchantData);
                }
