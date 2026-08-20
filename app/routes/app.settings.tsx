@@ -8,22 +8,45 @@ import Settings from "../components/settings/Settings";
 export async function loader({ request }: LoaderFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
   
-  // 1. Get shop details from Shopify
-  const response = await admin.graphql(
-    `#graphql
-      query {
-        shop {
-          name
-          primaryDomain { url host }
-          contactEmail
-          myshopifyDomain
+  // 1. Get shop details from Shopify — NEVER let this throw.
+  //
+  // THIS IS THE "200 ERROR PAGE". When a call cannot be authorised,
+  // @shopify/shopify-app-react-router THROWS a Response with status 200 and
+  // X-Shopify-API-Request-Failure-Reauthorize headers, for App Bridge to
+  // intercept. On a DOCUMENT request that works. On a CLIENT-SIDE navigation
+  // it does not: single-fetch serialises the throw into the turbo-stream as an
+  // ErrorResponse, and React Router renders `error.status` — a page whose
+  // entire body is the text "200". Measured 2026-08-20: loading /app/settings
+  // directly renders fine; navigating to it from Billing renders "200".
+  //
+  // That is the reviewer's exact gesture. Billing's backAction points here, so
+  // the one navigation they were asked to make was the one that broke.
+  //
+  // app.tsx already wraps its identical shop query in try/catch, which is why
+  // the dashboard survives the same condition. Settings did not, so it was the
+  // only route that could take the whole screen down.
+  //
+  // Every field below already has a fallback, so a failed query costs a shop
+  // name — not the page.
+  let shop: { name?: string; primaryDomain?: { host?: string }; contactEmail?: string } | null = null;
+  try {
+    const response = await admin.graphql(
+      `#graphql
+        query {
+          shop {
+            name
+            primaryDomain { url host }
+            contactEmail
+            myshopifyDomain
+          }
         }
-      }
-    `
-  );
-  
-  const shopData = await response.json();
-  const shop = shopData.data?.shop;
+      `
+    );
+    const shopData = await response.json();
+    shop = shopData.data?.shop ?? null;
+  } catch (e) {
+    console.warn("[Settings Loader] shop query failed; rendering from session:", e);
+  }
   
   // 2. Get Merchant details from Firestore to get accurate install date and api_key
   // Empty, not "Not available" — the component hides the row when there is no
