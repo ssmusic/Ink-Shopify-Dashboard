@@ -216,7 +216,7 @@ export const loader = async ({
     request,
     params,
 }: LoaderFunctionArgs): Promise<LoaderData> => {
-    const { admin } = await authenticate.admin(request);
+    const { admin, session } = await authenticate.admin(request);
     const { orderId } = params;
 
     if (!orderId) {
@@ -325,9 +325,32 @@ export const loader = async ({
 
                 console.log(`✅ Proof data retrieved from Alan's API`);
 
+                // THE BUYER'S PAGE, from the one author of that address.
+                //
+                // This hand-built `https://in.ink/verify/{proof_id}`. That URL
+                // is dead — measured 2026-08-20, it renders "404 NOTHING HERE"
+                // — and it was a third copy of a resolution that
+                // brand-page-url.server.ts exists specifically to keep single:
+                // "one author, because two would drift." It drifted.
+                //
+                // The live address is {brand}.in.ink/r/{nfc_token}. pageUrl is
+                // null unless the proof carries a real nfc_token, which is the
+                // point: nothing gets published that we cannot stand behind.
+                const { resolveBrandPageUrl } = await import("../services/brand-page-url.server");
+                const { findMerchantDoc } = await import("../services/merchant-doc.server");
+                const firestore = (await import("../firestore.server")).default;
+                const merchantHit = await findMerchantDoc(firestore, session.shop);
+                const resolvedPage = await resolveBrandPageUrl({
+                    merchantApiKey: merchantHit?.data?.ink_api_key ?? null,
+                    proofId,
+                    shop: session.shop,
+                    merchantData: merchantHit?.data ?? {},
+                    label: "order-detail",
+                });
+
                 alanProofData = {
                     verification_status: proofResponse.delivery?.gps_verdict ? "verified" : "enrolled",
-                    verify_url: `https://in.ink/verify/${proofId}`,
+                    verify_url: resolvedPage.pageUrl,
                     verification_updated_at: proofResponse.delivery?.timestamp || null,
                     distance_meters: null, // Not returned by /retrieve, only /verify
                     gps_verdict: proofResponse.delivery?.gps_verdict || null,
@@ -818,6 +841,20 @@ export default function OrderDetails() {
                 }
                 subtitle={formatDate(order.createdAt)}
                 backAction={{ content: "Shipments", onAction: () => navigate(-1) }}
+                // The buyer's page, offered where a merchant is already looking
+                // at the order. It was resolved in the loader and then rendered
+                // nowhere — a typed field nobody shows is invisible to tsc, to
+                // the suite, and to review. `external` keeps it a real anchor:
+                // it leaves the embedded app for {brand}.in.ink.
+                secondaryActions={
+                    order.localProof?.verify_url
+                        ? [{
+                            content: "Open the buyer's page",
+                            url: order.localProof.verify_url,
+                            external: true,
+                        }]
+                        : undefined
+                }
             >
                 <Layout>
                     {/* Left Column: Customer + Products */}

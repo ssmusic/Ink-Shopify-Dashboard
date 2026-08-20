@@ -90,6 +90,12 @@ const SOURCES = (function collect(dir: string): { path: string; src: string }[] 
   return out;
 })(resolve(process.cwd(), "app"));
 
+/** Source with // and /* *\/ comments removed. Prose that describes a banned
+ *  pattern is not an instance of it. */
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
+
 describe("route contracts", () => {
   it("finds routes to check", () => {
     expect(FILES.length).toBeGreaterThan(20);
@@ -204,6 +210,50 @@ describe("route contracts", () => {
       offenders,
       "A Polaris AppProvider without linkComponent makes every `url` prop a plain <a href>. In an embedded app that is a full document navigation, it drops the session params, and the merchant gets the re-authorize page rendered as a '200 error page'. Pass a React Router Link.",
     ).toEqual([]);
+  });
+
+  // 2026-08-20. app.orders.$orderId's loader hand-built the buyer's address as
+  // `https://in.ink/verify/${proofId}`. Loaded in a browser that renders
+  // "404 NOTHING HERE" — the live address is {brand}.in.ink/r/{nfc_token}.
+  //
+  // brand-page-url.server.ts opens with "one author, because two would drift",
+  // and names the exact damage: an email and a tracking button sending the same
+  // buyer to two different pages. This was the third copy, and the one that was
+  // wrong. So the rule is mechanical: nobody builds that address by hand.
+  it("nobody hand-builds the buyer's page URL", () => {
+    const AUTHOR = "app/services/brand-page-url.server.ts";
+    const offenders: string[] = [];
+    for (const f of SOURCES) {
+      if (f.path === AUTHOR) continue;
+      // in.ink/verify/... is the dead shape; in.ink/r/... is the live one, and
+      // only the author may assemble it. Literal hosts in tests are their own
+      // business — this scans app source, and the contract file excludes itself.
+      if (/in\.ink\/verify\//.test(stripComments(f.src))) {
+        offenders.push(`${f.path} (dead /verify/ shape)`);
+      }
+    }
+    expect(
+      offenders,
+      "The buyer's page address has one author: app/services/brand-page-url.server.ts. `in.ink/verify/{proof}` is not a real page — it renders 404 — and a second copy of this resolution is how an email and a tracking link end up pointing at two different pages.",
+    ).toEqual([]);
+  });
+
+  it("that detector fires on the URL that was actually shipped", () => {
+    const shipped = "verify_url: `https://in.ink/verify/${proofId}`,";
+    expect(/in\.ink\/verify\//.test(stripComments(shipped))).toBe(true);
+
+    const fixed = "verify_url: resolvedPage.pageUrl,";
+    expect(/in\.ink\/verify\//.test(stripComments(fixed))).toBe(false);
+
+    // A comment DESCRIBING the dead URL is not an offence — the first version
+    // of this contract failed on its own explanatory comment, which is how a
+    // detector teaches people to delete the explanation instead of the bug.
+    expect(
+      /in\.ink\/verify\//.test(stripComments("// this used to build in.ink/verify/{id}\nconst x = 1;")),
+    ).toBe(false);
+    expect(
+      /in\.ink\/verify\//.test(stripComments("/* in.ink/verify/{id} */\nconst x = 1;")),
+    ).toBe(false);
   });
 
   it("catches the exact code that was rejected", () => {
