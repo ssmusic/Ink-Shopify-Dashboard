@@ -43,6 +43,42 @@ const FILES = routeFiles(ROUTES).map((path) => ({
  *  returning a Response is exactly what they are for. */
 const componentRoutes = FILES.filter((f) => /export\s+default\s+function|export\s+default\s+\w+/.test(f.src));
 
+/** Handler bodies extracted by walking braces, not by guessing where the
+ *  closing brace sits in the source. A loader that contains any nested block is
+ *  invisible to a `[\s\S]*?\n\}` regex the moment its own closer is indented. */
+function handlerBodies(src: string): string[] {
+  const out: string[] = [];
+  const signature = /export\s+(?:async\s+)?(?:const\s+(?:loader|action)\b|function\s+(?:loader|action)\b)/g;
+  let m: RegExpExecArray | null;
+  while ((m = signature.exec(src))) {
+    // The body's brace, not the parameter object's: `loader({ request })` opens
+    // a `{` before the body ever starts. Walk to the first `{` at paren-depth 0.
+    let open = -1;
+    for (let i = m.index, parens = 0; i < src.length; i++) {
+      if (src[i] === "(") parens++;
+      else if (src[i] === ")") parens--;
+      else if (src[i] === "{" && parens === 0) { open = i; break; }
+    }
+    if (open === -1) continue;
+    let depth = 0;
+    for (let i = open; i < src.length; i++) {
+      if (src[i] === "{") depth++;
+      else if (src[i] === "}") {
+        depth--;
+        if (depth === 0) {
+          out.push(src.slice(open, i + 1));
+          signature.lastIndex = i;
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+const rethrowsResponse = (body: string) =>
+  /instanceof\s+Response\b[\s\S]{0,400}?\bthrow\s+\w/.test(body);
+
 describe("route contracts", () => {
   it("finds routes to check", () => {
     expect(FILES.length).toBeGreaterThan(20);
@@ -69,6 +105,56 @@ describe("route contracts", () => {
       offenders,
       "React Router 7 serialises component-route loader data itself. Returning a Response makes single-fetch fail and boundary.error() render the status code — the literal '200 error page' Shopify rejected.",
     ).toEqual([]);
+  });
+
+  // 2026-08-20, the SWEEP. #92 fixed app.settings.tsx, the one route the reviewer
+  // was told to visit. It was never the only one: app.tagged-shipments._index —
+  // the second-most linked destination in the app — caught the same throw and
+  // deliberately re-threw it, `if (err instanceof Response) throw err`, on the
+  // belief that App Bridge would recover.
+  //
+  // Measured against react-router's own source rather than assumed. In
+  // singleFetchLoaders, `handleQueryResult` returns `isResponse(result) ? result
+  // : staticContextToResponse(result)`. A RESOURCE route (no component) makes
+  // staticHandler.query return the Response itself, so it goes back untouched,
+  // reauthorize headers intact, and App Bridge's patched fetch does see them —
+  // bubbling there is correct. A route WITH A COMPONENT takes the other branch:
+  // staticContextToResponse turbo-stream-encodes the throw as an ErrorResponse,
+  // the headers never reach the browser, and the client renders `error.status`.
+  // That is the "200 error page", and it is why this contract is scoped to
+  // component routes only.
+  it("a route with a component never re-throws a caught Response", () => {
+    const offenders = componentRoutes
+      .filter((f) => handlerBodies(f.src).some(rethrowsResponse))
+      .map((f) => f.path);
+    expect(
+      offenders,
+      "Re-throwing a reauthorize Response from a component route's loader/action renders the '200 error page' on client-side navigation: react-router turbo-stream-encodes the throw and the X-Shopify-API-Request-Failure-Reauthorize headers never reach App Bridge. Degrade to a fallback payload instead. Only resource routes (no component) may bubble a Response.",
+    ).toEqual([]);
+  });
+
+  it("that re-throw detector fires on the code it was written for", () => {
+    // The literal shape removed from app.tagged-shipments._index.tsx.
+    const rejected = `
+      export const loader = async ({ request }: LoaderFunctionArgs) => {
+        const { admin } = await authenticate.admin(request);
+        let response;
+        try {
+          response = await admin.graphql(query);
+        } catch (err) {
+          if (err instanceof Response) throw err;
+          return { orders: [], error: "Failed to fetch orders" };
+        }
+        return { orders: [] };
+      };
+      export default function ShipmentsIndex() { return null; }
+    `;
+    const bodies = handlerBodies(rejected);
+    expect(bodies).toHaveLength(1);
+    expect(bodies.some(rethrowsResponse)).toBe(true);
+
+    // and it does NOT fire once the re-throw is gone
+    expect(handlerBodies(rejected.replace("if (err instanceof Response) throw err;", "")).some(rethrowsResponse)).toBe(false);
   });
 
   it("catches the exact code that was rejected", () => {

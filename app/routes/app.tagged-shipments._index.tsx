@@ -70,11 +70,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   `;
 
+  // NEVER re-throw here. See app.settings.tsx for the full account: when a call
+  // cannot be authorised, @shopify/shopify-app-react-router THROWS a Response
+  // with status 200 and X-Shopify-API-Request-Failure-Reauthorize headers for
+  // App Bridge to intercept. This route has a default export, so on a
+  // client-side navigation React Router turbo-stream-encodes that throw as an
+  // ErrorResponse (react-router staticContextToResponse) — the reauthorize
+  // headers are dropped from the HTTP response, App Bridge never sees them, and
+  // the page renders `error.status`: a screen whose entire body is the text
+  // "200". That is the exact failure the App Store reviewer reported on
+  // Settings, and Tagged Shipments is the second-most linked destination in the
+  // app, so it could have produced the same rejection.
+  //
+  // Bubbling is only correct from a RESOURCE route (no default export, no
+  // ErrorBoundary) — there staticHandler.query returns the Response untouched
+  // and App Bridge's patched fetch does see the headers. That is why the
+  // app.api.* routes keep their `throw err` and this one must not.
+  //
+  // The fallback below already exists, so a failed query costs the order list
+  // instead of the page.
   let response;
   try {
     response = await admin.graphql(query);
   } catch (err) {
-    if (err instanceof Response) throw err;
     console.error("❌ GraphQL call failed in tagged-shipments index:", err);
     return { orders: [], error: "Failed to fetch orders" };
   }
