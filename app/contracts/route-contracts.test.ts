@@ -79,6 +79,17 @@ function handlerBodies(src: string): string[] {
 const rethrowsResponse = (body: string) =>
   /instanceof\s+Response\b[\s\S]{0,400}?\bthrow\s+\w/.test(body);
 
+const SOURCES = (function collect(dir: string): { path: string; src: string }[] {
+  const out: { path: string; src: string }[] = [];
+  for (const name of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, name.name);
+    if (name.isDirectory()) out.push(...collect(full));
+    else if (/\.tsx$/.test(name.name) && !/\.test\.tsx$/.test(name.name))
+      out.push({ path: full.slice(full.indexOf("app/")), src: readFileSync(full, "utf8") });
+  }
+  return out;
+})(resolve(process.cwd(), "app"));
+
 describe("route contracts", () => {
   it("finds routes to check", () => {
     expect(FILES.length).toBeGreaterThan(20);
@@ -155,6 +166,44 @@ describe("route contracts", () => {
 
     // and it does NOT fire once the re-throw is gone
     expect(handlerBodies(rejected.replace("if (err instanceof Response) throw err;", "")).some(rethrowsResponse)).toBe(false);
+  });
+
+  // 2026-08-20, the ACTUAL "200 error page". Polaris's UnstyledLink falls back to
+  // a plain <a href> whenever AppProvider has no linkComponent. Inside the
+  // embedded iframe that is a FULL DOCUMENT navigation: ?shop=&host=&id_token=
+  // are dropped, the request arrives unauthenticated, and the server answers
+  // with App Bridge's re-authorize page — status 200, rendered in the frame.
+  //
+  // Measured in Cloud Run: the back arrow logged `GET /app/settings` with no
+  // authentication and no `/app/settings.data` ever. The loader was never
+  // reached, which is why #88, #91 and #92 all missed it.
+  it("Polaris AppProvider always routes urls through the router", () => {
+    // Only POLARIS's AppProvider takes linkComponent. auth.login renders
+    // Shopify's same-named AppProvider, which does not — resolve the local
+    // alias from the import instead of matching the tag name blindly.
+    const offenders: string[] = [];
+    let checked = 0;
+    for (const f of SOURCES) {
+      const imp = f.src.match(
+        /import\s*\{([^}]*)\}\s*from\s*["']@shopify\/polaris["']/,
+      );
+      if (!imp) continue;
+      const alias = imp[1]
+        .split(",")
+        .map((x) => x.trim())
+        .find((x) => /^AppProvider(\s+as\s+\w+)?$/.test(x));
+      if (!alias) continue;
+      const local = alias.includes(" as ") ? alias.split(/\s+as\s+/)[1].trim() : "AppProvider";
+      for (const tag of f.src.match(new RegExp(`<${local}\\b[^>]*>`, "g")) ?? []) {
+        checked++;
+        if (!/linkComponent=/.test(tag)) offenders.push(`${f.path}: ${tag.slice(0, 60)}`);
+      }
+    }
+    expect(checked, "no Polaris AppProvider found — did it move?").toBeGreaterThan(0);
+    expect(
+      offenders,
+      "A Polaris AppProvider without linkComponent makes every `url` prop a plain <a href>. In an embedded app that is a full document navigation, it drops the session params, and the merchant gets the re-authorize page rendered as a '200 error page'. Pass a React Router Link.",
+    ).toEqual([]);
   });
 
   it("catches the exact code that was rejected", () => {
