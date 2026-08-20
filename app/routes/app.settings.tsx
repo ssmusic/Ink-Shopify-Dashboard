@@ -1,5 +1,4 @@
 import { useLoaderData, type LoaderFunctionArgs } from "react-router";
-import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { getInventory, getInventoryByShopDomain, getShopIdByDomain } from "../services/ink-api.server";
@@ -89,7 +88,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     console.warn("Could not fetch shopId:", e);
   }
 
-  return json(payload);
+  // PLAIN OBJECT, NOT A Response. This is React Router 7, where a route with
+  // a component returns its data directly and the framework serialises it.
+  // Returning Remix v2's `json()` here hands single-fetch a raw Response it
+  // cannot encode; the failure bubbles to app.tsx's boundary.error(), which
+  // renders the Response's STATUS — a page containing the bare text "200".
+  //
+  // That is Shopify rejection 2.1.1, second round, verbatim: "going to the
+  // billing section and navigating back ... shows an 200 error page". The
+  // Billing page's backAction points at /app/settings, so the reviewer hit it
+  // on the one navigation they were asked to make.
+  return payload;
 }
 
 export default function SettingsPage() {

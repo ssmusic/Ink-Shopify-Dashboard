@@ -1,5 +1,5 @@
 import { type LoaderFunctionArgs } from "react-router";
-import { redirect } from "@remix-run/node";
+import { redirect } from "react-router";
 import { LandingPageContent } from "../../components/LandingPageContent";
 import { login } from "../../shopify.server";
 
