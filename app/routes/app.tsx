@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { Outlet, useLoaderData, useRouteError, useRouteLoaderData, Link, type HeadersFunction, type LoaderFunctionArgs, type LinksFunction } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
@@ -95,13 +96,59 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 
+// THE "200 ERROR PAGE" — root cause, and it was never the loader.
+//
+// Polaris renders every `url` prop it is given — Page backAction, Button url,
+// Link url — through UnstyledLink, which does exactly this:
+//
+//     const LinkComponent = useLink();
+//     if (LinkComponent) return <LinkComponent {...props} />;
+//     return <a href={url} ... />;            // ← when no linkComponent is set
+//
+// Nothing in this app ever set one, so those were plain anchors. A plain
+// <a href> inside the embedded iframe is a FULL DOCUMENT navigation: it drops
+// ?shop=&host=&id_token=, the request arrives unauthenticated, and the server
+// answers with App Bridge's re-authorize page — carrying status 200. The iframe
+// renders that, and the merchant sees a screen whose body is the text "200".
+//
+// Measured 2026-08-20 in Cloud Run, which is the only reason it was found:
+// clicking through to Billing logs `GET /app/billing.data` — authenticated,
+// session loaded, 70ms. Clicking Billing's BACK ARROW logs `GET /app/settings`
+// — a document request, no params, no "Authenticating admin request" line at
+// all, 10ms — and `/app/settings.data` never appears anywhere in the logs. The
+// settings loader was never reached. All three earlier fixes (#88, #91, #92)
+// treated the loader, which is why logging out and back in changed nothing.
+//
+// Routing Polaris urls through React Router's Link makes them client-side
+// navigations, which keep the embedded session. This covers the whole class,
+// not just Billing's back arrow: app/components/settings/SettingsAdvanced.tsx
+// carries the identical backAction.
+const PolarisLink = forwardRef<HTMLAnchorElement, any>(function PolarisLink(
+  { url = "", external, target, children, ...rest },
+  ref,
+) {
+  // Anything leaving the app stays a real anchor.
+  if (external || target === "_blank" || /^(https?:|mailto:|tel:)/i.test(url)) {
+    return (
+      <a href={url} target={target ?? "_blank"} rel="noopener noreferrer" ref={ref} {...rest}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link to={url} ref={ref} {...rest}>
+      {children}
+    </Link>
+  );
+});
+
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
 
   return (
     <QueryClientProvider client={queryClient}>
       <ShopifyAppProvider embedded apiKey={apiKey}>
-        <PolarisAppProvider i18n={translations}>
+        <PolarisAppProvider i18n={translations} linkComponent={PolarisLink}>
           <ShopProvider>
             <TooltipProvider>
               <Toaster />
@@ -122,7 +169,7 @@ export function ErrorBoundary() {
   if (data && data.apiKey) {
     return (
       <ShopifyAppProvider embedded apiKey={data.apiKey}>
-        <PolarisAppProvider i18n={translations}>
+        <PolarisAppProvider i18n={translations} linkComponent={PolarisLink}>
           {boundary.error(error)}
         </PolarisAppProvider>
       </ShopifyAppProvider>
