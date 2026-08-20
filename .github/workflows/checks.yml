@@ -57,3 +57,12 @@ jobs:
 
       - name: Tests
         run: npm test
+
+      # THE REAL PRODUCTION BUILD, because typecheck and tests cannot see it.
+      # 2026-08-20: a test file added under app/routes/ passed typecheck and
+      # vitest, merged green, and BROKE `react-router build` on main — React
+      # Router compiles every file in app/routes as a route module. CI had no
+      # way to notice. esbuild is stricter than tsc and this is the only step
+      # that runs what actually ships.
+      - name: Production build
+        run: npm run build
