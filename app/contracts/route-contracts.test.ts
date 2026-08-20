@@ -19,6 +19,10 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROUTES = resolve(process.cwd(), "app/routes");
+// This file lives in app/contracts, NOT app/routes: React Router compiles
+// every file under app/routes as a ROUTE MODULE, so a test placed there is
+// built as a route and breaks `react-router build`. Which is exactly what it
+// did — see the commit message.
 
 function routeFiles(dir: string): string[] {
   const out: string[] = [];

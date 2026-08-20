@@ -59,7 +59,10 @@ const BrandPreviewCard = ({
               style={{ backgroundColor: ink }}
             >
               <span className="text-xs" style={{ color: paper }}>
-                {built ? "Your page" : "Your page — building"}
+                {/* NOT "building": `built` says whether a page EXISTS. Nothing here
+                      knows if a build is running, so promising progress is the
+                      same empty promise the studio made for an hour. */}
+                  {built ? "Your page" : "Your page — not built yet"}
               </span>
             </div>
           )}
