@@ -74,7 +74,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         };
         // "Built" = the book has real brand media (logo or hero), not just a
         // provisioned shell.
-        brandBuilt = Boolean(kit.logoUrl || kit.heroUrl);
+        // "BUILD YOUR PAGE" IS ANSWERED BY A PAGE, NOT BY PICTURES.
+        //
+        // This read `Boolean(kit.logoUrl || kit.heroUrl)`, which asks whether
+        // the brand has imagery. Those are different questions, and they came
+        // apart on the first real Shopify install to reach this screen
+        // (Corvara Cicli, 2026-08-20):
+        //
+        //   book.tap_page                      present — the page renders
+        //   runtime…logo.primary_logo_candidate ""     — the logo the kit reads
+        //   tokens.logo.primary_url            set     — where the logo IS
+        //   tap_page.hero_url                  null    — EMPTY BY DESIGN: a
+        //     non-Instagram page leaves the hero to the live order's product
+        //   instagram.posts                    0       — no Instagram
+        //
+        // So a merchant with a working page was told "Your page — not built
+        // yet" and handed a button to go build one. For a store behind a
+        // storefront password that button is a dead end, which is the exact
+        // shape of the 2.1.1 rejection.
+        //
+        // A page exists when the book carries one. Imagery still counts —
+        // a brand mid-build with a logo and no page has started — but it is
+        // no longer the only way to answer yes.
+        brandBuilt = Boolean(kit.hasPage || kit.logoUrl || kit.heroUrl);
       }
       if (stats) {
         ordersEnrolled = stats.enrollments ?? 0;
