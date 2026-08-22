@@ -82,6 +82,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       carrier_name: trackingCompany || undefined,
       tracking_number: trackingNumber,
       tracking_url: trackingUrl || undefined,
+      // Usually absent at creation; forwarded when Shopify already knows.
+      shipment_status: payload.shipment_status || undefined,
     });
     console.log(`✅ [${topic}] Tracking forwarded for ${orderName}: ${trackingCompany ?? "?"} ${trackingNumber} → ${proofId}`);
 

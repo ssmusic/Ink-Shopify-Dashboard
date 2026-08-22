@@ -103,6 +103,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 (Array.isArray(fulfillment.tracking_urls) && fulfillment.tracking_urls[0]) ||
                 fulfillment.tracking_url ||
                 undefined,
+              // Shopify's own shipment state rides every update — the
+              // baseline tracking source for ANY carrier, including the
+              // ones Shippo cannot follow. The backend maps it
+              // advance-only, so re-sends and interleaving are safe.
+              shipment_status: shipmentStatus || undefined,
             });
             console.log(
               `✅ Tracking forwarded on UPDATE for ${trackingOrder?.name ?? orderId}: ` +
