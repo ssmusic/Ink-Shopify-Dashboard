@@ -39,6 +39,15 @@ export interface BrandEmailKit {
   paper: string;
   /** The page's own hero media (IG post / published hero) — the email's visual. */
   heroUrl: string | null;
+  /** Does a page EXIST for this brand — `book.tap_page` is present.
+   *
+   *  Separate from logoUrl/heroUrl on purpose. The dashboard used to answer
+   *  "is your page built?" with `logoUrl || heroUrl`, which is a question
+   *  about PICTURES, not about a page. Corvara Cicli, 2026-08-20: a live
+   *  broadsheet front page that renders for every order, and the merchant's
+   *  first screen still read "Your page — not built yet" with a button
+   *  inviting them to go build one. */
+  hasPage: boolean;
   campaigns: EmailCampaign[];
 }
 
@@ -86,6 +95,7 @@ export async function fetchBrandEmailKit(shopId: string): Promise<BrandEmailKit 
         httpsImage(igPosts.find((p) => p?.display_url && p?.enabled !== false)?.display_url) ??
         httpsImage(book?.imagery?.hero?.[0]?.url) ??
         null,
+      hasPage: Boolean(book?.tap_page),
       campaigns: Array.isArray(book?.campaigns) ? (book.campaigns as EmailCampaign[]) : [],
     };
   } catch {
