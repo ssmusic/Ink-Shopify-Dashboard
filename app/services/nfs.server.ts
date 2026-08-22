@@ -212,7 +212,16 @@ export const NFSService = {
   async updateTracking(
     proofId: string,
     apiKey: string,
-    payload: { carrier_name?: string; tracking_number: string; tracking_url?: string },
+    payload: {
+      carrier_name?: string;
+      tracking_number: string;
+      tracking_url?: string;
+      /** Shopify's own fulfillment shipment_status (in_transit,
+       *  out_for_delivery, …) — the baseline tracking source for ANY
+       *  carrier. The backend maps it advance-only; sending it on every
+       *  update is the whole point (2026-08-21). */
+      shipment_status?: string;
+    },
   ): Promise<any> {
     console.log(`📦 Forwarding tracking for proof ${proofId}:`, payload);
 
