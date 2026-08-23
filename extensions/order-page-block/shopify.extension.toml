@@ -1,0 +1,43 @@
+# THE ORDER STATUS PAGE CARRIES THE DOOR.
+#
+# Shopify's notification templates cannot be edited by any app (re-verified
+# 2026-08-23: notification templates are admin-UI-only; the internal
+# EmailTemplateUpdate mutation is not callable) — so the email's primary
+# button will point at Shopify's own Order status page for every store that
+# never does the manual paste. This extension makes that page OURS to speak
+# on: the button lands the buyer one tap from the brand's order page, with
+# zero merchant work.
+#
+# Why this is durable where the paste is not:
+#   · It ships inside the app. Install = on. No per-store template surgery.
+#   · `customer-account.order-status.block.render` self-places: "by default,
+#     block extensions are placed in the first available placement reference"
+#     (shopify.dev, build-order-status). The merchant CAN move or remove it in
+#     the checkout & accounts editor; they never have to touch it.
+#   · The Order status page is pre-authenticated — buyers arriving from the
+#     email's button see it without logging in. All plans, not just Plus.
+#
+# The app holds the switch: the block renders ONLY when the `ink:order_door`
+# shop metafield carries a door base. No metafield → the extension renders
+# nothing at all (the Clare-V law: neutral/empty when data is missing). The
+# embed writes and clears that metafield server-side
+# (order-door-metafield.server.ts), so turning a store on or off never needs
+# a redeploy of this extension.
+
+api_version = "2026-07"
+
+[[extensions]]
+type = "ui_extension"
+name = "ink order page"
+handle = "order-page-block"
+
+  [[extensions.targeting]]
+  module = "./src/order-page-block.js"
+  target = "customer-account.order-status.block.render"
+
+  # The one piece of app data the block needs: the brand's own door base,
+  # e.g. https://stevemadden.in.ink/o/ — written on the SHOP by the embed at
+  # enroll time. Declared here so the runtime delivers it via appMetafields.
+  [[extensions.metafields]]
+  namespace = "ink"
+  key = "order_door"

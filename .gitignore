@@ -29,3 +29,4 @@ env.*
 # Local render harness — review tool, never shipped (see PR #81).
 preview-harness/
 .claude/
+/extensions/*/manifest.json
