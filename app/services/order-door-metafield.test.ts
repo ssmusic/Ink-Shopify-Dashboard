@@ -109,6 +109,28 @@ describe("assertOrderDoorMetafield", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("a caller-supplied slug writes without any proof fetch", async () => {
+    // The settings flip has no proof in hand — it resolves the brand the
+    // no-proof way and passes the slug. Resolution must not run at all.
+    const { admin, calls } = fakeAdmin({ current: null });
+    const out = await assertOrderDoorMetafield({
+      shop: BASE_ARGS.shop,
+      admin,
+      merchantData: {},
+      slug: "stevemadden",
+    });
+    expect(out).toMatchObject({ outcome: "written", value: "https://stevemadden.in.ink/o/" });
+    expect(resolveBrandPageUrl).not.toHaveBeenCalled();
+    expect(calls.some((c) => c.query.includes("InkOrderDoorSet"))).toBe(true);
+  });
+
+  it("no slug and no proof writes nothing", async () => {
+    const { admin, calls } = fakeAdmin({ current: null });
+    const out = await assertOrderDoorMetafield({ shop: BASE_ARGS.shop, admin, merchantData: {} });
+    expect(out.outcome).toBe("skipped_no_slug");
+    expect(calls.some((c) => c.query.includes("InkOrderDoorSet"))).toBe(false);
+  });
+
   it("a thrown admin call is an outcome, never an exception", async () => {
     const { admin } = fakeAdmin({ failWith: "socket hang up" });
     const out = await assertOrderDoorMetafield({ ...BASE_ARGS, admin, merchantData: {} });

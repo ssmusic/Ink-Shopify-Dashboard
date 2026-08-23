@@ -83,6 +83,7 @@ export async function assertOrderDoorMetafield({
   merchantData,
   merchantApiKey,
   proofId,
+  slug: givenSlug,
   label = "order-door",
 }: {
   admin: { graphql: (query: string, opts?: any) => Promise<Response> };
@@ -90,8 +91,14 @@ export async function assertOrderDoorMetafield({
   merchantData: Record<string, any>;
   merchantApiKey?: string | null;
   /** A proof on this shop — how the one-author resolution finds the backend
-   *  merchant doc. Any current proof works; the slug is per-merchant. */
-  proofId: string;
+   *  merchant doc. Any current proof works; the slug is per-merchant.
+   *  Not needed when `slug` is supplied. */
+  proofId?: string;
+  /** A slug the CALLER already resolved (the settings flip has no proof to
+   *  hand, and resolves the brand the no-proof way the snippet card does).
+   *  Supplying it skips the proof fetch entirely; it must still be a real
+   *  brand_slug, never a domain-derived guess. */
+  slug?: string | null;
   label?: string;
 }): Promise<OrderDoorResult> {
   try {
@@ -130,8 +137,11 @@ export async function assertOrderDoorMetafield({
 
     // 4 · First time only: resolve the brand the way the tracking rewrite
     //     does, and refuse to write anything a doc did not say.
-    const resolved = await resolveBrandPageUrl({ merchantApiKey, proofId, shop, merchantData, label });
-    const slug = String(resolved?.brandDoc?.brand_slug ? resolved.brandSlug : "").trim();
+    let slug = String(givenSlug || "").trim();
+    if (!slug && proofId) {
+      const resolved = await resolveBrandPageUrl({ merchantApiKey, proofId, shop, merchantData, label });
+      slug = String(resolved?.brandDoc?.brand_slug ? resolved.brandSlug : "").trim();
+    }
     if (!slug) {
       console.log(
         `🚪 ${label}: no brand_slug on the merchant doc for ${shop} — no door (never a derived host).`,

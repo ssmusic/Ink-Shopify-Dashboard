@@ -89,6 +89,15 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
   // fallback so the card is never blank and never shows a guessed host.
   const [snippet, setSnippet] = useState<string>(FALLBACK_SNIPPET);
   const [loaded, setLoaded] = useState(false);
+  // THE FLIP — the half of this page that needs no merchant work at all.
+  // `canFlip` is false until the store has a brand page to point at; the row
+  // says so instead of offering a switch that would write a broken door.
+  const [door, setDoor] = useState<{ on: boolean; door: string | null; canFlip: boolean }>({
+    on: true,
+    door: null,
+    canFlip: false,
+  });
+  const [doorSaving, setDoorSaving] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -101,6 +110,14 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
       }
       if (data?.snippet) setSnippet(data.snippet);
       setLoaded(true);
+    });
+    secureFetch("/app/api/settings/order-door").then(({ data, error }) => {
+      if (!mounted || error || !data) return;
+      setDoor({
+        on: data.on !== false,
+        door: data.door ?? null,
+        canFlip: Boolean(data.canFlip),
+      });
     });
     return () => {
       mounted = false;
@@ -193,6 +210,37 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
     </InlineStack>
   );
 
+  // The brand host alone — never the door base with its dangling /o/.
+  const doorHost = (() => {
+    try {
+      return door.door ? new URL(door.door).host : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  // Apply-first on the server: a failure means Shopify did NOT change, so the
+  // switch must not move either.
+  const flipDoor = async () => {
+    const next = !door.on;
+    setDoorSaving(true);
+    const { data, error } = await secureFetch("/app/api/settings/order-door", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on: next }),
+    });
+    setDoorSaving(false);
+    if (error) {
+      toast({ description: error.message, variant: "destructive", duration: 4000 });
+      return;
+    }
+    setDoor((d) => ({ ...d, on: next, door: data?.door ?? d.door }));
+    toast({
+      description: next ? "Your page is on the order status page." : "Turned off.",
+      duration: 2000,
+    });
+  };
+
   const templatesDone = TEMPLATE_KEYS.filter((k) => settings.templatesPastedAt[k]).length;
   const notificationsUrl = shopDomain
     ? `https://admin.shopify.com/store/${shopDomain.replace(".myshopify.com", "")}/settings/notifications`
@@ -200,6 +248,37 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
 
   return (
     <Layout>
+      {/* ── The half that needs no merchant work ───────────────────────── */}
+      <Layout.AnnotatedSection
+        title="The order status page"
+        description="Every button in Shopify's emails opens it. This puts your page there."
+      >
+        <Card>
+          <BlockStack gap="400">
+            <ToggleRow
+              checked={door.on && door.canFlip}
+              onToggle={flipDoor}
+              disabled={!door.canFlip || doorSaving}
+              title="Show your page"
+              description={
+                !door.canFlip
+                  ? "Connect this store to ink first — then this turns on."
+                  : door.on
+                    ? // The HOST, never the door base: a merchant reading
+                      // "a link to https://brand.in.ink/o/" sees a dangling
+                      // URL no buyer is ever sent to. Each buyer gets their
+                      // own order appended to it.
+                      `Every buyer gets a link to their order on ${doorHost ?? "your page"}.`
+                    : "Off. The order status page shows nothing from you."
+              }
+              suffix={
+                door.canFlip && door.on ? <Badge tone="success">On</Badge> : undefined
+              }
+            />
+          </BlockStack>
+        </Card>
+      </Layout.AnnotatedSection>
+
       {/* ── The one merchant action that isn't automatic ───────────────── */}
       <Layout.AnnotatedSection
         title="Your page in Shopify's emails"
