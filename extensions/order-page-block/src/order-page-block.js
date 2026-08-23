@@ -56,14 +56,18 @@ export default async () => {
     const heading = document.createElement("s-heading");
     heading.textContent = "Your order page";
 
+    // PLACEHOLDER COPY, AWAITING SAM. Three lines a buyer reads, written to
+    // the law and no further: no possessive cushioning past the heading, no
+    // copy that reassures or explains itself, and no promise of a feature a
+    // given store may not have on (an earlier draft said "returns", which is
+    // false for any merchant without them configured). BRAND_BIBLE §5/§6.
     const line = document.createElement("s-text");
-    line.textContent =
-      "This order has its own page — delivery, help, and returns in one place.";
+    line.textContent = "Delivery updates and help for this order.";
 
     const button = document.createElement("s-button");
     button.setAttribute("href", base + digits);
     button.setAttribute("variant", "primary");
-    button.textContent = "Open your order page";
+    button.textContent = "Open the page";
 
     stack.append(heading, line, button);
     root.append(stack);
