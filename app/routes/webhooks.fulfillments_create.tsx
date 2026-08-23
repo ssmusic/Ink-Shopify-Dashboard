@@ -104,6 +104,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shippoRegistered: patched?.shippo_registered === true,
         label: `[${topic}] branded-tracking-link`,
       });
+
+      // The Order status page — where the email's primary button lands —
+      // carries the brand's door once this shop metafield exists. One guard
+      // read per event, a real write once per merchant ever, and never fatal
+      // (order-door-metafield.server.ts).
+      const { assertOrderDoorMetafield } = await import("../services/order-door-metafield.server");
+      await assertOrderDoorMetafield({
+        admin,
+        shop,
+        merchantData: merchantHit?.data ?? {},
+        merchantApiKey,
+        proofId,
+        label: `[${topic}] order-door`,
+      });
     } catch (e: any) {
       console.error(`❌ branded tracking link failed (non-fatal):`, e?.message);
     }
