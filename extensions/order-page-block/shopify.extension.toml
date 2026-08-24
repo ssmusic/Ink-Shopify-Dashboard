@@ -30,10 +30,34 @@ api_version = "2026-07"
 type = "ui_extension"
 name = "ink order page"
 handle = "order-page-block"
+uid = "32c2b02f-8707-56d2-4baf-e6cf4ff74acdbc4e3d5a"
 
+  # THE TARGET IS STATIC, AND THAT IS THE WHOLE POINT — MEASURED, not guessed.
+  #
+  # `block.render` was the first attempt and it did NOT render on a real
+  # fulfilled order status page (Steve Madden #1020, 2026-08-23, with
+  # the-ritualist-14 live and the shop metafield present). Shopify's extension
+  # runtime WAS active on that page — another app's order-action extension
+  # loaded from the CDN in the same pageview — so the platform was working and
+  # our block simply had never been PLACED. Block targets render "where the
+  # merchant sets them using the checkout editor", and a merchant who has to
+  # open an editor is the same merchant who was never going to paste Liquid.
+  #
+  # A static target renders in a fixed location with no editor step. This one
+  # sits directly under the shipment and its tracking number — exactly where
+  # "where is my order" gets asked.
+  #
+  # KNOWN LIMITS, both deliberate:
+  #  · It renders ONCE PER FULFILLMENT (the target carries a fulfillmentId), so
+  #    a split shipment shows the card per parcel. Every parcel belongs to one
+  #    order and the link is the same page, so this is repetitive, not wrong.
+  #  · An UNFULFILLED order has no fulfillment details, so nothing renders yet.
+  #    The block is a "where is it" answer; before anything ships there is no
+  #    question to answer. The tracking rewrite already covers the shipped case
+  #    from the email itself.
   [[extensions.targeting]]
   module = "./src/order-page-block.js"
-  target = "customer-account.order-status.block.render"
+  target = "customer-account.order-status.fulfillment-details.render-after"
 
   # The one piece of app data the block needs: the brand's own door base,
   # e.g. https://stevemadden.in.ink/o/ — written on the SHOP by the embed at
@@ -41,3 +65,13 @@ handle = "order-page-block"
   [[extensions.metafields]]
   namespace = "ink"
   key = "order_door"
+
+  # Shopify's own order-status example ships this, and we do not know that the
+  # runtime will hand us declared metafields without it. Measured 2026-08-23:
+  # with the-ritualist-15 released and the shop metafield present, our bundle
+  # was never even FETCHED on a real order page (5 checks over 9 minutes — not
+  # a propagation delay). This is the one difference between our config and the
+  # documented working example, so it gets ruled out before we spend a real
+  # order on the test.
+  [extensions.capabilities]
+  api_access = true
