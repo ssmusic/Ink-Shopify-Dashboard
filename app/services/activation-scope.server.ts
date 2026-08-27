@@ -61,6 +61,10 @@ export interface ActivationScope {
   ship_to?: {
     countries?: string[];
     states?: string[];
+    /** ZIP or postcode, matched EXACT-OR-PREFIX so "90026" names one place
+     *  and "900" names a region. Not US-only: "SW1A" names a London
+     *  district the same way. */
+    postcodes?: string[];
     country?: string;
   } | null;
   /** A count that depletes. NOT answered here — a cap is a running tally,
@@ -80,6 +84,17 @@ export interface ScopableLine {
   sku?: string | null;
   title?: string | null;
   name?: string | null;
+}
+
+/** "90026" / "90026-1234" / "sw1a 1aa" → "90026" / "90026" / "SW1A1AA".
+ *  A ZIP+4 keeps only its five — the last four are a delivery segment
+ *  nobody narrows a pilot by. */
+export function normalizePostcode(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const cleaned = raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!cleaned) return null;
+  if (/^\d{9}$/.test(cleaned)) return cleaned.slice(0, 5);
+  return cleaned;
 }
 
 /** "california" / "CA" / " Ca " → "CA". Unknown → null (never a guess). */
@@ -123,10 +138,18 @@ export function normalizeScope(raw: unknown): ActivationScope | null {
     // The legacy `country: "US"` is read as NOTHING: it qualified the states
     // rather than naming a place, and promoting it would silently widen a
     // merchant's slice from California to all of America.
+    const postcodes = Array.isArray(shipTo.postcodes)
+      ? Array.from(
+          new Set(
+            shipTo.postcodes.map(normalizePostcode).filter((z): z is string => z !== null),
+          ),
+        ).sort()
+      : [];
     const place: NonNullable<ActivationScope["ship_to"]> = {};
     if (countries.length) place.countries = countries;
     if (states.length) place.states = states;
-    if (countries.length || states.length) scope.ship_to = place;
+    if (postcodes.length) place.postcodes = postcodes;
+    if (countries.length || states.length || postcodes.length) scope.ship_to = place;
   }
 
   // A cap of 0 is a pilot that is over before it starts — nobody asks for
@@ -194,14 +217,26 @@ export function orderActivates(
   const normalized = normalizeScope(scope);
   const states = normalized?.ship_to?.states ?? [];
   const countries = normalized?.ship_to?.countries ?? [];
-  if (!states.length && !countries.length) return true;
+  const postcodes = normalized?.ship_to?.postcodes ?? [];
+  if (!states.length && !countries.length && !postcodes.length) return true;
   const state = stateOfWebhookOrder(payload);
   const country = countryOfWebhookOrder(payload);
-  // OR across places: "the UK, and California" takes an order to London and
-  // an order to Los Angeles, and nothing else.
+  const postcode = postcodeOfWebhookOrder(payload);
+  // OR across places: "the UK, and California, and 90026" takes an order to
+  // any of them and nothing else.
   if (state && states.includes(state)) return true;
   if (country && countries.includes(country)) return true;
+  if (postcode && postcodes.some((z) => postcode === z || postcode.startsWith(z))) return true;
   return false;
+}
+
+/** The postcode this raw webhook body ships to, or null. Shopify sends it
+ *  as `zip` on the shipping address, so this costs no query. */
+export function postcodeOfWebhookOrder(payload: unknown): string | null {
+  const address = (payload as { shipping_address?: Record<string, unknown> } | null)
+    ?.shipping_address;
+  if (!address) return null;
+  return normalizePostcode(address.zip) ?? normalizePostcode(address.postal_code);
 }
 
 /** The ISO country this raw webhook body ships to, or null. `country_code`

@@ -4,6 +4,7 @@ import {
   normalizeStateCode,
   countryOfWebhookOrder,
   orderActivates,
+  postcodeOfWebhookOrder,
   productsActivate,
   scopeOfMerchant,
   stateOfWebhookOrder,
@@ -233,5 +234,46 @@ describe("a merchant can type their product's real name", () => {
 
   it("does not match a product the order does not hold", () => {
     expect(productsActivate(lines, normalizeScope({ products: { match: "backpack" } }))).toBe(false);
+  });
+});
+
+describe("a pilot on a ZIP or postcode", () => {
+  it("reads it off the raw body and normalizes ZIP+4 to its five", () => {
+    expect(postcodeOfWebhookOrder({ shipping_address: { zip: "90026-1234" } })).toBe("90026");
+    expect(postcodeOfWebhookOrder({ shipping_address: { zip: "sw1a 1aa" } })).toBe("SW1A1AA");
+    expect(postcodeOfWebhookOrder({ shipping_address: {} })).toBeNull();
+    expect(postcodeOfWebhookOrder(null)).toBeNull();
+  });
+
+  it("activates an exact match and a PREFIX", () => {
+    const one = normalizeScope({ ship_to: { postcodes: ["90026"] } });
+    expect(orderActivates({ shipping_address: { zip: "90026" } }, one)).toBe(true);
+    expect(orderActivates({ shipping_address: { zip: "90210" } }, one)).toBe(false);
+
+    const region = normalizeScope({ ship_to: { postcodes: ["900"] } });
+    expect(orderActivates({ shipping_address: { zip: "90026" } }, region)).toBe(true);
+    expect(orderActivates({ shipping_address: { zip: "90210" } }, region)).toBe(false);
+  });
+
+  it("is not US-only", () => {
+    const london = normalizeScope({ ship_to: { postcodes: ["SW1A"] } });
+    expect(orderActivates({ shipping_address: { zip: "SW1A 1AA" } }, london)).toBe(true);
+    expect(orderActivates({ shipping_address: { zip: "EC1A1BB" } }, london)).toBe(false);
+  });
+
+  it("FAILS CLOSED with no postcode on the order", () => {
+    const one = normalizeScope({ ship_to: { postcodes: ["90026"] } });
+    expect(orderActivates({ shipping_address: { city: "Los Angeles" } }, one)).toBe(false);
+    expect(orderActivates({}, one)).toBe(false);
+  });
+
+  it("sits beside countries and states, matched with OR", () => {
+    const mixed = normalizeScope({
+      ship_to: { countries: ["GB"], states: ["CA"], postcodes: ["10011"] },
+    });
+    expect(orderActivates({ shipping_address: { country_code: "GB" } }, mixed)).toBe(true);
+    expect(orderActivates({ shipping_address: { province_code: "CA" } }, mixed)).toBe(true);
+    expect(orderActivates({ shipping_address: { zip: "10011" } }, mixed)).toBe(true);
+    expect(orderActivates({ shipping_address: { province_code: "TX", zip: "73301" } }, mixed)).toBe(false);
   });
 });
