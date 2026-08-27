@@ -1,9 +1,15 @@
+import { normalizeCountryCode } from "./countries.server";
+
 // THE SLICE, webhook side — does this order ACTIVATE for this merchant?
 //
 // Sam, 2026-08-27: a merchant runs their pilot on the piece of their
 // business they are ready for ("might make it easier for them to commit -
-// if it isnt their entire global sales"). Today that piece is the states
-// they ship to.
+// if it isnt their entire global sales"): a set number of orders, certain
+// places, certain products.
+//
+// PLACES ARE INTERNATIONAL ("this is an international product"). A place is
+// a country as readily as a US state, so a London brand can describe its
+// own business — the first cut of this file could only name US states.
 //
 // CAPTURE IS NOT ACTIVATION, and this file only decides the second one.
 // ink's backend still records EVERY order the store sends — the enroll
@@ -47,7 +53,16 @@ const US_STATE_NAME_TO_CODE: Record<string, string> = {
 };
 
 export interface ActivationScope {
-  ship_to?: { country?: string; states?: string[] } | null;
+  /** WHERE it ships — a set of PLACES, matched with OR. ink is an
+   *  international product, so a place is a country as readily as a US
+   *  state. `country` (singular) is LEGACY: the US-only first cut wrote it
+   *  beside its states, where it qualified them rather than naming a place
+   *  of its own. Read, never written. */
+  ship_to?: {
+    countries?: string[];
+    states?: string[];
+    country?: string;
+  } | null;
   /** A count that depletes. NOT answered here — a cap is a running tally,
    *  so only the counter can answer it (activation-counter.server.ts). This
    *  file reports that a cap EXISTS; it never pretends to know the tally. */
@@ -89,19 +104,29 @@ export function normalizeScope(raw: unknown): ActivationScope | null {
 
   const shipTo = input.ship_to;
   if (shipTo && typeof shipTo === "object") {
-    const country =
-      typeof shipTo.country === "string" ? shipTo.country.trim().toUpperCase() : "US";
-    const states =
-      country === "US" && Array.isArray(shipTo.states)
-        ? Array.from(
-            new Set(
-              shipTo.states
-                .map(normalizeStateCode)
-                .filter((s): s is string => s !== null),
-            ),
-          ).sort()
-        : [];
-    if (states.length) scope.ship_to = { country: "US", states };
+    const states = Array.isArray(shipTo.states)
+      ? Array.from(
+          new Set(
+            shipTo.states.map(normalizeStateCode).filter((s): s is string => s !== null),
+          ),
+        ).sort()
+      : [];
+    const countries = Array.isArray(shipTo.countries)
+      ? Array.from(
+          new Set(
+            shipTo.countries
+              .map(normalizeCountryCode)
+              .filter((c): c is string => c !== null),
+          ),
+        ).sort()
+      : [];
+    // The legacy `country: "US"` is read as NOTHING: it qualified the states
+    // rather than naming a place, and promoting it would silently widen a
+    // merchant's slice from California to all of America.
+    const place: NonNullable<ActivationScope["ship_to"]> = {};
+    if (countries.length) place.countries = countries;
+    if (states.length) place.states = states;
+    if (countries.length || states.length) scope.ship_to = place;
   }
 
   // A cap of 0 is a pilot that is over before it starts — nobody asks for
@@ -167,11 +192,27 @@ export function orderActivates(
   scope: ActivationScope | null,
 ): boolean {
   const normalized = normalizeScope(scope);
-  const states = normalized?.ship_to?.states;
-  if (!states?.length) return true;
+  const states = normalized?.ship_to?.states ?? [];
+  const countries = normalized?.ship_to?.countries ?? [];
+  if (!states.length && !countries.length) return true;
   const state = stateOfWebhookOrder(payload);
-  if (!state) return false;
-  return states.includes(state);
+  const country = countryOfWebhookOrder(payload);
+  // OR across places: "the UK, and California" takes an order to London and
+  // an order to Los Angeles, and nothing else.
+  if (state && states.includes(state)) return true;
+  if (country && countries.includes(country)) return true;
+  return false;
+}
+
+/** The ISO country this raw webhook body ships to, or null. `country_code`
+ *  first — Shopify sends it, so this costs no query. */
+export function countryOfWebhookOrder(payload: unknown): string | null {
+  const address = (payload as { shipping_address?: Record<string, unknown> } | null)
+    ?.shipping_address;
+  if (!address) return null;
+  return (
+    normalizeCountryCode(address.country_code) ?? normalizeCountryCode(address.country)
+  );
 }
 
 /** Does the PRODUCT part pass? Asked once the order's lines are in hand —

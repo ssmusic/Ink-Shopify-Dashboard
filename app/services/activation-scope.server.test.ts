@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeScope,
   normalizeStateCode,
+  countryOfWebhookOrder,
   orderActivates,
   productsActivate,
   scopeOfMerchant,
@@ -99,9 +100,11 @@ describe("a merchant running on chosen states", () => {
   });
 
   it("reads the slice straight off the merchant doc", () => {
+    // The legacy `country: "US"` is read and then DROPPED — it qualified the
+    // states rather than naming a place, so it is not written back.
     expect(
       scopeOfMerchant({ activation_scope: { ship_to: { country: "US", states: ["ca"] } } }),
-    ).toEqual({ ship_to: { country: "US", states: ["CA"] } });
+    ).toEqual({ ship_to: { states: ["CA"] } });
   });
 });
 
@@ -164,9 +167,53 @@ describe("a cap is recorded but never answered here", () => {
       volume: { cap: 50 },
     });
     expect(all).toEqual({
-      ship_to: { country: "US", states: ["CA"] },
+      ship_to: { states: ["CA"] },
       volume: { cap: 50 },
       products: { match: "Boot" },
     });
+  });
+});
+
+// ── THIS IS AN INTERNATIONAL PRODUCT ─────────────────────────────────────
+describe("a pilot on a country", () => {
+  const uk = normalizeScope({ ship_to: { countries: ["GB"] } });
+
+  it("reads country_code first, then the name", () => {
+    expect(countryOfWebhookOrder({ shipping_address: { country_code: "GB" } })).toBe("GB");
+    expect(countryOfWebhookOrder({ shipping_address: { country: "United Kingdom" } })).toBe("GB");
+    // The names people and storefronts actually use.
+    expect(normalizeScope({ ship_to: { countries: ["uk"] } })?.ship_to?.countries).toEqual(["GB"]);
+  });
+
+  it("activates an order shipping there and no other", () => {
+    expect(orderActivates({ shipping_address: { country_code: "GB" } }, uk)).toBe(true);
+    expect(orderActivates({ shipping_address: { country_code: "US" } }, uk)).toBe(false);
+  });
+
+  it("FAILS CLOSED on a country it cannot place", () => {
+    expect(orderActivates({ shipping_address: { country: "Freedonia" } }, uk)).toBe(false);
+    expect(orderActivates({}, uk)).toBe(false);
+  });
+
+  it("matches places with OR — the UK, and California", () => {
+    const both = normalizeScope({ ship_to: { countries: ["GB"], states: ["CA"] } });
+    expect(orderActivates({ shipping_address: { country_code: "GB" } }, both)).toBe(true);
+    expect(
+      orderActivates({ shipping_address: { country_code: "US", province_code: "CA" } }, both),
+    ).toBe(true);
+    expect(
+      orderActivates({ shipping_address: { country_code: "US", province_code: "TX" } }, both),
+    ).toBe(false);
+  });
+});
+
+describe("a US-only slice written before this was international", () => {
+  it("keeps its states and is NOT widened to all of America", () => {
+    const legacy = normalizeScope({ ship_to: { country: "US", states: ["CA"] } });
+    expect(legacy?.ship_to?.states).toEqual(["CA"]);
+    expect(legacy?.ship_to?.countries).toBeUndefined();
+    expect(
+      orderActivates({ shipping_address: { country_code: "US", province_code: "TX" } }, legacy),
+    ).toBe(false);
   });
 });
