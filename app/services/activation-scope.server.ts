@@ -215,6 +215,13 @@ export function countryOfWebhookOrder(payload: unknown): string | null {
   );
 }
 
+/** Flatten a product title the way the app's normalizeProductTitle does —
+ *  lowercase, and every character outside a-z0-9 collapsed to a space. Both
+ *  sides of the comparison go through it or they cannot agree. */
+function flattenTitle(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
 /** Does the PRODUCT part pass? Asked once the order's lines are in hand —
  *  from ORDER_DETAIL_QUERY, which already fetches `title` and `sku`.
  *
@@ -230,11 +237,17 @@ export function productsActivate(
   const list = Array.isArray(lines) ? lines.filter(Boolean) : [];
   if (!list.length) return false;
   const skus = products.skus ?? [];
-  const needle = products.match?.trim().toLowerCase() ?? "";
+  // THE SEARCH AND THE TITLE ARE FLATTENED THE SAME WAY, or a merchant
+  // cannot find their own products. Measured 2026-08-27: typing "Côte" —
+  // the name in their own catalogue — matched nothing, while plain "cote"
+  // matched, because only one side had its accents handled. Worst for
+  // exactly the international brands this is for. Mirrors the app's
+  // normalizeProductTitle: anything outside a-z0-9 becomes a space.
+  const needle = flattenTitle(products.match ?? "");
   return list.some((line) => {
     const sku = typeof line.sku === "string" ? line.sku.trim().toUpperCase() : "";
     if (sku && skus.includes(sku)) return true;
     if (!needle) return false;
-    return `${line.title ?? ""} ${line.name ?? ""}`.toLowerCase().includes(needle);
+    return flattenTitle(`${line.title ?? ""} ${line.name ?? ""}`).includes(needle);
   });
 }

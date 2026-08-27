@@ -217,3 +217,21 @@ describe("a US-only slice written before this was international", () => {
     ).toBe(false);
   });
 });
+
+describe("a merchant can type their product's real name", () => {
+  // Measured on the real fixture ledger 2026-08-27: "Côte" matched nothing
+  // while "cote" matched, because only one side of the comparison had its
+  // accents flattened. The gate must agree with the workspace, or a
+  // merchant sees one set of orders and their customers get another.
+  const lines = [{ title: "La Côte Tote" }];
+
+  it("matches an accented product by its accented name, in any case", () => {
+    for (const typed of ["Côte", "côte", "CÔTE"]) {
+      expect(productsActivate(lines, normalizeScope({ products: { match: typed } }))).toBe(true);
+    }
+  });
+
+  it("does not match a product the order does not hold", () => {
+    expect(productsActivate(lines, normalizeScope({ products: { match: "backpack" } }))).toBe(false);
+  });
+});
