@@ -5,6 +5,7 @@ import { enrollOrder, createMerchant } from "../services/ink-api.server";
 import { attachProductUrls, productDetailFromLineItem } from "../services/order-line-item";
 import { findMerchantDocRef } from "../services/merchant-doc.server";
 import {
+  countryOfWebhookOrder,
   orderActivates,
   productsActivate,
   scopeOfMerchant,
@@ -295,9 +296,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   // ─── THE SLICE ──────────────────────────────────────────────────────
-  // A merchant may run their pilot on part of their business — today, the
-  // states they ship to. This is the ONE decision, and it decides
-  // ACTIVATION only:
+  // A merchant may run their pilot on part of their business: a set number
+  // of orders, certain places (a country as readily as a US state), certain
+  // products. Whatever they narrowed by, it decides ACTIVATION only:
   //   • the order is enrolled either way — ink's backend gets every order
   //     the store sends ("we want all the data"), so widening the slice
   //     later reveals a history that was there all along;
@@ -313,9 +314,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const shipToOk = orderActivates(data, activationScope);
   if (!shipToOk) {
     console.log(
-      `🔒 [orders/create] Order ${orderName} ships outside this merchant's chosen states ` +
-        `(${(activationScope?.ship_to?.states ?? []).join(", ")}; this order: ` +
-        `${stateOfWebhookOrder(data) ?? "no readable state"}) — recording it, no page.`
+      `🔒 [orders/create] Order ${orderName} ships outside this merchant's chosen places ` +
+        `(${[
+          ...(activationScope?.ship_to?.countries ?? []),
+          ...(activationScope?.ship_to?.states ?? []),
+        ].join(", ")}; this order: ` +
+        `${stateOfWebhookOrder(data) ?? countryOfWebhookOrder(data) ?? "nowhere readable"})` +
+        ` — recording it, no page.`
     );
   }
   // WHAT is on it and WHETHER the cap has room are not answerable yet: the
@@ -341,7 +346,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const apiKey = await getMerchantApiKey(shop);
       if (!apiKey) {
         console.warn(
-          `[orders/create] No ink_api_key for ${shop} — order tagged, auto-enroll skipped`
+          // NOT "order tagged" any more: a merchant who narrowed by product
+          // or by a cap cannot be judged without the order read below, and
+          // unknown never counts as yes — so a scoped merchant's order is
+          // recorded and left un-activated rather than tagged on a guess.
+          `[orders/create] No ink_api_key for ${shop} — auto-enroll skipped for ${orderName}`
         );
       } else {
         const odRes = await admin.graphql(ORDER_DETAIL_QUERY, {
