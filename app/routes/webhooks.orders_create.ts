@@ -3,7 +3,7 @@ import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { enrollOrder, createMerchant } from "../services/ink-api.server";
 import { attachProductUrls, productDetailFromLineItem } from "../services/order-line-item";
-import { findMerchantDocRef } from "../services/merchant-doc.server";
+import { findActivationDocRef } from "../services/merchant-doc.server";
 import {
   countryOfWebhookOrder,
   orderActivates,
@@ -270,11 +270,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // Background enrollment: INK is hidden from checkout and never appears as a
   // customer-paid shipping option, so every order on this shop is eligible.
   const deliveryMode = await getMerchantDeliveryMode(shop);
-  // The merchant doc, through the ONE resolver — three doc-identity
-  // conventions coexist in this collection and a hand-rolled lookup is the
-  // §17.2 landmine (merchant-doc.server.ts). Never fatal: an unreadable
-  // merchant means no slice, which means today's behaviour.
-  const merchantForScope = await findMerchantDocRef(firestore, shop).catch((e) => {
+  // The merchant doc FOR THE SLICE, through the slice's own resolver. A
+  // connected store can hold TWO merchant docs, and the workspace's save can
+  // only ever reach the ACTIVE one — reading the api-key doc here (as
+  // findMerchantDocRef rightly does for enrolling) made a saved slice
+  // invisible to this webhook (merchant-doc.server.ts tells the story).
+  // Never fatal: an unreadable merchant means no slice, today's behaviour.
+  const merchantForScope = await findActivationDocRef(firestore, shop).catch((e) => {
     console.warn(`[orders/create] Could not read merchant doc for ${shop}:`, e);
     return null;
   });
