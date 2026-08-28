@@ -3,6 +3,15 @@ import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { enrollOrder, createMerchant } from "../services/ink-api.server";
 import { attachProductUrls, productDetailFromLineItem } from "../services/order-line-item";
+import { findMerchantDocRef } from "../services/merchant-doc.server";
+import {
+  countryOfWebhookOrder,
+  orderActivates,
+  productsActivate,
+  scopeOfMerchant,
+  stateOfWebhookOrder,
+} from "../services/activation-scope.server";
+import { spendFromCap } from "../services/activation-counter.server";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -261,6 +270,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // Background enrollment: INK is hidden from checkout and never appears as a
   // customer-paid shipping option, so every order on this shop is eligible.
   const deliveryMode = await getMerchantDeliveryMode(shop);
+  // The merchant doc, through the ONE resolver — three doc-identity
+  // conventions coexist in this collection and a hand-rolled lookup is the
+  // §17.2 landmine (merchant-doc.server.ts). Never fatal: an unreadable
+  // merchant means no slice, which means today's behaviour.
+  const merchantForScope = await findMerchantDocRef(firestore, shop).catch((e) => {
+    console.warn(`[orders/create] Could not read merchant doc for ${shop}:`, e);
+    return null;
+  });
   const shouldEnroll = hasPremiumDelivery || deliveryMode === "background";
 
   if (!shouldEnroll) {
@@ -278,21 +295,45 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  try {
-    // Tag the order
-    const tagRes = await admin.graphql(TAG_MUTATION, {
-      variables: { id: orderGid, tags: ["INK-Verified-Delivery"] },
-    });
-    const tagJson = await tagRes.json();
-    const tagErrors = tagJson?.data?.tagsAdd?.userErrors;
-    if (tagErrors && tagErrors.length > 0) {
-      console.error(`[orders/create] tagsAdd userErrors:`, tagErrors);
-    } else {
-      console.log(
-        `✅ [orders/create] Tagged order ${orderName} with "INK-Verified-Delivery"`
-      );
-    }
+  // ─── THE SLICE ──────────────────────────────────────────────────────
+  // A merchant may run their pilot on part of their business: a set number
+  // of orders, certain places (a country as readily as a US state), certain
+  // products. Whatever they narrowed by, it decides ACTIVATION only:
+  //   • the order is enrolled either way — ink's backend gets every order
+  //     the store sends ("we want all the data"), so widening the slice
+  //     later reveals a history that was there all along;
+  //   • an out-of-slice order gets NO Shopify tag and NO ink.* metafields,
+  //     and every buyer-facing thing downstream gates on
+  //     ink.proof_reference — the fulfillment webhooks early-return 200
+  //     without it — so nothing ever reaches that customer.
+  // Absent scope (every merchant today) ⇒ activates, exactly as before.
+  const activationScope = scopeOfMerchant(merchantForScope?.data);
 
+  // WHERE it ships is answerable right now, from the body Shopify already
+  // sent — no query, no scope, no cost.
+  const shipToOk = orderActivates(data, activationScope);
+  if (!shipToOk) {
+    console.log(
+      `🔒 [orders/create] Order ${orderName} ships outside this merchant's chosen places ` +
+        `(${[
+          ...(activationScope?.ship_to?.countries ?? []),
+          ...(activationScope?.ship_to?.states ?? []),
+        ].join(", ")}; this order: ` +
+        `${stateOfWebhookOrder(data) ?? countryOfWebhookOrder(data) ?? "nowhere readable"})` +
+        ` — recording it, no page.`
+    );
+  }
+  // WHAT is on it and WHETHER the cap has room are not answerable yet: the
+  // first needs the order's lines, the second needs the tally. They start
+  // UNKNOWN and are settled below, and unknown never counts as yes — a
+  // merchant who narrowed by product or cap is fail-closed until the answer
+  // actually arrives. A merchant with neither is true from the start, so
+  // nothing about today's behaviour depends on the query succeeding.
+  let productsOk: boolean | null = activationScope?.products ? null : true;
+  let capOk: boolean | null = activationScope?.volume ? null : true;
+  const activatesNow = () => shipToOk && productsOk === true && capOk === true;
+
+  try {
     // ─── AUTO-ENROLL ────────────────────────────────────────────────
     // Create the Parallel proof now so the order autopopulates into Parallel
     // Orders (the merchant later just writes the tap URL onto a physical
@@ -305,7 +346,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const apiKey = await getMerchantApiKey(shop);
       if (!apiKey) {
         console.warn(
-          `[orders/create] No ink_api_key for ${shop} — order tagged, auto-enroll skipped`
+          // NOT "order tagged" any more: a merchant who narrowed by product
+          // or by a cap cannot be judged without the order read below, and
+          // unknown never counts as yes — so a scoped merchant's order is
+          // recorded and left un-activated rather than tagged on a guess.
+          `[orders/create] No ink_api_key for ${shop} — auto-enroll skipped for ${orderName}`
         );
       } else {
         const odRes = await admin.graphql(ORDER_DETAIL_QUERY, {
@@ -314,6 +359,54 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const odJson = await odRes.json();
         const order = odJson?.data?.order;
         const already = order?.metafield?.value;
+
+        // ─── THE REST OF THE SLICE ──────────────────────────────────
+        // The order's lines are in hand now, so the product question can be
+        // answered — off the SAME query, with no field added to it (one
+        // unauthorized selection there fails the whole query silently, which
+        // is how order #1019 died).
+        if (productsOk === null) {
+          const lines = (order?.lineItems?.edges || []).map((e: any) => e.node);
+          productsOk = productsActivate(lines, activationScope);
+          if (!productsOk) {
+            console.log(
+              `🔒 [orders/create] Order ${orderName} holds none of this merchant's chosen ` +
+                `products — recording it, no page.`
+            );
+          }
+        }
+        // And the cap, which only the tally can answer. Spent LAST, so a
+        // cap is never burned on an order that was never going to get a
+        // page for another reason. Idempotent across Shopify's redeliveries.
+        if (capOk === null) {
+          const cap = activationScope?.volume?.cap ?? 0;
+          const ref = merchantForScope?.ref;
+          if (!ref || !shipToOk || productsOk !== true) {
+            // Nothing to spend it on, or nowhere to keep the count. Refusing
+            // is the fail-closed side, and it spends nothing.
+            capOk = false;
+          } else {
+            try {
+              const decision = await spendFromCap(
+                firestore, ref, shop, data?.id ?? orderGid, cap,
+              );
+              capOk = decision.ok;
+              console.log(
+                `[orders/create] ${orderName} cap ${decision.used}/${decision.cap}` +
+                  `${decision.replay ? " (redelivery — already counted)" : ""}` +
+                  `${decision.ok ? "" : " — spent, recording it, no page"}`
+              );
+            } catch (capErr: any) {
+              // A tally we cannot read is not a permission. Fail closed and
+              // say so; the order is still captured either way.
+              capOk = false;
+              console.error(
+                `[orders/create] Could not read this merchant's cap for ${orderName}:`,
+                capErr?.message || capErr
+              );
+            }
+          }
+        }
 
         if (already) {
           // Idempotent: webhook retried (Shopify is at-least-once) — already enrolled.
@@ -470,63 +563,101 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
+    // THE ANSWER IS SETTLED HERE, and everything below reads it.
+    const activates = activatesNow();
+
+    // Tag the order — the merchant's own mark, in their own admin, for the
+    // orders ink runs on. It sits AFTER the enroll on purpose: the product
+    // and cap answers only exist once the order has been read, and a tag
+    // that promised a page we then withheld would be a lie in their admin.
+    // Still tagged when the enroll itself failed (that order is in scope and
+    // recoverable) — the behaviour the comment above depends on.
+    if (activates) {
+      const tagRes = await admin.graphql(TAG_MUTATION, {
+        variables: { id: orderGid, tags: ["INK-Verified-Delivery"] },
+      });
+      const tagJson = await tagRes.json();
+      const tagErrors = tagJson?.data?.tagsAdd?.userErrors;
+      if (tagErrors && tagErrors.length > 0) {
+        console.error(`[orders/create] tagsAdd userErrors:`, tagErrors);
+      } else {
+        console.log(
+          `✅ [orders/create] Tagged order ${orderName} with "INK-Verified-Delivery"`
+        );
+      }
+    }
+
     // Initialize / update INK metafields — proof_reference + ink_token are now
     // real (when auto-enroll succeeded) so the order is linked to its proof and
     // the warehouse knows which tap URL to write onto the sticker.
-    const metafieldRes = await admin.graphql(METAFIELD_MUTATION, {
-      variables: {
-        metafields: [
-          {
-            ownerId: orderGid,
-            namespace: "ink",
-            key: "verification_status",
-            type: "single_line_text_field",
-            value: verificationStatus,
-          },
-          {
-            ownerId: orderGid,
-            namespace: "ink",
-            key: "delivery_type",
-            type: "single_line_text_field",
-            value: deliveryMode === "background" ? "background" : "premium",
-          },
-          {
-            ownerId: orderGid,
-            namespace: "ink",
-            key: "proof_reference",
-            type: "single_line_text_field",
-            value: proofReference,
-          },
-          {
-            ownerId: orderGid,
-            namespace: "ink",
-            key: "ink_token",
-            type: "single_line_text_field",
-            value: inkToken,
-          },
-          {
-            ownerId: orderGid,
-            namespace: "ink",
-            key: "nfc_uid",
-            type: "single_line_text_field",
-            value: "",
-          },
-          {
-            ownerId: orderGid,
-            namespace: "ink",
-            key: "customer_phone",
-            type: "single_line_text_field",
-            value: finalPhone,
-          },
-        ].filter((m) => m.value !== ""),
-      },
-    });
-    const metafieldJson = await metafieldRes.json();
-    const metaErrors = metafieldJson?.data?.metafieldsSet?.userErrors;
-    if (metaErrors && metaErrors.length > 0) {
-      console.error(`[orders/create] metafieldsSet userErrors:`, metaErrors);
+    //
+    // THE SLICE'S REAL TEETH. Everything the buyer could ever see hangs off
+    // ink.proof_reference: the branded tracking link, the order door, and
+    // every state email all read it and early-return 200 when it is absent
+    // (webhooks.fulfillments_create.tsx:69, fulfillments_update.tsx:171).
+    // So an out-of-slice order is enrolled and recorded, and simply never
+    // announced — one skip here, no suppression logic anywhere downstream.
+    if (!activates) {
+      console.log(
+        `🔒 [orders/create] ${orderName} recorded (proof ${proofReference || "—"}) ` +
+          `without metafields — outside the piece this pilot runs on.`
+      );
     } else {
-      console.log(`✅ [orders/create] Metafields initialized for ${orderName}`);
+      const metafieldRes = await admin.graphql(METAFIELD_MUTATION, {
+        variables: {
+          metafields: [
+            {
+              ownerId: orderGid,
+              namespace: "ink",
+              key: "verification_status",
+              type: "single_line_text_field",
+              value: verificationStatus,
+            },
+            {
+              ownerId: orderGid,
+              namespace: "ink",
+              key: "delivery_type",
+              type: "single_line_text_field",
+              value: deliveryMode === "background" ? "background" : "premium",
+            },
+            {
+              ownerId: orderGid,
+              namespace: "ink",
+              key: "proof_reference",
+              type: "single_line_text_field",
+              value: proofReference,
+            },
+            {
+              ownerId: orderGid,
+              namespace: "ink",
+              key: "ink_token",
+              type: "single_line_text_field",
+              value: inkToken,
+            },
+            {
+              ownerId: orderGid,
+              namespace: "ink",
+              key: "nfc_uid",
+              type: "single_line_text_field",
+              value: "",
+            },
+            {
+              ownerId: orderGid,
+              namespace: "ink",
+              key: "customer_phone",
+              type: "single_line_text_field",
+              value: finalPhone,
+            },
+          ].filter((m) => m.value !== ""),
+        },
+      });
+      const metafieldJson = await metafieldRes.json();
+      const metaErrors = metafieldJson?.data?.metafieldsSet?.userErrors;
+      if (metaErrors && metaErrors.length > 0) {
+        console.error(`[orders/create] metafieldsSet userErrors:`, metaErrors);
+      } else {
+        console.log(`✅ [orders/create] Metafields initialized for ${orderName}`);
+      }
     }
   } catch (error: any) {
     console.error(
@@ -550,7 +681,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   console.log(
-    `✅ [orders/create] Successfully processed order ${orderName} (mode=${deliveryMode})\n`
+    `✅ [orders/create] Successfully processed order ${orderName} (mode=${deliveryMode}` +
+      `${activatesNow() ? "" : ", recorded only — outside the piece this pilot runs on"})\n`
   );
+  // 200 either way. An out-of-slice order is a DECISION, not a failure —
+  // a 500 here would have Shopify redeliver it forever.
   return new Response("ok");
 };
