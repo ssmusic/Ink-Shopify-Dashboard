@@ -69,3 +69,67 @@ export async function findMerchantDoc(
   const hit = await findMerchantDocRef(firestore, shop);
   return hit ? { data: hit.data, apiKey: hit.apiKey } : null;
 }
+
+/** THE SLICE'S OWN RESOLVER — the record the workspace door actually writes.
+ *
+ *  findMerchantDocRef prefers the doc carrying `ink_api_key`, which is right
+ *  for enrolling (the key IS what that caller wants) and WRONG for the slice.
+ *  A connected store can hold TWO merchant docs — the embed's own, keyed by
+ *  shop domain and carrying the api key, and the backend-provisioned one
+ *  (`shop_…`, `status: "active"`). The backend's PATCH /activation-scope can
+ *  only ever write the ACTIVE doc (its auth refuses everything else), so a
+ *  slice read off the api-key doc is a slice that never existed — saved in
+ *  the workspace, invisible to the webhook, silently running on every order.
+ *  Caught on the Steve Madden rig, 2026-08-28, before any order ran.
+ *
+ *  So for the slice (and its tally, which must land where the workspace's
+ *  GET reads it): prefer the ACTIVE doc, then any doc already carrying
+ *  `activation_scope`, then fall back to exactly what findMerchantDocRef
+ *  would have chosen — a single-doc shop resolves identically either way. */
+export async function findActivationDocRef(
+  firestore: Firestore,
+  shop: string,
+): Promise<MerchantDocRefHit | null> {
+  const hits: Array<{ data: DocumentData; ref: DocumentReference }> = [];
+  const seen = new Set<string>();
+  const push = (data: DocumentData, ref: DocumentReference) => {
+    const id = ref.id ?? String(ref);
+    if (seen.has(id)) return;
+    seen.add(id);
+    hits.push({ data, ref });
+  };
+
+  try {
+    const direct = await firestore.collection("merchants").doc(shop).get();
+    if (direct.exists) push(direct.data() as DocumentData, direct.ref);
+  } catch { /* fall through to field queries */ }
+
+  // Every convention, no early exit — the active doc may sit behind a
+  // convention the api-key doc already satisfied.
+  for (const field of ["shop", "shopDomain", "shop_domain"]) {
+    try {
+      const snap = await firestore
+        .collection("merchants")
+        .where(field, "==", shop)
+        .limit(5)
+        .get();
+      snap.docs.forEach((d) => push(d.data(), d.ref));
+    } catch { /* keep trying the next convention */ }
+  }
+
+  if (hits.length === 0) return null;
+
+  const active = hits.find((h) => h.data?.status === "active");
+  const carriesScope = hits.find(
+    (h) => h.data?.activation_scope && typeof h.data.activation_scope === "object",
+  );
+  const withKey = hits.find(
+    (h) => typeof h.data?.ink_api_key === "string" && h.data.ink_api_key,
+  );
+  const hit = active ?? carriesScope ?? withKey ?? hits[0];
+  return {
+    data: hit.data,
+    ref: hit.ref,
+    apiKey: (withKey?.data.ink_api_key as string) ?? null,
+  };
+}
