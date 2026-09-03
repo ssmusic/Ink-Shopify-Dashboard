@@ -13,10 +13,10 @@ client_id = "8da1addef3dcd4251db5057cda3c85fa"
 # change gets undone weeks later by someone shipping an unrelated config.
 #
 # The wordmark is a separate asset and stays lowercase with its period —
-# `the ritualist.` — per parallelreturns #644. Prose follows #644 too:
-# "The Ritualist" sentence-initial, "the Ritualist" mid-sentence, bare
-# "Ritualist" adjectival. A name field reading "The Ritualist" beside a
-# lowercase wordmark is CORRECT, not drift.
+# `the ritualist.` — it is the site's mark. PROSE: "The Ritualist", capital T,
+# ALWAYS — mid-sentence too (Sam, 2026-09-03: "The Ritualist is always
+# capitalize The"; supersedes #644's mid-sentence lowercase). A name field
+# reading "The Ritualist" beside a lowercase wordmark is CORRECT.
 #
 # Inert until the next gated `shopify app deploy`; never regenerate this
 # app's credentials.

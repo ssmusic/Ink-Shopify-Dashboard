@@ -21,7 +21,7 @@ const RitualistDoor = ({
   opening: boolean;
 }) => (
   <section
-    aria-label="Open the Ritualist"
+    aria-label="Open The Ritualist"
     style={{
       background: "#f4f4f4",
       border: "1px solid #e5e5e5",
@@ -48,7 +48,7 @@ const RitualistDoor = ({
         letterSpacing: "-0.022em",
       }}
     >
-      Open the Ritualist studio — where your enrolled orders, pages, and returns live.
+      Open The Ritualist studio — where your enrolled orders and pages live.
     </p>
 
     <div style={{ marginTop: 28, display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
@@ -72,7 +72,7 @@ const RitualistDoor = ({
           opacity: opening ? 0.7 : 1,
         }}
       >
-        {opening ? "Opening…" : "Open the Ritualist"}
+        {opening ? "Opening…" : "Open The Ritualist"}
       </button>
       <span style={{ fontSize: 13, color: "#6a6a6a" }}>
         You’ll be signed in automatically — no password needed.

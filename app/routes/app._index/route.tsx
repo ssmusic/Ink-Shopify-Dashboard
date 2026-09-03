@@ -2,7 +2,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useLoaderData, useRouteError, type ActionFunctionArgs, type HeadersFunction, type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../../shopify.server";
 import { getMerchant } from "../../services/merchant.server";
-import { mintMagicToken } from "../../services/ink-api.server";
+import { mintMagicToken, getMerchantReturnState } from "../../services/ink-api.server";
 import { loadEnrolledOrders } from "../../services/enrolled-orders.server";
 import HomePage, { type HomeData } from "../../components/home/HomePage";
 
@@ -35,6 +35,7 @@ export const loader = async ({ request }: LoaderFunctionArgs): Promise<HomeData>
   }
 
   const enrolled = await loadEnrolledOrders(admin, 25);
+  const { returnsOn } = await getMerchantReturnState(session.shop);
 
   // PLAIN OBJECT, never a Response — React Router 7 serialises it.
   return {
@@ -43,6 +44,7 @@ export const loader = async ({ request }: LoaderFunctionArgs): Promise<HomeData>
     contactEmail,
     installedDate,
     connected: Boolean(merchant?.ink_api_key),
+    returnsOn,
     ...enrolled,
   };
 };
@@ -57,7 +59,7 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<{ url: st
     return { url: `${base}/welcome?token=${encodeURIComponent(token)}`, error: null };
   } catch (err) {
     console.error("[home] mint magic token failed:", err);
-    return { url: null, error: "Couldn’t open the Ritualist. Try again in a moment." };
+    return { url: null, error: "Couldn’t open The Ritualist. Try again in a moment." };
   }
 };
 

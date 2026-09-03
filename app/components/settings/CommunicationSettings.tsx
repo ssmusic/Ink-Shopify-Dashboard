@@ -81,7 +81,7 @@ const TEMPLATE_LABELS: Record<TemplateKey, string> = {
   delivered: "Delivered",
 };
 
-const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
+const CommunicationSettings = ({ shopDomain, returnsOn = true }: { shopDomain?: string; returnsOn?: boolean }) => {
   const [settings, setSettings] = useState<NotificationSettings>(
     DEFAULT_NOTIFICATION_SETTINGS,
   );
@@ -409,6 +409,9 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
         </Card>
       </Layout.AnnotatedSection>
 
+      {/* The return window only means something when the store's returns are on
+          — off for every pilot (the backend's return_enabled, read by Home). */}
+      {returnsOn ? (
       <Layout.AnnotatedSection
         title="Return Window"
         description="How long customers have to start a return after delivery. This sets the real window."
@@ -437,6 +440,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
           />
         </Card>
       </Layout.AnnotatedSection>
+      ) : null}
     </Layout>
   );
 };

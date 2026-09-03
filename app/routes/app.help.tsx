@@ -1,5 +1,7 @@
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { useRouteError, type HeadersFunction } from "react-router";
+import { useLoaderData, useRouteError, type HeadersFunction, type LoaderFunctionArgs } from "react-router";
+import { authenticate } from "../shopify.server";
+import { getMerchantReturnState } from "../services/ink-api.server";
 import { useState } from "react";
 import {
   Page,
@@ -22,14 +24,14 @@ const faqSections = [
     title: "Getting started",
     items: [
       {
-        question: "What does the Ritualist do?",
+        question: "What does The Ritualist do?",
         answer:
           "Every order gets its own page — your brand, the order, and live delivery tracking in one place. Your customer gets a link by email or text when the order ships and when it arrives. The page is also where they can start a return.",
       },
       {
         question: "What do I have to set up?",
         answer:
-          "Almost nothing. Orders enroll automatically as they're placed. Your page is built from your existing brand and can be tuned any time from the Ritualist studio. Email and text notifications are controlled in Settings.",
+          "Almost nothing. Orders enroll automatically as they're placed. Your page is built from your existing brand and can be tuned any time from The Ritualist studio. Email and text notifications are controlled in Settings.",
       },
       {
         question: "Do I need to change my shipping or carrier?",
@@ -59,7 +61,7 @@ const faqSections = [
       {
         question: "Does this replace my returns policy?",
         answer:
-          "No. Your policy and your rules stay yours — the Ritualist handles the customer-facing flow and keeps the status visible to you and to them.",
+          "No. Your policy and your rules stay yours — The Ritualist handles the customer-facing flow and keeps the status visible to you and to them.",
       },
     ],
   },
@@ -123,7 +125,17 @@ const FAQItem = ({
   );
 };
 
+// Returns are off for every pilot (the backend's return_enabled — see
+// ink-api getMerchantReturnState), so the Returns questions only show when
+// they are true for this store. PLAIN OBJECT, never a Response.
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const { returnsOn } = await getMerchantReturnState(session.shop);
+  return { returnsOn };
+};
+
 const Help = () => {
+  const { returnsOn } = useLoaderData<typeof loader>();
   return (
     <>
       <Page title="Help & Support">
@@ -141,7 +153,7 @@ const Help = () => {
                   that reaches the data and not the page is invisible to tsc
                   and to the suite (TECH_BIBLE law 9); only an eye on the
                   rendered screen catches it. */}
-              {faqSections.map((section) => (
+              {faqSections.filter((s) => s.title !== "Returns" || returnsOn).map((section) => (
                 <BlockStack key={section.title} gap="200">
                   <Text as="h3" variant="headingSm">
                     {section.title}

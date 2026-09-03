@@ -18,7 +18,7 @@ import type { EnrolledOrders } from "../../services/enrolled-orders.server";
 // pages, campaigns, returns, insights — lives in the studio the button opens.
 //
 // Copy on this page is reused from the surfaces it replaced; the only new
-// words are the button label, which is Sam's ("Open the Ritualist").
+// words are the button label, which is Sam's ("Open The Ritualist").
 
 export type HomeData = {
   shopDomain: string;
@@ -26,6 +26,8 @@ export type HomeData = {
   contactEmail: string;
   installedDate: string;
   connected: boolean;
+  /** The backend's return_enabled for this store. Off for every pilot. */
+  returnsOn: boolean;
 } & EnrolledOrders;
 
 type DoorResult = { url: string | null; error: string | null };
@@ -138,7 +140,7 @@ const HomePage = (data: HomeData) => {
         </Layout>
 
         <div id="notifications">
-          <CommunicationSettings shopDomain={data.shopDomain} />
+          <CommunicationSettings shopDomain={data.shopDomain} returnsOn={data.returnsOn} />
         </div>
 
         <Card>
