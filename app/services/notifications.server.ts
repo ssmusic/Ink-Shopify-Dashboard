@@ -1,12 +1,6 @@
 import sendgrid from "@sendgrid/mail";
-import twilio from "twilio";
 import { EmailService } from "./email.server";
 
-const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER;
-
-const twilioClient = TWILIO_SID && TWILIO_TOKEN ? twilio(TWILIO_SID, TWILIO_TOKEN) : null;
 
 // Tap-reminder events (hours4/24/48) removed 2026-08-07: NFC-era relics
 // (Sam: "tap reminders were from when this was nfc tags"), never scheduled,
@@ -118,47 +112,13 @@ export const NotificationService = {
     }
   },
 
+  // SMS DOES NOT EXIST. There is no sending number and no provider (Sam,
+  // 2026-09-03: "we dont have twilio so we dont have sms"). The channel stays
+  // in the settings document so nothing reading it breaks; asking it to send
+  // is answered honestly with false, never with a promise.
   async sendSms(payload: NotificationPayload): Promise<boolean> {
-    if (!twilioClient) {
-      console.warn("⚠️ Twilio credentials missing. SMS service disabled.");
-      return false;
-    }
-
-    if (!payload.toPhone) return false;
-
-    // Format message based on type
-    let messageBody = "";
-    
-    switch (payload.type) {
-      case "outForDelivery":
-        messageBody = `Hi ${payload.customerName}, your order ${payload.orderName} from ${payload.merchantName} is out for delivery today.`;
-        break;
-      case "delivered":
-        messageBody = `Your ${payload.merchantName} order ${payload.orderName} has arrived.${payload.verifyUrl ? ` Your receipt + returns: ${payload.verifyUrl}` : ""}`;
-        break;
-      case "deliveryConfirmed":
-        messageBody = `Delivery confirmed for your ${payload.merchantName} order ${payload.orderName}.${payload.verifyUrl ? ` Your receipt + returns: ${payload.verifyUrl}` : ""}`;
-        break;
-      case "return7d":
-        messageBody = `Hi ${payload.customerName}, you have 7 days left to return order ${payload.orderName}. Need to start a return? Click here: ${payload.verifyUrl}`;
-        break;
-      case "return48h":
-        messageBody = `Your return window for ${payload.merchantName} order ${payload.orderName} closes in 48 hours. Manage it here: ${payload.verifyUrl}`;
-        break;
-    }
-
-    try {
-      await twilioClient.messages.create({
-        body: messageBody,
-        from: TWILIO_PHONE,
-        to: payload.toPhone,
-      });
-      console.log(`✅ SMS (${payload.type}) sent via Twilio to ${payload.toPhone}`);
-      return true;
-    } catch (error: any) {
-      console.error(`❌ Twilio SMS failed:`, error.message);
-      return false;
-    }
+    console.log(`[NotificationService] SMS not configured — ${payload.type} text for ${payload.orderName} not sent.`);
+    return false;
   },
 
   async sendEmail(payload: NotificationPayload): Promise<boolean> {

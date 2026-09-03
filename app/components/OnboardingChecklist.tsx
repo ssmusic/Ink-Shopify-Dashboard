@@ -41,8 +41,8 @@ const OnboardingChecklist = ({
       title: "Build your page",
       done: s.brandBuilt,
       body: s.brandBuilt
-        ? "Your approved page collection is ready — the Ritualist can choose the best fit for each order."
-        : "Open the studio and enter your website — the Ritualist builds a reviewable page collection from your brand.",
+        ? "Your approved page collection is ready — The Ritualist can choose the best fit for each order."
+        : "Open the studio and enter your website — The Ritualist builds a reviewable page collection from your brand.",
       cta: s.brandBuilt ? undefined : { label: "Open studio to build", onOpenStudio: true },
     },
     {
@@ -54,7 +54,7 @@ const OnboardingChecklist = ({
         : "Let buyers know when their order ships and arrives — sent as you, by email or text.",
       cta: s.notificationsOn
         ? undefined
-        : { label: "Open Settings", to: "/app/settings?tab=communication" },
+        : { label: "Open notifications", to: "#notifications" },
     },
     {
       key: "firstorder",
@@ -66,7 +66,7 @@ const OnboardingChecklist = ({
               s.deliveries > 0 ? ` · ${s.deliveries} delivered` : ""
             }${s.opens > 0 ? ` · ${s.opens} opened` : ""}.`
           : "New orders enroll automatically. Place a test order, or wait for your next real one.",
-      cta: s.ordersEnrolled > 0 ? { label: "View orders", to: "/app/tagged-shipments" } : undefined,
+      cta: s.ordersEnrolled > 0 ? { label: "View orders", to: "#orders" } : undefined,
     },
   ];
 
@@ -79,7 +79,7 @@ const OnboardingChecklist = ({
         <InlineStack align="space-between" blockAlign="center" wrap={false} gap="400">
           <BlockStack gap="100">
             <Text as="h2" variant="headingMd">
-              Set up the Ritualist
+              Set up The Ritualist
             </Text>
             <Text as="p" tone="subdued">
               {doneCount} of {steps.length} done

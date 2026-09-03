@@ -88,7 +88,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         `[settings/branded-tracking-link] Merchant doc not found for ${shopDomain}; cannot persist`,
       );
       return json(
-        { error: "Merchant not registered with the Ritualist backend yet" },
+        { error: "Merchant not registered with The Ritualist backend yet" },
         { status: 404 },
       );
     }

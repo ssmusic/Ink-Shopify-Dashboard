@@ -279,89 +279,6 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
         </Card>
       </Layout.AnnotatedSection>
 
-      {/* ── The one merchant action that isn't automatic ───────────────── */}
-      <Layout.AnnotatedSection
-        title="Your page in Shopify's emails"
-        description="Shopify already links to your page from the tracking number on every shipment. This makes it the main button too."
-      >
-        <Card>
-          <BlockStack gap="400">
-            <InlineStack gap="200" blockAlign="center">
-              <Text as="p" variant="bodySm" fontWeight="medium">
-                Add one line to five email templates
-              </Text>
-              <Badge tone={templatesDone === TEMPLATE_KEYS.length ? "success" : "attention"}>
-                {`${templatesDone} of ${TEMPLATE_KEYS.length} done`}
-              </Badge>
-            </InlineStack>
-
-            <Text as="p" tone="subdued" variant="bodySm">
-              Shopify doesn&apos;t let apps edit these templates, so this part is yours —
-              about thirty seconds each.
-            </Text>
-
-            <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-              <BlockStack gap="200">
-                {/* The snippet must stay COPYABLE and readable, so it never
-                    breaks mid-identifier (`fulfillment.trac / king_url` — what
-                    break-all did). It scrolls sideways inside its own box
-                    instead; a merchant copies with the button, not by hand. */}
-                <div style={{ overflowX: "auto", maxWidth: "100%" }}>
-                  <code
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: "12px",
-                      whiteSpace: "pre",
-                      display: "block",
-                    }}
-                  >
-                    {snippet}
-                  </code>
-                </div>
-                <InlineStack gap="200">
-                  <Button onClick={copySnippet}>Copy the line</Button>
-                  <Button url={notificationsUrl} target="_blank" variant="plain">
-                    Open Shopify notifications
-                  </Button>
-                </InlineStack>
-              </BlockStack>
-            </Box>
-
-            <List type="number">
-              <List.Item>Open the template, then click <b>Edit code</b>.</List.Item>
-              <List.Item>
-                Put the cursor at the very top and press Enter to make a blank first line —
-                <b> don&apos;t replace the line that&apos;s already there</b>. Overwriting it
-                breaks the template and Shopify refuses to save.
-              </List.Item>
-              <List.Item>Paste the line, then Save.</List.Item>
-            </List>
-
-            <Divider />
-
-            <Text as="p" tone="subdued" variant="bodySm">
-              Tick each one as you go. We can&apos;t read your templates, so this list is
-              your own record.
-            </Text>
-
-            <BlockStack gap="300">
-              {TEMPLATE_KEYS.map((key) => (
-                <ToggleRow
-                  key={key}
-                  checked={Boolean(settings.templatesPastedAt[key])}
-                  onToggle={() => markTemplate(key)}
-                  title={TEMPLATE_LABELS[key]}
-                  description={
-                    settings.templatesPastedAt[key]
-                      ? `Marked done ${new Date(settings.templatesPastedAt[key]!).toLocaleDateString()}`
-                      : "Not done yet."
-                  }
-                />
-              ))}
-            </BlockStack>
-          </BlockStack>
-        </Card>
-      </Layout.AnnotatedSection>
 
       <Layout.AnnotatedSection
         title="Notification Channel"
@@ -374,15 +291,6 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
               onToggle={() => toggle("channels", "email", "Email notifications")}
               title="Email"
               description="Send notifications by email."
-            />
-            <Divider />
-            <ToggleRow
-              checked={false}
-              onToggle={() => {}}
-              disabled
-              title="SMS"
-              suffix={<Badge>Pending verification</Badge>}
-              description="Our sending number is going through carrier verification. Text notifications turn on here once it clears."
             />
           </BlockStack>
         </Card>
@@ -418,68 +326,6 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
         </Card>
       </Layout.AnnotatedSection>
 
-      {/* Kept visible, plainly marked: the toggles round-trip but nothing
-          sends them yet — the scheduler is its own build. Showing them ON
-          while nothing sends is the exact dishonesty this page had. */}
-      <Layout.AnnotatedSection
-        title="Return Window Reminders"
-        description="Sent as a customer's return window approaches closing."
-      >
-        <Card>
-          <BlockStack gap="400">
-            <InlineStack gap="200" blockAlign="center">
-              <Badge>Coming soon</Badge>
-              <Text as="p" tone="subdued" variant="bodySm">
-                Not sending yet.
-              </Text>
-            </InlineStack>
-            <ToggleRow
-              checked={settings.returnReminders.days7}
-              onToggle={() => {}}
-              disabled
-              title="7 days before the window closes"
-              description="Early reminder, with the return link."
-            />
-            <Divider />
-            <ToggleRow
-              checked={settings.returnReminders.hours48}
-              onToggle={() => {}}
-              disabled
-              title="48 hours before the window closes"
-              description="Last call."
-            />
-          </BlockStack>
-        </Card>
-      </Layout.AnnotatedSection>
-
-      <Layout.AnnotatedSection
-        title="Return Window"
-        description="How long customers have to start a return after delivery. This sets the real window."
-      >
-        <Card>
-          <Select
-            label=""
-            labelHidden
-            disabled={!loaded}
-            value={settings.returnWindow}
-            onChange={(v) => {
-              setSettings((prev) => {
-                const next = { ...prev, returnWindow: v as NotificationSettings["returnWindow"] };
-                persist(next, "Couldn't update the return window").then((ok) => {
-                  if (ok) toast({ description: `Return window set to ${v} days`, duration: 1500 });
-                });
-                return next;
-              });
-            }}
-            options={[
-              { label: "14 days", value: "14" },
-              { label: "30 days", value: "30" },
-              { label: "60 days", value: "60" },
-              { label: "90 days", value: "90" },
-            ]}
-          />
-        </Card>
-      </Layout.AnnotatedSection>
     </Layout>
   );
 };

@@ -1,5 +1,7 @@
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { useRouteError, type HeadersFunction } from "react-router";
+import { useLoaderData, useRouteError, type HeadersFunction, type LoaderFunctionArgs } from "react-router";
+import { authenticate } from "../shopify.server";
+import { getMerchantReturnState } from "../services/ink-api.server";
 import { useState } from "react";
 import {
   Page,
@@ -10,7 +12,6 @@ import {
   Layout,
   Button,
 } from "@shopify/polaris";
-import PolarisAppLayout from "../components/PolarisAppLayout";
 
 // Comms-first FAQ (2026-07-05 pivot). The NFC-era FAQ (stickers, tag
 // inventory, "ink. Drop", per-tap pricing) is gone — none of it described
@@ -23,24 +24,19 @@ const faqSections = [
     title: "Getting started",
     items: [
       {
-        question: "What does the Ritualist do?",
+        question: "What does The Ritualist do?",
         answer:
           "Every order gets its own page — your brand, the order, and live delivery tracking in one place. Your customer gets a link by email or text when the order ships and when it arrives. The page is also where they can start a return.",
       },
       {
         question: "What do I have to set up?",
         answer:
-          "Almost nothing. Orders enroll automatically as they're placed. Your page is built from your existing brand and can be tuned any time from the Ritualist studio. Email and text notifications are controlled in Settings.",
+          "Almost nothing. Orders enroll automatically as they're placed. Your page is built from your existing brand and can be tuned any time from The Ritualist studio. Email and text notifications are controlled in Settings.",
       },
       {
         question: "Do I need to change my shipping or carrier?",
         answer:
           "No. The Ritualist sits on top of your existing setup. Your carrier, your warehouse workflow, your returns policy — nothing changes.",
-      },
-      {
-        question: "Do I need any hardware or stickers?",
-        answer:
-          "No. The Ritualist is software only — every order gets its page automatically the moment it's placed.",
       },
     ],
   },
@@ -51,26 +47,6 @@ const faqSections = [
         question: "What does my customer see?",
         answer:
           "A page in your brand — their order, where it is right now, and what you want them to see next. It opens in the browser from a link in their email or text. No app download, no login, no account creation.",
-      },
-      {
-        question: "What emails and texts go out?",
-        answer:
-          "Shipping and delivery updates, sent in your name. You choose which ones are on in Settings → Notifications. Shopify's own shipping emails can carry your page too — that tab shows you how.",
-      },
-    ],
-  },
-  {
-    title: "The delivery record",
-    items: [
-      {
-        question: "What does the Ritualist record about a delivery?",
-        answer:
-          "The carrier's delivery confirmation, timestamps, and — when your customer opens their page and allows location — where the order was opened. The record is cryptographically signed when it's created.",
-      },
-      {
-        question: "How does this help with disputes?",
-        answer:
-          "When a customer files a chargeback or claim, you have a signed record of the delivery, and pre-shipment photos if you use them — evidence of what was packed and that it arrived.",
       },
     ],
   },
@@ -85,7 +61,7 @@ const faqSections = [
       {
         question: "Does this replace my returns policy?",
         answer:
-          "No. Your policy and your rules stay yours — the Ritualist handles the customer-facing flow and keeps the status visible to you and to them.",
+          "No. Your policy and your rules stay yours — The Ritualist handles the customer-facing flow and keeps the status visible to you and to them.",
       },
     ],
   },
@@ -149,9 +125,19 @@ const FAQItem = ({
   );
 };
 
+// Returns are off for every pilot (the backend's return_enabled — see
+// ink-api getMerchantReturnState), so the Returns questions only show when
+// they are true for this store. PLAIN OBJECT, never a Response.
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const { returnsOn } = await getMerchantReturnState(session.shop);
+  return { returnsOn };
+};
+
 const Help = () => {
+  const { returnsOn } = useLoaderData<typeof loader>();
   return (
-    <PolarisAppLayout>
+    <>
       <Page title="Help & Support">
         <Layout>
           <Layout.Section>
@@ -167,7 +153,7 @@ const Help = () => {
                   that reaches the data and not the page is invisible to tsc
                   and to the suite (TECH_BIBLE law 9); only an eye on the
                   rendered screen catches it. */}
-              {faqSections.map((section) => (
+              {faqSections.filter((s) => s.title !== "Returns" || returnsOn).map((section) => (
                 <BlockStack key={section.title} gap="200">
                   <Text as="h3" variant="headingSm">
                     {section.title}
@@ -210,7 +196,7 @@ const Help = () => {
           </Layout.Section>
         </Layout>
       </Page>
-    </PolarisAppLayout>
+    </>
   );
 };
 

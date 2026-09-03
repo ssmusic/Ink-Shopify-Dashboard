@@ -5,8 +5,6 @@ import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-ro
 import { NavMenu } from "@shopify/app-bridge-react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
 import { authenticate, registerWebhooks } from "../shopify.server";
-import { ShopProvider } from "../contexts/ShopContext";
-import { ensureCarrierServiceRegistered } from "../services/carrier-service.server";
 import { createMerchant } from "../services/ink-api.server";
 import { getMerchant, updateMerchant } from "../services/merchant.server";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "../services/notification-settings";
@@ -15,11 +13,6 @@ import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
 
 import { Toaster } from "../components/ui/toaster";
-import { Toaster as Sonner } from "../components/ui/sonner";
-import { TooltipProvider } from "../components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-
-const queryClient = new QueryClient();
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -28,12 +21,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // by INK's internal merchant provisioning. This loader may create the
   // operational merchant record needed for orders/pages, but it must not mark
   // a merchant as subscribed or paid.
-  const appUrl = process.env.SHOPIFY_APP_URL || "";
-  if (appUrl) {
-    ensureCarrierServiceRegistered(admin, appUrl).catch((err) =>
-      console.error("[App] Carrier service registration error (non-blocking):", err)
-    );
-  }
   registerWebhooks({ session }).catch((err) =>
     console.error("[App] Webhook registration error (non-blocking):", err)
   );
@@ -146,19 +133,20 @@ export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ShopifyAppProvider embedded apiKey={apiKey}>
-        <PolarisAppProvider i18n={translations} linkComponent={PolarisLink}>
-          <ShopProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <Outlet />
-            </TooltipProvider>
-          </ShopProvider>
-        </PolarisAppProvider>
-      </ShopifyAppProvider>
-    </QueryClientProvider>
+    <ShopifyAppProvider embedded apiKey={apiKey}>
+      <PolarisAppProvider i18n={translations} linkComponent={PolarisLink}>
+        {/* Shopify's own left-rail navigation for the app (App Bridge NavMenu):
+            three destinations, and the first is home. The custom tab bar it
+            replaces (TopNav) was a second nav inside Shopify's nav. */}
+        <NavMenu>
+          <Link to="/app" rel="home">Home</Link>
+          <Link to="/app/billing">Billing</Link>
+          <Link to="/app/help">Help</Link>
+        </NavMenu>
+        <Toaster />
+        <Outlet />
+      </PolarisAppProvider>
+    </ShopifyAppProvider>
   );
 }
 

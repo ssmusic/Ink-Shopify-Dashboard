@@ -12,23 +12,21 @@ const shopify = shopifyApp({
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.October25,
 
-  // Scopes MUST match shopify.app.smusic.toml exactly to avoid session invalidation
+  // Scopes MUST match shopify.app.toml EXACTLY (the 8da1 "The Ritualist" app);
+  // a config that asks for more than a session holds forces re-auth.
   scopes: [
     "read_assigned_fulfillment_orders",
     "write_assigned_fulfillment_orders",
+    "read_merchant_managed_fulfillment_orders",
+    "write_merchant_managed_fulfillment_orders",
+    "read_third_party_fulfillment_orders",
+    "write_third_party_fulfillment_orders",
     "read_customers",
-    "read_files",
-    "write_files",
     "read_fulfillments",
     "write_fulfillments",
-    "read_metaobjects",
-    "write_metaobjects",
-    "read_online_store_pages",
-    "write_online_store_pages",
     "read_orders",
     "write_orders",
-    "write_shipping",
-    "write_themes",
+    "read_products",
   ],
 
   appUrl: process.env.SHOPIFY_APP_URL || "",

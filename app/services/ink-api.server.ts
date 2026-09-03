@@ -94,6 +94,32 @@ export const getShopIdByDomain = async (shopDomain: string): Promise<string> => 
     return merchant.shop_id;
 };
 
+// WHAT THE BACKEND SAYS ABOUT THIS STORE'S RETURNS. Absent means OFF:
+// eligibility refuses on `!merchant.return_enabled` (ink-backend
+// utils/returnEligibility.js → MERCHANT_RETURNS_DISABLED), and the embed's own
+// provision never sends that field — so a store installed from Shopify has no
+// return door until someone turns it on. That is the pilot's money fence (Sam,
+// 2026-09-03: "no returns on a pilot — returns is an upsell"; a real label runs
+// ~$8 on ink's own carrier account). Fails CLOSED: unknown reads as off, so a
+// settings section is never shown for a feature that will refuse the buyer.
+export const getMerchantReturnState = async (
+  shopDomain: string,
+): Promise<{ returnsOn: boolean; hasReturnAddress: boolean }> => {
+  const off = { returnsOn: false, hasReturnAddress: false };
+  try {
+    const listRes = await fetch(getAlanUrl("/admin/merchants?limit=200"), {
+      headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
+    });
+    if (!listRes.ok) return off;
+    const { merchants } = await listRes.json();
+    const m = merchants?.find((x: any) => x.shop_domain === shopDomain);
+    return { returnsOn: Boolean(m?.return_enabled), hasReturnAddress: Boolean(m?.return_address) };
+  } catch (e) {
+    console.warn("[ink-api] return state unavailable; treating as off:", e);
+    return off;
+  }
+};
+
 // Real verified-tap + enrollment totals for a merchant, summed from Alan's proof
 // rows (GET /admin/proofs?merchant_id=<shop_id>, which returns tap_count per row).
 // Powers the dashboard's "verified engagements" number — replaces the hardcoded
