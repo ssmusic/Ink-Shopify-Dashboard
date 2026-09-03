@@ -140,7 +140,7 @@ const HomePage = (data: HomeData) => {
         </Layout>
 
         <div id="notifications">
-          <CommunicationSettings shopDomain={data.shopDomain} returnsOn={data.returnsOn} />
+          <CommunicationSettings shopDomain={data.shopDomain} />
         </div>
 
         <Card>
