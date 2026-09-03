@@ -1,20 +1,10 @@
-import { Outlet } from "react-router";
-import { useRouteError } from "react-router";
-import type { HeadersFunction } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
+import { redirect, type LoaderFunctionArgs } from "react-router";
 
-/**
- * Layout wrapper for all /app/tagged-shipments/* routes.
- * The actual content lives in:
- *   _index.tsx  → /app/tagged-shipments  (list)
- *   $orderId.tsx → /app/tagged-shipments/:id (detail)
- */
-export default function TaggedShipmentsLayout() {
-  return <Outlet />;
-}
-
-export function ErrorBoundary() {
-  return boundary.error(useRouteError());
-}
-
-export const headers: HeadersFunction = (args) => boundary.headers(args);
+// This page folded into Home. Anything still linking here — a bookmark, the
+// review's written steps, an old email — lands on /app with its embedded
+// params intact. Resource route (no component), so a redirect Response is
+// exactly right; see app/contracts/route-contracts.test.ts.
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  throw redirect(`/app${url.search}`);
+};

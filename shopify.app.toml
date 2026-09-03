@@ -115,7 +115,14 @@ api_version = "2025-10"
 # separately and fail open (webhooks.orders_create.ts, PRODUCT_URLS_QUERY), so
 # a store that has not re-consented still enrolls normally and simply carries
 # no product link. This scope is what turns that link on.
-scopes = "read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders,read_customers,read_files,write_files,read_fulfillments,write_fulfillments,read_metaobjects,write_metaobjects,read_online_store_pages,write_online_store_pages,read_orders,write_orders,read_products,write_shipping,write_themes"
+# TRIMMED 2026-09-03 to the scopes the code exercises (grep of every Admin
+# API call): fulfillment tracking (the three who-fulfills pairs +
+# read/write_fulfillments), orders (read + tags/metafields), read_customers
+# (the buyer's name/email for the page and the emails), read_products (the
+# product link). Dropped as unused: write_themes, read/write_online_store_pages,
+# read/write_metaobjects, read/write_files, write_shipping (the carrier service
+# no longer registers). Removing scopes never re-prompts a merchant; adding does.
+scopes = "read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders,read_customers,read_fulfillments,write_fulfillments,read_orders,write_orders,read_products"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

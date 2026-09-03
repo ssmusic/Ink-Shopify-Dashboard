@@ -10,7 +10,6 @@ import {
   Layout,
   Button,
 } from "@shopify/polaris";
-import PolarisAppLayout from "../components/PolarisAppLayout";
 
 // Comms-first FAQ (2026-07-05 pivot). The NFC-era FAQ (stickers, tag
 // inventory, "ink. Drop", per-tap pricing) is gone — none of it described
@@ -37,11 +36,6 @@ const faqSections = [
         answer:
           "No. The Ritualist sits on top of your existing setup. Your carrier, your warehouse workflow, your returns policy — nothing changes.",
       },
-      {
-        question: "Do I need any hardware or stickers?",
-        answer:
-          "No. The Ritualist is software only — every order gets its page automatically the moment it's placed.",
-      },
     ],
   },
   {
@@ -51,26 +45,6 @@ const faqSections = [
         question: "What does my customer see?",
         answer:
           "A page in your brand — their order, where it is right now, and what you want them to see next. It opens in the browser from a link in their email or text. No app download, no login, no account creation.",
-      },
-      {
-        question: "What emails and texts go out?",
-        answer:
-          "Shipping and delivery updates, sent in your name. You choose which ones are on in Settings → Notifications. Shopify's own shipping emails can carry your page too — that tab shows you how.",
-      },
-    ],
-  },
-  {
-    title: "The delivery record",
-    items: [
-      {
-        question: "What does the Ritualist record about a delivery?",
-        answer:
-          "The carrier's delivery confirmation, timestamps, and — when your customer opens their page and allows location — where the order was opened. The record is cryptographically signed when it's created.",
-      },
-      {
-        question: "How does this help with disputes?",
-        answer:
-          "When a customer files a chargeback or claim, you have a signed record of the delivery, and pre-shipment photos if you use them — evidence of what was packed and that it arrived.",
       },
     ],
   },
@@ -151,7 +125,7 @@ const FAQItem = ({
 
 const Help = () => {
   return (
-    <PolarisAppLayout>
+    <>
       <Page title="Help & Support">
         <Layout>
           <Layout.Section>
@@ -210,7 +184,7 @@ const Help = () => {
           </Layout.Section>
         </Layout>
       </Page>
-    </PolarisAppLayout>
+    </>
   );
 };
 

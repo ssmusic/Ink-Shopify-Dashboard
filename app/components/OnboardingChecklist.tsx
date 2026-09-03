@@ -54,7 +54,7 @@ const OnboardingChecklist = ({
         : "Let buyers know when their order ships and arrives — sent as you, by email or text.",
       cta: s.notificationsOn
         ? undefined
-        : { label: "Open Settings", to: "/app/settings?tab=communication" },
+        : { label: "Open notifications", to: "#notifications" },
     },
     {
       key: "firstorder",
@@ -66,7 +66,7 @@ const OnboardingChecklist = ({
               s.deliveries > 0 ? ` · ${s.deliveries} delivered` : ""
             }${s.opens > 0 ? ` · ${s.opens} opened` : ""}.`
           : "New orders enroll automatically. Place a test order, or wait for your next real one.",
-      cta: s.ordersEnrolled > 0 ? { label: "View orders", to: "/app/tagged-shipments" } : undefined,
+      cta: s.ordersEnrolled > 0 ? { label: "View orders", to: "#orders" } : undefined,
     },
   ];
 

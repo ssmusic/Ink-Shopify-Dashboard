@@ -5,6 +5,11 @@ import globalStyles from "./styles/globals.css?url";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: globalStyles },
+  // The product's faces (Geist · Archivo Black · JetBrains Mono) — the door
+  // card wears the site's type, not Shopify's. Measured from www.in.ink's CSS.
+  { rel: "preconnect", href: "https://fonts.googleapis.com" },
+  { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+  { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" },
   { rel: "stylesheet", href: premiumStyles },
 ];
 
