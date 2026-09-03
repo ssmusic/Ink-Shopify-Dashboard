@@ -22,12 +22,12 @@ export default function BillingPage() {
     <Page title="Billing" backAction={{ content: "Home", url: "/app" }}>
       <Card>
         <BlockStack gap="200">
-          <Text as="h2" variant="headingSm">Your Shopify plan is Free.</Text>
+          {/* Sam's words, 2026-09-03. */}
+          <Text as="h2" variant="headingSm">We are free for now.</Text>
           <Text as="p" tone="subdued">
             There is no subscription charge, trial, usage fee, card on file, or off-platform
             invoice. Installing the app creates no charge. If paid plans are introduced later,
-            Shopify will present them for approval and add approved charges to your regular
-            Shopify invoice. Nothing starts on its own.
+            you’ll choose and approve one inside Shopify — nothing will start on its own.
           </Text>
         </BlockStack>
       </Card>

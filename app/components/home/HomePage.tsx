@@ -146,7 +146,9 @@ const HomePage = (data: HomeData) => {
         <Card>
           <BlockStack gap="200">
             <Text as="h2" variant="headingMd">Cost</Text>
-            <Text as="p" fontWeight="semibold">Your Shopify plan is Free.</Text>
+            {/* Sam's words, 2026-09-03 — he rejected "Your Shopify plan is Free"
+                (it reads as the merchant's own Shopify subscription). */}
+            <Text as="p" fontWeight="semibold">We are free for now.</Text>
             <Text as="p" tone="subdued">
               There is no subscription charge, trial, usage fee, or off-platform invoice. Installing
               the app creates no charge. If paid plans are introduced later, you’ll choose and approve
