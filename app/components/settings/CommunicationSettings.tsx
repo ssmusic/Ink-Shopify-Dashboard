@@ -375,15 +375,6 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
               title="Email"
               description="Send notifications by email."
             />
-            <Divider />
-            <ToggleRow
-              checked={false}
-              onToggle={() => {}}
-              disabled
-              title="SMS"
-              suffix={<Badge>Pending verification</Badge>}
-              description="Our sending number is going through carrier verification. Text notifications turn on here once it clears."
-            />
           </BlockStack>
         </Card>
       </Layout.AnnotatedSection>
@@ -413,40 +404,6 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
               onToggle={() => toggle("delivery", "deliveryConfirmed", "Delivery confirmed")}
               title="Delivery confirmed"
               description="Sent after the customer opens their page."
-            />
-          </BlockStack>
-        </Card>
-      </Layout.AnnotatedSection>
-
-      {/* Kept visible, plainly marked: the toggles round-trip but nothing
-          sends them yet — the scheduler is its own build. Showing them ON
-          while nothing sends is the exact dishonesty this page had. */}
-      <Layout.AnnotatedSection
-        title="Return Window Reminders"
-        description="Sent as a customer's return window approaches closing."
-      >
-        <Card>
-          <BlockStack gap="400">
-            <InlineStack gap="200" blockAlign="center">
-              <Badge>Coming soon</Badge>
-              <Text as="p" tone="subdued" variant="bodySm">
-                Not sending yet.
-              </Text>
-            </InlineStack>
-            <ToggleRow
-              checked={settings.returnReminders.days7}
-              onToggle={() => {}}
-              disabled
-              title="7 days before the window closes"
-              description="Early reminder, with the return link."
-            />
-            <Divider />
-            <ToggleRow
-              checked={settings.returnReminders.hours48}
-              onToggle={() => {}}
-              disabled
-              title="48 hours before the window closes"
-              description="Last call."
             />
           </BlockStack>
         </Card>

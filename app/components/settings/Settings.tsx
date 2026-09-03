@@ -7,7 +7,6 @@ import TagsSettings from "./TagsSettings";
 import { FEATURE_NFC } from "../../flags";
 import BrandingSettings from "./BrandingSettings";
 import CommunicationSettings from "./CommunicationSettings";
-import UserManagementSettings from "./UserManagementSettings";
 import DeliveryModeSettings from "./DeliveryModeSettings";
 
 const tabs = [
@@ -17,7 +16,6 @@ const tabs = [
   ...(FEATURE_NFC ? [{ id: "tags", content: "Inventory" }] : []),
   { id: "branding", content: "Media" },
   { id: "communication", content: "Notifications" },
-  { id: "users", content: "Users" },
 ];
 
 const Settings = ({ initialData }: { initialData?: any }) => {
@@ -42,7 +40,6 @@ const Settings = ({ initialData }: { initialData?: any }) => {
       // shopDomain builds the deep link into THIS store's Shopify notification
       // settings — the merchant shouldn't have to go find it.
       case "communication": return <CommunicationSettings shopDomain={initialData?.shopDomain} />;
-      case "users": return <UserManagementSettings />;
       default: return <AccountSettings />;
     }
   };
