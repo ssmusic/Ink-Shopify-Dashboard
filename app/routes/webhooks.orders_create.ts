@@ -12,6 +12,7 @@ import {
   stateOfWebhookOrder,
 } from "../services/activation-scope.server";
 import { spendFromCap } from "../services/activation-counter.server";
+import { orderMoneyFromWebhook } from "../services/order-money";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -484,7 +485,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               finalPhone || order.customer?.phone || null,
               // The buyer's own order-status page on the merchant's site.
               // Shopify has always sent it in this body; we never read it.
-              { orderStatusUrl: data?.order_status_url || null, shopDomain: shop || null }
+              // And (Track C) the order's own money — total, currency, the
+              // codes the buyer typed — from the same body: no query, no
+              // scope, no cost, and a total the backend never has to guess.
+              {
+                orderStatusUrl: data?.order_status_url || null,
+                shopDomain: shop || null,
+                money: orderMoneyFromWebhook(data),
+              }
             );
 
           let inkData: any;

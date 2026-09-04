@@ -62,6 +62,16 @@ api_version = "2025-10"
   topics = [ "orders/fulfilled" ]
   uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/orders_fulfilled"
 
+  # THE DISCOUNTS DOOR (Track C, 2026-09-04). App-level and declarative like
+  # orders/*, never ALSO registered imperatively (§17.8: two registrations =
+  # two deliveries). These topics need `read_discounts`, which is OPTIONAL
+  # below: a shop that never granted it simply never hears them, and Shopify
+  # forces no re-consent on anyone. One handler, webhooks.discounts.ts,
+  # switches on the topic — the five bodies differ only in what they carry.
+  [[webhooks.subscriptions]]
+  topics = [ "discounts/create", "discounts/update", "discounts/delete", "discounts/redeemcode_added", "discounts/redeemcode_removed" ]
+  uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/discounts"
+
   # GDPR compliance topics — MANDATORY for App Store review (auto-fail if
   # missing). Handlers already existed; this registers them. HMAC is verified
   # by authenticate.webhook(), which 401s invalid signatures (also required).
@@ -116,7 +126,14 @@ api_version = "2025-10"
 # a store that has not re-consented still enrolls normally and simply carries
 # no product link. This scope is what turns that link on.
 scopes = "read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders,read_customers,read_files,write_files,read_fulfillments,write_fulfillments,read_metaobjects,write_metaobjects,read_online_store_pages,write_online_store_pages,read_orders,write_orders,read_products,write_shipping,write_themes"
-optional_scopes = [ ]
+# OPTIONAL scopes are per-installation (Track C, 2026-09-04): only the
+# merchant who presses "Allow" on Settings › Account › Shopify discounts is
+# asked, in a modal, and nobody else re-consents. `read_discounts` is the
+# discounts door (the webhooks above + the backfill on grant);
+# `write_discounts` lets the Ritualist create a campaign's code in the store
+# so the code on the page is real. A config push (`shopify app deploy`) is
+# still Sam's act — but it is not a re-consent event.
+optional_scopes = [ "read_discounts", "write_discounts" ]
 use_legacy_install_flow = false
 
 [auth]
