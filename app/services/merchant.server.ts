@@ -15,6 +15,12 @@ export interface MerchantData {
   /** First provision. Settings renders this as the install date — it was
    *  never written, so that row read "Not available" forever. */
   createdAt?: string;
+  /** The discounts door (Track C): when this store's discounts were last
+   *  walked into the backend after the read_discounts grant, how many, and
+   *  whether the walk was cut short (a webhook-time backfill is bounded). */
+  discounts_backfilled_at?: string;
+  discounts_backfill_count?: number;
+  discounts_backfill_partial?: boolean;
 }
 
 export const getMerchant = async (shop: string): Promise<MerchantData | null> => {

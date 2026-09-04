@@ -1,4 +1,6 @@
 import { authenticate } from "../shopify.server";
+import { buildEnrollPayload, type EnrollOrderContext } from "./enroll-payload";
+import type { DiscountDoorEntry } from "./shopify-discounts.server";
 
 const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
 const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET;
@@ -255,68 +257,23 @@ export const enrollOrder = async (
     carrierName?: string | null,
     trackingNumber?: string | null,
     customerPhone?: string | null,
-    // WHERE THE BUYER CAN SEE THIS ORDER ON THE MERCHANT'S OWN SITE.
-    // An options bag rather than two more positional args — this signature is
-    // already fourteen deep, and the two other enroll call sites (warehouse,
-    // tagged-shipments) simply don't pass it and are unaffected.
-    orderContext?: { orderStatusUrl?: string | null; shopDomain?: string | null }
+    // WHERE THE BUYER CAN SEE THIS ORDER ON THE MERCHANT'S OWN SITE, and (Track
+    // C) THE ORDER'S OWN MONEY. An options bag rather than more positional
+    // args — this signature is already fourteen deep, and the two other enroll
+    // call sites (warehouse, tagged-shipments) simply don't pass it and are
+    // unaffected. The body itself is built in enroll-payload.ts (pure, pinned
+    // by test); this function only sends it.
+    orderContext?: EnrollOrderContext
 ) => {
-    // Alan's API was changed to require order details nested in an
-    // `order_details` JSON object rather than as separate top-level fields.
-    // The v1.5 docs describe the old shape, but the live API rejects that
-    // with "order_details must be a JSON object" (verified in Cloud Run logs
-    // 2026-04-26). Nesting works around it without waiting on Alan to either
-    // revert or update docs. Top-level operational fields (order_id,
-    // nfc_token, photos, GPS, carrier) stay where they are.
-    const payload: any = {
-        order_id: orderId, // numeric ID string
-        nfc_token: nfcToken,
-        order_details: {
-            order_number: orderNumber,
-            // Parallel renders order_details.customer_name (no fallback to
-            // shipping_address.name), so lift the recipient name up to it —
-            // otherwise "Customer"/"Ship To" stay blank in the dashboard.
-            customer_name:
-                (shippingAddress && typeof shippingAddress === "object"
-                    ? shippingAddress.name
-                    : "") || "",
-            customer_email: customerEmail || "",
-            customer_phone: customerPhone || "",
-            shipping_address: shippingAddress,
-            product_details: productDetails,
-        },
-    };
-
-    // Shopify's orders/create body has always carried `order_status_url` — the
-    // buyer's own order-status page, no login required. We simply never read
-    // it, so no proof has ever held one and the tap page has had no honest way
-    // to say "view your order". Nothing downstream needs changing to accept it:
-    // the backend's validation spreads unknown keys and the serializer emits
-    // the whole object, so it reaches the customer wire for free.
-    //
-    // Only stamped when present — an absent field must stay absent rather than
-    // become an empty string, because the page hides the link on absence and
-    // "" would render a dead one (law 7).
-    if (orderContext?.orderStatusUrl) {
-        payload.order_details.order_status_url = orderContext.orderStatusUrl;
-    }
-    // The real shop domain, alongside it. `proof.merchant` and `proof.shop_id`
-    // are BOTH the merchant_id despite the comment on the former saying
-    // shop_domain, so nothing on the wire has ever carried the actual host.
-    if (orderContext?.shopDomain) {
-        payload.order_details.shop_domain = orderContext.shopDomain;
-    }
-
-    if (warehouseLocation) payload.warehouse_location = warehouseLocation;
-    if (nfcUid) payload.nfc_uid = nfcUid;
-    if (photoUrls && photoUrls.length > 0) payload.photo_urls = photoUrls;
-    if (photoHashes && photoHashes.length > 0) payload.photo_hashes = photoHashes;
-    if (carrierName) payload.carrier_name = carrierName;
-    if (trackingNumber) payload.tracking_number = trackingNumber;
+    const payload = buildEnrollPayload({
+        orderId, nfcToken, orderNumber, customerEmail, shippingAddress, productDetails,
+        warehouseLocation, nfcUid, photoUrls, photoHashes, carrierName, trackingNumber,
+        customerPhone, orderContext,
+    });
 
     const enrollUrl = getAlanUrl('/api/enroll');
     console.log("[ink-api] enrollOrder →", enrollUrl);
-    console.log("[ink-api] enrollOrder payload (no sensitive):", JSON.stringify({ order_id: payload.order_id, nfc_token: payload.nfc_token, order_number: payload.order_number }));
+    console.log("[ink-api] enrollOrder payload (no sensitive):", JSON.stringify({ order_id: payload.order_id, nfc_token: payload.nfc_token, order_number: payload.order_details.order_number }));
     const response = await fetch(enrollUrl, {
         method: "POST",
         headers: {
@@ -333,6 +290,34 @@ export const enrollOrder = async (
         throw new Error(`Enrollment failed: ${errText}`);
     }
     return await response.json();
+};
+
+// THE DISCOUNTS DOOR (Track C). Hands Shopify's discount events — the thin
+// webhook bodies verbatim, and the DiscountNodes read back — to the backend,
+// which owns the record and merges every event onto one row. Bearer
+// ink_api_key on purpose: that names the exact merchant record enrol writes
+// (a connected store can hold TWO — the two-record trap), so a discount can
+// never land on the demo twin. Throws on refusal; callers log and, in a
+// webhook, still return 200.
+export const reportShopifyDiscounts = async (
+    apiKey: string,
+    entries: DiscountDoorEntry[],
+): Promise<{ written: number; skipped: number[] }> => {
+    if (!entries.length) return { written: 0, skipped: [] };
+    const response = await fetch(getAlanUrl('/api/promos/shopify'), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ discounts: entries }),
+    });
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(`promos/shopify ${response.status} ${errorText}`.trim());
+    }
+    const data = await response.json().catch(() => ({}));
+    return { written: Number(data?.written) || 0, skipped: Array.isArray(data?.skipped) ? data.skipped : [] };
 };
 
 export const getProof = async (apiKey: string, nfcToken: string) => {
