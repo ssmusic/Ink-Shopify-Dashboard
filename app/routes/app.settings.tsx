@@ -4,10 +4,14 @@ import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { getInventory, getInventoryByShopDomain, getShopIdByDomain } from "../services/ink-api.server";
 import Settings from "../components/settings/Settings";
+import { readActivePlan } from "../services/billing-read.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { admin, session } = await authenticate.admin(request);
-  
+  const { admin, session, billing } = await authenticate.admin(request);
+
+  // 0. The plan this store is on, from Shopify — never throws (billing-read).
+  const plan = await readActivePlan(billing, "[settings]");
+
   // 1. Get shop details from Shopify — NEVER let this throw.
   //
   // THIS IS THE "200 ERROR PAGE". When a call cannot be authorised,
@@ -99,6 +103,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
      primaryDomain: shop?.primaryDomain?.host || session.shop,
      contactEmail: shop?.contactEmail || "",
      installedDate,
+     plan,
      inventoryData: {
        current: inventoryStr,
        usedThisPeriod: usedStr
