@@ -3,7 +3,7 @@ import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { enrollOrder, createMerchant } from "../services/ink-api.server";
 import { attachProductUrls, productDetailFromLineItem } from "../services/order-line-item";
-import { findActivationDocRef } from "../services/merchant-doc.server";
+import { findActivationDocRef, findMerchantDocRef, type MerchantDocRefHit } from "../services/merchant-doc.server";
 import {
   countryOfWebhookOrder,
   orderActivates,
@@ -14,58 +14,32 @@ import {
 import { spendFromCap } from "../services/activation-counter.server";
 
 /**
- * Look up the merchant's verified-delivery mode preference.
- * Defaults to "background" so a missing preference never implies a
- * customer-paid checkout add-on.
+ * The merchant, resolved ONCE per webhook delivery through the SAME
+ * resolver the settings routes use — `findMerchantDocRef`, not the two
+ * private, single-convention ("shopDomain" field, then doc-id) lookups this
+ * used to carry (one for the delivery-mode preference, one — byte-identical
+ * to the warehouse enroll proxy's — for the ink_api_key Alan's /api/enroll
+ * needs). Both missed the backend's snake_case shop_domain doc and never
+ * preferred the doc actually carrying the key: on a store holding two
+ * merchant docs, enrollment could silently run with NO key (the order is
+ * recorded and never gets a page) or, worse, re-provision a fresh one on
+ * every 401 instead of ever finding the real doc (§17.2 landmine).
+ *
+ * Delivery mode defaults to "background" so a missing preference never
+ * implies a customer-paid checkout add-on; there is currently only one
+ * valid mode, so the read is precautionary/consistency, not load-bearing.
  */
-async function getMerchantDeliveryMode(
-  shopDomain: string
-): Promise<"background"> {
+async function resolveMerchantForEnroll(
+  shopDomain: string,
+): Promise<{ hit: MerchantDocRefHit | null; deliveryMode: "background"; apiKey: string | null }> {
+  let hit: MerchantDocRefHit | null = null;
   try {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-    let docData = snapshot.empty ? null : snapshot.docs[0].data();
-    if (!docData) {
-      const direct = await firestore.collection("merchants").doc(shopDomain).get();
-      if (direct.exists) docData = direct.data() ?? null;
-    }
-    const mode = docData?.verified_delivery_mode;
-    if (mode === "background") return mode;
-    return "background";
+    hit = await findMerchantDocRef(firestore, shopDomain);
   } catch (e) {
-    console.warn(
-      `[orders/create] Failed to read delivery mode for ${shopDomain}, defaulting to background:`,
-      e
-    );
-    return "background";
+    console.warn(`[orders/create] Failed to resolve merchant doc for ${shopDomain}:`, e);
   }
-}
-
-/**
- * The merchant's INK api_key — the Bearer Alan's /api/enroll (requireMerchant)
- * needs. Same source the warehouse enroll uses.
- */
-async function getMerchantApiKey(shopDomain: string): Promise<string | null> {
-  try {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-    let data = snapshot.empty ? null : snapshot.docs[0].data();
-    if (!data) {
-      const direct = await firestore.collection("merchants").doc(shopDomain).get();
-      if (direct.exists) data = direct.data() ?? null;
-    }
-    const key = data?.ink_api_key;
-    return key && key !== "sk_test_fallback" ? key : null;
-  } catch (e) {
-    console.warn(`[orders/create] getMerchantApiKey failed for ${shopDomain}:`, e);
-    return null;
-  }
+  const apiKey = hit?.apiKey && hit.apiKey !== "sk_test_fallback" ? hit.apiKey : null;
+  return { hit, deliveryMode: "background", apiKey };
 }
 
 function genNfcToken(): string {
@@ -269,7 +243,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   // Background enrollment: INK is hidden from checkout and never appears as a
   // customer-paid shipping option, so every order on this shop is eligible.
-  const deliveryMode = await getMerchantDeliveryMode(shop);
+  // Resolved ONCE here — reused below for the ink_api_key and, on a stale-key
+  // retry, for the ref to update.
+  const { hit: merchantHit, deliveryMode, apiKey: resolvedApiKey } = await resolveMerchantForEnroll(shop);
   // The merchant doc FOR THE SLICE, through the slice's own resolver. A
   // connected store can hold TWO merchant docs, and the workspace's save can
   // only ever reach the ACTIVE one — reading the api-key doc here (as
@@ -345,7 +321,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     let inkToken = "";
     let verificationStatus = "pending";
     try {
-      const apiKey = await getMerchantApiKey(shop);
+      const apiKey = resolvedApiKey;
       if (!apiKey) {
         console.warn(
           // NOT "order tagged" any more: a merchant who narrowed by product
@@ -509,13 +485,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               const fresh = await createMerchant(shop, shopIdentity?.name || shop, ownerEmail);
               const freshKey = fresh?.api_key;
               if (!freshKey) throw e;
-              const snap = await firestore
-                .collection("merchants")
-                .where("shopDomain", "==", shop)
-                .limit(1)
-                .get();
-              if (!snap.empty) {
-                await snap.docs[0].ref.update({ ink_api_key: freshKey, updatedAt: new Date() });
+              // Write through the SAME ref resolveMerchantForEnroll already
+              // found for this shop (any doc shape) — a fresh ad hoc query
+              // here (as this used to run) could create a THIRD doc instead
+              // of healing the one the resolver, and everything downstream,
+              // actually reads.
+              if (merchantHit?.ref) {
+                await merchantHit.ref.update({ ink_api_key: freshKey, updatedAt: new Date() });
               } else {
                 await firestore
                   .collection("merchants")

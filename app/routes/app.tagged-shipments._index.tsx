@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useLoaderData, useRevalidator, useRouteError, type HeadersFunction } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { getMerchant } from "../services/merchant.server";
 import { enrollOrder } from "../services/ink-api.server";
 import {
   Page,

@@ -2,6 +2,7 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
 import { verifyProxyToken } from "../services/token-verify.server";
 import { authenticate } from "../shopify.server";
+import { findMerchantDocRefByEither } from "../services/merchant-doc.server";
 
 const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
 const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET;
@@ -54,20 +55,23 @@ async function decodeToken(token: string): Promise<{ shop?: string; merchant_id?
   return { shop: payload.shop as string | undefined, merchant_id: payload.merchant_id as string | undefined };
 }
 
+// WHICH MERCHANT DOC. `findMerchantDocRefByEither` — the same resolver the
+// fulfillment webhook uses, tried against merchant_id then shopDomain. This
+// used to be a private lookup (merchant_id-as-doc-id, then a single
+// "shopDomain" field query) that missed the backend's snake_case
+// shop_domain convention and never preferred the doc carrying ink_api_key —
+// the §17.2 landmine. On a store holding two merchant docs, uploaded media
+// could be saved to one doc while ConsumerTap (which reads via Alan's own
+// shop_id) renders from the other, or a later save silently starts a SECOND
+// media list this endpoint never sees again.
 async function getMerchantDoc(shopDomain?: string, merchantId?: string) {
-  if (merchantId) {
-    const doc = await firestore.collection("merchants").doc(merchantId).get();
-    if (doc.exists) return doc;
-  }
-  if (shopDomain) {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-    if (!snapshot.empty) return snapshot.docs[0];
-  }
-  return null;
+  const hit = await findMerchantDocRefByEither(firestore, { shopDomain, merchantId });
+  if (!hit) return null;
+  return {
+    exists: true,
+    data: () => hit.data,
+    ref: hit.ref,
+  };
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
