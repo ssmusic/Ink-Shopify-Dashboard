@@ -2,6 +2,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useLoaderData, type LoaderFunctionArgs, useRouteError, type HeadersFunction } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
+import { findMerchantDoc } from "../services/merchant-doc.server";
 import { getInventory, getInventoryByShopDomain, getShopIdByDomain } from "../services/ink-api.server";
 import Settings from "../components/settings/Settings";
 
@@ -57,20 +58,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let usedStr = "0";
 
   try {
-    // BY DOCUMENT ID FIRST. The embedded app provisions with
-    // `merchants.doc(shop).set({ shop, … })`, so `where("shopDomain", …)` never
-    // matched it — which is why this read "Not available" for every merchant,
-    // permanently, no matter how long ago they installed. The query is kept as
-    // a fallback: the standalone auth path creates docs with random ids and a
-    // `shopDomain` field.
-    let data: Record<string, any> | undefined;
-    const byId = await firestore.collection("merchants").doc(session.shop).get();
-    if (byId.exists) {
-      data = byId.data();
-    } else {
-      const merchantDocs = await firestore.collection("merchants").where("shopDomain", "==", session.shop).limit(1).get();
-      if (!merchantDocs.empty) data = merchantDocs.docs[0].data();
-    }
+    // ONE RESOLVER. The embedded app provisions by document id and the
+    // standalone auth path creates docs with random ids and a `shopDomain`
+    // field, which is why this row read "Not available" for every merchant
+    // until it learned to try both. It tried them in its own private order —
+    // findMerchantDoc is that same search, and it is the one updateMerchant
+    // now stamps `createdAt` through. On a store holding two merchant docs the
+    // private order read the one provisioning never wrote, and the row went
+    // blank again.
+    const data = (await findMerchantDoc(firestore, session.shop))?.data;
     if (data?.createdAt) {
       const date = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
       if (!Number.isNaN(date.getTime())) {

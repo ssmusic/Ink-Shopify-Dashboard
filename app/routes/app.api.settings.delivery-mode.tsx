@@ -11,11 +11,20 @@
  *                  of which shipping method the customer picked.
  *
  * Reads/writes are gated by `authenticate.admin(request)` from Shopify.
+ *
+ * WHICH MERCHANT DOC. `findMerchantDocRef` — the same resolver the orders/create
+ * webhook uses to read this field back, not a private lookup. Both sides used
+ * to carry their own (`where("shopDomain")` first, doc-id second). They agreed
+ * on all thirteen connected shops when measured 2026-09-05, but only because a
+ * `limit(1)` field query happened to return the same document the webhook
+ * wanted — Firestore promises no ordering there, so the agreement was luck,
+ * not design. One resolver on both ends makes it design.
  */
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
 import { authenticate } from "../shopify.server";
 import { setCarrierServiceActive } from "../services/carrier-service.server";
+import { findMerchantDocRef } from "../services/merchant-doc.server";
 
 const VALID_MODES = ["background"] as const;
 type DeliveryMode = (typeof VALID_MODES)[number];
@@ -32,29 +41,16 @@ const json = (data: any, init?: ResponseInit) =>
     ...init,
   });
 
-async function getMerchantDoc(shopDomain: string) {
-  const snapshot = await firestore
-    .collection("merchants")
-    .where("shopDomain", "==", shopDomain)
-    .limit(1)
-    .get();
-  if (!snapshot.empty) return snapshot.docs[0];
-  // Fallback: doc keyed by domain directly
-  const direct = await firestore.collection("merchants").doc(shopDomain).get();
-  if (direct.exists) return direct;
-  return null;
-}
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  const { session } = await authenticate.admin(request);
-  const shopDomain = session.shop;
+  // The gate still runs; the GET has nothing merchant-specific to read —
+  // "background" is the only mode this app supports.
+  await authenticate.admin(request);
 
   try {
-    const doc = await getMerchantDoc(shopDomain);
     const mode: DeliveryMode = "background";
     return json({ mode });
   } catch (err: any) {
@@ -86,8 +82,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    const doc = await getMerchantDoc(shopDomain);
-    if (!doc) {
+    const hit = await findMerchantDocRef(firestore, shopDomain);
+    if (!hit) {
       console.warn(
         `[settings/delivery-mode] Merchant doc not found for ${shopDomain}; cannot persist mode`
       );
@@ -97,7 +93,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    await doc.ref.update({
+    await hit.ref.update({
       verified_delivery_mode: mode,
       updatedAt: new Date(),
     });

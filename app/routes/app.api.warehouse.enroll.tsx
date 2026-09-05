@@ -33,33 +33,19 @@ const INK_API_URL =
 // JWTs. The old decode-without-verify fallback is gone (fix-list #2).
 
 import { enrollOrder, getShopIdByDomain, adjustMerchantInventory, getInventoryByShopDomain } from "../services/ink-api.server";
+import { findMerchantDocRefByShopOrId } from "../services/merchant-doc.server";
 
+/** The merchant's INK api_key, through the resolver that WRITES it.
+ *
+ *  api/auth/login and the orders/create self-heal both cache the key through
+ *  findMerchantDocRef, which returns the document that actually carries one.
+ *  This carried its own lookup (doc-id by merchant_id, then
+ *  `where("shopDomain")`) and could stop on a keyless document while the key
+ *  sat one doc over — measured on a connected store, 2026-09-05. */
 async function getMerchantApiKey(shopDomain?: string, merchantId?: string): Promise<string | null> {
-  // 1. Try matching by Firestore document ID (=== merchant_id from Alan JWT)
-  if (merchantId) {
-    const doc = await firestore.collection("merchants").doc(merchantId).get();
-    if (doc.exists) {
-      const apiKey = doc.data()?.ink_api_key;
-      if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
-    }
-  }
-
-  // 2. Try matching by shopDomain field
-  if (shopDomain) {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-
-    if (!snapshot.empty) {
-      const data = snapshot.docs[0].data();
-      const apiKey = data?.ink_api_key;
-      if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
-    }
-  }
-
-  return null;
+  const hit = await findMerchantDocRefByShopOrId(firestore, shopDomain, merchantId);
+  const apiKey = hit?.apiKey ?? hit?.data?.ink_api_key;
+  return apiKey && apiKey !== "sk_test_fallback" ? apiKey : null;
 }
 
 // CORS preflight
@@ -162,12 +148,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log("[ENROLL] ✅ Inventory check passed. Current count:", currentCount);
 
       // Check min_enrollment_value setting
-      const merchantDoc = await (async () => {
-        const doc = await firestore.collection("merchants").doc(effectiveIdentifier).get();
-        if (doc.exists) return doc.data();
-        const snap = await firestore.collection("merchants").where("shopDomain", "==", effectiveIdentifier).limit(1).get();
-        return snap.empty ? null : snap.docs[0].data();
-      })();
+      // The same resolver settings/inventory saves the minimum through. A
+      // private lookup here would enforce a number the merchant never set.
+      const merchantDoc =
+        (await findMerchantDocRefByShopOrId(firestore, shopDomain, merchantId))?.data ?? null;
 
       const minValue = merchantDoc?.min_enrollment_value ?? 0;
       if (minValue > 0) {

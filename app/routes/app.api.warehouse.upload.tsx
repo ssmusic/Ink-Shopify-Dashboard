@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
+import { findMerchantDocRefByShopOrId } from "../services/merchant-doc.server";
 import { uploadMedia, adjustMerchantInventory, getShopIdByDomain } from "../services/ink-api.server";
 import { verifyProxyToken } from "../services/token-verify.server";
 
@@ -28,32 +29,17 @@ const json = (data: any, init?: ResponseInit) =>
 // local HMAC for our own tokens, REMOTE /auth/validate for ink-backend
 // JWTs. The old decode-without-verify fallback is gone (fix-list #2).
 
+/** The merchant's INK api_key, through the resolver that WRITES it.
+ *
+ *  api/auth/login and the orders/create self-heal both cache the key through
+ *  findMerchantDocRef, which returns the document that actually carries one.
+ *  This carried its own lookup (doc-id by merchant_id, then
+ *  `where("shopDomain")`) and could stop on a keyless document while the key
+ *  sat one doc over — measured on a connected store, 2026-09-05. */
 async function getMerchantApiKey(shopDomain?: string, merchantId?: string): Promise<string | null> {
-  // 1. Try matching by Firestore document ID (=== merchant_id from Alan JWT)
-  if (merchantId) {
-    const doc = await firestore.collection("merchants").doc(merchantId).get();
-    if (doc.exists) {
-      const apiKey = doc.data()?.ink_api_key;
-      if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
-    }
-  }
-
-  // 2. Try matching by shopDomain field
-  if (shopDomain) {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-
-    if (!snapshot.empty) {
-      const data = snapshot.docs[0].data();
-      const apiKey = data?.ink_api_key;
-      if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
-    }
-  }
-
-  return null;
+  const hit = await findMerchantDocRefByShopOrId(firestore, shopDomain, merchantId);
+  const apiKey = hit?.apiKey ?? hit?.data?.ink_api_key;
+  return apiKey && apiKey !== "sk_test_fallback" ? apiKey : null;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

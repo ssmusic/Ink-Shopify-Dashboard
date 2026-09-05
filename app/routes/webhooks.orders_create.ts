@@ -3,7 +3,11 @@ import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { enrollOrder, createMerchant } from "../services/ink-api.server";
 import { attachProductUrls, productDetailFromLineItem } from "../services/order-line-item";
-import { findActivationDocRef } from "../services/merchant-doc.server";
+import {
+  findActivationDocRef,
+  findMerchantDoc,
+  findMerchantDocRef,
+} from "../services/merchant-doc.server";
 import {
   countryOfWebhookOrder,
   orderActivates,
@@ -17,22 +21,18 @@ import { spendFromCap } from "../services/activation-counter.server";
  * Look up the merchant's verified-delivery mode preference.
  * Defaults to "background" so a missing preference never implies a
  * customer-paid checkout add-on.
+ *
+ * READS WHERE THE SETTING SAVES: `findMerchantDoc`, the same resolver
+ * settings/delivery-mode now writes through. This carried its own lookup
+ * (`where("shopDomain")` first, doc-id second) — a private copy on the read
+ * side of a switch is the §17.2 landmine facing the other way.
  */
 async function getMerchantDeliveryMode(
   shopDomain: string
 ): Promise<"background"> {
   try {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-    let docData = snapshot.empty ? null : snapshot.docs[0].data();
-    if (!docData) {
-      const direct = await firestore.collection("merchants").doc(shopDomain).get();
-      if (direct.exists) docData = direct.data() ?? null;
-    }
-    const mode = docData?.verified_delivery_mode;
+    const hit = await findMerchantDoc(firestore, shopDomain);
+    const mode = hit?.data?.verified_delivery_mode;
     if (mode === "background") return mode;
     return "background";
   } catch (e) {
@@ -47,20 +47,16 @@ async function getMerchantDeliveryMode(
 /**
  * The merchant's INK api_key — the Bearer Alan's /api/enroll (requireMerchant)
  * needs. Same source the warehouse enroll uses.
+ *
+ * `findMerchantDoc` is what this wanted all along: of every document a shop can
+ * reach, it returns the one that actually CARRIES `ink_api_key`. The private
+ * copy took the first `where("shopDomain")` hit and could land on a doc without
+ * a key while the key sat one document over.
  */
 async function getMerchantApiKey(shopDomain: string): Promise<string | null> {
   try {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-    let data = snapshot.empty ? null : snapshot.docs[0].data();
-    if (!data) {
-      const direct = await firestore.collection("merchants").doc(shopDomain).get();
-      if (direct.exists) data = direct.data() ?? null;
-    }
-    const key = data?.ink_api_key;
+    const hit = await findMerchantDoc(firestore, shopDomain);
+    const key = hit?.apiKey ?? hit?.data?.ink_api_key;
     return key && key !== "sk_test_fallback" ? key : null;
   } catch (e) {
     console.warn(`[orders/create] getMerchantApiKey failed for ${shopDomain}:`, e);
@@ -509,13 +505,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               const fresh = await createMerchant(shop, shopIdentity?.name || shop, ownerEmail);
               const freshKey = fresh?.api_key;
               if (!freshKey) throw e;
-              const snap = await firestore
-                .collection("merchants")
-                .where("shopDomain", "==", shop)
-                .limit(1)
-                .get();
-              if (!snap.empty) {
-                await snap.docs[0].ref.update({ ink_api_key: freshKey, updatedAt: new Date() });
+              // Cache the fresh key in the document getMerchantApiKey reads —
+              // findMerchantDocRef, not a private `where("shopDomain")`. Writing
+              // the healed key into a doc the reader never opens would heal
+              // nothing and re-provision on every order.
+              const cacheHit = await findMerchantDocRef(firestore, shop);
+              if (cacheHit) {
+                await cacheHit.ref.update({ ink_api_key: freshKey, updatedAt: new Date() });
               } else {
                 await firestore
                   .collection("merchants")

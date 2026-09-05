@@ -133,3 +133,55 @@ export async function findActivationDocRef(
     apiKey: (withKey?.data.ink_api_key as string) ?? null,
   };
 }
+
+/** SAME RESOLVER, for the routes authed by a PWA/App-Bridge token.
+ *
+ *  The media and inventory settings routes are reached two ways: an embedded
+ *  Shopify session (shop domain in hand) and a Bearer token that may carry
+ *  only Alan's `merchant_id`. Both carried a private lookup that tried
+ *  `doc(merchant_id)` first and `where("shopDomain")` second — so on a store
+ *  holding two merchant docs they saved into the doc-id document while the
+ *  readers (api/verify by `ink_api_key`, the fulfillment webhooks by
+ *  `findMerchantDoc`) open the one carrying the key.
+ *
+ *  Shop domain wins when we have one, because that is what every reader
+ *  resolves from. With only a merchant_id we read that document, then — if it
+ *  names its shop — resolve canonically from that name, so the token path and
+ *  the session path land on the SAME document. */
+export async function findMerchantDocRefByShopOrId(
+  firestore: Firestore,
+  shop?: string | null,
+  merchantId?: string | null,
+): Promise<MerchantDocRefHit | null> {
+  if (shop) {
+    const hit = await findMerchantDocRef(firestore, shop);
+    if (hit) return hit;
+  }
+
+  if (!merchantId) return null;
+
+  let direct;
+  try {
+    direct = await firestore.collection("merchants").doc(merchantId).get();
+  } catch {
+    return null;
+  }
+  if (!direct.exists) return null;
+
+  const data = direct.data() as DocumentData;
+  const named = ["shop", "shopDomain", "shop_domain"]
+    .map((f) => data?.[f])
+    .find((v): v is string => typeof v === "string" && Boolean(v));
+
+  // Converge on the session path's answer whenever the doc names its shop.
+  if (named && named !== merchantId) {
+    const hit = await findMerchantDocRef(firestore, named);
+    if (hit) return hit;
+  }
+
+  return {
+    data,
+    ref: direct.ref,
+    apiKey: typeof data?.ink_api_key === "string" && data.ink_api_key ? data.ink_api_key : null,
+  };
+}

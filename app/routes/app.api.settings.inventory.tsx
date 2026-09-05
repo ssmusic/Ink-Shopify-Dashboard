@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
 import { verifyProxyToken } from "../services/token-verify.server";
+import { findMerchantDocRefByShopOrId } from "../services/merchant-doc.server";
 
 /**
  * Inventory Settings endpoint (authenticated by warehouse JWT).
@@ -9,6 +10,14 @@ import { verifyProxyToken } from "../services/token-verify.server";
  *
  * GET  /app/api/settings/inventory → { low_inventory_threshold, min_enrollment_value }
  * POST /app/api/settings/inventory → update settings
+ *
+ * WHICH MERCHANT DOC. `findMerchantDocRefByShopOrId` — the resolver every
+ * reader of these fields uses, not a private lookup. This route had its own
+ * (doc-id by merchant_id, then `where("shopDomain")`), and so did the enroll
+ * gate that reads `min_enrollment_value` back. Two private copies agreeing by
+ * luck is still the §17.2 landmine: they agree only while the shop holds one
+ * merchant doc, and a store that holds two makes the saved minimum invisible
+ * to the gate that enforces it.
  */
 
 const corsHeaders = {
@@ -25,26 +34,6 @@ const json = (data: any, init?: ResponseInit) =>
 
 // Token verification: services/token-verify.server.ts (fail-closed; the old
 // decodeToken computed an HMAC and then never checked it — pure decode).
-
-async function getMerchantDoc(shopDomain?: string, merchantId?: string) {
-  // Try by document ID (merchant_id)
-  if (merchantId) {
-    const doc = await firestore.collection("merchants").doc(merchantId).get();
-    if (doc.exists) return doc;
-  }
-
-  // Try by shopDomain field
-  if (shopDomain) {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-    if (!snapshot.empty) return snapshot.docs[0];
-  }
-
-  return null;
-}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (request.method === "OPTIONS") {
@@ -64,8 +53,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop: shopDomain, merchant_id: merchantId } = tokenPayload;
 
   try {
-    const doc = await getMerchantDoc(shopDomain, merchantId);
-    const data = doc?.data() ?? {};
+    const hit = await findMerchantDocRefByShopOrId(firestore, shopDomain, merchantId);
+    const data = hit?.data ?? {};
 
     return json({
       low_inventory_threshold: data.low_inventory_threshold ?? 20,
@@ -116,14 +105,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (low_inventory_threshold !== undefined) updates.low_inventory_threshold = low_inventory_threshold;
     if (min_enrollment_value !== undefined) updates.min_enrollment_value = min_enrollment_value;
 
-    const doc = await getMerchantDoc(shopDomain, merchantId);
-    if (doc) {
-      await doc.ref.update(updates);
+    const hit = await findMerchantDocRefByShopOrId(firestore, shopDomain, merchantId);
+    if (hit) {
+      await hit.ref.update(updates);
     } else {
-      // Create if doesn't exist
+      // Create if doesn't exist. Name the shop under both conventions the
+      // resolver searches, so the next save finds this document instead of
+      // minting a second one beside it.
       const docId = merchantId || shopDomain || "unknown";
       await firestore.collection("merchants").doc(docId).set({
-        shopDomain,
+        ...(shopDomain ? { shop: shopDomain, shopDomain } : {}),
         ...updates,
         createdAt: new Date(),
       }, { merge: true });

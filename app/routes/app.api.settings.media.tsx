@@ -1,7 +1,23 @@
+/**
+ * Merchant media — the bumper the consumer tap plays.
+ *
+ * WHICH MERCHANT DOC. `findMerchantDocRefByShopOrId`, the resolver the reader
+ * uses. api/verify resolves the merchant by `ink_api_key` (the key that just
+ * proved it owns the proof) and reads `merchant_media` off THAT document. This
+ * route carried its own lookup — doc-id by merchant_id, then
+ * `where("shopDomain")` — so on a store holding two merchant docs the merchant
+ * uploaded a bumper, the panel listed it back, and the tap played the default.
+ *
+ * MEASURED, not theoretical: of the thirteen shops holding a Shopify session
+ * on 2026-09-05, `smusic-official.myshopify.com` has exactly this shape — this
+ * route wrote `smusic-official.myshopify.com`, api/verify reads
+ * `PWXStzc7mP8hn33xPbNf`.
+ */
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
 import { verifyProxyToken } from "../services/token-verify.server";
 import { authenticate } from "../shopify.server";
+import { findMerchantDocRefByShopOrId } from "../services/merchant-doc.server";
 
 const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
 const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET;
@@ -54,22 +70,6 @@ async function decodeToken(token: string): Promise<{ shop?: string; merchant_id?
   return { shop: payload.shop as string | undefined, merchant_id: payload.merchant_id as string | undefined };
 }
 
-async function getMerchantDoc(shopDomain?: string, merchantId?: string) {
-  if (merchantId) {
-    const doc = await firestore.collection("merchants").doc(merchantId).get();
-    if (doc.exists) return doc;
-  }
-  if (shopDomain) {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-    if (!snapshot.empty) return snapshot.docs[0];
-  }
-  return null;
-}
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -117,11 +117,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   console.log(`[settings/media] GET proceeding for domain=${shopDomain}, merchantId=${merchantId}`);
 
   try {
-    const doc = await getMerchantDoc(shopDomain, merchantId);
-    if (!doc) {
+    const hit = await findMerchantDocRefByShopOrId(firestore, shopDomain, merchantId);
+    if (!hit) {
       console.log(`[settings/media] No merchant doc found for ${shopDomain || merchantId}`);
     }
-    const data = doc?.data() ?? {};
+    const data = hit?.data ?? {};
     
     console.log(`[settings/media] GET success, found ${data.merchant_media?.length || 0} media items`);
 
@@ -181,8 +181,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   console.log(`[settings/media] ${request.method} proceeding for domain=${shopDomain}, merchantId=${merchantId}`);
 
   try {
-    const doc = await getMerchantDoc(shopDomain, merchantId);
-    let merchantMedia = doc?.data()?.merchant_media || [];
+    const hit = await findMerchantDocRefByShopOrId(firestore, shopDomain, merchantId);
+    let merchantMedia = hit?.data?.merchant_media || [];
 
     // POST: Upload Media
     if (request.method === "POST") {
@@ -207,8 +207,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // possible to avoid the round-trip.
       let alanMerchantId: string | null = null;
       try {
-        if (doc?.data()?.shop_id) {
-          alanMerchantId = doc.data()?.shop_id as string;
+        if (hit?.data?.shop_id) {
+          alanMerchantId = hit.data?.shop_id as string;
           console.log(`[settings/media] Using cached merchant_id from Firestore: ${alanMerchantId}`);
         } else if (shopDomain) {
           const { getShopIdByDomain } = await import("../services/ink-api.server");
@@ -302,9 +302,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       merchantMedia.push(newItem);
       
-      if (doc) {
+      if (hit) {
           console.log(`[settings/media] Saving to Firestore (${merchantMedia.length} total items)`);
-          await doc.ref.update({ merchant_media: merchantMedia, updatedAt: new Date() });
+          await hit.ref.update({ merchant_media: merchantMedia, updatedAt: new Date() });
       } else {
           console.warn(`[settings/media] Cannot save to Firestore — merchant doc is null!`);
       }
@@ -321,7 +321,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
        // Resolve shop_id so we delete from the SAME merchant_animations doc the
        // upload writes + the tap reads (via the by-id route). The old slug route
        // deleted a different doc, leaving the media live at tap (the split-brain).
-       const dData = doc?.data();
+       const dData = hit?.data;
        let alanMerchantId: string | null =
            dData && typeof dData.shop_id === "string" ? dData.shop_id : null;
        if (!alanMerchantId && shopDomain) {
@@ -349,8 +349,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
        }
        
        merchantMedia = merchantMedia.filter((m: any) => m.id !== id);
-       if (doc) {
-           await doc.ref.update({ merchant_media: merchantMedia, updatedAt: new Date() });
+       if (hit) {
+           await hit.ref.update({ merchant_media: merchantMedia, updatedAt: new Date() });
        }
        return json({ success: true, media: merchantMedia });
     }
@@ -381,7 +381,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
            // route. The old slug route (/{toMerchantSlug(domain)}/primary) wrote a
            // DIFFERENT doc that lacks the uploaded media_items → 502 MEDIA_NOT_FOUND
            // (the split-brain: upload used shop_id, set-primary used the slug).
-           const dData = doc?.data();
+           const dData = hit?.data;
            let alanMerchantId: string | null =
                dData && typeof dData.shop_id === "string" ? dData.shop_id : null;
            if (!alanMerchantId && shopDomain) {
@@ -456,8 +456,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
            }
        }
        
-       if (doc) {
-           await doc.ref.update({ merchant_media: merchantMedia, updatedAt: new Date() });
+       if (hit) {
+           await hit.ref.update({ merchant_media: merchantMedia, updatedAt: new Date() });
        }
        return json({ success: true, media: merchantMedia });
     }

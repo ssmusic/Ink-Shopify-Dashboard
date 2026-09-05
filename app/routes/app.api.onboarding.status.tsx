@@ -1,6 +1,7 @@
 import { type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
+import { findMerchantDoc } from "../services/merchant-doc.server";
 import { brandSlugFromDomain } from "../services/email.server";
 import { fetchBrandEmailKit } from "../services/brand-email.server";
 import { getShopIdByDomain, getMerchantTapStats } from "../services/ink-api.server";
@@ -41,8 +42,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let notificationsOn = false;
     let brandSlugOverride: string | undefined;
     try {
-      const doc = await firestore.collection("merchants").doc(shop).get();
-      const d = doc.exists ? doc.data() ?? {} : {};
+      // findMerchantDoc, not `doc(shop)`: settings/notifications writes through
+      // that resolver, and a store holding two merchant docs reported its
+      // notifications step incomplete forever when this read the other one.
+      const hit = await findMerchantDoc(firestore, shop);
+      const d = hit?.data ?? {};
       const ch = d.notification_settings?.channels;
       notificationsOn = Boolean(ch?.email || ch?.sms);
       if (typeof d.brand_slug === "string" && d.brand_slug) brandSlugOverride = d.brand_slug;
