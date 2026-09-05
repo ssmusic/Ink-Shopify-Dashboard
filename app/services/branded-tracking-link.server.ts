@@ -27,8 +27,19 @@
 //     everywhere; `merchants/{shop}.branded_tracking_link === false` turns it
 //     off for one merchant. Rollout is default-ON for every merchant (Sam,
 //     2026-08-06) — these are the emergency exits, not the opt-in.
-//  4. NO SILENT NOTIFICATION. notifyCustomer:false — rewriting a link must
-//     never re-send a shipping email to a buyer who already got one.
+//  4. NO SILENT NOTIFICATION. Rewriting a link must never re-send a shipping
+//     email to a buyer who already got one — and that sentence has a second
+//     half. Until 2026-09-05 this pinned notifyCustomer to false for EVERY
+//     buyer, including the ones who got nothing at all: a merchant who
+//     fulfills with the notification unticked (3PLs, ShipStation, bulk
+//     fulfillment) sends no shipping email, and we refused to send the one
+//     that would have carried the brand. Sam's ruling that day: "the email
+//     from shopify should have a link to the buyers in.ink order."
+//     So the flag is now DECIDED, not pinned: `shouldNotifyCustomer` is asked
+//     once, at the last possible moment before the mutation, and it answers
+//     from Shopify's own order timeline (shopify-shipping-notice.server.ts).
+//     No decider, or a decider that says no, and the value is false exactly
+//     as before. The default of this argument is silence.
 
 import { resolveBrandPageUrl } from "./brand-page-url.server";
 
@@ -47,6 +58,10 @@ export interface BrandedTrackingResult {
   outcome: BrandedTrackingOutcome;
   url?: string;
   detail?: string;
+  /** Did this rewrite ask Shopify to email the buyer? Only ever true when a
+   *  decider was supplied AND said yes; the caller stamps its own record off
+   *  this, so it must never be optimistic. */
+  notifiedCustomer?: boolean;
 }
 
 const MUTATION = `#graphql
@@ -94,6 +109,7 @@ export async function assertBrandedTrackingUrl({
   merchantApiKey,
   merchantData,
   shippoRegistered,
+  shouldNotifyCustomer,
   label = "branded-tracking-link",
 }: {
   admin: { graphql: (query: string, opts?: any) => Promise<Response> };
@@ -106,6 +122,13 @@ export async function assertBrandedTrackingUrl({
   /** From the backend's PATCH /proofs/:id/tracking response. Only `true`
    *  means the Shippo feed is registered and our page can actually speak. */
   shippoRegistered: boolean;
+  /** Asked ONCE, immediately before the mutation, and only when a rewrite is
+   *  actually going to happen — so an echo or a dead feed costs nothing. It
+   *  answers "has this buyer already had a shipping email for this
+   *  fulfillment?" from Shopify's own timeline. Absent ⇒ notifyCustomer:false,
+   *  byte-identical to every rewrite before 2026-09-05. It must never throw;
+   *  a thrown decider is treated as a no. */
+  shouldNotifyCustomer?: () => Promise<boolean>;
   label?: string;
 }): Promise<BrandedTrackingResult> {
   const carrier = String(payload?.tracking_company || "").trim() || "(no carrier name)";
@@ -170,12 +193,26 @@ export async function assertBrandedTrackingUrl({
       : { number: numbers[0], url: resolved.pageUrl }),
   };
 
+  // THE LAST MOMENT. Everything above has already agreed to rewrite, so this
+  // question is asked once per real rewrite and never on a refusal.
+  let notifyCustomer = false;
+  if (shouldNotifyCustomer) {
+    try {
+      notifyCustomer = (await shouldNotifyCustomer()) === true;
+    } catch (e) {
+      // A decider that fell over has not proven the buyer got nothing.
+      const said = e instanceof Error ? e.message : String(e);
+      console.warn(`🔗 ${label}: the notify decision threw — sending silently. ${said}`);
+      notifyCustomer = false;
+    }
+  }
+
   try {
     const res = await admin.graphql(MUTATION, {
       variables: {
         fulfillmentId: `gid://shopify/Fulfillment/${fulfillmentRawId}`,
         trackingInfoInput,
-        notifyCustomer: false,
+        notifyCustomer,
       },
     });
     const json: any = await res.json();
@@ -190,8 +227,13 @@ export async function assertBrandedTrackingUrl({
       console.error(`🔗 ${label}: GraphQL error — ${detail}`);
       return { outcome: "failed", detail };
     }
-    console.log(`✅ ${label}: ${carrier} tracking for proof ${proofId} now points at ${resolved.pageUrl}`);
-    return { outcome: "updated", url: resolved.pageUrl };
+    console.log(
+      `✅ ${label}: ${carrier} tracking for proof ${proofId} now points at ${resolved.pageUrl}` +
+        (notifyCustomer
+          ? " — and Shopify is sending its own shipping email, carrying that address."
+          : ""),
+    );
+    return { outcome: "updated", url: resolved.pageUrl, notifiedCustomer: notifyCustomer };
   } catch (e: any) {
     // Webhook discipline: a failed rewrite is a link that stays as Shopify's.
     // It is never a non-200.

@@ -1,9 +1,23 @@
 /**
- * Branded tracking link — merchant preference endpoint.
+ * The tracking-link card's preferences — one endpoint, three switches.
  *
- * GET   → { enabled: boolean }
- * PATCH → { enabled: boolean } persisted to
- *         merchants/{shopDomain}.branded_tracking_link
+ * GET   → { enabled, shopifyShippingEmail, brandPageEmail, killedGlobally }
+ * PATCH → any subset of { enabled, shopifyShippingEmail, brandPageEmail },
+ *         persisted to merchants/{shopDomain}.{branded_tracking_link,
+ *         shopify_shipping_email, brand_page_email}
+ *
+ * THE TWO NEW ONES (Sam's ruling, 2026-09-05 — "the email from shopify should
+ * have a link to the buyers in.ink order"):
+ *
+ *  · `shopify_shipping_email` — DEFAULT ON, like the tracking link above it.
+ *    When a merchant fulfills WITHOUT ticking Shopify's own notification, their
+ *    buyer gets no shipping email at all; this lets Shopify send exactly one,
+ *    from the merchant's own template, whose tracking button is the brand's
+ *    page. A buyer who already had a shipping email never gets a second
+ *    (shopify-shipping-notice.server.ts decides, from Shopify's own timeline).
+ *  · `brand_page_email` — DEFAULT OFF, and deliberately the other way round: it
+ *    is a NEW email to someone else's customer, which is the merchant's call.
+ *    Only an explicit `true` turns it on.
  *
  * DEFAULT ON (Sam, 2026-08-06): an absent field reads as enabled, so every
  * merchant gets the branded tracking link without touching this screen. The
@@ -17,6 +31,10 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
 import { authenticate } from "../shopify.server";
+import {
+  readTrackingCardSwitches,
+  trackingCardUpdatesFrom,
+} from "../services/tracking-card-switches";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,9 +72,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   try {
     const doc = await getMerchantDoc(shopDomain);
-    // Absent → ON. Only an explicit false turns it off.
-    const enabled = doc?.data()?.branded_tracking_link !== false;
-    return json({ enabled, killedGlobally: Boolean(process.env.BRANDED_TRACKING_LINK_DISABLED) });
+    // Absent → ON for the first two, OFF for the third; the rule lives in one
+    // place (tracking-card-switches.ts) so the screen and the webhooks agree.
+    const switches = readTrackingCardSwitches(doc?.data());
+    return json({
+      ...switches,
+      killedGlobally: Boolean(process.env.BRANDED_TRACKING_LINK_DISABLED),
+      shopifyShippingEmailKilledGlobally: Boolean(process.env.SHOPIFY_SHIPPING_EMAIL_DISABLED),
+      brandPageEmailKilledGlobally: Boolean(process.env.BRAND_PAGE_EMAIL_DISABLED),
+    });
   } catch (err: any) {
     console.error("[settings/branded-tracking-link] GET error:", err.message);
     return json({ error: "Failed to fetch tracking link setting" }, { status: 500 });
@@ -77,9 +101,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const body = await request.json();
-    const enabled = body?.enabled;
-    if (typeof enabled !== "boolean") {
-      return json({ error: "Invalid body. Expected { enabled: boolean }" }, { status: 400 });
+
+    // Only known keys move a switch, and only a literal boolean moves one —
+    // the sanitizer discipline the notification settings already use. A body
+    // that names nothing we recognise is a 400, never a silent no-op.
+    const updates = trackingCardUpdatesFrom(body);
+
+    if (Object.keys(updates).length === 0) {
+      return json(
+        {
+          error:
+            "Invalid body. Expected at least one of { enabled, shopifyShippingEmail, brandPageEmail } as a boolean",
+        },
+        { status: 400 },
+      );
     }
 
     const doc = await getMerchantDoc(shopDomain);
@@ -93,10 +128,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    await doc.ref.update({ branded_tracking_link: enabled, updatedAt: new Date() });
-    console.log(`[settings/branded-tracking-link] ${shopDomain} → enabled=${enabled}`);
+    await doc.ref.update({ ...updates, updatedAt: new Date() });
+    console.log(
+      `[settings/branded-tracking-link] ${shopDomain} → ` +
+        Object.entries(updates)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(" "),
+    );
 
-    return json({ enabled });
+    return json(readTrackingCardSwitches({ ...(doc.data() ?? {}), ...updates }));
   } catch (err: any) {
     console.error("[settings/branded-tracking-link] PATCH error:", err.message);
     return json({ error: "Failed to update tracking link setting" }, { status: 500 });

@@ -9,7 +9,10 @@
 // selection (parallelreturns src/lib/campaigns.ts) so the email and the
 // page always agree on which aim this buyer sees.
 
-const WORKER_BASE = "https://ink-easypost-proxy.inink.workers.dev";
+/** The Worker. One author for the host, because two would drift: the brand
+ *  book read below and the buyer-mail rail (brand-page-email.server.ts) must
+ *  always be talking to the same deployment. */
+export const WORKER_BASE = "https://ink-easypost-proxy.inink.workers.dev";
 
 export interface EmailCampaign {
   id: string;
