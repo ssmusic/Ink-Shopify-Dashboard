@@ -41,6 +41,7 @@
 
 import { WORKER_BASE } from "./brand-email.server";
 import { resolveBrandPageUrl } from "./brand-page-url.server";
+import { brandPageEmailEnabled } from "./tracking-card-switches";
 
 type Loose = Record<string, unknown>;
 
@@ -100,7 +101,7 @@ export function looksLikeAnAddress(value: unknown): boolean {
  *  image of `branded_tracking_link`, and deliberately so: that one is a link
  *  the merchant already sends, this one is a new email to their customer. The
  *  rule lives with the other two switches. */
-export { brandPageEmailEnabled } from "./tracking-card-switches";
+export { brandPageEmailEnabled };
 
 /** The merchant's own addresses — the only ones a test-flagged shop may reach. */
 function ownAddressesOf(brandDoc: Loose): string[] {
@@ -153,7 +154,7 @@ export async function sendBrandPageEmailOnce({
       console.log(`✉️ ${label}: OFF by env — the brand sends nothing.`);
       return { outcome: "skipped_disabled_env", detail: "turned off everywhere by the env kill switch" };
     }
-    if (merchantData?.brand_page_email !== true) {
+    if (!brandPageEmailEnabled(merchantData)) {
       console.log(`✉️ ${label}: OFF for ${shop} (default) — no second email.`);
       return {
         outcome: "skipped_disabled_merchant",
@@ -285,11 +286,27 @@ export async function sendBrandPageEmailOnce({
 /** The merchant's postal address as one line, from the return address they
  *  already gave the returns rail. Null when the record does not carry one —
  *  the email then goes without it and the log says so, rather than inventing
- *  an address for a real brand (the Clare-V law). */
+ *  an address for a real brand (the Clare-V law).
+ *
+ *  THE FIELD NAMES ARE MEASURED, NOT ASSUMED. The backend merchant record for
+ *  Steve Madden (`shop_bb508e5ca47a1036`, read 2026-09-05) carries
+ *  `{name, line1, line2, city, state, zip, country}`. A reader that only knew
+ *  `street1`/`address1` would have dropped the street out of a real brand's
+ *  email and said nothing — the silent-success shape. The other spellings stay
+ *  because the returns rail has accepted them from other writers. */
 export function postalLineOf(brandDoc: Loose): string | null {
   const a = brandDoc?.return_address as Loose | undefined;
   if (!a || typeof a !== "object") return null;
-  const parts = [a.name, a.company, a.street1 ?? a.address1, a.street2 ?? a.address2, a.city, a.state ?? a.province, a.zip ?? a.postal_code, a.country]
+  const parts = [
+    a.name,
+    a.company,
+    a.line1 ?? a.street1 ?? a.address1,
+    a.line2 ?? a.street2 ?? a.address2,
+    a.city,
+    a.state ?? a.province,
+    a.zip ?? a.postal_code,
+    a.country,
+  ]
     .map((v) => String(v ?? "").trim())
     .filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : null;

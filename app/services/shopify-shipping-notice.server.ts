@@ -53,6 +53,8 @@
 // today's behaviour. The cost of a wrong YES is a second email in a stranger's
 // inbox, which is not ours to spend.
 
+import { shippingNoticeEnabled } from "./tracking-card-switches";
+
 /** Anything Shopify hands back, before we have looked at it. */
 type Loose = Record<string, unknown>;
 
@@ -145,7 +147,7 @@ function mailTemplateName(args: unknown): string {
  *  merchant off, and the env kills it everywhere. The rule itself lives with
  *  the other two switches, so "absent means on" cannot drift between the
  *  screen that shows it and the webhook that obeys it. */
-export { shippingNoticeEnabled } from "./tracking-card-switches";
+export { shippingNoticeEnabled };
 
 /**
  * Should Shopify send its shipping email for this fulfillment — the one that
@@ -189,7 +191,7 @@ export async function decideShopifyShippingNotice({
     console.log(`📨 ${label}: OFF by env — Shopify sends nothing on our account.`);
     return no("skipped_disabled_env", "turned off everywhere by the env kill switch");
   }
-  if (merchantData?.shopify_shipping_email === false) {
+  if (!shippingNoticeEnabled(merchantData)) {
     console.log(`📨 ${label}: OFF for ${shop} — the merchant turned this off.`);
     return no("skipped_disabled_merchant", "this shop turned the setting off");
   }

@@ -275,4 +275,23 @@ describe("the small honest helpers", () => {
     expect(postalLineOf({})).toBeNull();
     expect(postalLineOf({ return_address: {} })).toBeNull();
   });
+
+  it("READS THE SHAPE THE REAL RECORD USES — line1/line2, measured on Steve Madden", () => {
+    // Verbatim from merchants/shop_bb508e5ca47a1036 on 2026-09-05. A reader
+    // that only knew street1/address1 would have dropped the street out of a
+    // real brand's email and reported a clean send.
+    expect(
+      postalLineOf({
+        return_address: {
+          country: "US",
+          line2: "",
+          zip: "10036",
+          city: "New York",
+          name: "Times Square Store",
+          state: "ny",
+          line1: "3 Times Square",
+        },
+      }),
+    ).toBe("Times Square Store, 3 Times Square, New York, ny, 10036, US");
+  });
 });
