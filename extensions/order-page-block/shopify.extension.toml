@@ -37,7 +37,23 @@ handle = "order-page-block"
 
   # The one piece of app data the block needs: the brand's own door base,
   # e.g. https://stevemadden.in.ink/o/ — written on the SHOP by the embed at
-  # enroll time. Declared here so the runtime delivers it via appMetafields.
+  # enroll time. Declared here so the runtime delivers it via appMetafields;
+  # "Only metafields declared in your shopify.extension.toml are available"
+  # (shopify.dev, customer-account-ui-extensions → order-apis/metafields-api).
+  #
+  # ⚠️ DO NOT ADD `ink / page_url` HERE. The order's own exact page address is
+  # stamped on the ORDER at enrol (page-url-on-the-order.server.ts) and reading
+  # it here would spare the redirect hop — it cannot be read, and adding the
+  # declaration would silently deliver nothing. Measured 2026-09-05:
+  # `AppMetafieldEntryTarget.type` on this target is customer · product · shop
+  # · shopUser · variant · company · companyLocation · cart — there is no
+  # `order`; the separate `metafields` property that 2025-10 documented as
+  # "The metafields associated with the order" is gone in 2026-07; and `ink`
+  # is a merchant-owned namespace, so Customer Account access is "Hidden from
+  # Customer Accounts API (default)" and "can only be configured through the
+  # Shopify admin" — per store, by hand, i.e. the Liquid paste again.
+  # `shop` is an owner type, so the door below is the mechanism, not a
+  # consolation. Full reasoning in src/order-page-block.js's header.
   [[extensions.metafields]]
   namespace = "ink"
   key = "order_door"
