@@ -25,12 +25,26 @@
  * turns it off everywhere. Both are emergency exits, not opt-ins — which is
  * why `false` is stored explicitly and absence is never treated as a refusal.
  *
- * Reads/writes are gated by `authenticate.admin(request)` from Shopify. Follows
- * the app.api.settings.delivery-mode.tsx precedent exactly.
+ * Reads/writes are gated by `authenticate.admin(request)` from Shopify.
+ *
+ * WHICH MERCHANT DOC. `findMerchantDocRef` — the same resolver the fulfillment
+ * webhook uses, not a private lookup. This route had its own, which read the
+ * doc whose ID is the shop domain and stopped there; the webhook prefers the
+ * doc that actually carries `ink_api_key`. On a store where those are two
+ * different documents the switch saved in one and the webhook read the other,
+ * so the setting was invisible to the thing it governs — the fifth appearance
+ * of the §17.2 landmine `merchant-doc.server.ts` exists to end.
+ *
+ * MEASURED, not theoretical: of the thirteen shops holding a Shopify session
+ * on 2026-09-05, `smusic-official.myshopify.com` has exactly this shape (the
+ * route would write `smusic-official.myshopify.com`, the webhook reads
+ * `PWXStzc7mP8hn33xPbNf`). That store's `branded_tracking_link` switch has
+ * therefore never worked, and both new switches would have inherited it.
  */
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
 import { authenticate } from "../shopify.server";
+import { findMerchantDocRef } from "../services/merchant-doc.server";
 import {
   readTrackingCardSwitches,
   trackingCardUpdatesFrom,
@@ -48,20 +62,6 @@ const json = (data: any, init?: ResponseInit) =>
     ...init,
   });
 
-async function getMerchantDoc(shopDomain: string) {
-  const direct = await firestore.collection("merchants").doc(shopDomain).get();
-  if (direct.exists) return direct;
-  for (const field of ["shop", "shopDomain", "shop_domain"]) {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where(field, "==", shopDomain)
-      .limit(1)
-      .get();
-    if (!snapshot.empty) return snapshot.docs[0];
-  }
-  return null;
-}
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -71,10 +71,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shopDomain = session.shop;
 
   try {
-    const doc = await getMerchantDoc(shopDomain);
+    const hit = await findMerchantDocRef(firestore, shopDomain);
     // Absent → ON for the first two, OFF for the third; the rule lives in one
     // place (tracking-card-switches.ts) so the screen and the webhooks agree.
-    const switches = readTrackingCardSwitches(doc?.data());
+    const switches = readTrackingCardSwitches(hit?.data);
     return json({
       ...switches,
       killedGlobally: Boolean(process.env.BRANDED_TRACKING_LINK_DISABLED),
@@ -117,8 +117,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    const doc = await getMerchantDoc(shopDomain);
-    if (!doc) {
+    const hit = await findMerchantDocRef(firestore, shopDomain);
+    if (!hit) {
       console.warn(
         `[settings/branded-tracking-link] Merchant doc not found for ${shopDomain}; cannot persist`,
       );
@@ -128,7 +128,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    await doc.ref.update({ ...updates, updatedAt: new Date() });
+    await hit.ref.update({ ...updates, updatedAt: new Date() });
     console.log(
       `[settings/branded-tracking-link] ${shopDomain} → ` +
         Object.entries(updates)
@@ -136,7 +136,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           .join(" "),
     );
 
-    return json(readTrackingCardSwitches({ ...(doc.data() ?? {}), ...updates }));
+    return json(readTrackingCardSwitches({ ...(hit.data ?? {}), ...updates }));
   } catch (err: any) {
     console.error("[settings/branded-tracking-link] PATCH error:", err.message);
     return json({ error: "Failed to update tracking link setting" }, { status: 500 });

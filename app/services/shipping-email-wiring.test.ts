@@ -93,4 +93,14 @@ describe("what the merchant sees", () => {
     // A body naming nothing we know is a refusal in words, not a quiet no-op.
     expect(ROUTE).toMatch(/Object\.keys\(updates\)\.length === 0/);
   });
+
+  it("SAVES WHERE THE WEBHOOK READS — the same resolver, not a private lookup", () => {
+    // A switch written to a document the webhook never opens is a switch that
+    // saves and does nothing. Measured 2026-09-05: one connected store
+    // (smusic-official) already holds those as two different documents.
+    expect(ROUTE).toContain("findMerchantDocRef");
+    expect(ROUTE).not.toContain("async function getMerchantDoc");
+    // And it writes through that resolver's own ref.
+    expect(ROUTE).toMatch(/hit\.ref\.update\(/);
+  });
 });
