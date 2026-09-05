@@ -8,13 +8,17 @@
 //  · a webhook path that throws
 //  · the writer and the extension disagreeing about what a door looks like
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
 const resolveBrandPageUrl = vi.hoisted(() => vi.fn());
 vi.mock("./brand-page-url.server", () => ({ resolveBrandPageUrl }));
 
 import { assertOrderDoorMetafield, orderDoorBase } from "./order-door-metafield.server";
+// The other half of the contract, imported rather than scraped.
+import {
+  DOOR_KEY,
+  isOrderDoorBase,
+  linkForOrder,
+} from "../../extensions/order-page-block/src/order-page-block.js";
 
 /** An admin.graphql that answers the guard query and records every call. */
 function fakeAdmin(opts: { current?: string | null; failWith?: string }) {
@@ -140,31 +144,49 @@ describe("assertOrderDoorMetafield", () => {
 
 // ── The writer and the extension are one contract ───────────────────────────
 //
-// The extension trusts only values matching its own regex; the writer mints
+// The extension trusts only values passing its own gate; the writer mints
 // values from orderDoorBase. If either side moves alone, the block silently
 // renders nothing on every store — this is the test that refuses that.
+//
+// It used to scrape the extension's source for its regex literal. It now
+// imports the extension's own functions and runs them: the same contract,
+// pinned by behaviour instead of by text, so a rewrite that keeps the meaning
+// stays green and a rewrite that loses it goes red. The block's own tests are
+// extensions/order-page-block/src/order-page-block.test.js.
 describe("the extension trusts exactly what the writer writes", () => {
-  const SRC = readFileSync(
-    resolve(process.cwd(), "extensions/order-page-block/src/order-page-block.js"),
-    "utf8",
-  );
-
   it("the writer's value passes the extension's own gate", () => {
-    const m = SRC.match(/\/\^https:[^/]*\\\/\\\/(.+?)\/\.test\(base\)/);
-    expect(m, "extension no longer gates door values with a regex").toBeTruthy();
-    const gate = new RegExp(`^https:\\/\\/${m![1]}`);
-    expect(gate.test(orderDoorBase("stevemadden"))).toBe(true);
+    expect(isOrderDoorBase(orderDoorBase("stevemadden"))).toBe(true);
+    expect(isOrderDoorBase(orderDoorBase("betsey-johnson"))).toBe(true);
     // And the gate still refuses what it exists to refuse.
-    expect(gate.test("http://stevemadden.in.ink/o/")).toBe(false);
-    expect(gate.test("https://evil.example.com/o/")).toBe(false);
+    expect(isOrderDoorBase("http://stevemadden.in.ink/o/")).toBe(false);
+    expect(isOrderDoorBase("https://evil.example.com/o/")).toBe(false);
   });
 
-  it("the block renders nothing without a door, and never fetches", () => {
-    expect(SRC).toContain("if (!base || !digits) return");
-    expect(SRC).not.toContain("fetch(");
+  it("the writer's door and this order's number make the link the block renders", () => {
+    expect(
+      linkForOrder({
+        appMetafields: [{ metafield: { key: DOOR_KEY, value: orderDoorBase("stevemadden") } }],
+        orderName: "#1027",
+      }),
+    ).toBe("https://stevemadden.in.ink/o/1027");
   });
 
-  it("the block appends digits only — the door compares on digits alone", () => {
-    expect(SRC).toContain('.replace(/\\D/g, "")');
+  it("a writer that stopped minting doors takes the surface down, not a wrong link", () => {
+    // The one failure mode this pairing exists to catch: the writer changing
+    // shape (a trailing slash lost, a scheme downgraded, a host derived) while
+    // the extension keeps its gate. The block goes dark; it never guesses.
+    for (const drifted of [
+      "https://stevemadden.in.ink/o",
+      "http://stevemadden.in.ink/o/",
+      "https://sm-test-hhawzn52.myshopify.com/o/",
+    ]) {
+      expect(
+        linkForOrder({
+          appMetafields: [{ metafield: { key: DOOR_KEY, value: drifted } }],
+          orderName: "#1027",
+        }),
+        `a drifted writer value reached a buyer: ${drifted}`,
+      ).toBeNull();
+    }
   });
 });

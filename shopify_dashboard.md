@@ -588,7 +588,92 @@ Currently minimal usage - can be expanded for SMS alerts.
 
 ## 🧩 Shopify Extensions
 
-### **INK Cart Selector Extension**
+### **ink order page** — the block on the Order status page
+
+**Location**: `extensions/order-page-block/`
+
+**Type**: `ui_extension`, target `customer-account.order-status.block.render` (api_version `2026-07`)
+
+**Purpose**: put the buyer's Ritualist page one tap from Shopify's own
+**"View your order"** button — **without any merchant pasting anything.**
+
+**Why it exists — it replaces the Liquid paste.** Shopify has no API for
+notification templates (re-verified 2026-08-23: they are admin-UI-only, and the
+internal `EmailTemplateUpdate` mutation is not callable). Until this block, the
+only way a shipping email opened the brand's page was one Liquid line the
+merchant pasted into their Shipping confirmation and Shipping update templates,
+by hand, per store. That line still works and stays as belt-and-braces; but for
+every merchant who never does it, the email's primary button lands on Shopify's
+Order status page — and this block is standing there.
+
+- It ships inside the app. Install = on. No per-store template surgery.
+- The target self-places: "by default, block extensions are placed in the first
+  available placement reference". A merchant can move or remove it in the
+  checkout & accounts editor; they never have to touch it.
+- The Order status page is pre-authenticated, so a buyer arriving from the email
+  sees it without logging in. All plans, not just Plus.
+
+**What it renders**: one heading, one line, one primary button to
+`https://{brand}.in.ink/o/{order_number}` — the order door, which 302s to that
+buyer's page. Copy is **placeholder, awaiting Sam**.
+
+**What it renders when anything is missing**: *nothing at all.* No fallback host,
+no host derived from the shop domain (the Clare-V law — a plausible-but-wrong
+host is how `sm-test-hhawzn52.in.ink` happened). It never touches the network.
+
+**The switch is server-side.** The block reads exactly one app metafield —
+`ink:order_door` on the **SHOP**, holding the door base
+`https://{brand}.in.ink/o/`. Its only writer is
+`app/services/order-door-metafield.server.ts`, which mints it from `brand_slug`
+and deletes it when `merchants/{shop}.order_door_block === false`. So turning a
+store on or off never redeploys this extension.
+
+**⚠️ Why the block composes the door instead of reading the order's own page
+address.** The exact address (`https://{brand}.in.ink/r/{token}`) is stamped on
+the ORDER at enrol as `ink.page_url` (`page-url-on-the-order.server.ts`), and
+reading it here would spare the redirect hop and the order-number match. It
+cannot be read. Measured against shopify.dev on **2026-09-05**, three walls, any
+one of them fatal:
+
+1. **No `order` owner.** `appMetafields` is the only metafields property this
+   target has on `2026-07`, and `AppMetafieldEntryTarget.type` is `customer` ·
+   `product` · `shop` · `shopUser` · `variant` · `company` · `companyLocation` ·
+   `cart`. There is no `order`.
+2. **The order-metafield accessor is gone.** `2025-10` documented a second root
+   property, `metafields` — *"The metafields associated with the order."*
+   `2026-07` documents `appMetafields` and nothing else.
+3. **An unreserved namespace is hidden anyway.** `ink` is merchant-owned, so its
+   Customer Account API access is *"Hidden from Customer Accounts API
+   (default)"* and *"can only be configured through the Shopify admin"* — per
+   store, by hand, which is the Liquid paste wearing a different hat. Only an
+   app-reserved namespace (`$app:…`) can be granted that access from the app.
+
+So the shop's door is the mechanism, not a consolation prize: `shop` **is** an
+owner type, it needs no merchant work, and it reaches the same page.
+`ink.page_url` stays on the order for Shopify's own notification templates,
+which read it in Liquid where none of the three walls apply.
+
+**Tests**: `extensions/order-page-block/src/order-page-block.test.js` (the gate,
+the silence, the late-filling signal, the no-network and no-hardcoded-host pins)
+and the writer↔extension contract at the foot of
+`app/services/order-door-metafield.test.ts`. `vitest.config.ts` includes
+`extensions/**/src/*.test.{js,ts}` for this reason: the block is the one
+buyer-facing file that neither `typecheck` nor `build` ever sees.
+
+**Deployment**: extensions ship **only** with `shopify app deploy` (app config +
+extensions), which is a separate act from merging to `main` (that deploys the
+Cloud Run server only). Adding or changing this extension needs **no** access
+scope, so it triggers **no merchant re-consent**; customer account UI extensions
+are listed "No" under *Requires review and approval*, so releasing a version
+carrying it needs **no** Shopify review.
+
+---
+
+### **INK Cart Selector Extension** *(removed — kept for history)*
+
+> **No longer in the repo.** The `ink-cart-selector` theme extension was taken
+> out of the release in `402472a`; `extensions/` holds only `order-page-block`.
+> The rest of this section describes what it was.
 
 **Location**: `extensions/ink-cart-selector/`
 

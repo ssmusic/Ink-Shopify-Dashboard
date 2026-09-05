@@ -12,6 +12,15 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["app/**/*.{test,canary.test}.{ts,tsx}"],
+    // `extensions/**` is here because the order status block is the one piece
+    // of buyer-facing code in this repo that neither typecheck nor build ever
+    // sees: it is plain JS, outside tsconfig's `include`, bundled by the
+    // Shopify CLI at `shopify app deploy` and by nothing else. Its guard
+    // decides what address a buyer taps out of a shipping email, so it gets
+    // real tests instead of the string-scraping pins it had.
+    include: [
+      "app/**/*.{test,canary.test}.{ts,tsx}",
+      "extensions/**/src/*.test.{js,ts}",
+    ],
   },
 });

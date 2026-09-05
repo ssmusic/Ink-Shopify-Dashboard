@@ -89,6 +89,18 @@ module.exports = {
         node: true,
       },
     },
+
+    // Extension tests. The extension itself runs in Shopify's sandbox off the
+    // `shopify` and `document` globals; its tests run under vitest in node and
+    // swap those globals in and out, so they need `globalThis` — an ES2020
+    // name the base `es6` env does not know.
+    {
+      files: ["extensions/**/*.test.{js,ts}"],
+      env: {
+        node: true,
+        es2022: true,
+      },
+    },
   ],
   globals: {
     shopify: "readonly"
