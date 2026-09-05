@@ -344,6 +344,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     let proofReference = "";
     let inkToken = "";
     let verificationStatus = "pending";
+    // The backend's merchant identity off the enrol response — how the page's
+    // address finds its brand (page-url-on-the-order.server.ts).
+    let proofShopId = "";
     try {
       const apiKey = await getMerchantApiKey(shop);
       if (!apiKey) {
@@ -528,6 +531,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }
           }
           proofReference = inkData?.proof_id || "";
+          proofShopId = String(inkData?.shop_id || "");
           verificationStatus = proofReference ? "enrolled" : "pending";
           if (inkData?.already_enrolled && inkData?.nfc_token) {
             // Backend deduped on (shop_id, order_id) — this delivery was a
@@ -659,6 +663,53 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.error(`[orders/create] metafieldsSet userErrors:`, metaErrors);
       } else {
         console.log(`✅ [orders/create] Metafields initialized for ${orderName}`);
+      }
+
+      // THE PAGE ON THE ORDER — so the FIRST shipping email opens it. The
+      // tracking-URL rewrite runs after Shopify has composed that email and
+      // never re-sends it (rule 4 of branded-tracking-link.server.ts), so the
+      // page's address has to be on the order before any fulfilment exists.
+      // Its own wire, its own mutation, never fatal
+      // (page-url-on-the-order.server.ts); the Shipping confirmation /
+      // Shipping update templates read it as `metafields.ink.page_url`.
+      // Out-of-slice orders never reach here — no ink.* metafield, no page,
+      // nothing for a buyer to see.
+      if (proofReference && inkToken) {
+        try {
+          const { pageUrlForEnrolledOrder, stampPageUrlOnOrder } = await import(
+            "../services/page-url-on-the-order.server"
+          );
+          const page = await pageUrlForEnrolledOrder({
+            shopId: proofShopId,
+            nfcToken: inkToken,
+            merchantData: merchantForScope?.data ?? {},
+            label: "[orders/create] page-url",
+          });
+          await stampPageUrlOnOrder({
+            admin,
+            orderGid,
+            orderName,
+            pageUrl: page.pageUrl,
+            reason:
+              page.reason === "no_slug"
+                ? "no brand_slug on the merchant doc (never a derived host)"
+                : page.reason,
+            label: "[orders/create] page-url",
+          });
+        } catch (stampErr: unknown) {
+          console.error(
+            `🔗 [orders/create] page-url: ${orderName} failed (non-fatal) — ` +
+              `${stampErr instanceof Error ? stampErr.message : String(stampErr)}`
+          );
+        }
+      } else {
+        // A redelivery of an already-enrolled order carries no token here —
+        // the delivery that enrolled it stamped the page. An order with no
+        // proof has no page to name.
+        console.log(
+          `🔗 [orders/create] page-url: ${orderName} skipped_no_token — ` +
+            `${proofReference ? "redelivery of an already-enrolled order; the enrolling delivery stamped it" : "no proof"}`
+        );
       }
     }
   } catch (error: any) {
