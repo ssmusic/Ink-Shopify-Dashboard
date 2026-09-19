@@ -13,6 +13,9 @@ import type {
     HeadersFunction,
 } from "react-router";
 import { authenticate } from "../shopify.server";
+import { openRecordFromProof, openRowsFromTapEvents, locationLine } from "../services/order-open-record";
+import type { OpenRow } from "../services/order-open-record";
+import TapOpensList from "../components/TapOpensList";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
     Page,
@@ -196,6 +199,9 @@ interface OrderDetail {
         distance_meters: number | null;
         gps_verdict: string | null;
         photo_urls: string[] | null;
+        tap_count: number;
+        last_tap_at: string | null;
+        opens: OpenRow[];
     } | null;
 }
 
@@ -302,7 +308,11 @@ export const loader = async ({
         const proofId = metafields.proof_reference;
         console.log(`🔍 Order Details Loader: Order ${orderId}, Proof ID from metafields: ${proofId || "none"}`);
 
-        // Fetch proof data from Alan's API if we have a proof_id
+        // The order's proof, read with the merchant's own key. This used to
+        // call the proof door with no key at all and get 401 on every order —
+        // measured 2026-09-19 — so nothing below ever rendered. The key is the
+        // one resolveBrandPageUrl already needs; the per-open rows are asked
+        // for only once the merchant-keyed read has returned this proof.
         let alanProofData: {
             verification_status: string | null;
             verify_url: string | null;
@@ -311,64 +321,53 @@ export const loader = async ({
             gps_verdict: string | null;
             enrollment_status: string | null;
             nfc_uid: string | null;
-            shipping_gps: string | null;
-            warehouse_gps: string | null; // Added field
             delivery_gps: string | null;
             photo_urls: string[] | null;
+            tap_count: number;
+            last_tap_at: string | null;
+            opens: OpenRow[];
         } | null = null;
 
         if (proofId) {
             try {
-                // Import NFSService to call Alan's API
-                const { NFSService } = await import("../services/nfs.server");
-                const proofResponse = await NFSService.retrieveProof(proofId);
-
-                console.log(`✅ Proof data retrieved from Alan's API`);
-
-                // THE BUYER'S PAGE, from the one author of that address.
-                //
-                // This hand-built `https://in.ink/verify/{proof_id}`. That URL
-                // is dead — measured 2026-08-20, it renders "404 NOTHING HERE"
-                // — and it was a third copy of a resolution that
-                // brand-page-url.server.ts exists specifically to keep single:
-                // "one author, because two would drift." It drifted.
-                //
-                // The live address is {brand}.in.ink/r/{nfc_token}. pageUrl is
-                // null unless the proof carries a real nfc_token, which is the
-                // point: nothing gets published that we cannot stand behind.
+                const { getProof, getTapEvents } = await import("../services/ink-api.server");
                 const { resolveBrandPageUrl } = await import("../services/brand-page-url.server");
                 const { findMerchantDoc } = await import("../services/merchant-doc.server");
                 const firestore = (await import("../firestore.server")).default;
                 const merchantHit = await findMerchantDoc(firestore, session.shop);
-                const resolvedPage = await resolveBrandPageUrl({
-                    merchantApiKey: merchantHit?.data?.ink_api_key ?? null,
-                    proofId,
-                    shop: session.shop,
-                    merchantData: merchantHit?.data ?? {},
-                    label: "order-detail",
-                });
+                const merchantApiKey: string | null = merchantHit?.data?.ink_api_key ?? null;
 
-                alanProofData = {
-                    verification_status: proofResponse.delivery?.gps_verdict ? "verified" : "enrolled",
-                    verify_url: resolvedPage.pageUrl,
-                    verification_updated_at: proofResponse.delivery?.timestamp || null,
-                    distance_meters: null, // Not returned by /retrieve, only /verify
-                    gps_verdict: proofResponse.delivery?.gps_verdict || null,
-                    enrollment_status: proofResponse.enrollment ? "enrolled" : "pending",
-                    nfc_uid: proofResponse.nfc_uid || null,
-                    shipping_gps: proofResponse.enrollment?.shipping_address_gps
-                        ? JSON.stringify(proofResponse.enrollment.shipping_address_gps)
-                        : null,
-                    warehouse_gps: proofResponse.enrollment?.warehouse_gps
-                        ? JSON.stringify(proofResponse.enrollment.warehouse_gps)
-                        : null,
-                    delivery_gps: proofResponse.delivery?.delivery_gps
-                        ? JSON.stringify(proofResponse.delivery.delivery_gps)
-                        : null,
-                    photo_urls: proofResponse.enrollment?.photo_urls || null,
-                };
+                const proof = merchantApiKey ? await getProof(merchantApiKey, proofId) : null;
+                if (proof) {
+                    const record = openRecordFromProof(proof);
+                    const opens = openRowsFromTapEvents(await getTapEvents(proofId));
+
+                    // THE BUYER'S PAGE, from the one author of that address
+                    // (brand-page-url.server.ts): {brand}.in.ink/r/{nfc_token},
+                    // null unless the proof carries a real token.
+                    const resolvedPage = await resolveBrandPageUrl({
+                        merchantApiKey,
+                        proofId,
+                        shop: session.shop,
+                        merchantData: merchantHit?.data ?? {},
+                        label: "order-detail",
+                    });
+
+                    // Where the first open happened, when that open shared it.
+                    const firstOpen = opens.find((o) => o.first) ?? null;
+                    alanProofData = {
+                        ...record,
+                        verify_url: resolvedPage.pageUrl,
+                        enrollment_status: "enrolled",
+                        nfc_uid: proof.nfc_uid || null,
+                        delivery_gps: firstOpen?.coords ? JSON.stringify(firstOpen.coords) : null,
+                        opens,
+                    };
+                } else {
+                    console.warn(`[order-detail] no proof read for ${proofId} (${merchantApiKey ? "not found for this shop" : "merchant has no ink key"})`);
+                }
             } catch (alanError: any) {
-                console.error(`⚠️ Failed to fetch proof from Alan's API:`, alanError.message);
+                console.error(`⚠️ Failed to fetch proof from ink:`, alanError.message);
                 // Continue without proof data - don't fail the whole page
             }
         }
@@ -387,8 +386,9 @@ export const loader = async ({
         if (alanProofData) {
             metafields.nfc_uid = metafields.nfc_uid || alanProofData.nfc_uid || undefined;
             metafields.delivery_gps = alanProofData.delivery_gps || metafields.delivery_gps;
-            // Add warehouse_gps to metafields object for easy access in UI (even though it's not a real Shopify metafield yet)
-            (metafields as any).warehouse_gps = alanProofData.warehouse_gps;
+            // warehouse_gps rode along from the old unauthenticated read (a
+            // legacy NFC-enroll field the proof projection does not carry);
+            // the FEATURE_NFC block below still reads it off metafields.
         }
 
         // Extract products
@@ -424,6 +424,9 @@ export const loader = async ({
                 distance_meters: alanProofData.distance_meters,
                 gps_verdict: alanProofData.gps_verdict,
                 photo_urls: alanProofData.photo_urls,
+                tap_count: alanProofData.tap_count,
+                last_tap_at: alanProofData.last_tap_at,
+                opens: alanProofData.opens,
             } : null,
         };
 
@@ -788,7 +791,8 @@ export default function OrderDetails() {
     };
     const statusLabel = verificationStatusRaw.charAt(0).toUpperCase() + verificationStatusRaw.slice(1);
 
-    const hasTapData = verificationStatusRaw === "verified" || !!order.localProof?.gps_verdict;
+    const hasTapData = verificationStatusRaw === "verified" || (order.localProof?.tap_count ?? 0) > 0;
+    const locationWords = locationLine(order.localProof?.gps_verdict, order.localProof?.distance_meters);
 
     // Parse delivery GPS
     const deliveryGps = order.metafields.delivery_gps;
@@ -1065,13 +1069,13 @@ export default function OrderDetails() {
                                                                     </BlockStack>
                                                                 </InlineStack>
                                                             )}
-                                                            {order.localProof?.distance_meters != null && (
+                                                            {locationWords && (
                                                                 <InlineStack gap="300" blockAlign="start">
                                                                     <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--p-color-text)", marginTop: "4px", flexShrink: 0 }} />
                                                                     <BlockStack gap="100">
-                                                                        <Text as="p" variant="bodySm" fontWeight="medium">Location verified</Text>
+                                                                        <Text as="p" variant="bodySm" fontWeight="medium">Location</Text>
                                                                         <Text as="p" tone="subdued" variant="bodySm">
-                                                                            {order.localProof.distance_meters}m from shipping address
+                                                                            {locationWords}
                                                                         </Text>
                                                                         {deliveryCoords && (
                                                                             <Text as="p" tone="subdued" variant="bodySm">
@@ -1095,6 +1099,12 @@ export default function OrderDetails() {
                                                         </BlockStack>
                                                     </BlockStack>
                                                 </div>
+                                                {/* Every open, newest first */}
+                                                {(order.localProof?.opens?.length ?? 0) > 0 && (
+                                                    <div style={{ flex: 1 }}>
+                                                        <TapOpensList opens={order.localProof!.opens} />
+                                                    </div>
+                                                )}
                                                 {/* Map */}
                                                 {deliveryCoords && (
                                                     <div style={{ flex: 1 }}>
@@ -1105,7 +1115,7 @@ export default function OrderDetails() {
                                                                 lng={deliveryCoords.lng}
                                                                 address={addressLabel}
                                                                 fullAddress={fullAddress}
-                                                                distanceFromAddress={order.localProof?.distance_meters != null ? `${order.localProof.distance_meters}m` : undefined}
+                                                                distanceFromAddress={locationWords ?? undefined}
                                                             />
                                                         </BlockStack>
                                                     </div>

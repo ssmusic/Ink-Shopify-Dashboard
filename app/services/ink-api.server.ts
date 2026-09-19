@@ -335,6 +335,27 @@ export const enrollOrder = async (
     return await response.json();
 };
 
+// Every open of one order, from the backend's admin door. Ask it only for a
+// proof that getProof (merchant-keyed, 404 on a foreign shop) has already
+// returned — the admin secret is the app's, not the merchant's, and this is
+// how the call stays inside the merchant's own orders. Never throws: an
+// order page renders without the list before it fails on it.
+export const getTapEvents = async (proofId: string): Promise<any[]> => {
+    try {
+        const url = getAlanUrl(`/admin/tap-events?proof_id=${encodeURIComponent(proofId)}`);
+        const response = await fetch(url, { headers: { "X-Admin-Secret": INK_ADMIN_SECRET } });
+        if (!response.ok) {
+            console.warn(`[ink-api] getTapEvents ${response.status} for ${proofId.slice(0, 20)}…`);
+            return [];
+        }
+        const body = await response.json();
+        return Array.isArray(body?.tap_events) ? body.tap_events : [];
+    } catch (error) {
+        console.warn("[ink-api] getTapEvents failed:", error);
+        return [];
+    }
+};
+
 export const getProof = async (apiKey: string, nfcToken: string) => {
     const url = getAlanUrl(`/api/proofs/${encodeURIComponent(nfcToken)}`);
     console.log(`[ink-api] getProof → ${url} (apiKey prefix: ${apiKey.slice(0, 12)}...)`);
