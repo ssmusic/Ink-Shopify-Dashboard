@@ -32,7 +32,7 @@ export default function VerifiableRecordCard({ verifyUrl, qrSrc, auditReportHref
               <img src={qrSrc} alt="Re-check this record" width={112} height={112} style={{ border: "1px solid var(--p-color-border)", background: "#fff" }} />
               <BlockStack gap="200">
                 <Text as="p" variant="bodySm" tone="subdued">
-                  Anyone can scan this or open the link and re-check the order&apos;s signed record in their own browser — every signature verifies against ink&apos;s published key.
+                  Anyone can scan this or open the link and re-check the order&apos;s signed record in their own browser — every signature verifies against ink&apos;s published key. The buyer&apos;s location is sealed there; only your copies carry it.
                 </Text>
                 <Text as="p" variant="bodySm" breakWord><code style={{ fontFamily: "monospace", fontSize: "12px" }}>{verifyUrl}</code></Text>
                 <InlineStack gap="200">

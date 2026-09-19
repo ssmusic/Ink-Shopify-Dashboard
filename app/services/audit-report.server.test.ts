@@ -57,7 +57,7 @@ describe("auditReportLines", () => {
     expect(text).toContain("Previous hash:  none - first event");
     expect(text).toContain("Signature:      " + "ab".repeat(32));
     expect(text).toContain(URL);
-    expect(text).toContain("withheld on the public page");
+    expect(text).toContain("the buyer's location is a commitment inside the signed bytes");
   });
 
   it("a missing reference is stated, never invented; a broken chain is said", () => {

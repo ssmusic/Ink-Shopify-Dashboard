@@ -99,12 +99,12 @@ function elementLine(el: AuditElement, tz: string): string {
   const bits: string[] = [];
   if (el.element === "order" && v.order_number) bits.push(String(v.order_number));
   if (el.element === "buyer" && v.tier) bits.push(String(v.tier));
-  if (el.element === "delivery_date" && v.delivered_at) bits.push(`${fmtDate(String(v.delivered_at), tz)}${v.source ? ` (${String(v.source)})` : ""}`);
+  if (el.element === "delivery_date" && v.delivered_at) bits.push(`${fmtDate(String(v.delivered_at), tz)}${v.source ? ` (${String(v.source)})` : ""}${v.signed ? " - signed" : ""}${v.mismatch ? ` - RECORD SAYS ${fmtDate(String(v.record_says), tz)}` : ""}`);
   if (el.element === "delivery_place") bits.push(v.verified_at_door ? "confirmed at the door" : v.geocoded ? "address on file" : "no address");
   if (el.element === "carrier_scan") bits.push([v.last_status, v.carrier].filter(Boolean).join(" - ") + (v.last_at ? ` - ${fmtDate(String(v.last_at), tz)}` : ""));
   if (el.element === "the_open") {
-    if (v.first_open_at) bits.push(`first ${fmtDate(String(v.first_open_at), tz)}`);
-    if (v.opens != null) bits.push(`${String(v.opens)} open${Number(v.opens) === 1 ? "" : "s"}`);
+    if (v.first_open_at) bits.push(`first ${fmtDate(String(v.first_open_at), tz)}${v.first_open_signed ? " (signed)" : ""}`);
+    if (v.opens != null) bits.push(`${String(v.opens)} open${Number(v.opens) === 1 ? "" : "s"}${v.signed_opens != null ? ` (${String(v.signed_opens)} signed)` : ""}`);
     const loc = v.location as { verdict?: string; distance_m?: number | null } | null | undefined;
     if (loc?.verdict === "not_shared") bits.push("location not shared by the buyer");
     else if (loc?.verdict === "unmeasured") bits.push("location shared, no distance available");
@@ -198,7 +198,7 @@ export function auditReportLines(p: AuditPacket, opts: { verifyUrl: string; tz?:
   }
 
   push("RE-RUN THE PUBLIC VERIFICATION", { font: "sans-bold", size: 9, gap: 18 });
-  prose("Scan the code or open this link. The browser re-checks every disclosed hash and signature against ink's published key. Events that carry the buyer's location are withheld on the public page; this copy carries them in full.", { size: 8, gap: 2 });
+  prose("Scan the code or open this link. The browser re-checks every hash and signature against ink's published key. The record is sealed: on the public page the buyer's location is a commitment inside the signed bytes, never the coordinates; this copy carries the revealed values beside them.", { size: 8, gap: 2 });
   push(opts.verifyUrl, { font: "mono", size: 8, gap: 2 });
   push("", { rects: qrRects(opts.verifyUrl, 96), reserve: 100, gap: 4 });
   return L;
