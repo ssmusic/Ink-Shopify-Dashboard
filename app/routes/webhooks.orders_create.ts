@@ -8,6 +8,7 @@ import {
   countryOfWebhookOrder,
   orderActivates,
   productsActivate,
+  pausedOfMerchant,
   scopeOfMerchant,
   stateOfWebhookOrder,
 } from "../services/activation-scope.server";
@@ -311,10 +312,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // Absent scope (every merchant today) ⇒ activates, exactly as before.
   const activationScope = scopeOfMerchant(merchantForScope?.data);
 
+  // PAUSED is answered first and costs nothing: a paused pilot withholds the
+  // ritual from every order — recorded, no tag, no page, and the cap is
+  // never spent on it. Not a scope (a scope cannot say "nobody"); its own
+  // boolean on the same doc, read through the mirror's one reader.
+  const paused = pausedOfMerchant(merchantForScope?.data);
+  if (paused) {
+    console.log(
+      `⏸ [orders/create] Order ${orderName} — this merchant's pilot is paused; recording it, no page.`
+    );
+  }
+
   // WHERE it ships is answerable right now, from the body Shopify already
-  // sent — no query, no scope, no cost.
-  const shipToOk = orderActivates(data, activationScope);
-  if (!shipToOk) {
+  // sent — no query, no scope, no cost. A paused pilot ships nowhere.
+  const shipToOk = !paused && orderActivates(data, activationScope);
+  if (!shipToOk && !paused) {
     console.log(
       `🔒 [orders/create] Order ${orderName} ships outside this merchant's chosen places ` +
         `(${[
@@ -684,7 +696,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   console.log(
     `✅ [orders/create] Successfully processed order ${orderName} (mode=${deliveryMode}` +
-      `${activatesNow() ? "" : ", recorded only — outside the piece this pilot runs on"})\n`
+      `${activatesNow() ? "" : paused ? ", recorded only — this pilot is paused" : ", recorded only — outside the piece this pilot runs on"})\n`
   );
   // 200 either way. An out-of-slice order is a DECISION, not a failure —
   // a 500 here would have Shopify redeliver it forever.
