@@ -16,6 +16,7 @@ import { authenticate } from "../shopify.server";
 import { openRecordFromProof, openRowsFromTapEvents, locationLine } from "../services/order-open-record";
 import type { OpenRow } from "../services/order-open-record";
 import TapOpensList from "../components/TapOpensList";
+import VerifiableRecordCard from "../components/VerifiableRecordCard";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
     Page,
@@ -202,6 +203,12 @@ interface OrderDetail {
         tap_count: number;
         last_tap_at: string | null;
         opens: OpenRow[];
+        // The verifiable record (the audit machine): the public verify link,
+        // its QR, and whether ink has published a chained record yet.
+        proof_id: string;
+        verify_record_url: string;
+        verify_record_qr: string;
+        record_published: boolean;
     } | null;
 }
 
@@ -326,6 +333,10 @@ export const loader = async ({
             tap_count: number;
             last_tap_at: string | null;
             opens: OpenRow[];
+            proof_id: string;
+            verify_record_url: string;
+            verify_record_qr: string;
+            record_published: boolean;
         } | null = null;
 
         if (proofId) {
@@ -355,6 +366,21 @@ export const loader = async ({
 
                     // Where the first open happened, when that open shared it.
                     const firstOpen = opens.find((o) => o.first) ?? null;
+
+                    // The verifiable record: published once ink holds a chained
+                    // event for this order (the audit door answers with one).
+                    // Best-effort — an order page never fails on it.
+                    const { publicVerifyUrl, verifyQrSrc } = await import("../services/verify-url.server");
+                    const { getProofAudit } = await import("../services/ink-api.server");
+                    let recordPublished = false;
+                    try {
+                        // merchantApiKey is non-null here: getProof returned a proof.
+                        const audit = await getProofAudit(merchantApiKey as string, proofId);
+                        recordPublished = !!audit && Array.isArray(audit.chain) && audit.chain.length > 0;
+                    } catch (auditErr: any) {
+                        console.warn("[order-detail] audit door unavailable:", auditErr?.message ?? auditErr);
+                    }
+
                     alanProofData = {
                         ...record,
                         verify_url: resolvedPage.pageUrl,
@@ -362,6 +388,10 @@ export const loader = async ({
                         nfc_uid: proof.nfc_uid || null,
                         delivery_gps: firstOpen?.coords ? JSON.stringify(firstOpen.coords) : null,
                         opens,
+                        proof_id: proofId,
+                        verify_record_url: publicVerifyUrl(proofId),
+                        verify_record_qr: verifyQrSrc(proofId),
+                        record_published: recordPublished,
                     };
                 } else {
                     console.warn(`[order-detail] no proof read for ${proofId} (${merchantApiKey ? "not found for this shop" : "merchant has no ink key"})`);
@@ -427,6 +457,10 @@ export const loader = async ({
                 tap_count: alanProofData.tap_count,
                 last_tap_at: alanProofData.last_tap_at,
                 opens: alanProofData.opens,
+                proof_id: alanProofData.proof_id,
+                verify_record_url: alanProofData.verify_record_url,
+                verify_record_qr: alanProofData.verify_record_qr,
+                record_published: alanProofData.record_published,
             } : null,
         };
 
@@ -1131,6 +1165,20 @@ export default function OrderDetails() {
                                 )}
                             </div>
                         </div>
+                        {/* The verifiable record — the public link, its QR, the
+                            printed audit report, the export (the audit machine). */}
+                        {order.localProof?.proof_id && (
+                            <div style={{ marginTop: "16px" }}>
+                                <VerifiableRecordCard
+                                    proofId={order.localProof.proof_id}
+                                    verifyUrl={order.localProof.verify_record_url}
+                                    qrSrc={order.localProof.verify_record_qr}
+                                    auditReportHref={`/app/api/orders/${encodeURIComponent(order.id)}/audit-report?proof=${encodeURIComponent(order.localProof.proof_id)}`}
+                                    recordExportHref={`/app/api/orders/${encodeURIComponent(order.id)}/record-export?proof=${encodeURIComponent(order.localProof.proof_id)}`}
+                                    published={order.localProof.record_published}
+                                />
+                            </div>
+                        )}
                     </Layout.Section>
                 </Layout>
             </Page>
