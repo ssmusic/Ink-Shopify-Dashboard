@@ -19,7 +19,7 @@ function packet(over: Partial<AuditPacket> = {}): AuditPacket {
   return {
     proof_id: "proof_" + "a".repeat(24), audience: "merchant", issued_at: "2026-09-19T20:00:00.000Z",
     issuer: { name: "ink", alg: "ed25519", key_ids: ["key_001"], jwks_url: "/.well-known/jwks.json" },
-    summary: { order_number: "#1042", merchant: "Goodr", buyer_name: "Maya Chen", buyer_initials: "MC", buyer_tier: "returning", ship_to: { city: "Los Angeles", region: "CA", country: "US", postal_code: "90026", line1: "123 Hidden St" }, enrolled_at: "2026-09-11T18:00:00.000Z", delivered_at: "2026-09-12T18:00:00.000Z", delivery_stage: "delivered", carrier: "usps", tracking_number: "9400111", first_open_at: "2026-09-13T18:00:00.000Z", last_open_at: null, opens: 1, return_status: null },
+    summary: { order_number: "#1042", merchant: "Northwind Optics", buyer_name: "Maya Chen", buyer_initials: "MC", buyer_tier: "returning", ship_to: { city: "Los Angeles", region: "CA", country: "US", postal_code: "90026", line1: "123 Hidden St" }, enrolled_at: "2026-09-11T18:00:00.000Z", delivered_at: "2026-09-12T18:00:00.000Z", delivery_stage: "delivered", carrier: "usps", tracking_number: "9400111", first_open_at: "2026-09-13T18:00:00.000Z", last_open_at: null, opens: 1, return_status: null },
     verdict: {
       elements: [
         { element: "order", label: "Order", value: { order_number: "#1042" }, status: "attested", evidence_event_ids: ["evt_1"] },
@@ -43,7 +43,7 @@ describe("auditReportLines", () => {
   it("says what the record supports, each element's level and evidence, every event's hashes and signature, and the verify link", () => {
     const text = auditReportLines(packet(), { verifyUrl: URL }).map((l) => l.text).join("\n");
     expect(text).toContain("AUDIT REPORT");
-    expect(text).toContain("Order #1042 - Goodr");
+    expect(text).toContain("Order #1042 - Northwind Optics");
     expect(text).toContain("6 of 6 elements are backed by signed events; the 3-event chain verifies.");
     expect(text).toContain("Buyer: Maya Chen (returning)");
     expect(text).toContain("Ship to: 123 Hidden St, Los Angeles, CA, 90026, US");
