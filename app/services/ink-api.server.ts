@@ -335,6 +335,45 @@ export const enrollOrder = async (
     return await response.json();
 };
 
+// Every open of one order, from the backend's admin door. Ask it only for a
+// proof that getProof (merchant-keyed, 404 on a foreign shop) has already
+// returned — the admin secret is the app's, not the merchant's, and this is
+// how the call stays inside the merchant's own orders. Never throws: an
+// order page renders without the list before it fails on it.
+export const getTapEvents = async (proofId: string): Promise<any[]> => {
+    try {
+        const url = getAlanUrl(`/admin/tap-events?proof_id=${encodeURIComponent(proofId)}`);
+        const response = await fetch(url, { headers: { "X-Admin-Secret": INK_ADMIN_SECRET } });
+        if (!response.ok) {
+            console.warn(`[ink-api] getTapEvents ${response.status} for ${proofId.slice(0, 20)}…`);
+            return [];
+        }
+        const body = await response.json();
+        return Array.isArray(body?.tap_events) ? body.tap_events : [];
+    } catch (error) {
+        console.warn("[ink-api] getTapEvents failed:", error);
+        return [];
+    }
+};
+
+// The audit machine's merchant doors (ink-backend #104/#105): the full
+// packet, the signed receipt, the export bundle — the shop's own orders only
+// (ink answers 404 for any other shop's proof). Each returns null on 404 and
+// throws on anything else, like getProof.
+async function merchantDoor(apiKey: string, idOrToken: string, door: "audit" | "receipt" | "export") {
+    const url = getAlanUrl(`/api/proofs/${encodeURIComponent(idOrToken)}/${door}`);
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+        const body = await response.text().catch(() => "<unreadable>");
+        throw new Error(`ink ${door} ${response.status}: ${body.slice(0, 300)}`);
+    }
+    return response.json();
+}
+export const getProofAudit = (apiKey: string, idOrToken: string) => merchantDoor(apiKey, idOrToken, "audit");
+export const getProofReceipt = (apiKey: string, idOrToken: string) => merchantDoor(apiKey, idOrToken, "receipt");
+export const getProofExport = (apiKey: string, idOrToken: string) => merchantDoor(apiKey, idOrToken, "export");
+
 export const getProof = async (apiKey: string, nfcToken: string) => {
     const url = getAlanUrl(`/api/proofs/${encodeURIComponent(nfcToken)}`);
     console.log(`[ink-api] getProof → ${url} (apiKey prefix: ${apiKey.slice(0, 12)}...)`);
