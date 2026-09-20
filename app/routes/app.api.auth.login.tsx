@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
 import { createMerchant, loginUser } from "../services/ink-api.server";
+import { findMerchantDocRef } from "../services/merchant-doc.server";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -93,24 +94,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const freshApiKey = inkMerchantRes.api_key;
 
         if (freshApiKey) {
-          // Upsert into Firestore: first try by document ID, then by shopDomain field
-          const existingDoc = await firestore.collection("merchants").doc(merchantId).get();
-          if (existingDoc.exists) {
-            await existingDoc.ref.update({ ink_api_key: freshApiKey, updatedAt: new Date() });
+          // Upsert into Firestore through the SAME resolver the fulfillment
+          // webhook uses — the old two-convention lookup (doc-id, then a
+          // single "shopDomain" field) missed the backend's snake_case
+          // shop_domain doc, so a store already provisioned there could get
+          // a SECOND doc created right here, permanently splitting the two.
+          const hit = await findMerchantDocRef(firestore, merchantId);
+          if (hit) {
+            await hit.ref.update({ ink_api_key: freshApiKey, updatedAt: new Date() });
           } else {
-            // Also check by shopDomain field  
-            const snapshot = await firestore.collection("merchants").where("shopDomain", "==", merchantId).limit(1).get();
-            if (!snapshot.empty) {
-              await snapshot.docs[0].ref.update({ ink_api_key: freshApiKey, updatedAt: new Date() });
-            } else {
-              // Create new doc with document ID = merchantId for easy future lookups
-              await firestore.collection("merchants").doc(merchantId).set({
-                shopDomain: merchantId,
-                ink_api_key: freshApiKey,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              });
-            }
+            // Genuinely nothing exists yet — create the canonical domain-keyed doc.
+            await firestore.collection("merchants").doc(merchantId).set({
+              shopDomain: merchantId,
+              ink_api_key: freshApiKey,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
           }
           console.log(`[Auth] Cached ink_api_key for merchant ${merchantId}`);
         }
@@ -158,22 +157,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ error: "Invalid email or password" }, { status: 401 });
   }
 
-  // Ensure the merchant configuration document exists and has a real INK API key (heal from sk_test_fallback)
-  const merchantSnapshot = await firestore
-    .collection("merchants")
-    .where("shopDomain", "==", userData.shopDomain)
-    .limit(1)
-    .get();
+  // Ensure the merchant configuration document exists and has a real INK API
+  // key (heal from sk_test_fallback). findMerchantDocRef — the same resolver
+  // the fulfillment webhook uses — replaces a private single-convention
+  // "shopDomain" field query that missed the embed's own doc-id shape AND
+  // the backend's snake_case shop_domain, so this legacy path could heal a
+  // key onto a THIRD doc while the real one sat unread.
+  const merchantHit = await findMerchantDocRef(firestore, userData.shopDomain);
 
-  let apiKey = merchantSnapshot.empty ? null : merchantSnapshot.docs[0].data().ink_api_key;
-  let docId = merchantSnapshot.empty ? null : merchantSnapshot.docs[0].id;
+  let apiKey = merchantHit?.apiKey ?? null;
+  const docId = merchantHit?.ref.id ?? null;
 
   if (!apiKey || apiKey === "sk_test_fallback") {
     console.log(`[Auth] Key missing or fallback for ${userData.shopDomain}. Calling INK Admin API...`);
     try {
       const inkRes = await createMerchant(userData.shopDomain, userData.shopDomain, userData.email || email);
       apiKey = inkRes.api_key;
-      
+
       if (docId) {
         await firestore.collection("merchants").doc(docId).update({
           ink_api_key: apiKey,

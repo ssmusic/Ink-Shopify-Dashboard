@@ -17,16 +17,15 @@ export interface MerchantData {
   createdAt?: string;
 }
 
-export const getMerchant = async (shop: string): Promise<MerchantData | null> => {
-  try {
-    const doc = await firestore.collection(COLLECTION).doc(shop).get();
-    if (!doc.exists) return null;
-    return doc.data() as MerchantData;
-  } catch (error) {
-    console.error("Error fetching merchant:", error);
-    return null;
-  }
-};
+// getMerchant() used to live here — a doc-id-only read (`doc(shop).get()`,
+// no fallback). Its one real caller, app.tsx's self-provisioning loader,
+// now resolves through `findMerchantDocRef` instead (services/merchant-doc.
+// server.ts), which also checks the backend's snake_case shop_domain field
+// and prefers whichever doc actually carries ink_api_key — the §17.2
+// landmine this doc-id-only shape kept re-triggering on every embedded page
+// load for a store holding two merchant docs. Deleted rather than kept
+// unused; `git log -S "export const getMerchant"` has it if anything ever
+// needs a doc-id-only read again.
 
 export const updateMerchant = async (shop: string, data: Partial<MerchantData>) => {
   try {

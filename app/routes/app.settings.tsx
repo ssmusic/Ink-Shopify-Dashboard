@@ -3,6 +3,7 @@ import { useLoaderData, type LoaderFunctionArgs, useRouteError, type HeadersFunc
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { getInventory, getInventoryByShopDomain, getShopIdByDomain } from "../services/ink-api.server";
+import { findMerchantDocRef } from "../services/merchant-doc.server";
 import Settings from "../components/settings/Settings";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -57,20 +58,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let usedStr = "0";
 
   try {
-    // BY DOCUMENT ID FIRST. The embedded app provisions with
-    // `merchants.doc(shop).set({ shop, … })`, so `where("shopDomain", …)` never
-    // matched it — which is why this read "Not available" for every merchant,
-    // permanently, no matter how long ago they installed. The query is kept as
-    // a fallback: the standalone auth path creates docs with random ids and a
-    // `shopDomain` field.
-    let data: Record<string, any> | undefined;
-    const byId = await firestore.collection("merchants").doc(session.shop).get();
-    if (byId.exists) {
-      data = byId.data();
-    } else {
-      const merchantDocs = await firestore.collection("merchants").where("shopDomain", "==", session.shop).limit(1).get();
-      if (!merchantDocs.empty) data = merchantDocs.docs[0].data();
-    }
+    // findMerchantDocRef — the same resolver the fulfillment webhook uses.
+    // This used to be a private doc-id-then-"shopDomain" lookup, which is
+    // exactly the §17.2 landmine: on a store holding two merchant docs, the
+    // install date could live on the doc this private lookup never checked
+    // (a random-id backend doc, or one using the snake_case shop_domain
+    // field), and this row would read "Not available" even though the real
+    // doc has a createdAt.
+    const hit = await findMerchantDocRef(firestore, session.shop);
+    const data: Record<string, any> | undefined = hit?.data;
     if (data?.createdAt) {
       const date = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
       if (!Number.isNaN(date.getTime())) {

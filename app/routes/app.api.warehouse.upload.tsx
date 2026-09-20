@@ -2,6 +2,7 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
 import { uploadMedia, adjustMerchantInventory, getShopIdByDomain } from "../services/ink-api.server";
 import { verifyProxyToken } from "../services/token-verify.server";
+import { findMerchantDocRefByEither } from "../services/merchant-doc.server";
 
 /**
  * Public endpoint (authenticated by warehouse JWT only).
@@ -28,32 +29,16 @@ const json = (data: any, init?: ResponseInit) =>
 // local HMAC for our own tokens, REMOTE /auth/validate for ink-backend
 // JWTs. The old decode-without-verify fallback is gone (fix-list #2).
 
+// WHICH MERCHANT DOC. `findMerchantDocRefByEither` — the same resolver the
+// fulfillment webhook uses, tried against merchant_id then shopDomain. This
+// was a private lookup (merchant_id-as-doc-id, then a single "shopDomain"
+// field query), byte-identical to the one in app.api.warehouse.enroll.tsx —
+// two copies of the §17.2 landmine that also missed the backend's snake_case
+// shop_domain convention and never preferred the doc carrying ink_api_key.
 async function getMerchantApiKey(shopDomain?: string, merchantId?: string): Promise<string | null> {
-  // 1. Try matching by Firestore document ID (=== merchant_id from Alan JWT)
-  if (merchantId) {
-    const doc = await firestore.collection("merchants").doc(merchantId).get();
-    if (doc.exists) {
-      const apiKey = doc.data()?.ink_api_key;
-      if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
-    }
-  }
-
-  // 2. Try matching by shopDomain field
-  if (shopDomain) {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-
-    if (!snapshot.empty) {
-      const data = snapshot.docs[0].data();
-      const apiKey = data?.ink_api_key;
-      if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
-    }
-  }
-
-  return null;
+  const hit = await findMerchantDocRefByEither(firestore, { shopDomain, merchantId });
+  const apiKey = hit?.apiKey;
+  return apiKey && apiKey !== "sk_test_fallback" ? apiKey : null;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

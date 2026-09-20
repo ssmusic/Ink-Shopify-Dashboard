@@ -70,6 +70,37 @@ export async function findMerchantDoc(
   return hit ? { data: hit.data, apiKey: hit.apiKey } : null;
 }
 
+/** THE WAREHOUSE/PWA SHAPE — a caller that may hold EITHER identifier.
+ *
+ *  Several proxy routes (warehouse enroll/upload, settings/media,
+ *  settings/inventory) carry a JWT that names `shop` (a domain) or
+ *  `merchant_id` (which, for an ink-backend-issued token, IS the backend
+ *  doc's own id) — sometimes both, sometimes one. Each route hand-rolled a
+ *  "try merchant_id as a doc id, else try shopDomain as a field" lookup that
+ *  knew only ONE field convention and never preferred the doc carrying
+ *  `ink_api_key` — the §17.2 landmine, appearances six and seven (warehouse
+ *  enroll and upload carried byte-identical copies of the same function).
+ *
+ *  This tries each identifier in turn through the ONE resolver, so whichever
+ *  one is present still lands on the doc the fulfilment webhook reads. A
+ *  candidate that resolves but carries no ink_api_key is kept as a fallback
+ *  rather than returned immediately — the OTHER identifier gets a chance to
+ *  find the doc that actually carries the key first. */
+export async function findMerchantDocRefByEither(
+  firestore: Firestore,
+  identifiers: { shopDomain?: string | null; merchantId?: string | null },
+): Promise<MerchantDocRefHit | null> {
+  let fallback: MerchantDocRefHit | null = null;
+  for (const candidate of [identifiers.merchantId, identifiers.shopDomain]) {
+    if (!candidate) continue;
+    const hit = await findMerchantDocRef(firestore, candidate);
+    if (!hit) continue;
+    if (hit.apiKey) return hit;
+    fallback = fallback ?? hit;
+  }
+  return fallback;
+}
+
 /** THE SLICE'S OWN RESOLVER — the record the workspace door actually writes.
  *
  *  findMerchantDocRef prefers the doc carrying `ink_api_key`, which is right

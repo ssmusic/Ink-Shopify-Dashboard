@@ -4,6 +4,7 @@ import firestore from "../firestore.server";
 import { brandSlugFromDomain } from "../services/email.server";
 import { fetchBrandEmailKit } from "../services/brand-email.server";
 import { getShopIdByDomain, getMerchantTapStats } from "../services/ink-api.server";
+import { findMerchantDocRef } from "../services/merchant-doc.server";
 
 const json = (data: any, init?: ResponseInit) =>
   new Response(JSON.stringify(data), {
@@ -38,11 +39,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const shop = session.shop;
 
     // Merchant doc: notifications + optional brand_slug override.
+    //
+    // findMerchantDocRef, not doc(shop) alone: the doc-id-only read missed a
+    // store's real notification_settings whenever it lived on the other of
+    // the two possible merchant docs (§17.2 landmine) — the checklist would
+    // say "not done yet" for a merchant who had already turned them on.
     let notificationsOn = false;
     let brandSlugOverride: string | undefined;
     try {
-      const doc = await firestore.collection("merchants").doc(shop).get();
-      const d = doc.exists ? doc.data() ?? {} : {};
+      const hit = await findMerchantDocRef(firestore, shop);
+      const d = hit?.data ?? {};
       const ch = d.notification_settings?.channels;
       notificationsOn = Boolean(ch?.email || ch?.sms);
       if (typeof d.brand_slug === "string" && d.brand_slug) brandSlugOverride = d.brand_slug;

@@ -33,33 +33,18 @@ const INK_API_URL =
 // JWTs. The old decode-without-verify fallback is gone (fix-list #2).
 
 import { enrollOrder, getShopIdByDomain, adjustMerchantInventory, getInventoryByShopDomain } from "../services/ink-api.server";
+import { findMerchantDocRefByEither } from "../services/merchant-doc.server";
 
+// WHICH MERCHANT DOC. `findMerchantDocRefByEither` — the same resolver the
+// fulfillment webhook uses, tried against merchant_id then shopDomain. This
+// was a private lookup (merchant_id-as-doc-id, then a single "shopDomain"
+// field query), byte-identical to the one in app.api.warehouse.upload.tsx —
+// two copies of the §17.2 landmine that also missed the backend's snake_case
+// shop_domain convention and never preferred the doc carrying ink_api_key.
 async function getMerchantApiKey(shopDomain?: string, merchantId?: string): Promise<string | null> {
-  // 1. Try matching by Firestore document ID (=== merchant_id from Alan JWT)
-  if (merchantId) {
-    const doc = await firestore.collection("merchants").doc(merchantId).get();
-    if (doc.exists) {
-      const apiKey = doc.data()?.ink_api_key;
-      if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
-    }
-  }
-
-  // 2. Try matching by shopDomain field
-  if (shopDomain) {
-    const snapshot = await firestore
-      .collection("merchants")
-      .where("shopDomain", "==", shopDomain)
-      .limit(1)
-      .get();
-
-    if (!snapshot.empty) {
-      const data = snapshot.docs[0].data();
-      const apiKey = data?.ink_api_key;
-      if (apiKey && apiKey !== "sk_test_fallback") return apiKey;
-    }
-  }
-
-  return null;
+  const hit = await findMerchantDocRefByEither(firestore, { shopDomain, merchantId });
+  const apiKey = hit?.apiKey;
+  return apiKey && apiKey !== "sk_test_fallback" ? apiKey : null;
 }
 
 // CORS preflight
@@ -161,15 +146,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
       console.log("[ENROLL] ✅ Inventory check passed. Current count:", currentCount);
 
-      // Check min_enrollment_value setting
-      const merchantDoc = await (async () => {
-        const doc = await firestore.collection("merchants").doc(effectiveIdentifier).get();
-        if (doc.exists) return doc.data();
-        const snap = await firestore.collection("merchants").where("shopDomain", "==", effectiveIdentifier).limit(1).get();
-        return snap.empty ? null : snap.docs[0].data();
-      })();
-
-      const minValue = merchantDoc?.min_enrollment_value ?? 0;
+      // Check min_enrollment_value setting. findMerchantDocRefByEither — the
+      // same resolver the fulfillment webhook uses — tried against BOTH
+      // identifiers, not the single OR'd `effectiveIdentifier` string this
+      // used to collapse them into (which only ever checked one convention
+      // for whichever of shopDomain/merchantId happened to be truthy first).
+      const hit = await findMerchantDocRefByEither(firestore, { shopDomain, merchantId });
+      const minValue = hit?.data?.min_enrollment_value ?? 0;
       if (minValue > 0) {
         // order_total_value is passed in body from the PWA
         const orderTotal = parseFloat(body.order_total_value ?? "0") || 0;

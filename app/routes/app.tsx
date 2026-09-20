@@ -8,7 +8,9 @@ import { authenticate, registerWebhooks } from "../shopify.server";
 import { ShopProvider } from "../contexts/ShopContext";
 import { ensureCarrierServiceRegistered } from "../services/carrier-service.server";
 import { createMerchant } from "../services/ink-api.server";
-import { getMerchant, updateMerchant } from "../services/merchant.server";
+import { updateMerchant } from "../services/merchant.server";
+import { findMerchantDocRef } from "../services/merchant-doc.server";
+import firestore from "../firestore.server";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "../services/notification-settings";
 
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
@@ -44,9 +46,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // INK merchant's api_key into merchants/{shop} + default to automatic the
   // first time only (guarded on ink_api_key so an existing key is never
   // re-rotated). Non-blocking: never delays or breaks the app render.
+  //
+  // findMerchantDocRef, not a doc-id-only read: the private `getMerchant`
+  // this used to call only ever checked `merchants/{shop}` by document id.
+  // A store already carrying a backend-provisioned doc under a DIFFERENT id
+  // (with a real ink_api_key) would read as having none here, and THIS
+  // loader — which runs on every embedded page load — would call
+  // createMerchant() again and again, minting a fresh key onto the
+  // domain-keyed doc while the real one sat untouched: the §17.2 landmine,
+  // self-inflicted on every visit rather than found once.
   (async () => {
-    const existing = await getMerchant(session.shop);
-    if (!existing?.ink_api_key) {
+    const hit = await findMerchantDocRef(firestore, session.shop);
+    if (!hit?.apiKey) {
       // Real owner identity, not the old admin@{domain} placeholder — that
       // placeholder made the magic link the ONLY door into in.ink (the
       // merchant could never log in with their real email).
@@ -74,11 +85,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         // Settings page rendered them all as ON (audit 2026-08-07). The
         // Notifications GET backfills too, so installs predating this heal
         // on their first visit to the tab.
-        await updateMerchant(session.shop, {
-          ink_api_key: inkData.api_key,
-          verified_delivery_mode: "background",
-          notification_settings: DEFAULT_NOTIFICATION_SETTINGS,
-        });
+        if (hit?.ref) {
+          // A doc already exists under SOME shape for this shop (just
+          // without a real key yet) — heal that one, never fork a second.
+          await hit.ref.set(
+            {
+              ink_api_key: inkData.api_key,
+              verified_delivery_mode: hit.data?.verified_delivery_mode ?? "background",
+              notification_settings: hit.data?.notification_settings ?? DEFAULT_NOTIFICATION_SETTINGS,
+              updatedAt: new Date(),
+            },
+            { merge: true },
+          );
+        } else {
+          // Genuinely nothing exists yet — create the canonical domain-keyed doc.
+          await updateMerchant(session.shop, {
+            ink_api_key: inkData.api_key,
+            verified_delivery_mode: "background",
+            notification_settings: DEFAULT_NOTIFICATION_SETTINGS,
+          });
+        }
       }
     }
   })().catch((err) =>
