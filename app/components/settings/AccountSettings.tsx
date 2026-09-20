@@ -1,4 +1,5 @@
 import { useShop } from "../../contexts/ShopContext";
+import DiscountsSettings from "./DiscountsSettings";
 import { useNavigate, useRouteLoaderData } from "react-router";
 import {
   BlockStack,
@@ -82,6 +83,9 @@ const AccountSettings = () => {
             </BlockStack>
           </Card>
         </Layout.AnnotatedSection>
+
+        {/* The discounts door (Track C) — named in its PR as a new surface. */}
+        <DiscountsSettings />
       </Layout>
     </BlockStack>
   );
