@@ -1,6 +1,6 @@
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useEffect, useRef, useState } from "react";
-import { useFetcher, type ActionFunctionArgs, useRouteError, type HeadersFunction } from "react-router";
+import { useFetcher, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs, useRouteError, type HeadersFunction } from "react-router";
 import {
   Page,
   Card,
@@ -13,6 +13,7 @@ import {
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { mintMagicToken } from "../services/ink-api.server";
+import { readActivePlan } from "../services/billing-read.server";
 import PolarisAppLayout from "~/components/PolarisAppLayout";
 import RecentActivity from "~/components/RecentActivity";
 import EngagementFunnel from "~/components/EngagementFunnel";
@@ -27,6 +28,14 @@ import { FEATURE_NFC } from "~/flags";
 // Removed from render (kept in tree, unreferenced): TimeToEngagement +
 // CommunicationsUsage rendered hardcoded fictional numbers. Nothing on this
 // dashboard may show a number that isn't the merchant's own.
+
+// The plan this store is on, from Shopify, for the PlanCard below. A plain
+// object (React Router 7 serialises it); readActivePlan never throws.
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { billing } = await authenticate.admin(request);
+  const plan = await readActivePlan(billing, "[dashboard]");
+  return { plan };
+};
 
 // Mint a single-use magic-login token for this shop and hand back a
 // www.in.ink/welcome URL the merchant can open already signed in.
@@ -56,6 +65,7 @@ const Dashboard = () => {
   // embed leads with the lightweight engagement cards + handoff, not a second
   // comprehensive dashboard to keep in sync.
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const { plan } = useLoaderData<typeof loader>();
 
   const fetcher = useFetcher<typeof action>();
   const pendingWindow = useRef<Window | null>(null);
@@ -134,7 +144,7 @@ const Dashboard = () => {
             <RecentActivity />
             <div className="flex flex-col gap-4">
               <CommsCard />
-              <PlanCard />
+              <PlanCard plan={plan} />
             </div>
           </div>
 

@@ -24,6 +24,9 @@ const AccountSettings = () => {
   // construction until the merchant record started stamping createdAt.)
   const storeEmail = shopData?.contactEmail || "";
   const installedDate = shopData?.installedDate || "";
+  // The plan Shopify says this store is on (app.settings loader → billing-read);
+  // null = none chosen, and the card says there is no charge, which is true.
+  const plan = shopData?.plan as { key: string; amount: number; ordersPerMonth: number; test?: boolean } | null | undefined;
   const displayDomain = shopData?.primaryDomain || shopData?.shopDomain || currentShop?.domain || "";
 
   if (loading) {
@@ -67,15 +70,29 @@ const AccountSettings = () => {
         <Layout.AnnotatedSection title="Cost">
           <Card>
             <BlockStack gap="300">
-              <Text as="p" variant="bodyMd" fontWeight="semibold">
-                Your Shopify plan is Free.
-              </Text>
-              <Text as="p" variant="bodyMd">
-                There is no subscription charge, trial, usage fee, or
-                off-platform invoice. Installing the app creates no charge. If
-                paid plans are introduced later, you&rsquo;ll choose and approve
-                one inside Shopify &mdash; nothing will start on its own.
-              </Text>
+              {plan ? (
+                <>
+                  <Text as="p" variant="bodyMd" fontWeight="semibold">
+                    Your plan is {plan.key} &mdash; ${plan.amount.toLocaleString("en-US")}/mo, up to {plan.ordersPerMonth.toLocaleString("en-US")} orders a month.
+                  </Text>
+                  <Text as="p" variant="bodyMd">
+                    Approved inside Shopify and billed on your regular Shopify invoice.
+                    {plan.test ? " This is a test subscription — no money moves." : ""}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text as="p" variant="bodyMd" fontWeight="semibold">
+                    No plan chosen &mdash; there is no charge.
+                  </Text>
+                  <Text as="p" variant="bodyMd">
+                    There is no subscription charge, trial, usage fee, or
+                    off-platform invoice. Installing the app creates no charge.
+                    When you choose a plan, you approve it inside Shopify &mdash;
+                    nothing starts on its own.
+                  </Text>
+                </>
+              )}
               <div>
                 <Button onClick={() => navigate("/app/billing")}>View details</Button>
               </div>

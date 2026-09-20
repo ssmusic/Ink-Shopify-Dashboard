@@ -2,10 +2,12 @@ import "@shopify/shopify-app-react-router/adapters/node";
 import {
   ApiVersion,
   AppDistribution,
+  BillingInterval,
   shopifyApp,
 } from "@shopify/shopify-app-react-router/server";
 import { FirestoreSessionStorage } from "./firestore-session-storage.server";
 import { DeliveryMethod } from "@shopify/shopify-api"; // ✅ Added import
+import { BILLING_PLANS } from "./services/billing-plans";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -35,6 +37,25 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new FirestoreSessionStorage(),
   distribution: AppDistribution.AppStore,
+
+  // THE THREE LOCKED TIERS, through the Shopify Billing API
+  // (appSubscriptionCreate under the hood — https://shopify.dev/docs/api/admin-graphql/2025-10/mutations/appSubscriptionCreate).
+  // Shopify owns approval, decline, invoicing, cancellation and the
+  // reinstall re-approval (requirements 1.2.1 / 1.2.2, docs/billing-compliance).
+  // Nothing here charges on its own: a plan starts only when the merchant
+  // chooses one on /app/billing and approves it on Shopify's screen. The
+  // numbers are services/billing-plans.ts — never typed here.
+  billing: {
+    Starter: {
+      lineItems: [{ amount: BILLING_PLANS.Starter.amount, currencyCode: BILLING_PLANS.Starter.currencyCode, interval: BillingInterval.Every30Days }],
+    },
+    Growth: {
+      lineItems: [{ amount: BILLING_PLANS.Growth.amount, currencyCode: BILLING_PLANS.Growth.currencyCode, interval: BillingInterval.Every30Days }],
+    },
+    Pro: {
+      lineItems: [{ amount: BILLING_PLANS.Pro.amount, currencyCode: BILLING_PLANS.Pro.currencyCode, interval: BillingInterval.Every30Days }],
+    },
+  },
   
   // ✅ Webhook definitions with proper DeliveryMethod enum
   webhooks: {
