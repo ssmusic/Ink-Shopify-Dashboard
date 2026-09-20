@@ -115,7 +115,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             );
 
             const { assertBrandedTrackingUrl } = await import("../services/branded-tracking-link.server");
-            await assertBrandedTrackingUrl({
+            const { decideShopifyShippingNotice, stampShippingNotice } = await import(
+              "../services/shopify-shipping-notice.server"
+            );
+            const { brandPageEmailEnabled, sendBrandPageEmailOnce } = await import(
+              "../services/brand-page-email.server"
+            );
+
+            // The same decision as fulfillments/create, and the same single
+            // read: tracking that arrives LATE (the 3PL shape) reaches the
+            // buyer through this handler, so the shipping email has to be
+            // decided here too or the whole 3PL population is left out.
+            let notice: Awaited<ReturnType<typeof decideShopifyShippingNotice>> | null = null;
+            const decideOnce = async () => {
+              if (!notice) {
+                notice = await decideShopifyShippingNotice({
+                  admin,
+                  shop,
+                  orderGid,
+                  fulfillmentPayload: fulfillment,
+                  merchantData: hit?.data ?? {},
+                  label: `[${topic}] shipping-notice`,
+                });
+              }
+              return notice;
+            };
+
+            const branded = await assertBrandedTrackingUrl({
               admin,
               shop,
               payload: fulfillment,
@@ -123,8 +149,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               merchantApiKey: apiKey,
               merchantData: hit?.data ?? {},
               shippoRegistered: patched?.shippo_registered === true,
+              shouldNotifyCustomer: async () => (await decideOnce()).notifyCustomer,
               label: `[${topic}] branded-tracking-link`,
             });
+
+            if (branded.notifiedCustomer) {
+              await stampShippingNotice({
+                admin,
+                orderGid,
+                fulfillmentId: String(fulfillment?.id ?? ""),
+                label: `[${topic}] shipping-notice`,
+              });
+            }
+
+            if (
+              brandPageEmailEnabled(hit?.data ?? {}) &&
+              (branded.outcome === "updated" || branded.outcome === "skipped_already_branded")
+            ) {
+              const verdict = await decideOnce();
+              if (verdict.decision === "skipped_already_sent_by_shopify") {
+                await sendBrandPageEmailOnce({
+                  admin,
+                  shop,
+                  orderGid,
+                  orderName: trackingOrder?.name ?? String(orderId),
+                  customerEmail: trackingOrder?.customer?.email,
+                  proofId: trackingProofId,
+                  fulfillmentId: String(fulfillment?.id ?? ""),
+                  merchantApiKey: apiKey,
+                  merchantData: hit?.data ?? {},
+                  label: `[${topic}] brand-page-email`,
+                });
+              }
+            }
 
             // The Order status page — where the email's primary button lands —
             // carries the brand's door once this shop metafield exists. One

@@ -103,9 +103,68 @@ describe("the outbox canary — the happy path actually rewrites the link", () =
     // answering its question better — the number and company stay visible.
     expect(input.company).toBe("UPS");
 
-    // NO SILENT NOTIFICATION: rewriting a link must never re-send a shipping
-    // email to a buyer who already got one.
+    // NO SILENT NOTIFICATION: with no decider supplied, this is byte-identical
+    // to every rewrite this app has ever made. Silence is the default.
     expect(variables.notifyCustomer).toBe(false);
+  });
+
+  it("a decider that says yes makes Shopify send its own shipping email", async () => {
+    // Sam, 2026-09-05: "the email from shopify should have a link to the buyers
+    // in.ink order." The decider answers from Shopify's own timeline; here it
+    // stands for a buyer who has had no shipping email at all.
+    const admin = fakeAdmin();
+    const result = await assertBrandedTrackingUrl({
+      admin,
+      ...base(),
+      shouldNotifyCustomer: async () => true,
+    });
+    expect(admin.calls[0].variables.notifyCustomer).toBe(true);
+    expect(result.notifiedCustomer).toBe(true);
+    // The email Shopify composes carries the URL THIS mutation sets, which is
+    // why the notify rides the rewrite instead of a second call.
+    expect((admin.calls[0].variables.trackingInfoInput as Record<string, unknown>).url).toBe(
+      "https://clarev.in.ink/r/nfc_test_token",
+    );
+  });
+
+  it("a decider that says no leaves the buyer alone", async () => {
+    const admin = fakeAdmin();
+    const result = await assertBrandedTrackingUrl({
+      admin,
+      ...base(),
+      shouldNotifyCustomer: async () => false,
+    });
+    expect(admin.calls[0].variables.notifyCustomer).toBe(false);
+    expect(result.notifiedCustomer).toBe(false);
+  });
+
+  it("A DECIDER THAT FELL OVER HAS NOT PROVEN THE BUYER GOT NOTHING", async () => {
+    const admin = fakeAdmin();
+    const result = await assertBrandedTrackingUrl({
+      admin,
+      ...base(),
+      shouldNotifyCustomer: async () => {
+        throw new Error("timeline unreadable");
+      },
+    });
+    expect(admin.calls[0].variables.notifyCustomer).toBe(false);
+    expect(result.outcome).toBe("updated");
+  });
+
+  it("the decision is asked ONCE, and only when a rewrite is really going to happen", async () => {
+    const decider = vi.fn(async () => true);
+    // A dead feed refuses before the mutation, so the timeline is never read —
+    // one Shopify call per event is the whole steady-state cost.
+    await assertBrandedTrackingUrl({
+      admin: fakeAdmin(),
+      ...base(),
+      shippoRegistered: false,
+      shouldNotifyCustomer: decider,
+    });
+    expect(decider).not.toHaveBeenCalled();
+
+    await assertBrandedTrackingUrl({ admin: fakeAdmin(), ...base(), shouldNotifyCustomer: decider });
+    expect(decider).toHaveBeenCalledTimes(1);
   });
 
   it("a multi-parcel fulfillment uses the plural form, one page per number", async () => {

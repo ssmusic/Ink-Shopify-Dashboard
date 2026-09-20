@@ -10,12 +10,19 @@ import {
 } from "@shopify/polaris";
 import { toast } from "../../hooks/use-toast";
 
-const DeliveryModeSettings = () => {
+const DeliveryModeSettings = ({ shopName }: { shopName?: string }) => {
   const [loading, setLoading] = useState(true);
   // The branded tracking link. ON for every merchant unless they turn it off
   // here — so this starts true and only a loaded `false` moves it.
   const [trackingLink, setTrackingLink] = useState(true);
+  // Shopify's own shipping email, carrying the page. ON by default, same as
+  // the tracking link — Sam's ruling of 2026-09-05 is the default.
+  const [shopifyShippingEmail, setShopifyShippingEmail] = useState(true);
+  // The brand's own email. OFF by default: a second email to someone else's
+  // customer is the merchant's call, not ours.
+  const [brandPageEmail, setBrandPageEmail] = useState(false);
   const [trackingLinkSaving, setTrackingLinkSaving] = useState(false);
+  const brand = (shopName || "your brand").trim() || "your brand";
 
   // App-Bridge-aware fetch (mirrors the pattern used in BrandingSettings).
   const fetchSecure = async (path: string, options: RequestInit = {}) => {
@@ -69,6 +76,10 @@ const DeliveryModeSettings = () => {
       try {
         const res = await fetchSecure("/app/api/settings/branded-tracking-link");
         if (res && typeof res.enabled === "boolean") setTrackingLink(res.enabled);
+        if (res && typeof res.shopifyShippingEmail === "boolean") {
+          setShopifyShippingEmail(res.shopifyShippingEmail);
+        }
+        if (res && typeof res.brandPageEmail === "boolean") setBrandPageEmail(res.brandPageEmail);
       } catch (err: any) {
         console.error("Failed to load tracking link setting:", err);
       }
@@ -77,22 +88,27 @@ const DeliveryModeSettings = () => {
     load();
   }, []);
 
-  const saveTrackingLink = async (enabled: boolean) => {
-    const previous = trackingLink;
-    setTrackingLink(enabled); // optimistic — a toggle that lags feels broken
+  // ONE saver for the three switches on this card. Each one moves optimistically
+  // and is put back if the save fails — a toggle that keeps a lie on screen is
+  // worse than one that lags.
+  const saveSwitch = async (
+    field: "enabled" | "shopifyShippingEmail" | "brandPageEmail",
+    value: boolean,
+    apply: (v: boolean) => void,
+    previous: boolean,
+    message: string,
+  ) => {
+    apply(value);
     setTrackingLinkSaving(true);
     try {
       await fetchSecure("/app/api/settings/branded-tracking-link", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify({ [field]: value }),
       });
-      toast({
-        title: enabled ? "Tracking links point to your page" : "Tracking links point to the carrier",
-        duration: 2500,
-      });
+      toast({ title: message, duration: 2500 });
     } catch (err: any) {
-      setTrackingLink(previous); // say so, don't keep a lie on screen
+      apply(previous); // say so, don't keep a lie on screen
       toast({
         title: "Couldn't save that",
         description: err.message,
@@ -103,6 +119,33 @@ const DeliveryModeSettings = () => {
       setTrackingLinkSaving(false);
     }
   };
+
+  const saveTrackingLink = (enabled: boolean) =>
+    saveSwitch(
+      "enabled",
+      enabled,
+      setTrackingLink,
+      trackingLink,
+      enabled ? "Tracking links point to your page" : "Tracking links point to the carrier",
+    );
+
+  const saveShopifyShippingEmail = (on: boolean) =>
+    saveSwitch(
+      "shopifyShippingEmail",
+      on,
+      setShopifyShippingEmail,
+      shopifyShippingEmail,
+      on ? "Shopify's shipping email will carry your page" : "Shopify's shipping email is left alone",
+    );
+
+  const saveBrandPageEmail = (on: boolean) =>
+    saveSwitch(
+      "brandPageEmail",
+      on,
+      setBrandPageEmail,
+      brandPageEmail,
+      on ? `${brand} will email the page` : `${brand} sends no extra email`,
+    );
 
   if (loading) {
     return (
@@ -167,6 +210,36 @@ const DeliveryModeSettings = () => {
               with a carrier we can’t follow keep Shopify’s own tracking link, so no customer is
               ever sent to a page that can’t tell them anything.
             </Text>
+
+            {/* PLACEHOLDER COPY — Sam writes the words. The two switches Sam
+                ruled on, 2026-09-05, on the card that already owns this
+                subject rather than a new one. */}
+            <Checkbox
+              id="ink-shopify-shipping-email"
+              label="Send Shopify’s shipping email when your customer hasn’t had one"
+              helpText={
+                "If you fulfil an order without ticking Shopify’s own “Send shipment details”, your " +
+                "customer gets no shipping email at all. This sends exactly one, from your own " +
+                "template, and its tracking button opens your order page. A customer who already " +
+                "had a shipping email never gets a second."
+              }
+              checked={shopifyShippingEmail}
+              disabled={trackingLinkSaving}
+              onChange={saveShopifyShippingEmail}
+            />
+
+            <Checkbox
+              id="ink-brand-page-email"
+              label={`Email the page from ${brand} when Shopify’s email already went out`}
+              helpText={
+                "When your shipping email has already gone out with the carrier’s link in it, this " +
+                "sends one short email from your brand with a link to the order’s page. Off unless " +
+                "you turn it on: it is a second email to your customer."
+              }
+              checked={brandPageEmail}
+              disabled={trackingLinkSaving}
+              onChange={saveBrandPageEmail}
+            />
           </BlockStack>
         </Card>
       </Layout.AnnotatedSection>

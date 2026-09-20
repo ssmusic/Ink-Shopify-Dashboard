@@ -34,7 +34,8 @@ const Settings = ({ initialData }: { initialData?: any }) => {
   const renderTabContent = () => {
     switch (tabs[selected]?.id) {
       case "account": return <AccountSettings />;
-      case "delivery": return <DeliveryModeSettings />;
+      // shopName names the brand in the "email the page from {brand}" switch.
+      case "delivery": return <DeliveryModeSettings shopName={initialData?.shopName} />;
       case "tags": return <TagsSettings inventoryData={initialData?.inventoryData} />;
       case "branding": return <BrandingSettings />;
       // shopDomain builds the deep link into THIS store's Shopify notification

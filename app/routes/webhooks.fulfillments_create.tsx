@@ -94,7 +94,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // never fatal — see branded-tracking-link.server.ts.
     try {
       const { assertBrandedTrackingUrl } = await import("../services/branded-tracking-link.server");
-      await assertBrandedTrackingUrl({
+      const { decideShopifyShippingNotice, stampShippingNotice } = await import(
+        "../services/shopify-shipping-notice.server"
+      );
+      const { brandPageEmailEnabled, sendBrandPageEmailOnce } = await import(
+        "../services/brand-page-email.server"
+      );
+      const orderGid = `gid://shopify/Order/${orderId}`;
+
+      // ONE READ OF THE TIMELINE PER EVENT, AT MOST. The decision is asked for
+      // twice — once by the rewrite, at the last moment before it mutates, and
+      // once below by the brand's own email — and both get the same answer.
+      let notice: Awaited<ReturnType<typeof decideShopifyShippingNotice>> | null = null;
+      const decideOnce = async () => {
+        if (!notice) {
+          notice = await decideShopifyShippingNotice({
+            admin,
+            shop,
+            orderGid,
+            fulfillmentPayload: payload,
+            merchantData: merchantHit?.data ?? {},
+            label: `[${topic}] shipping-notice`,
+          });
+        }
+        return notice;
+      };
+
+      const branded = await assertBrandedTrackingUrl({
         admin,
         shop,
         payload,
@@ -102,8 +128,46 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         merchantApiKey,
         merchantData: merchantHit?.data ?? {},
         shippoRegistered: patched?.shippo_registered === true,
+        // Shopify sends its OWN shipping email, once, carrying the page —
+        // but only for a buyer who has had none (shopify-shipping-notice).
+        shouldNotifyCustomer: async () => (await decideOnce()).notifyCustomer,
         label: `[${topic}] branded-tracking-link`,
       });
+
+      // Record OUR ask straight away, so a webhook redelivery can never repeat
+      // it. Written only after Shopify accepted the notifying mutation.
+      if (branded.notifiedCustomer) {
+        await stampShippingNotice({
+          admin,
+          orderGid,
+          fulfillmentId: String(payload?.id ?? ""),
+          label: `[${topic}] shipping-notice`,
+        });
+      }
+
+      // THE OTHER CASE: Shopify's shipping email already went out, with the
+      // carrier's link in it. Default OFF, so the read below costs nothing for
+      // a merchant who has not asked for it.
+      if (
+        brandPageEmailEnabled(merchantHit?.data ?? {}) &&
+        (branded.outcome === "updated" || branded.outcome === "skipped_already_branded")
+      ) {
+        const verdict = await decideOnce();
+        if (verdict.decision === "skipped_already_sent_by_shopify") {
+          await sendBrandPageEmailOnce({
+            admin,
+            shop,
+            orderGid,
+            orderName,
+            customerEmail: customer?.email,
+            proofId,
+            fulfillmentId: String(payload?.id ?? ""),
+            merchantApiKey,
+            merchantData: merchantHit?.data ?? {},
+            label: `[${topic}] brand-page-email`,
+          });
+        }
+      }
 
       // The Order status page — where the email's primary button lands —
       // carries the brand's door once this shop metafield exists. One guard
