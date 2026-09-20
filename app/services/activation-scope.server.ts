@@ -185,6 +185,24 @@ export function scopeOfMerchant(merchantData: unknown): ActivationScope | null {
   return normalizeScope((merchantData as Record<string, unknown>).activation_scope);
 }
 
+/** PAUSED — the pilot withholds the ritual from EVERY order until resumed.
+ *
+ *  Not a scope. A scope says which orders the pilot runs on, and by its own
+ *  law an absent one means every order and a cap is at least 1 — the type
+ *  cannot say "nobody" (the orchestrator's ruling on the simple face's
+ *  F5 (a), 2026-09-19). So a pause is its own boolean beside the scope on
+ *  the merchant doc (`activation_paused`, written by ink-backend's
+ *  /api/activation-scope, PR 11), and this is the one reading of it the
+ *  webhook makes. Capture is not activation here either: a paused
+ *  merchant's orders are still enrolled and kept; the tag, the metafields
+ *  and the page are withheld, and the cap is never spent on them. Only
+ *  the literal `true` pauses — a string, a 1, an absent field is today's
+ *  behaviour, every merchant running. */
+export function pausedOfMerchant(merchantData: unknown): boolean {
+  if (!merchantData || typeof merchantData !== "object") return false;
+  return (merchantData as Record<string, unknown>).activation_paused === true;
+}
+
 /** The state this RAW Shopify webhook body ships to, or null.
  *
  *  province_code first: Shopify's orders/create body already carries the

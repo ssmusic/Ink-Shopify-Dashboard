@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   normalizeScope,
   normalizeStateCode,
   countryOfWebhookOrder,
   orderActivates,
+  pausedOfMerchant,
   postcodeOfWebhookOrder,
   productsActivate,
   scopeOfMerchant,
@@ -275,5 +277,38 @@ describe("a pilot on a ZIP or postcode", () => {
     expect(orderActivates({ shipping_address: { province_code: "CA" } }, mixed)).toBe(true);
     expect(orderActivates({ shipping_address: { zip: "10011" } }, mixed)).toBe(true);
     expect(orderActivates({ shipping_address: { province_code: "TX", zip: "73301" } }, mixed)).toBe(false);
+  });
+});
+
+// ── PAUSED — its own boolean beside the slice, never a scope ─────────────
+describe("a paused pilot", () => {
+  it("is the literal true on the merchant doc, and nothing else — every merchant today is running", () => {
+    expect(pausedOfMerchant({ activation_paused: true })).toBe(true);
+    expect(pausedOfMerchant({ activation_paused: false })).toBe(false);
+    expect(pausedOfMerchant({ activation_paused: "true" })).toBe(false);
+    expect(pausedOfMerchant({ activation_paused: 1 })).toBe(false);
+    expect(pausedOfMerchant({ ink_api_key: "sk_live_x" })).toBe(false);
+    expect(pausedOfMerchant({})).toBe(false);
+    expect(pausedOfMerchant(null)).toBe(false);
+    expect(pausedOfMerchant(undefined)).toBe(false);
+  });
+
+  it("leaves the slice exactly as it was — a pause is beside the scope, not inside it", () => {
+    const doc = { activation_scope: { volume: { cap: 200 }, ship_to: { states: ["CA"] } }, activation_paused: true };
+    expect(scopeOfMerchant(doc)).toEqual({ ship_to: { states: ["CA"] }, volume: { cap: 200 } });
+    expect(pausedOfMerchant(doc)).toBe(true);
+  });
+
+  it("is read by the order webhook BEFORE the places question, so a paused order ships nowhere and the cap is never spent on it", () => {
+    // No harness runs the webhook route end to end (it is Shopify's
+    // admin.graphql from the first line), so the wiring is pinned as text:
+    // the route reads the pause through the mirror's one reader, folds it
+    // into shipToOk, and the cap guard already refuses on !shipToOk.
+    const route = readFileSync(new URL("../routes/webhooks.orders_create.ts", import.meta.url), "utf8");
+    expect(route).toMatch(/pausedOfMerchant\(merchantForScope\?\.data\)/);
+    expect(route).toMatch(/const shipToOk = !paused && orderActivates\(data, activationScope\)/);
+    expect(route).toMatch(/if \(!ref \|\| !shipToOk \|\| productsOk !== true\)/);
+    // And the enroll is untouched: capture is not activation.
+    expect(route.indexOf("const paused = pausedOfMerchant")).toBeLessThan(route.indexOf("AUTO-ENROLL"));
   });
 });
