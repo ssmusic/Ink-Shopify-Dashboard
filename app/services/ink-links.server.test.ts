@@ -33,8 +33,8 @@ describe("readRecentOrderRecords", () => {
     const rows = await readRecentOrderRecords({ graphql }, 5);
     expect(graphql).toHaveBeenCalledWith(RECENT_ORDERS_QUERY, { variables: { first: 5 } });
     expect(rows).toEqual([
-      { id: "gid://shopify/Order/2", name: "#1002", createdAt: "2026-09-22T10:00:00Z", recordUrl: `https://www.in.ink/verify/${PROOF}` },
-      { id: "gid://shopify/Order/1", name: "#1001", createdAt: "2026-09-21T10:00:00Z", recordUrl: null },
+      { id: "gid://shopify/Order/2", name: "#1002", createdAt: "2026-09-22T10:00:00Z", recordUrl: `https://www.in.ink/verify/${PROOF}`, proofId: PROOF },
+      { id: "gid://shopify/Order/1", name: "#1001", createdAt: "2026-09-21T10:00:00Z", recordUrl: null, proofId: null },
     ]);
   });
 

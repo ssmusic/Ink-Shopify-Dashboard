@@ -17,6 +17,9 @@ import { openRecordFromProof, openRowsFromTapEvents, locationLine } from "../ser
 import type { OpenRow } from "../services/order-open-record";
 import TapOpensList from "../components/TapOpensList";
 import VerifiableRecordCard from "../components/VerifiableRecordCard";
+import RecordDoor from "../components/RecordDoor";
+import { readInkMerchant } from "../services/ink-merchant.server";
+import { readRecordDoors, recordDoorFor, type RecordDoorView } from "../services/record-charges.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
     Page,
@@ -209,12 +212,18 @@ interface OrderDetail {
         verify_record_url: string;
         verify_record_qr: string;
         record_published: boolean;
+        /** Priced and not bought: the proof is behind the purchase. */
+        record_locked: boolean;
+        /** The audit door spoke of a price at all (locked, or bought). */
+        record_priced: boolean;
     } | null;
 }
 
 type LoaderData = {
     order: OrderDetail | null;
     error: string | null;
+    /** THE RECORD'S DOOR for this order (services/record-charges.server.ts). */
+    recordDoor?: RecordDoorView | null;
 };
 
 type ActionData = {
@@ -337,6 +346,8 @@ export const loader = async ({
             verify_record_url: string;
             verify_record_qr: string;
             record_published: boolean;
+            record_locked: boolean;
+            record_priced: boolean;
         } | null = null;
 
         if (proofId) {
@@ -373,10 +384,17 @@ export const loader = async ({
                     const { publicVerifyUrl, verifyQrSrc } = await import("../services/verify-url.server");
                     const { getProofAudit } = await import("../services/ink-api.server");
                     let recordPublished = false;
+                    let recordLocked = false;
+                    let recordPriced = false;
                     try {
                         // merchantApiKey is non-null here: getProof returned a proof.
                         const audit = await getProofAudit(merchantApiKey as string, proofId);
-                        recordPublished = !!audit && Array.isArray(audit.chain) && audit.chain.length > 0;
+                        // A priced record that is not bought answers its words
+                        // and no chain (ink-backend #124): it is published —
+                        // and locked.
+                        recordLocked = !!audit && audit.record?.locked === true;
+                        recordPriced = !!audit && !!audit.record;
+                        recordPublished = recordLocked || (!!audit && Array.isArray(audit.chain) && audit.chain.length > 0);
                     } catch (auditErr: any) {
                         console.warn("[order-detail] audit door unavailable:", auditErr?.message ?? auditErr);
                     }
@@ -392,6 +410,8 @@ export const loader = async ({
                         verify_record_url: publicVerifyUrl(proofId),
                         verify_record_qr: verifyQrSrc(proofId),
                         record_published: recordPublished,
+                        record_locked: recordLocked,
+                        record_priced: recordPriced,
                     };
                 } else {
                     console.warn(`[order-detail] no proof read for ${proofId} (${merchantApiKey ? "not found for this shop" : "merchant has no ink key"})`);
@@ -461,10 +481,27 @@ export const loader = async ({
                 verify_record_url: alanProofData.verify_record_url,
                 verify_record_qr: alanProofData.verify_record_qr,
                 record_published: alanProofData.record_published,
+                record_locked: alanProofData.record_locked,
+                record_priced: alanProofData.record_priced,
             } : null,
         };
 
-        return { order, error: null };
+        // THE RECORD'S DOOR — the same door the in.ink screen draws, on this
+        // order. Only when the audit door spoke of a price (locked or bought):
+        // an unpriced merchant — every merchant today — pays no extra call.
+        // Best-effort: an order page never fails on it.
+        let recordDoor: RecordDoorView | null = null;
+        if (order.localProof?.proof_id && order.localProof.record_priced) {
+            try {
+                const view = await readInkMerchant(session.shop);
+                const doors = await readRecordDoors(admin, view, [order.localProof.proof_id]);
+                recordDoor = recordDoorFor(doors, order.localProof.proof_id);
+            } catch (doorErr: any) {
+                console.warn("[order-detail] record door unavailable:", doorErr?.message ?? doorErr);
+            }
+        }
+
+        return { order, error: null, recordDoor };
     } catch (error) {
         console.error("Loader error:", error);
         return { order: null, error: "Failed to load order" };
@@ -613,7 +650,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function OrderDetails() {
-    const { order, error } = useLoaderData() as LoaderData;
+    const { order, error, recordDoor } = useLoaderData() as LoaderData;
     const actionData = useActionData() as ActionData | undefined;
     const navigate = useNavigate();
 
@@ -1176,7 +1213,17 @@ export default function OrderDetails() {
                                     auditReportHref={`/app/api/orders/${encodeURIComponent(order.id)}/audit-report?proof=${encodeURIComponent(order.localProof.proof_id)}`}
                                     recordExportHref={`/app/api/orders/${encodeURIComponent(order.id)}/record-export?proof=${encodeURIComponent(order.localProof.proof_id)}`}
                                     published={order.localProof.record_published}
-                                />
+                                    locked={order.localProof.record_locked}
+                                >
+                                    {recordDoor && (
+                                        <RecordDoor
+                                            proofId={order.localProof.proof_id}
+                                            orderName={order.name}
+                                            returnTo={`/app/orders/${encodeURIComponent(order.id)}`}
+                                            door={recordDoor}
+                                        />
+                                    )}
+                                </VerifiableRecordCard>
                             </div>
                         )}
                     </Layout.Section>

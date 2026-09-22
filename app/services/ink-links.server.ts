@@ -37,7 +37,7 @@ export function recordUrlFor(proofId: string | null | undefined): string | null 
   return typeof proofId === "string" && PROOF_ID.test(proofId) ? `${RECORD_BASE}${proofId}` : null;
 }
 
-export type RecentOrderRecord = { id: string; name: string; createdAt: string | null; recordUrl: string | null };
+export type RecentOrderRecord = { id: string; name: string; createdAt: string | null; recordUrl: string | null; proofId: string | null };
 
 type OrderNode = { id?: unknown; name?: unknown; createdAt?: unknown; proof?: { value?: unknown } | null };
 type RecentOrdersBody = { data?: { orders?: { nodes?: (OrderNode | null)[] } } };
@@ -51,11 +51,14 @@ export async function readRecentOrderRecords(admin: AdminGraphql, first = 5): Pr
     const rows: RecentOrderRecord[] = [];
     for (const n of nodes) {
       if (!n || typeof n.id !== "string") continue;
+      const recordUrl = recordUrlFor(typeof n.proof?.value === "string" ? n.proof.value : null);
       rows.push({
         id: n.id,
         name: typeof n.name === "string" ? n.name : n.id,
         createdAt: typeof n.createdAt === "string" ? n.createdAt : null,
-        recordUrl: recordUrlFor(typeof n.proof?.value === "string" ? n.proof.value : null),
+        recordUrl,
+        // The record's own id when (and only when) it is one: the door's key.
+        proofId: recordUrl ? (n.proof!.value as string) : null,
       });
     }
     return rows;

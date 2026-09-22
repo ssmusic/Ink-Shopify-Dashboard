@@ -108,7 +108,7 @@ describe("the route contract between the two apps", () => {
     }
   });
 
-  it("ink mounts exactly its own routes: the shell, auth, the layout, the enrol and tracking webhooks, GDPR, and its two screens", () => {
+  it("ink mounts exactly its own routes: the shell, auth, the layout, the enrol and tracking webhooks, GDPR, its two screens, and the record's door", () => {
     expect([...INK_MOUNTS].sort()).toEqual(
       [
         "root",
@@ -128,6 +128,7 @@ describe("the route contract between the two apps", () => {
         "routes/webhooks.customers.data_request",
         "routes/webhooks.customers.redact",
         "routes/webhooks.shop.redact",
+        "routes/app.record",
       ].sort(),
     );
   });
