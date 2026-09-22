@@ -29,6 +29,12 @@ export interface MerchantData {
   ink_mark_capture_note?: string;
   /** When the merchant pressed "Use this" on the captured mark. */
   ink_mark_confirmed_at?: string;
+
+  // ── THE RITUALIST'S OWN FIELD on a doc ink made (plan-precedence.server.ts). ──
+  /** When the Ritualist's install claimed an ink merchant's plan (PATCH
+   *  plan: "ritualist"); cleared (null) when the Ritualist uninstalls and
+   *  hands the merchant back to ink, so a re-install claims it again. */
+  ritualist_plan_claimed_at?: string | null;
 }
 
 export const getMerchant = async (shop: string): Promise<MerchantData | null> => {

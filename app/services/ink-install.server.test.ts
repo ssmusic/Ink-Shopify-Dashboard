@@ -6,11 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const createMerchant = vi.fn();
 const getShopIdByDomain = vi.fn();
+const patchMerchant = vi.fn();
 const getMerchant = vi.fn();
 const updateMerchant = vi.fn();
 const captureBrandMark = vi.fn();
 
-vi.mock("./ink-api.server", () => ({ createMerchant, getShopIdByDomain }));
+vi.mock("./ink-api.server", () => ({ createMerchant, getShopIdByDomain, patchMerchant }));
 vi.mock("./merchant.server", () => ({ getMerchant, updateMerchant }));
 vi.mock("./brand-mark.server", () => ({ captureBrandMark }));
 
@@ -82,6 +83,40 @@ describe("provisionInkMerchant", () => {
     expect(createMerchant).not.toHaveBeenCalled();
     expect(updateMerchant).not.toHaveBeenCalled();
     expect(captureBrandMark).not.toHaveBeenCalled();
+  });
+
+  // PLAN PRECEDENCE, order 1 (plan-precedence.server.ts): the Ritualist was
+  // installed first, so the shared doc carries its key and the backend
+  // merchant is on the paid plan (absent = ritualist). ink's install must
+  // not touch it — no create (which would ROTATE the key), no PATCH (which
+  // would downgrade the plan). An ink install never downgrades.
+  it("never downgrades a merchant the Ritualist made: no create, no PATCH plan, nothing written", async () => {
+    getMerchant.mockResolvedValue({
+      shop: SHOP,
+      ink_api_key: "ink_live_ritualists",
+      notification_settings: { channels: { email: true } },
+      // No ink_shop_id: the Ritualist's own provision wrote this doc.
+    });
+    const admin = adminAnswering({ name: "x", email: "e@example.test" });
+
+    const { provisionInkMerchant } = await import("./ink-install.server");
+    expect(await provisionInkMerchant({ admin, shop: SHOP })).toEqual({ outcome: "already_provisioned" });
+
+    expect(createMerchant).not.toHaveBeenCalled();
+    expect(patchMerchant).not.toHaveBeenCalled();
+    expect(updateMerchant).not.toHaveBeenCalled();
+  });
+
+  it("sends plan: ink only on its own create, and nowhere else", async () => {
+    getMerchant.mockResolvedValue(null);
+    createMerchant.mockResolvedValue({ shop_id: "shop_abc123", api_key: "k" });
+    const admin = adminAnswering({ name: "x", email: "e@example.test", primaryDomain: { url: "https://x.test" } });
+
+    const { provisionInkMerchant } = await import("./ink-install.server");
+    await provisionInkMerchant({ admin, shop: SHOP });
+
+    expect(createMerchant.mock.calls[0][3]).toEqual({ plan: "ink" });
+    expect(patchMerchant).not.toHaveBeenCalled();
   });
 
   it("waits for a real owner email rather than provisioning with a placeholder", async () => {

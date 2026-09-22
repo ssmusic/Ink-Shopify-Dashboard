@@ -83,28 +83,46 @@ export const createMerchant = async (
 };
 
 // PATCH /admin/merchants/:id — the backend's tight-whitelist profile door
-// (shop_name, owner_email, merchant_category, merchant_region, and THE BUYER'S
-// DOOR: page_mode, flash_ask, flash_forward; null clears a dial). Any other
-// field is refused in a sentence, never written. This is how ink's settings
-// write: the backend first, and nothing recorded locally that the backend
-// does not already hold. Throws on refusal so the caller can show the
-// sentence; returns the fresh merchant doc (api_key_hash stripped).
+// (shop_name, owner_email, merchant_category, merchant_region, `plan` since
+// ink-backend #118, and THE BUYER'S DOOR: page_mode, flash_ask,
+// flash_forward; null clears a dial). Any other field is refused in a
+// sentence, never written. This is how ink's settings and the plan
+// precedence write: the backend first, and nothing recorded locally that the
+// backend does not already hold. Throws on refusal so the caller can show
+// the sentence; the thrown error carries `status` (0 when the call never
+// completed) so a webhook can tell a refusal the backend will keep giving
+// (4xx — ack and log) from a blip worth a retry (5xx / network — 500).
+// Returns the fresh merchant doc (api_key_hash stripped).
+export class InkApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "InkApiError";
+    this.status = status;
+  }
+}
+
 export const patchMerchant = async (
   shopId: string,
   fields: Record<string, string | null>,
 ): Promise<Record<string, any>> => {
-  const response = await fetch(getAlanUrl(`/admin/merchants/${encodeURIComponent(shopId)}`), {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Admin-Secret": INK_ADMIN_SECRET,
-    },
-    body: JSON.stringify(fields),
-  });
+  let response: Response;
+  try {
+    response = await fetch(getAlanUrl(`/admin/merchants/${encodeURIComponent(shopId)}`), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Secret": INK_ADMIN_SECRET,
+      },
+      body: JSON.stringify(fields),
+    });
+  } catch (e: any) {
+    throw new InkApiError(`Failed to update merchant: ${e?.message ?? e}`, 0);
+  }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const why = typeof body?.error === "string" ? body.error : `${response.status} ${response.statusText}`;
-    throw new Error(`Failed to update merchant: ${why}`);
+    throw new InkApiError(`Failed to update merchant: ${why}`, response.status);
   }
   return body?.merchant ?? body ?? {};
 };

@@ -1,6 +1,9 @@
 import firestore from "./firestore.server";
+import { SESSION_COLLECTION } from "./firestore-session-storage.server";
 
-const COLLECTION = "shopify_sessions";
+// The flavor's own collection (firestore-session-storage.server.ts): the
+// Ritualist's name is what it always was; ink's is its own.
+const COLLECTION = SESSION_COLLECTION;
 
 interface ShopifySession {
   id: string;
