@@ -14,7 +14,7 @@ function GlobalLoadingScreen() {
   // is (app.tsx). Outside /app, or before it has loaded, it is the Ritualist's
   // — exactly what every load showed before ink existed.
   const appData = useRouteLoaderData("routes/app") as { flavor?: string } | undefined;
-  const wordmark = appData?.flavor === "ink" ? "ink." : "the ritualist.";
+  const wordmark = appData?.flavor === "ink" ? "in.ink" : "the ritualist.";
   return (
     <div
       id="ink-global-loader"

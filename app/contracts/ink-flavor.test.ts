@@ -34,9 +34,9 @@ describe("shopify.app.ink.toml", () => {
   const live = read("shopify.app.toml");
   const field = (src: string, key: string) => src.match(new RegExp(`^${key}\\s*=\\s*"([^"]*)"`, "m"))?.[1];
 
-  it("is the dormant record, renamed ink, at install.in.ink", () => {
+  it("is the dormant record, renamed in.ink, at install.in.ink", () => {
     expect(field(toml, "client_id")).toBe("45cc130ef59cbeaf9133acea201981ed");
-    expect(field(toml, "name")).toBe("ink");
+    expect(field(toml, "name")).toBe("in.ink");
     expect(field(toml, "application_url")).toBe("https://install.in.ink");
     expect(toml).toMatch(/^embedded = true$/m);
     expect(toml).toMatch(/^use_legacy_install_flow = false$/m);

@@ -1,10 +1,10 @@
-# ink — the free app. The SAME codebase as The Ritualist (shopify.app.toml),
+# in.ink — the free app (the company stays ink). The SAME codebase as The Ritualist (shopify.app.toml),
 # a SECOND app record, and one env var apart: the Cloud Run service `ink-app`
 # runs this image with APP_FLAVOR=ink and this record's key and secret
 # (app/services/app-flavor.server.ts is the one reader).
 #
 # This is the dormant "INK — Dynamic Receipts" record (shopify.app.smusic.toml,
-# client 45cc…), renamed ink. THE NAME MUST MATCH THE PARTNER DASHBOARD — Sam
+# client 45cc…), renamed in.ink (Sam, 09-22). THE NAME MUST MATCH THE PARTNER DASHBOARD — Sam
 # renames the record by hand; this file overwrites the Dashboard name on the
 # next `shopify app deploy` (his act, never a session's). Never regenerate
 # this record's credentials.
@@ -12,7 +12,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "45cc130ef59cbeaf9133acea201981ed"
-name = "ink"
+name = "in.ink"
 # install.in.ink = a new *.in.ink label the Worker fronts the same way app.in.ink
 # fronts the Ritualist (the label is the Worker session's to rename; this
 # file and the Cloud Run env SHOPIFY_APP_URL move together). The App Store
