@@ -13,12 +13,12 @@
 
 client_id = "45cc130ef59cbeaf9133acea201981ed"
 name = "ink"
-# go.in.ink = a new *.in.ink label the Worker fronts the same way app.in.ink
+# install.in.ink = a new *.in.ink label the Worker fronts the same way app.in.ink
 # fronts the Ritualist (the label is the Worker session's to rename; this
 # file and the Cloud Run env SHOPIFY_APP_URL move together). The App Store
 # checker rejects app URLs whose DOMAIN contains "shopify", which the
 # ink-app-…run.app host does.
-application_url = "https://go.in.ink"
+application_url = "https://install.in.ink"
 embedded = true
 
 [build]
@@ -89,6 +89,6 @@ use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
-  "https://go.in.ink/auth/callback",
-  "https://go.in.ink/auth/shopify/callback"
+  "https://install.in.ink/auth/callback",
+  "https://install.in.ink/auth/shopify/callback"
 ]

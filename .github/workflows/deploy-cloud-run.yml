@@ -41,7 +41,7 @@
 #     appUrl at import) and would leave a failed revision. Until it exists
 #     the job skips with a notice and main stays green. The one-time creation
 #     is in the PR that added this (values are Sam's, never in this repo):
-#       gcloud run deploy ink-app --source . --project inink-c76d3 #         --region us-central1 --allow-unauthenticated #         --update-env-vars APP_FLAVOR=ink,SHOPIFY_API_KEY=…,SHOPIFY_API_SECRET=…,SHOPIFY_APP_URL=https://go.in.ink,…
+#       gcloud run deploy ink-app --source . --project inink-c76d3 #         --region us-central1 --allow-unauthenticated #         --update-env-vars APP_FLAVOR=ink,SHOPIFY_API_KEY=…,SHOPIFY_API_SECRET=…,SHOPIFY_APP_URL=https://install.in.ink,…
 # The service is inert until the Partner Dashboard points the ink record's
 # URLs at it — Sam's click, not a deploy's.
 # ──────────────────────────────────────────────────────────────────────────
