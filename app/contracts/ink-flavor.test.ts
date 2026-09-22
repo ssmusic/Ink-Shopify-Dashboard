@@ -34,14 +34,14 @@ describe("shopify.app.ink.toml", () => {
   const live = read("shopify.app.toml");
   const field = (src: string, key: string) => src.match(new RegExp(`^${key}\\s*=\\s*"([^"]*)"`, "m"))?.[1];
 
-  it("is the dormant record, renamed ink, at go.in.ink", () => {
+  it("is the dormant record, renamed ink, at install.in.ink", () => {
     expect(field(toml, "client_id")).toBe("45cc130ef59cbeaf9133acea201981ed");
     expect(field(toml, "name")).toBe("ink");
-    expect(field(toml, "application_url")).toBe("https://go.in.ink");
+    expect(field(toml, "application_url")).toBe("https://install.in.ink");
     expect(toml).toMatch(/^embedded = true$/m);
     expect(toml).toMatch(/^use_legacy_install_flow = false$/m);
-    expect(toml).toContain('"https://go.in.ink/auth/callback"');
-    expect(toml).toContain('"https://go.in.ink/auth/shopify/callback"');
+    expect(toml).toContain('"https://install.in.ink/auth/callback"');
+    expect(toml).toContain('"https://install.in.ink/auth/shopify/callback"');
   });
 
   it("asks for exactly the scopes the code is written against", () => {
