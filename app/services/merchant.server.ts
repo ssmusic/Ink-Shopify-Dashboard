@@ -27,6 +27,9 @@ export interface MerchantData {
    *  onboarding screen reads these to say "looking", "found", or "try again". */
   ink_mark_captured_at?: string;
   ink_mark_capture_note?: string;
+  /** The host label the Worker claimed for this shop — `{slug}.in.ink`. The
+   *  backend merchant doc's `brand_slug` is the authority; this is its echo. */
+  ink_brand_slug?: string;
   /** When the merchant pressed "Use this" on the captured mark. */
   ink_mark_confirmed_at?: string;
 

@@ -8,7 +8,7 @@
 // the install's fire-and-forget provision.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { brandMarkDoorUrl, captureBrandMark, logoUrlFromCaptureBody } from "./brand-mark.server";
+import { brandMarkDoorUrl, captureBrandMark, claimFromCaptureBody, logoUrlFromCaptureBody } from "./brand-mark.server";
 
 const fetchMock = vi.fn();
 
@@ -118,6 +118,63 @@ describe("captureBrandMark", () => {
     const out = await captureBrandMark({ site: "", shopId: "shop_1", fetchImpl: fetchMock as any });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(out.ok).toBe(false);
+  });
+});
+
+describe("the host the same call claims", () => {
+  it("reads the claimed label off the answer and names the door in the note", async () => {
+    answer(200, {
+      claim: { slug: "stevemadden", claimed: true, why: "stevemadden.in.ink claimed" },
+      sent: { brand_slug: "stevemadden", brand_logo_url: "https://cdn.test/m.svg" },
+      brand_logo_url: "https://cdn.test/m.svg",
+    });
+    const out = await captureBrandMark({ site: "https://www.stevemadden.com/", shopId: "shop_1", fetchImpl: fetchMock as any });
+    expect(out).toMatchObject({ ok: true, slug: "stevemadden", slugNote: "stevemadden.in.ink claimed" });
+    expect(out.note).toContain("host stevemadden.in.ink");
+  });
+
+  it("claims nothing when the label is another merchant's, and says why — the mark still landed", async () => {
+    answer(200, {
+      claim: { slug: "stevemadden", claimed: false, why: "stevemadden.in.ink is already another merchant's — this one stays unclaimed" },
+      brand_logo_url: "https://cdn.test/m.svg",
+    });
+    const out = await captureBrandMark({ site: "https://www.stevemadden.com/", shopId: "shop_2", fetchImpl: fetchMock as any });
+    expect(out.ok).toBe(true);
+    expect(out.logoUrl).toBe("https://cdn.test/m.svg");
+    expect(out.slug).toBeNull();
+    expect(out.note).toContain("no host (stevemadden.in.ink is already another merchant's");
+  });
+
+  it("keeps the host a refusal still claimed: no mark is not no door", async () => {
+    answer(404, {
+      error: "no mark could be found on this site",
+      claim: { slug: "plainbrand", claimed: true, why: "plainbrand.in.ink claimed" },
+      sent: { brand_slug: "plainbrand" },
+    });
+    const out = await captureBrandMark({ site: "https://www.plainbrand.com/", shopId: "shop_3", fetchImpl: fetchMock as any });
+    expect(out).toMatchObject({ ok: false, status: 404, logoUrl: null, slug: "plainbrand" });
+    expect(out.note).toContain("no mark could be found on this site");
+    expect(out.note).toContain("host plainbrand.in.ink");
+  });
+
+  it("an answer with no claim at all is simply no host", async () => {
+    answer(200, { brand_logo_url: "https://cdn.test/m.svg" });
+    const out = await captureBrandMark({ site: "https://x.test", shopId: "shop_4", fetchImpl: fetchMock as any });
+    expect(out.slug).toBeNull();
+    expect(out.slugNote).toBeNull();
+    expect(out.note).toBe("mark captured: https://cdn.test/m.svg");
+  });
+});
+
+describe("claimFromCaptureBody", () => {
+  it("takes a label only when the Worker says it claimed it, and keeps the sentence either way", () => {
+    expect(claimFromCaptureBody({ claim: { slug: " kotn ", claimed: true, why: "kotn.in.ink claimed" } }))
+      .toEqual({ slug: "kotn", slugNote: "kotn.in.ink claimed" });
+    expect(claimFromCaptureBody({ claim: { slug: "kotn", claimed: false, why: "kotn is reserved" } }))
+      .toEqual({ slug: null, slugNote: "kotn is reserved" });
+    expect(claimFromCaptureBody({ claim: { slug: null, claimed: false, why: "a myshopify domain names the store, not the brand" } }))
+      .toEqual({ slug: null, slugNote: "a myshopify domain names the store, not the brand" });
+    expect(claimFromCaptureBody(null)).toEqual({ slug: null, slugNote: null });
   });
 });
 
