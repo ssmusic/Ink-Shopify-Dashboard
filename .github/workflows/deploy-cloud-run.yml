@@ -44,6 +44,26 @@
 #       gcloud run deploy ink-app --source . --project inink-c76d3 #         --region us-central1 --allow-unauthenticated #         --update-env-vars APP_FLAVOR=ink,SHOPIFY_API_KEY=…,SHOPIFY_API_SECRET=…,SHOPIFY_APP_URL=https://install.in.ink,…
 # The service is inert until the Partner Dashboard points the ink record's
 # URLs at it — Sam's click, not a deploy's.
+#
+# CREATED 2026-09-22. `ink-app` now exists (us-central1, port 3000 like
+# shopify-app, max-instances 20, the default compute service account), so the
+# skip branch below no longer fires and every merge deploys it. Two things the
+# creation measured, written down so the next reader does not rediscover them:
+#   · The first revision, deployed without SHOPIFY_API_SECRET, could not boot:
+#     `Cannot initialize Shopify API Library. Missing values for: apiSecretKey`.
+#     The header's warning is exact — the library refuses an empty secret at
+#     import, not at the first request.
+#   · The ink record's secret is therefore set to the literal placeholder
+#     `PLACEHOLDER_REPLACE_WITH_INK_SECRET` so the service serves. OAuth
+#     COMPLETION stays broken until Sam replaces it with the real value from
+#     the Partner Dashboard (one line, never --set-env-vars):
+#       gcloud run services update ink-app --project inink-c76d3 \
+#         --region us-central1 --update-env-vars SHOPIFY_API_SECRET=<ink secret>
+# install.in.ink already reaches the service through the Worker's front-door
+# map (the wildcard *.in.ink is proxied), and a Cloud Run domain mapping for
+# install.in.ink is created and waiting on a grey-cloud CNAME
+# `install → ghs.googlehosted.com`, which would serve it directly as app.in.ink
+# is served. Either path answers; the CNAME is the one that skips the Worker.
 # ──────────────────────────────────────────────────────────────────────────
 
 name: Deploy shopify-app · Cloud Run
