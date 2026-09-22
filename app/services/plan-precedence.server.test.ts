@@ -4,13 +4,15 @@
 //   1. ink installs on a merchant the Ritualist made → nothing (ink-install
 //      test pins the provision; here the claim side pins that a Ritualist's
 //      doc is never PATCHed);
-//   2. the Ritualist installs on a merchant ink made → the arrival is stamped
-//      once and the PLAN IS NOT TOUCHED: the page is the paid product and it
-//      must not appear before the merchant has published one, so the flip
-//      lives at the Worker's publish door (the-ritualist), not here;
-//   3. the Ritualist uninstalls while ink is installed → plan: ink; without
-//      ink → nothing; a backend refusal is acked, a blip is retried, an
-//      unknown is thrown.
+//   2. the Ritualist installs on a merchant ink made → the ENTITLEMENT is
+//      recorded (ritualist_installed_at) and the PLAN IS NOT TOUCHED: the
+//      page is the paid product and it must not appear before the merchant
+//      has published one, so the flip lives at the Worker's publish door
+//      (the-ritualist), not here. The entitlement is what opens the door
+//      they publish FROM;
+//   3. the Ritualist uninstalls while ink is installed → plan: ink and the
+//      entitlement cleared; without ink → nothing; a backend refusal is
+//      acked, a blip is retried, an unknown is thrown.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,16 +48,20 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("order 2 — the Ritualist installs on a merchant ink made", () => {
-  it("stamps the arrival once and NEVER touches the plan — the buyer keeps ink's flash until a page is published", async () => {
+  it("records the entitlement and NEVER touches the plan — the buyer keeps ink's flash until a page is published", async () => {
     const { claimRitualistPlan } = await import("./plan-precedence.server");
     const existing = { shop: SHOP, ink_api_key: "ink_live_k", ink_shop_id: "shop_abc123" } as any;
 
     expect(await claimRitualistPlan({ shop: SHOP, existing })).toBe("claimed");
 
-    // THE WHOLE POINT OF THIS CHIP: no backend call at install. `page_mode`
-    // derives from the plan, so a PATCH here would serve an ink merchant's
-    // buyers an unbranded Ritualist page before their brand book exists.
-    expect(patchMerchant).not.toHaveBeenCalled();
+    // The one field written on the backend, and an instant. `page_mode`
+    // derives from the plan, so a plan PATCH here would serve an ink
+    // merchant's buyers an unbranded Ritualist page before their book exists.
+    expect(patchMerchant).toHaveBeenCalledTimes(1);
+    expect(patchMerchant).toHaveBeenCalledWith("shop_abc123", { ritualist_installed_at: expect.any(String) });
+    const at = patchMerchant.mock.calls[0][1].ritualist_installed_at;
+    expect(new Date(at).toISOString()).toBe(at);
+    expect(patchMerchant.mock.calls[0][1]).not.toHaveProperty("plan");
     expect(updateMerchant).toHaveBeenCalledWith(SHOP, {
       ritualist_plan_claimed_at: expect.any(String),
       notification_settings: expect.objectContaining({ channels: expect.anything() }),
@@ -67,6 +73,7 @@ describe("order 2 — the Ritualist installs on a merchant ink made", () => {
   it("asks nothing the second time — the layout loader runs on every page", async () => {
     const { claimRitualistPlan } = await import("./plan-precedence.server");
     const existing = { ink_api_key: "k", ink_shop_id: "shop_abc123", ritualist_plan_claimed_at: "2026-09-22T00:00:00Z" } as any;
+
 
     expect(await claimRitualistPlan({ shop: SHOP, existing })).toBe("already_claimed");
     expect(patchMerchant).not.toHaveBeenCalled();
@@ -81,6 +88,15 @@ describe("order 2 — the Ritualist installs on a merchant ink made", () => {
     expect(updateMerchant).toHaveBeenCalledWith(SHOP, { ritualist_plan_claimed_at: expect.any(String) });
   });
 
+  it("does not stamp when the backend refuses the entitlement — the next page load asks again", async () => {
+    const { claimRitualistPlan } = await import("./plan-precedence.server");
+    patchMerchant.mockRejectedValue(new InkApiError("Failed to update merchant: No updatable fields provided", 400));
+    const existing = { shop: SHOP, ink_api_key: "k", ink_shop_id: "shop_abc123" } as any;
+
+    expect(await claimRitualistPlan({ shop: SHOP, existing })).toBe("failed");
+    expect(updateMerchant).not.toHaveBeenCalled();
+  });
+
   it("order 1's mirror: a doc the Ritualist itself made (no ink_shop_id) is never PATCHed — every merchant today", async () => {
     const { claimRitualistPlan } = await import("./plan-precedence.server");
     const existing = { shop: SHOP, ink_api_key: "ink_live_k", notification_settings: {} } as any;
@@ -90,7 +106,7 @@ describe("order 2 — the Ritualist installs on a merchant ink made", () => {
     expect(updateMerchant).not.toHaveBeenCalled();
   });
 
-  it("asks the backend nothing at all — an install is not a publish", async () => {
+  it("never asks the backend for a plan — an install is not a publish", async () => {
     const { claimRitualistPlan } = await import("./plan-precedence.server");
     for (const existing of [
       { ink_api_key: "k", ink_shop_id: "shop_abc123" },
@@ -99,12 +115,16 @@ describe("order 2 — the Ritualist installs on a merchant ink made", () => {
     ] as any[]) {
       await claimRitualistPlan({ shop: SHOP, existing });
     }
-    expect(patchMerchant).not.toHaveBeenCalled();
+    for (const [, fields] of patchMerchant.mock.calls) {
+      expect(fields).not.toHaveProperty("plan");
+    }
+    // Only the first (an unstamped ink doc) spoke to the backend at all.
+    expect(patchMerchant).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("order 3 — the Ritualist uninstalls", () => {
-  it("hands the merchant back to ink when ink is still installed: plan: ink, the stamp cleared, the key untouched", async () => {
+  it("hands the merchant back to ink when ink is still installed: plan: ink, the entitlement and the stamp cleared, the key untouched", async () => {
     otherAppHoldsSession.mockResolvedValue(true);
     getMerchant.mockResolvedValue({ ink_api_key: "ink_live_k", ink_shop_id: "shop_abc123", ritualist_plan_claimed_at: "2026-09-22T00:00:00Z" });
     resolveInkShopId.mockResolvedValue("shop_abc123");
@@ -114,7 +134,7 @@ describe("order 3 — the Ritualist uninstalls", () => {
     expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("restored");
 
     expect(otherAppHoldsSession).toHaveBeenCalledWith(SHOP);
-    expect(patchMerchant).toHaveBeenCalledWith("shop_abc123", { plan: "ink" });
+    expect(patchMerchant).toHaveBeenCalledWith("shop_abc123", { plan: "ink", ritualist_installed_at: null });
     expect(updateMerchant).toHaveBeenCalledWith(SHOP, { ritualist_plan_claimed_at: null });
     expect(updateMerchant.mock.calls[0][1]).not.toHaveProperty("ink_api_key");
   });

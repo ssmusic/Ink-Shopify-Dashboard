@@ -22,7 +22,14 @@
 //      install writes; this stamps `ritualist_plan_claimed_at` on the shared
 //      doc so the layout loader — which runs on every embedded page — does
 //      the work once, and seeds the notification toggles an ink doc never
-//      had. IT DOES NOT TOUCH THE PLAN.
+//      had. IT DOES NOT TOUCH THE PLAN. What it DOES write on the backend is
+//      the ENTITLEMENT: `ritualist_installed_at` — the instant the paid app
+//      landed here (ink-backend #121). The plan says which product the
+//      merchant is on; the entitlement says which they may open, and it is
+//      what carries an ink merchant to the page-building door (the dashboard
+//      fences /onboard and /simple by plan, the-ritualist #1375). Without it
+//      an ink merchant who bought the Ritualist had no way to publish, and
+//      so no way to earn the flip.
 //
 //      THE PLAN FLIPS WHEN THE PAGE IS PUBLISHED, NOT WHEN THE APP IS
 //      INSTALLED (Sam, 2026-09-22). `page_mode` derives from the plan, so a
@@ -36,8 +43,9 @@
 //      the Worker holds.
 //   3. THE RITUALIST UNINSTALLS WHILE INK IS STILL INSTALLED (ink's own
 //      session for the shop exists). Hand the merchant back: PATCH
-//      `plan: "ink"` so the link keeps working as ink, and clear the stamp
-//      so a later re-install claims again. If ink is not there, leave the
+//      `plan: "ink"` so the link keeps working as ink and
+//      `ritualist_installed_at: null` so the page doors close again, and
+//      clear the local stamp so a later re-install claims again. If ink is not there, leave the
 //      plan alone — the store is leaving, and shop/redact will do its work
 //      in 48 hours. Nothing here touches the shared doc's key.
 //
@@ -50,16 +58,18 @@ import { InkApiError, patchMerchant } from "./ink-api.server";
 import { getMerchant, updateMerchant, type MerchantData } from "./merchant.server";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "./notification-settings";
 
-export type PlanClaimOutcome = "not_an_ink_merchant" | "already_claimed" | "claimed";
+export type PlanClaimOutcome = "not_an_ink_merchant" | "already_claimed" | "claimed" | "failed";
 
 /** Order 2 — the Ritualist's install on a merchant ink made. Called from the
  *  Ritualist's provision when the shared doc already carries a key. Never
  *  throws: it runs inside app.tsx's fire-and-forget provision.
  *
- *  It makes NO backend call. The stamp records that the Ritualist arrived on
- *  this ink store, so this runs once and not on every embedded page load; the
- *  plan itself is the merchant's to earn, at the moment their page publishes
- *  (see the header). An ink merchant keeps ink's flash until then. */
+ *  It writes the ENTITLEMENT and not the plan: `ritualist_installed_at` on
+ *  the backend record, which opens the dashboard's page doors, while the
+ *  plan stays the merchant's to earn at the moment their page publishes (see
+ *  the header). An ink merchant keeps ink's flash until then. The local stamp
+ *  is written only after the backend took it, so a refusal is retried on the
+ *  next page load instead of being silently lost. */
 export async function claimRitualistPlan({
   shop,
   existing,
@@ -72,13 +82,23 @@ export async function claimRitualistPlan({
   if (!existing.ink_shop_id) return "not_an_ink_merchant";
   if (existing.ritualist_plan_claimed_at) return "already_claimed";
 
+  try {
+    await patchMerchant(existing.ink_shop_id, { ritualist_installed_at: new Date().toISOString() });
+  } catch (e: any) {
+    // Logged, not stamped: the next app load asks again. Until the backend
+    // deploy that knows the field (ink-backend #121) this is a 400 each load
+    // — one line apiece, and the merchant keeps ink's experience meanwhile.
+    console.error(`[plan] The Ritualist could not record its arrival on ${shop} (${existing.ink_shop_id}): ${e?.message ?? e}`);
+    return "failed";
+  }
+
   await updateMerchant(shop, {
     ritualist_plan_claimed_at: new Date().toISOString(),
     // The Ritualist's install seeds the notification toggles (every sender
     // treats a missing block as "send nothing"); an ink doc never had them.
     ...(existing.notification_settings ? {} : { notification_settings: DEFAULT_NOTIFICATION_SETTINGS }),
   });
-  console.log(`[plan] The Ritualist arrived on ${shop} (${existing.ink_shop_id}): plan left as ink until the page publishes`);
+  console.log(`[plan] The Ritualist arrived on ${shop} (${existing.ink_shop_id}): entitled; plan left as ink until the page publishes`);
   return "claimed";
 }
 
@@ -107,13 +127,13 @@ export async function restoreInkPlanOnRitualistUninstall(shop: string): Promise<
   }
 
   try {
-    await patchMerchant(shopId, { plan: "ink" });
+    await patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null });
   } catch (e: any) {
     const status = e instanceof InkApiError ? e.status : 0;
     if (status >= 400 && status < 500) {
       // A refusal the backend will keep giving (e.g. a door that does not
       // know `plan` yet). Retrying cannot change it; say so and ack.
-      console.error(`[plan] ${shop}: the backend refused plan → ink (${status}): ${e?.message ?? e} — hand it back by hand (PATCH /admin/merchants/${shopId} { plan: "ink" }).`);
+      console.error(`[plan] ${shop}: the backend refused plan → ink (${status}): ${e?.message ?? e} — hand it back by hand (PATCH /admin/merchants/${shopId} { plan: "ink", ritualist_installed_at: null }).`);
       return "refused";
     }
     console.error(`[plan] ${shop}: plan → ink failed (${status || "network"}): ${e?.message ?? e} — will retry.`);
@@ -121,6 +141,6 @@ export async function restoreInkPlanOnRitualistUninstall(shop: string): Promise<
   }
 
   await updateMerchant(shop, { ritualist_plan_claimed_at: null });
-  console.log(`[plan] ${shop}: the Ritualist left, ink stays — plan → ink (${shopId}).`);
+  console.log(`[plan] ${shop}: the Ritualist left, ink stays — plan → ink, entitlement cleared (${shopId}).`);
   return "restored";
 }

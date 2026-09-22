@@ -183,7 +183,9 @@ describe("the Ritualist's queries, byte for byte", () => {
     // plan and the page must not appear before the merchant has one.
     const precedence = read("app/services/plan-precedence.server.ts");
     expect(precedence).not.toContain('plan: "ritualist"');
-    expect(precedence).toContain('patchMerchant(shopId, { plan: "ink" })');
+    expect(precedence).toContain('patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null })');
+    // The arrival records the ENTITLEMENT, never the plan (ink-backend #121).
+    expect(precedence).toContain("ritualist_installed_at: new Date().toISOString()");
     const uninstall = read("app/routes/webhooks.app.uninstalled.tsx");
     expect(uninstall).toContain("if (!isInk()) {");
     expect(uninstall).toContain("await restoreInkPlanOnRitualistUninstall(shop)");
