@@ -147,13 +147,28 @@ describe("the Ritualist's queries, byte for byte", () => {
     expect(src).toContain("provisionInkMerchant({ admin, shop: session.shop })");
   });
 
-  it("the Ritualist's session collection keeps its name", () => {
+  it("the Ritualist's session collection keeps its name, and no route or helper names it by hand", () => {
     const src = read("app/firestore-session-storage.server.ts");
     expect(src).toContain('export const SESSION_COLLECTION = isInk() ? "shopify_sessions_ink" : "shopify_sessions";');
-    for (const route of ["app/routes/webhooks.app.uninstalled.tsx", "app/routes/webhooks.app.scopes_update.tsx", "app/routes/auth.$.tsx"]) {
-      expect(read(route)).toContain(".collection(SESSION_COLLECTION)");
-      expect(read(route)).not.toContain('.collection("shopify_sessions")');
+    for (const file of ["app/routes/webhooks.app.uninstalled.tsx", "app/routes/webhooks.app.scopes_update.tsx", "app/routes/auth.$.tsx", "app/session-utils.server.ts"]) {
+      expect(read(file)).toContain("SESSION_COLLECTION");
+      expect(read(file)).not.toContain('"shopify_sessions"');
     }
+  });
+
+  it("both installs create only when the shared doc has no key — the create door rotates the key on every call", () => {
+    // The Ritualist's guard, verbatim; ink's, in its own file.
+    expect(read("app/routes/app.tsx")).toContain("if (!existing?.ink_api_key) {");
+    expect(read("app/services/ink-install.server.ts")).toContain('if (existing?.ink_api_key) return { outcome: "already_provisioned" };');
+  });
+
+  it("plan precedence is wired: the Ritualist's provision claims an ink doc, its uninstall hands back, ink's uninstall does neither", () => {
+    expect(read("app/routes/app.tsx")).toContain("await claimRitualistPlan({ shop: session.shop, existing });");
+    const uninstall = read("app/routes/webhooks.app.uninstalled.tsx");
+    expect(uninstall).toContain("if (!isInk()) {");
+    expect(uninstall).toContain("await restoreInkPlanOnRitualistUninstall(shop)");
+    // The uninstall never touches the shared merchant doc.
+    expect(uninstall).not.toMatch(/collection\("merchants"\)/);
   });
 });
 

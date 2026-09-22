@@ -12,6 +12,7 @@ import { getMerchant, updateMerchant } from "../services/merchant.server";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "../services/notification-settings";
 import { appFlavor } from "../services/app-flavor.server";
 import { provisionInkMerchant } from "../services/ink-install.server";
+import { claimRitualistPlan } from "../services/plan-precedence.server";
 
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
@@ -98,6 +99,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           notification_settings: DEFAULT_NOTIFICATION_SETTINGS,
         });
       }
+    } else {
+      // PLAN PRECEDENCE (plan-precedence.server.ts): a doc that already
+      // carries a key was made by this app or by ink. Made by ink, this is
+      // the upgrade — plan → ritualist, once. Made by the Ritualist (every
+      // merchant today) it returns at once, with no call made.
+      await claimRitualistPlan({ shop: session.shop, existing });
     }
   })().catch((err) =>
     console.error("[App] INK self-provision error (non-blocking):", err)
