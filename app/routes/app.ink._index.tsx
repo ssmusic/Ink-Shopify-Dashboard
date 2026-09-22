@@ -13,7 +13,7 @@
 //
 // Every visible string is PLACEHOLDER copy — Sam writes the words.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   useFetcher,
   useLoaderData,
@@ -32,6 +32,7 @@ import {
   Card,
   InlineStack,
   Layout,
+  Link,
   Page,
   Spinner,
   Text,
@@ -40,6 +41,7 @@ import { authenticate } from "../shopify.server";
 import { captureInkMark, readShopIdentity } from "../services/ink-install.server";
 import { brandNameOf, markOf, readInkMerchant, stageOf } from "../services/ink-merchant.server";
 import { updateMerchant } from "../services/merchant.server";
+import { dashboardDoorUrl, readRecentOrderRecords } from "../services/ink-links.server";
 
 // How long the screen keeps asking before it stops and offers "try again":
 // the capture's own timeout (45s) plus the install's two backend calls.
@@ -47,9 +49,13 @@ const POLL_MS = 3_000;
 const POLL_LIMIT = 25;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const view = await readInkMerchant(session.shop);
+  const { admin, session } = await authenticate.admin(request);
+  const [view, recentOrders] = await Promise.all([
+    readInkMerchant(session.shop),
+    readRecentOrderRecords(admin),
+  ]);
   return {
+    recentOrders,
     stage: stageOf(view.doc),
     mark: markOf(view),
     brandName: brandNameOf(view),
@@ -68,20 +74,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // The press. Recorded on the embed's own doc; the mark itself already
     // lives on the backend doc, where the flash reads it.
     await updateMerchant(session.shop, { ink_mark_confirmed_at: new Date().toISOString() });
-    return { ok: true, intent, note: null as string | null };
+    return { ok: true, intent, note: null as string | null, url: null as string | null };
+  }
+
+  if (intent === "open-dashboard") {
+    // The Ritualist's own door (/app/dashboard): a single-use magic token,
+    // redeemed at www.in.ink/welcome. The dashboard reads the plan, so the
+    // menu is ink's.
+    try {
+      return { ok: true, intent, note: null, url: await dashboardDoorUrl(session.shop) };
+    } catch (err) {
+      console.error("[ink] dashboard door failed:", err);
+      return { ok: false, intent, note: "Couldn't open your dashboard. Try again in a moment.", url: null }; // PLACEHOLDER
+    }
   }
 
   if (intent === "recapture") {
     const view = await readInkMerchant(session.shop);
     if (!view.shopId) {
-      return { ok: false, intent, note: "This store is still being set up — try again in a moment." }; // PLACEHOLDER
+      return { ok: false, intent, note: "This store is still being set up — try again in a moment.", url: null }; // PLACEHOLDER
     }
     const identity = await readShopIdentity(admin, session.shop);
     const capture = await captureInkMark({ shop: session.shop, shopId: view.shopId, siteUrl: identity.siteUrl });
-    return { ok: capture.ok, intent, note: capture.note };
+    return { ok: capture.ok, intent, note: capture.note, url: null };
   }
 
-  return { ok: false, intent, note: "Unknown action." }; // PLACEHOLDER
+  return { ok: false, intent, note: "Unknown action.", url: null }; // PLACEHOLDER
 };
 
 export default function InkOnboarding() {
@@ -108,6 +126,27 @@ export default function InkOnboarding() {
 
   const confirmed = Boolean(data.confirmedAt);
 
+  // The dashboard opens in a new tab: opened inside the click (a user gesture,
+  // so no popup block), pointed at the signed-in URL when the token returns —
+  // the same dance as /app/dashboard.
+  const door = useFetcher<typeof action>();
+  const pendingWindow = useRef<Window | null>(null);
+  const openDashboard = () => {
+    pendingWindow.current = window.open("", "_blank");
+    door.submit({ intent: "open-dashboard" }, { method: "post" });
+  };
+  useEffect(() => {
+    const d = door.data;
+    if (!d) return;
+    if (d.url) {
+      if (pendingWindow.current) pendingWindow.current.location.href = d.url;
+      else window.open(d.url, "_blank", "noopener,noreferrer");
+    } else if (pendingWindow.current) {
+      pendingWindow.current.close();
+    }
+    pendingWindow.current = null;
+  }, [door.data]);
+
   return (
     // PLACEHOLDER: page title.
     <Page title="Your mark">
@@ -119,6 +158,50 @@ export default function InkOnboarding() {
                 {fetcher.data.note}
               </Banner>
             )}
+            {door.data && door.data.note && (
+              <Banner tone="warning">{door.data.note}</Banner>
+            )}
+
+            {/* THE WAY OUT — the dashboard, signed in, and each recent order's
+                public record. Every string here is PLACEHOLDER copy. */}
+            <Card>
+              <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
+                <BlockStack gap="100">
+                  {/* PLACEHOLDER copy */}
+                  <Text as="h2" variant="headingMd">Your dashboard</Text>
+                  <Text as="p" tone="subdued">{"Your orders and their records. You'll be signed in automatically."}</Text>
+                </BlockStack>
+                {/* PLACEHOLDER label */}
+                <Button variant="primary" loading={door.state !== "idle"} onClick={openDashboard}>
+                  Open your dashboard
+                </Button>
+              </InlineStack>
+            </Card>
+
+            <Card>
+              <BlockStack gap="200">
+                {/* PLACEHOLDER copy */}
+                <Text as="h2" variant="headingMd">Recent orders</Text>
+                {data.recentOrders.length === 0 ? (
+                  <Text as="p" tone="subdued">No orders yet.</Text>
+                ) : (
+                  <BlockStack gap="100">
+                    {data.recentOrders.map((order) => (
+                      <InlineStack key={order.id} align="space-between" blockAlign="center" gap="400">
+                        <Text as="span">{order.name}</Text>
+                        {order.recordUrl ? (
+                          // PLACEHOLDER label
+                          <Link url={order.recordUrl} target="_blank">View record</Link>
+                        ) : (
+                          // PLACEHOLDER copy
+                          <Text as="span" tone="subdued">No record yet</Text>
+                        )}
+                      </InlineStack>
+                    ))}
+                  </BlockStack>
+                )}
+              </BlockStack>
+            </Card>
 
             {waiting ? (
               <Card>
