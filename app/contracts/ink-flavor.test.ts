@@ -164,6 +164,13 @@ describe("the Ritualist's queries, byte for byte", () => {
 
   it("plan precedence is wired: the Ritualist's provision claims an ink doc, its uninstall hands back, ink's uninstall does neither", () => {
     expect(read("app/routes/app.tsx")).toContain("await claimRitualistPlan({ shop: session.shop, existing });");
+    // AN INSTALL IS NOT A PUBLISH: the only `plan` this app ever PATCHes is
+    // the hand-back to ink on uninstall. `plan: "ritualist"` belongs to the
+    // Worker's publish door (the-ritualist), because page_mode follows the
+    // plan and the page must not appear before the merchant has one.
+    const precedence = read("app/services/plan-precedence.server.ts");
+    expect(precedence).not.toContain('plan: "ritualist"');
+    expect(precedence).toContain('patchMerchant(shopId, { plan: "ink" })');
     const uninstall = read("app/routes/webhooks.app.uninstalled.tsx");
     expect(uninstall).toContain("if (!isInk()) {");
     expect(uninstall).toContain("await restoreInkPlanOnRitualistUninstall(shop)");

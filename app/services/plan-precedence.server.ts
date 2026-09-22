@@ -17,11 +17,23 @@
 //      provision sees the key and does nothing — plan is left exactly as it
 //      is. An ink install never downgrades. (ink-install.server.ts; here for
 //      the reader.)
-//   2. THE RITUALIST INSTALLS ON AN INK MERCHANT. The upgrade: PATCH
-//      `plan: "ritualist"` through the admin door, once, stamped on the
-//      shared doc under a flavor-named field so the layout loader — which
-//      runs on every embedded page — never asks twice. The doc says it was
-//      ink's by `ink_shop_id`, which only ink's install writes.
+//   2. THE RITUALIST INSTALLS ON AN INK MERCHANT. The arrival, NOT the
+//      upgrade. The doc says it was ink's by `ink_shop_id`, which only ink's
+//      install writes; this stamps `ritualist_plan_claimed_at` on the shared
+//      doc so the layout loader — which runs on every embedded page — does
+//      the work once, and seeds the notification toggles an ink doc never
+//      had. IT DOES NOT TOUCH THE PLAN.
+//
+//      THE PLAN FLIPS WHEN THE PAGE IS PUBLISHED, NOT WHEN THE APP IS
+//      INSTALLED (Sam, 2026-09-22). `page_mode` derives from the plan, so a
+//      PATCH here handed an ink merchant's buyers the Ritualist PAGE the
+//      moment the app landed — before a brand book existed. That is an
+//      unbranded page where they had a clean flash, and the page is the paid
+//      product: it must not appear before it is ready. The flip now belongs
+//      to the merchant's own publish, through the Worker's
+//      `POST /api/merchant/plan` door (the-ritualist), which takes the
+//      shop_id from the merchant's JWT and PATCHes with the admin secret only
+//      the Worker holds.
 //   3. THE RITUALIST UNINSTALLS WHILE INK IS STILL INSTALLED (ink's own
 //      session for the shop exists). Hand the merchant back: PATCH
 //      `plan: "ink"` so the link keeps working as ink, and clear the stamp
@@ -38,11 +50,16 @@ import { InkApiError, patchMerchant } from "./ink-api.server";
 import { getMerchant, updateMerchant, type MerchantData } from "./merchant.server";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "./notification-settings";
 
-export type PlanClaimOutcome = "not_an_ink_merchant" | "already_claimed" | "claimed" | "failed";
+export type PlanClaimOutcome = "not_an_ink_merchant" | "already_claimed" | "claimed";
 
 /** Order 2 — the Ritualist's install on a merchant ink made. Called from the
  *  Ritualist's provision when the shared doc already carries a key. Never
- *  throws: it runs inside app.tsx's fire-and-forget provision. */
+ *  throws: it runs inside app.tsx's fire-and-forget provision.
+ *
+ *  It makes NO backend call. The stamp records that the Ritualist arrived on
+ *  this ink store, so this runs once and not on every embedded page load; the
+ *  plan itself is the merchant's to earn, at the moment their page publishes
+ *  (see the header). An ink merchant keeps ink's flash until then. */
 export async function claimRitualistPlan({
   shop,
   existing,
@@ -55,23 +72,13 @@ export async function claimRitualistPlan({
   if (!existing.ink_shop_id) return "not_an_ink_merchant";
   if (existing.ritualist_plan_claimed_at) return "already_claimed";
 
-  try {
-    await patchMerchant(existing.ink_shop_id, { plan: "ritualist" });
-  } catch (e: any) {
-    // Logged, not stamped: the next app load asks again. Until the backend
-    // deploy that knows `plan` (ink-backend #118) this is a 400 every load —
-    // one line each, and the merchant keeps ink's experience meanwhile.
-    console.error(`[plan] The Ritualist could not claim ${shop} (${existing.ink_shop_id}): ${e?.message ?? e}`);
-    return "failed";
-  }
-
   await updateMerchant(shop, {
     ritualist_plan_claimed_at: new Date().toISOString(),
     // The Ritualist's install seeds the notification toggles (every sender
     // treats a missing block as "send nothing"); an ink doc never had them.
     ...(existing.notification_settings ? {} : { notification_settings: DEFAULT_NOTIFICATION_SETTINGS }),
   });
-  console.log(`[plan] The Ritualist claimed ${shop} (${existing.ink_shop_id}): plan → ritualist`);
+  console.log(`[plan] The Ritualist arrived on ${shop} (${existing.ink_shop_id}): plan left as ink until the page publishes`);
   return "claimed";
 }
 
