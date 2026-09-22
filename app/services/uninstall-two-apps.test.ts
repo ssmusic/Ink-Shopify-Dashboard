@@ -127,7 +127,7 @@ describe("ink + the Ritualist installed, the Ritualist uninstalls", () => {
     expect(res.status).toBe(200);
     expect(deleted).toEqual([`shopify_sessions/offline_${SHOP}`]);
     expect(sessions.shopify_sessions_ink).toHaveLength(1);
-    expect(patchCalls()).toEqual([{ url: "https://api.test/admin/merchants/shop_abc123", body: { plan: "ink" } }]);
+    expect(patchCalls()).toEqual([{ url: "https://api.test/admin/merchants/shop_abc123", body: { plan: "ink", ritualist_installed_at: null } }]);
     // The shared doc: the stamp cleared, and nothing else — never the key.
     expect(merchantWrites).toHaveLength(1);
     expect(merchantWrites[0]).toMatch(/^set:/);
@@ -158,7 +158,7 @@ describe("ink + the Ritualist installed, the Ritualist uninstalls", () => {
     const res = await uninstall("");
     expect(res.status).toBe(200);
     expect(deleted).toEqual([]);
-    expect(patchCalls()).toEqual([{ url: "https://api.test/admin/merchants/shop_abc123", body: { plan: "ink" } }]);
+    expect(patchCalls()).toEqual([{ url: "https://api.test/admin/merchants/shop_abc123", body: { plan: "ink", ritualist_installed_at: null } }]);
   });
 });
 

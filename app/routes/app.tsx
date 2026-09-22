@@ -102,8 +102,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     } else {
       // PLAN PRECEDENCE (plan-precedence.server.ts): a doc that already
       // carries a key was made by this app or by ink. Made by ink, this is
-      // the upgrade — plan → ritualist, once. Made by the Ritualist (every
-      // merchant today) it returns at once, with no call made.
+      // the ARRIVAL — it records the entitlement (ritualist_installed_at)
+      // once, and leaves the plan alone: the flip is earned at the page's
+      // publish. Made by the Ritualist (every merchant today) it returns at
+      // once, with no call made.
       await claimRitualistPlan({ shop: session.shop, existing });
     }
   })().catch((err) =>
