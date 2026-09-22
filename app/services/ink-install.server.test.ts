@@ -29,7 +29,7 @@ function adminAnswering(shop: Record<string, unknown> | Error) {
 beforeEach(() => {
   vi.resetAllMocks();
   updateMerchant.mockResolvedValue(undefined);
-  captureBrandMark.mockResolvedValue({ ok: true, status: 200, logoUrl: "https://cdn.test/mark.svg", note: "mark captured: https://cdn.test/mark.svg" });
+  captureBrandMark.mockResolvedValue({ ok: true, status: 200, logoUrl: "https://cdn.test/mark.svg", slug: "made-up-goods", slugNote: "made-up-goods.in.ink claimed", note: "mark captured: https://cdn.test/mark.svg; host made-up-goods.in.ink" });
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -65,7 +65,10 @@ describe("provisionInkMerchant", () => {
     // The attempt recorded, so the onboarding screen can stop waiting.
     expect(updateMerchant).toHaveBeenNthCalledWith(2, SHOP, {
       ink_mark_captured_at: expect.any(String),
-      ink_mark_capture_note: "mark captured: https://cdn.test/mark.svg",
+      ink_mark_capture_note: "mark captured: https://cdn.test/mark.svg; host made-up-goods.in.ink",
+      // The host the Worker claimed in the same call — the label the record
+      // now holds, never one derived from the myshopify domain (#1016).
+      ink_brand_slug: "made-up-goods",
     });
 
     expect(out).toMatchObject({ outcome: "provisioned", shopId: "shop_abc123", capture: { ok: true } });
@@ -133,7 +136,7 @@ describe("provisionInkMerchant", () => {
   it("records a failed capture too — the screen offers 'look again' instead of waiting forever", async () => {
     getMerchant.mockResolvedValue(null);
     createMerchant.mockResolvedValue({ shop_id: "shop_abc123", api_key: "k" });
-    captureBrandMark.mockResolvedValue({ ok: false, status: 0, logoUrl: null, note: "brand-mark capture failed: fetch failed" });
+    captureBrandMark.mockResolvedValue({ ok: false, status: 0, logoUrl: null, slug: null, slugNote: null, note: "brand-mark capture failed: fetch failed" });
     const admin = adminAnswering({ name: "x", email: "e@example.test", primaryDomain: { url: "https://x.test" } });
 
     const { provisionInkMerchant } = await import("./ink-install.server");
@@ -143,6 +146,26 @@ describe("provisionInkMerchant", () => {
     expect(updateMerchant).toHaveBeenLastCalledWith(SHOP, {
       ink_mark_captured_at: expect.any(String),
       ink_mark_capture_note: "brand-mark capture failed: fetch failed",
+    });
+  });
+
+  it("records the host even when the mark was not found — no mark is not no door", async () => {
+    getMerchant.mockResolvedValue(null);
+    createMerchant.mockResolvedValue({ shop_id: "shop_abc123", api_key: "k" });
+    captureBrandMark.mockResolvedValue({
+      ok: false, status: 404, logoUrl: null,
+      slug: "plainbrand", slugNote: "plainbrand.in.ink claimed",
+      note: "the Worker refused the capture: no mark could be found on this site; host plainbrand.in.ink",
+    });
+    const admin = adminAnswering({ name: "Plain", email: "e@example.test", primaryDomain: { url: "https://www.plainbrand.test" } });
+
+    const { provisionInkMerchant } = await import("./ink-install.server");
+    await provisionInkMerchant({ admin, shop: SHOP });
+
+    expect(updateMerchant).toHaveBeenLastCalledWith(SHOP, {
+      ink_mark_captured_at: expect.any(String),
+      ink_mark_capture_note: "the Worker refused the capture: no mark could be found on this site; host plainbrand.in.ink",
+      ink_brand_slug: "plainbrand",
     });
   });
 

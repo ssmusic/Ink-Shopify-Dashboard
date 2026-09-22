@@ -8,9 +8,17 @@
 //      door learns the field this same build run; until then it is ignored
 //      and absent reads as ritualist — nothing breaks either way);
 //   2. seeds the embed's own doc with the key and the backend shop_id;
-//   3. asks the Worker to capture the brand's mark off its storefront and
-//      write it onto the backend merchant doc (brand-mark.server.ts), and
-//      records how that went so the onboarding screen can say so.
+//   3. asks the Worker to capture the brand's mark off its storefront AND to
+//      claim the brand's host, writing both onto the backend merchant doc in
+//      one call (brand-mark.server.ts), and records how that went so the
+//      onboarding screen can say so.
+//
+// THE HOST IS WHY STEP 3 IS NOT OPTIONAL. `brand_slug` on the merchant doc is
+// the one author of {brand}.in.ink, which is the host this app writes into
+// Shopify's tracking link; without a claim the link reads
+// {myshopify-label}.in.ink, a host that looks right and 404s (#1016). The
+// Worker does the claim because the registry is its KV — this file only
+// records the label it came back with.
 // No carrier service (ink holds no write_shipping), no notification toggles
 // (ink's embed sends no buyer email — there is nothing for them to switch).
 //
@@ -104,6 +112,10 @@ export async function captureInkMark({
     await updateMerchant(shop, {
       ink_mark_captured_at: new Date().toISOString(),
       ink_mark_capture_note: capture.note,
+      // The host the backend record now holds, mirrored here so this app's own
+      // screens never have to guess one from the myshopify domain. Absent when
+      // nothing was claimed — never a derived host (#1016).
+      ...(capture.slug ? { ink_brand_slug: capture.slug } : {}),
     });
   } catch (e) {
     console.warn(`[ink] could not record the capture attempt for ${shop}:`, e);

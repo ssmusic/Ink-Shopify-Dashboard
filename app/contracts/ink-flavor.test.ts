@@ -147,6 +147,19 @@ describe("the Ritualist's queries, byte for byte", () => {
     expect(src).toContain("provisionInkMerchant({ admin, shop: session.shop })");
   });
 
+  it("only ink claims a host: the Ritualist's install path names neither the capture nor the claim", () => {
+    // `brand_slug` is the one author of {brand}.in.ink. ink's install claims it
+    // through the Worker; the Ritualist's merchants get theirs where they
+    // always did — an operator's door at mint — and nothing in its branch of
+    // app.tsx, or in the file its branch calls, reaches the capture door.
+    const src = read("app/routes/app.tsx");
+    expect(src).not.toContain("captureBrandMark");
+    expect(src).not.toContain("brand-mark.server");
+    expect(src).not.toContain("brand_slug");
+    // The one caller of the capture is ink's own install file.
+    expect(read("app/services/ink-install.server.ts")).toContain("captureBrandMark({ site: siteUrl, shopId })");
+  });
+
   it("the Ritualist's session collection keeps its name, and no route or helper names it by hand", () => {
     const src = read("app/firestore-session-storage.server.ts");
     expect(src).toContain('export const SESSION_COLLECTION = isInk() ? "shopify_sessions_ink" : "shopify_sessions";');
