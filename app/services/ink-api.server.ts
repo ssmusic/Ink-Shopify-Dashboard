@@ -418,7 +418,9 @@ async function merchantDoor(apiKey: string, idOrToken: string, door: "audit" | "
     if (response.status === 404) return null;
     if (!response.ok) {
         const body = await response.text().catch(() => "<unreadable>");
-        throw new Error(`ink ${door} ${response.status}: ${body.slice(0, 300)}`);
+        // InkApiError carries the status: a 402 is a priced record not yet
+        // bought (ink-backend #124), which a door answers as such.
+        throw new InkApiError(`ink ${door} ${response.status}: ${body.slice(0, 300)}`, response.status);
     }
     return response.json();
 }
@@ -739,4 +741,78 @@ export const purgeShopInInk = async (
   } catch (e) {
     return { ok: false, status: 0, body: { error: String(e) } };
   }
+};
+
+// ─── THE RECORD'S PURCHASES (ink-backend #124) ────────────────────────────
+// One order's proof, bought. The backend mints the key only when this app
+// says Shopify's one-time charge is ACTIVE, refuses an unpriced merchant, and
+// keys each purchase by the charge's own number (one charge, one key). The
+// outcome is the merchant's own word. All behind X-Admin-Secret.
+
+export type RecordPurchase = {
+  id: string;
+  proof_id: string;
+  shop_id: string;
+  key: string;
+  price_cents: number;
+  currency: string;
+  created_at: string;
+  charge_id: string;
+  test: boolean;
+  outcome: "open" | "won" | "lost" | "unknown";
+  outcome_source: string | null;
+  packet_url?: string;
+};
+
+export const createRecordPurchase = async (input: {
+  proof_id: string;
+  shop_id: string;
+  charge_id: string;
+  price_cents: number;
+  currency: string;
+  test: boolean;
+}): Promise<RecordPurchase> => {
+  const response = await fetch(getAlanUrl("/admin/purchases"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Admin-Secret": INK_ADMIN_SECRET },
+    body: JSON.stringify(input),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body?.purchase) {
+    throw new InkApiError(`Record purchase refused: ${response.status} ${body?.error ?? ""}`.trim(), response.status);
+  }
+  return body.purchase as RecordPurchase;
+};
+
+/** This shop's purchases, newest first; [] when the read fails (the screen
+ *  then shows no packet links — never an error page). */
+export const listRecordPurchases = async (shopId: string): Promise<RecordPurchase[]> => {
+  try {
+    const response = await fetch(getAlanUrl(`/admin/purchases?shop_id=${encodeURIComponent(shopId)}`), {
+      headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
+    });
+    if (!response.ok) return [];
+    const body = await response.json();
+    return Array.isArray(body?.purchases) ? (body.purchases as RecordPurchase[]) : [];
+  } catch (err) {
+    console.warn("[record] purchases read failed:", err);
+    return [];
+  }
+};
+
+export const setRecordPurchaseOutcome = async (
+  purchaseId: string,
+  shopId: string,
+  outcome: RecordPurchase["outcome"],
+): Promise<RecordPurchase> => {
+  const response = await fetch(getAlanUrl(`/admin/purchases/${encodeURIComponent(purchaseId)}`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "X-Admin-Secret": INK_ADMIN_SECRET },
+    body: JSON.stringify({ shop_id: shopId, outcome }),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body?.purchase) {
+    throw new InkApiError(`Outcome refused: ${response.status} ${body?.error ?? ""}`.trim(), response.status);
+  }
+  return body.purchase as RecordPurchase;
 };

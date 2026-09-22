@@ -42,6 +42,8 @@ import { captureInkMark, readShopIdentity } from "../services/ink-install.server
 import { brandNameOf, markOf, readInkMerchant, stageOf } from "../services/ink-merchant.server";
 import { updateMerchant } from "../services/merchant.server";
 import { dashboardDoorUrl, readRecentOrderRecords } from "../services/ink-links.server";
+import { readRecordDoors, recordDoorFor } from "../services/record-charges.server";
+import RecordDoor from "../components/RecordDoor";
 
 // How long the screen keeps asking before it stops and offers "try again":
 // the capture's own timeout (45s) plus the install's two backend calls.
@@ -54,8 +56,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     readInkMerchant(session.shop),
     readRecentOrderRecords(admin),
   ]);
+  // THE RECORD'S DOOR (services/record-door.server.ts): a price on the row
+  // only when Sam has priced this merchant AND the kill switch is on.
+  const doors = await readRecordDoors(admin, view, recentOrders.map((o) => o.proofId));
   return {
-    recentOrders,
+    recentOrders: recentOrders.map((o) => ({ ...o, door: recordDoorFor(doors, o.proofId) })),
     stage: stageOf(view.doc),
     mark: markOf(view),
     brandName: brandNameOf(view),
@@ -189,13 +194,18 @@ export default function InkOnboarding() {
                     {data.recentOrders.map((order) => (
                       <InlineStack key={order.id} align="space-between" blockAlign="center" gap="400">
                         <Text as="span">{order.name}</Text>
-                        {order.recordUrl ? (
-                          // PLACEHOLDER label
-                          <Link url={order.recordUrl} target="_blank">View record</Link>
-                        ) : (
-                          // PLACEHOLDER copy
-                          <Text as="span" tone="subdued">No record yet</Text>
-                        )}
+                        <InlineStack gap="400" blockAlign="center">
+                          {order.proofId && (
+                            <RecordDoor proofId={order.proofId} orderName={order.name} returnTo="/app/ink" door={order.door} />
+                          )}
+                          {order.recordUrl ? (
+                            // PLACEHOLDER label
+                            <Link url={order.recordUrl} target="_blank">View record</Link>
+                          ) : (
+                            // PLACEHOLDER copy
+                            <Text as="span" tone="subdued">No record yet</Text>
+                          )}
+                        </InlineStack>
                       </InlineStack>
                     ))}
                   </BlockStack>

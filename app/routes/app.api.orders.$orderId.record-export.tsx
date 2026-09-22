@@ -1,6 +1,6 @@
 import { type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { getProofExport } from "../services/ink-api.server";
+import { getProofExport, InkApiError } from "../services/ink-api.server";
 import { findMerchantDoc } from "../services/merchant-doc.server";
 
 // GET /app/api/orders/:orderId/record-export?proof=proof_… — the export
@@ -14,7 +14,15 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const merchant = await findMerchantDoc(firestore, session.shop);
   const apiKey: string | null = merchant?.data?.ink_api_key ?? null;
   if (!apiKey) return new Response("This shop has no ink key", { status: 409 });
-  const bundle = await getProofExport(apiKey, proofId);
+  let bundle;
+  try {
+    bundle = await getProofExport(apiKey, proofId);
+  } catch (err) {
+    // A priced record not yet bought (ink-backend #124): the export is the
+    // proof, and the proof is behind the purchase.
+    if (err instanceof InkApiError && err.status === 402) return new Response("The record is not bought yet", { status: 402 });
+    throw err;
+  }
   if (!bundle) return new Response("Not found", { status: 404 });
   return new Response(JSON.stringify(bundle), {
     headers: {

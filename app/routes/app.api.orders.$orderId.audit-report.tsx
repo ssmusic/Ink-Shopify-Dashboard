@@ -19,6 +19,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   if (!apiKey) return new Response("This shop has no ink key", { status: 409 });
   const packet = await getProofAudit(apiKey, proofId);
   if (!packet) return new Response("Not found", { status: 404 });
+  // A priced record not yet bought answers its words only (ink-backend #124):
+  // the printed report is the proof, and the proof is behind the purchase.
+  if (packet.record?.locked === true) return new Response("The record is not bought yet", { status: 402 });
   const tz = (await shopTimezone(request)) ?? "UTC";
   const pdf = buildAuditReportPdf(packet, { verifyUrl: publicVerifyUrl(proofId), tz });
   return new Response(Buffer.from(pdf), {
