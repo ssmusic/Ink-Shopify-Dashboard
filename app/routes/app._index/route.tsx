@@ -1,9 +1,16 @@
-import { type LoaderFunctionArgs } from "react-router";
+import { redirect, type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../../shopify.server";
 import { LandingPageContent } from "../../components/LandingPageContent";
+import { isInk } from "../../services/app-flavor.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
+  // Under ink this landing (the Ritualist's dashboard door) does not exist:
+  // `/app` is ink's onboarding, one hop away, with the embedded params kept.
+  if (isInk()) {
+    const url = new URL(request.url);
+    throw redirect(`/app/ink${url.search}`);
+  }
   return null;
 };
 

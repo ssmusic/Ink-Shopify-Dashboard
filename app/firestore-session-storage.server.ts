@@ -1,8 +1,42 @@
 import { Session } from "@shopify/shopify-api";
 import type { SessionStorage } from "@shopify/shopify-app-session-storage";
 import firestore from "./firestore.server";
+import { isInk } from "./services/app-flavor.server";
 
-const COLLECTION = "shopify_sessions";
+// ONE COLLECTION PER APP. The library names an offline session
+// `offline_{shop}` — the shop and nothing else, no app identity in the id.
+// The Ritualist and ink are two Shopify apps on one Firestore, and a store
+// that installs both would have each app overwrite the other's access token
+// under the same document id: every API call from the app written second
+// answers 401, token exchange re-stores, and the two ping-pong forever. So
+// ink keeps its sessions in its own collection. The Ritualist's name is
+// untouched — every existing session stays where it is.
+//
+// Exported for the three routes that touch sessions by hand (uninstall,
+// scopes_update, auth.$): the same word everywhere or the ink uninstall
+// would delete nothing.
+export const SESSION_COLLECTION = isInk() ? "shopify_sessions_ink" : "shopify_sessions";
+const COLLECTION = SESSION_COLLECTION;
+
+/** The OTHER app's collection and name — what shop/redact asks before it
+ *  purges a merchant record the two apps share. */
+export const OTHER_APP = isInk()
+  ? { name: "The Ritualist", collection: "shopify_sessions" }
+  : { name: "ink", collection: "shopify_sessions_ink" };
+
+/** Does the other app still hold an offline session for this shop — i.e. is
+ *  it still installed there? Throws when Firestore cannot answer: the caller
+ *  is deciding whether to erase a merchant, and "unknown" must not read as
+ *  "no". */
+export async function otherAppHoldsSession(shop: string): Promise<boolean> {
+  const snap = await firestore
+    .collection(OTHER_APP.collection)
+    .where("shop", "==", shop)
+    .where("isOnline", "==", false)
+    .limit(1)
+    .get();
+  return !snap.empty;
+}
 
 /**
  * Custom Shopify SessionStorage adapter backed by Cloud Firestore.

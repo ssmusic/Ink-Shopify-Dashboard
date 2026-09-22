@@ -42,6 +42,13 @@ export const createMerchant = async (
     primary_carriers?: string[];
     monthly_order_volume?: number;
     pre_ink_dispute_rate?: number;
+    /** WHICH PRODUCT THIS MERCHANT IS ON — `ink` (free; the flash) or
+     *  `ritualist` (paid; the page). Sent by the ink flavor's install; absent
+     *  means ritualist for every merchant that exists today. The backend's
+     *  create door learns the field in the same build run (ink-backend, chip
+     *  A) and ignores it until then — the doc simply carries no plan, which
+     *  the backend reads as ritualist. */
+    plan?: "ink" | "ritualist";
   }
 ) => {
   try {
@@ -73,6 +80,33 @@ export const createMerchant = async (
     console.error("INK API Exception:", error);
     throw error;
   }
+};
+
+// PATCH /admin/merchants/:id — the backend's tight-whitelist profile door
+// (shop_name, owner_email, merchant_category, merchant_region, and THE BUYER'S
+// DOOR: page_mode, flash_ask, flash_forward; null clears a dial). Any other
+// field is refused in a sentence, never written. This is how ink's settings
+// write: the backend first, and nothing recorded locally that the backend
+// does not already hold. Throws on refusal so the caller can show the
+// sentence; returns the fresh merchant doc (api_key_hash stripped).
+export const patchMerchant = async (
+  shopId: string,
+  fields: Record<string, string | null>,
+): Promise<Record<string, any>> => {
+  const response = await fetch(getAlanUrl(`/admin/merchants/${encodeURIComponent(shopId)}`), {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Secret": INK_ADMIN_SECRET,
+    },
+    body: JSON.stringify(fields),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const why = typeof body?.error === "string" ? body.error : `${response.status} ${response.statusText}`;
+    throw new Error(`Failed to update merchant: ${why}`);
+  }
+  return body?.merchant ?? body ?? {};
 };
 
 export const getMerchants = async () => {

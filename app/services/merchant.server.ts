@@ -15,6 +15,20 @@ export interface MerchantData {
   /** First provision. Settings renders this as the install date — it was
    *  never written, so that row read "Not available" forever. */
   createdAt?: string;
+
+  // ── THE INK FLAVOR'S OWN FIELDS (app/services/app-flavor.server.ts). ──
+  // Written only by an install under APP_FLAVOR=ink; the Ritualist's
+  // provision never sets them, so a doc it wrote is byte-identical to before.
+  /** The backend merchant id (`shop_…`) from createMerchant's answer — kept
+   *  so ink's screens address `merchants/{shop_id}` and the admin PATCH door
+   *  directly instead of scanning the merchant list by domain. */
+  ink_shop_id?: string;
+  /** When the storefront capture was last attempted, and how it went — the
+   *  onboarding screen reads these to say "looking", "found", or "try again". */
+  ink_mark_captured_at?: string;
+  ink_mark_capture_note?: string;
+  /** When the merchant pressed "Use this" on the captured mark. */
+  ink_mark_confirmed_at?: string;
 }
 
 export const getMerchant = async (shop: string): Promise<MerchantData | null> => {

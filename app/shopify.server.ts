@@ -6,14 +6,14 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { FirestoreSessionStorage } from "./firestore-session-storage.server";
 import { DeliveryMethod } from "@shopify/shopify-api"; // ✅ Added import
+import { isInk } from "./services/app-flavor.server";
+import { INK_SCOPES } from "./services/ink-scopes.server";
 
-const shopify = shopifyApp({
-  apiKey: process.env.SHOPIFY_API_KEY,
-  apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
-  apiVersion: ApiVersion.October25,
-
-  // Scopes MUST match shopify.app.smusic.toml exactly to avoid session invalidation
-  scopes: [
+// The Ritualist's list, verbatim. Under managed installation the TOML is
+// what Shopify grants and this option is never compared to the session, so
+// it is documentation with teeth only for the ink flavor, whose list must
+// match shopify.app.ink.toml (ink-scopes.server.ts pins it).
+const RITUALIST_SCOPES = [
     "read_assigned_fulfillment_orders",
     "write_assigned_fulfillment_orders",
     "read_customers",
@@ -29,7 +29,15 @@ const shopify = shopifyApp({
     "write_orders",
     "write_shipping",
     "write_themes",
-  ],
+  ];
+
+const shopify = shopifyApp({
+  apiKey: process.env.SHOPIFY_API_KEY,
+  apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
+  apiVersion: ApiVersion.October25,
+
+  // Scopes MUST match shopify.app.smusic.toml exactly to avoid session invalidation
+  scopes: isInk() ? [...INK_SCOPES] : RITUALIST_SCOPES,
 
   appUrl: process.env.SHOPIFY_APP_URL || "",
   authPathPrefix: "/auth",

@@ -4,6 +4,22 @@ import { NotificationService } from "../services/notifications.server";
 import { NFSService } from "../services/nfs.server";
 import firestore from "../firestore.server";
 import { findMerchantDoc } from "../services/merchant-doc.server";
+import { appFlavor } from "../services/app-flavor.server";
+
+// INK'S ORDER READ: the same proof link, and no `customer { … }` — a Customer
+// object needs read_customers, which ink does not hold, and one unauthorized
+// selection fails the whole query (so the delivered mark and the
+// tracking-added-later hop would both have died). ink dispatches no
+// notification, so it has no use for the buyer's contact anyway.
+export const ORDER_QUERY_INK = `#graphql
+      query GetOrderForFulfillmentEvent($id: ID!) {
+        order(id: $id) {
+          name
+          tags
+          proofMetafield: metafield(namespace: "ink", key: "proof_reference") { value }
+        }
+      }
+    `;
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   console.log("\n📦 ================================================");
@@ -47,12 +63,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     `;
 
+    const ink = appFlavor() === "ink";
     let orderPromise: Promise<any> | null = null;
     const loadOrder = () => {
       if (!orderPromise) {
         console.log(`📦 Querying Shopify for Order details...`);
         orderPromise = admin
-          .graphql(orderQuery, { variables: { id: orderGid } })
+          .graphql(ink ? ORDER_QUERY_INK : orderQuery, { variables: { id: orderGid } })
           .then((r) => r.json())
           .then((j: any) => j.data?.order ?? null);
       }
@@ -129,7 +146,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             // The Order status page — where the email's primary button lands —
             // carries the brand's door once this shop metafield exists. One
             // guard read per event, a real write once per merchant ever, and
-            // never fatal (order-door-metafield.server.ts).
+            // never fatal (order-door-metafield.server.ts). The Ritualist's
+            // block, not ink's: under ink no door is written.
+            if (!ink) {
             const { assertOrderDoorMetafield } = await import("../services/order-door-metafield.server");
             await assertOrderDoorMetafield({
               admin,
@@ -139,6 +158,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               proofId: trackingProofId,
               label: `[${topic}] order-door`,
             });
+            }
           } else {
             console.log(`⚠️ No ink_api_key for ${shop}; cannot forward tracking added on update.`);
           }
@@ -210,7 +230,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // arrival whenever it fired. Gated + deduped inside; never blocks
       // the 200. Sent even if our mark-delivered write hiccuped above:
       // the carrier event, not our ledger, makes the claim true.
-      try {
+      // ink sends no buyer email of its own — the record is marked, and
+      // that is the whole of its delivered moment.
+      if (!ink) try {
         const { sendStateEmailOnce } = await import("../services/state-email.server");
         await sendStateEmailOnce({
           state: "delivered",
@@ -226,6 +248,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       } catch (e: any) {
         console.error(`❌ arrival email failed (non-fatal):`, e?.message);
       }
+    }
+
+    // ink has no notification rail: no email, no SMS, whatever toggles a
+    // shared merchant doc may carry from the Ritualist. The delivered mark
+    // above is the whole of its work here.
+    if (ink) {
+      console.log(`📦 ink: delivery recorded; no notifications are ink's to send. Exiting.`);
+      return new Response("OK", { status: 200 });
     }
 
     if (!settings) {

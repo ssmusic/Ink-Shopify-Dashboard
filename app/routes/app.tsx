@@ -10,6 +10,8 @@ import { ensureCarrierServiceRegistered } from "../services/carrier-service.serv
 import { createMerchant } from "../services/ink-api.server";
 import { getMerchant, updateMerchant } from "../services/merchant.server";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "../services/notification-settings";
+import { appFlavor } from "../services/app-flavor.server";
+import { provisionInkMerchant } from "../services/ink-install.server";
 
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
@@ -24,12 +26,20 @@ const queryClient = new QueryClient();
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
 
+  // WHICH APP THIS PROCESS IS (app/services/app-flavor.server.ts). Unset is
+  // the Ritualist, and every branch below on `ink` is additive: with the env
+  // unset the loader runs the exact text it ran before ink existed.
+  const flavor = appFlavor();
+  const ink = flavor === "ink";
+
   // Billing is owned by Shopify App Pricing / the Shopify Billing API, never
   // by INK's internal merchant provisioning. This loader may create the
   // operational merchant record needed for orders/pages, but it must not mark
   // a merchant as subscribed or paid.
   const appUrl = process.env.SHOPIFY_APP_URL || "";
-  if (appUrl) {
+  // The carrier service is the Ritualist's checkout lane (write_shipping);
+  // ink holds no such scope and registers none.
+  if (appUrl && !ink) {
     ensureCarrierServiceRegistered(admin, appUrl).catch((err) =>
       console.error("[App] Carrier service registration error (non-blocking):", err)
     );
@@ -38,6 +48,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[App] Webhook registration error (non-blocking):", err)
   );
 
+  // Under ink the install is its own file (ink-install.server.ts): the same
+  // fire-and-forget discipline, a `plan: "ink"` create, the mark captured off
+  // the storefront, no carrier service and no notification toggles.
+  if (ink) {
+    provisionInkMerchant({ admin, shop: session.shop }).catch((err) =>
+      console.error("[App] ink self-provision error (non-blocking):", err)
+    );
+  } else {
   // Self-provision on app load. Managed-install apps (use_legacy_install_flow =
   // false) don't fire afterAuth on token exchange — so the install hook never
   // runs for these stores. This loader does, on every embedded load. Seed the
@@ -84,6 +102,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   })().catch((err) =>
     console.error("[App] INK self-provision error (non-blocking):", err)
   );
+  }
 
   // No pricingUrl: the Partner Dashboard exposes one public Free plan, so
   // there is no paid charge or approval flow to launch. The previous version built
@@ -92,7 +111,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Run 2026-08-01), so that fallback was always what shipped, and it is not
   // this app's handle. It would have put a Shopify 404 in front of the
   // reviewer on the one screen the rejection was about.
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  //
+  // `flavor` rides along for the layout (ink's nav) and root's loading
+  // wordmark; the Ritualist reads "ritualist" and renders as before.
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", flavor };
 };
 
 
@@ -143,7 +165,7 @@ const PolarisLink = forwardRef<HTMLAnchorElement, any>(function PolarisLink(
 });
 
 export default function App() {
-  const { apiKey } = useLoaderData<typeof loader>();
+  const { apiKey, flavor } = useLoaderData<typeof loader>();
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -153,6 +175,16 @@ export default function App() {
             <TooltipProvider>
               <Toaster />
               <Sonner />
+              {/* ink's two screens hang off Shopify's own app nav (App Bridge
+                  NavMenu). The Ritualist renders nothing here — its
+                  navigation is its own TopNav, unchanged. */}
+              {flavor === "ink" && (
+                <NavMenu>
+                  {/* PLACEHOLDER copy — Sam writes the nav words. */}
+                  <a href="/app/ink" rel="home">Home</a>
+                  <a href="/app/ink/settings">Settings</a>
+                </NavMenu>
+              )}
               <Outlet />
             </TooltipProvider>
           </ShopProvider>

@@ -2,11 +2,37 @@ import { type ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { purgeShopInInk } from "../services/ink-api.server";
+import { OTHER_APP, otherAppHoldsSession } from "../firestore-session-storage.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { topic, shop } = await authenticate.webhook(request);
 
   console.log(`Received ${topic} webhook for ${shop}`);
+
+  // TWO APPS, ONE MERCHANT RECORD. The Ritualist and ink share the embed doc
+  // and the backend merchant (one backend, one Firestore, one link). A store
+  // that holds both and uninstalls ONE sends that app a shop/redact 48 hours
+  // later — and a purge here would erase the merchant the other app is still
+  // serving: no api key, no proofs, every order silently un-enrolled. So
+  // before anything is deleted, ask whether the other app is still installed
+  // (its own offline session for this shop). If it is, the record stays with
+  // it; its own shop/redact will erase everything when the store truly
+  // leaves. Until ink exists nothing can hold that session, so the
+  // Ritualist's path is what it always was. Firestore unable to answer →
+  // 500 and Shopify retries: an unknown must never purge.
+  let otherStillInstalled = false;
+  try {
+    otherStillInstalled = await otherAppHoldsSession(shop);
+  } catch (error) {
+    console.error(`[shop/redact] ${shop}: could not check whether ${OTHER_APP.name} is still installed — not purging; will retry:`, error);
+    return new Response("Shop purge deferred — will retry", { status: 500 });
+  }
+  if (otherStillInstalled) {
+    console.warn(
+      `[shop/redact] ${shop}: ${OTHER_APP.name} is still installed on this store and shares this merchant record — nothing purged. Its own shop/redact will.`,
+    );
+    return new Response("OK", { status: 200 });
+  }
 
   // SHOP/REDACT: ~48 hours after uninstall, or when a store requests
   // deletion. Two sides to erase:
