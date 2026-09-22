@@ -24,7 +24,7 @@ vi.mock("../services/ink-merchant.server", () => ({
   FLASH_FORWARDS: ["order_status", "carrier"],
 }));
 vi.mock("../services/merchant.server", () => ({ updateMerchant: vi.fn() }));
-vi.mock("../services/ink-api.server", () => ({ patchMerchant: vi.fn() }));
+vi.mock("../services/ink-api.server", () => ({ patchMerchant: vi.fn(), mintMagicToken: vi.fn() }));
 
 const { default: InkOnboarding } = await import("../routes/app.ink._index");
 const { default: InkSettings } = await import("../routes/app.ink.settings");
@@ -42,7 +42,9 @@ function render(Component: React.ComponentType, loaderData: Record<string, unkno
       ),
     },
   ]);
-  return renderToString(<Stub initialEntries={["/"]} hydrationData={{ loaderData: { screen: loaderData } }} />);
+  // The onboarding loader's recent orders default to none, so each stage's
+  // fixture names only what it is about.
+  return renderToString(<Stub initialEntries={["/"]} hydrationData={{ loaderData: { screen: { recentOrders: [], ...loaderData } } }} />);
 }
 
 const text = (html: string) =>
@@ -101,6 +103,36 @@ describe("the onboarding screen", () => {
       // The one deliberate exception: the upload field says it is not built yet.
       expect(text(html).replace("PLACEHOLDER: the upload door is not built yet.", "")).not.toContain("PLACEHOLDER");
     }
+  });
+});
+
+describe("the onboarding screen links out (day-one defect, 2026-09-22)", () => {
+  const READY = { stage: "ready", mark: null, brandName: "x", confirmedAt: null, captureNote: null, canRecapture: true };
+
+  it("offers the dashboard, signed in, at every stage", () => {
+    for (const stage of ["provisioning", "capturing", "ready"]) {
+      const html = render(InkOnboarding, { ...READY, stage });
+      expect(text(html)).toContain("Open your dashboard");
+    }
+  });
+
+  it("links each recent order to its public record, and says when an order has none yet", () => {
+    const html = render(InkOnboarding, {
+      ...READY,
+      recentOrders: [
+        { id: "gid://shopify/Order/2", name: "#1002", createdAt: null, recordUrl: "https://www.in.ink/verify/proof_b3ea86a2c6aa96d2d4ee1e8b" },
+        { id: "gid://shopify/Order/1", name: "#1001", createdAt: null, recordUrl: null },
+      ],
+    });
+    expect(text(html)).toContain("#1002");
+    expect(html).toContain('href="https://www.in.ink/verify/proof_b3ea86a2c6aa96d2d4ee1e8b"');
+    expect(text(html)).toContain("View record");
+    expect(text(html)).toContain("#1001");
+    expect(text(html)).toContain("No record yet");
+  });
+
+  it("says there are no orders when the read found none", () => {
+    expect(text(render(InkOnboarding, READY))).toContain("No orders yet");
   });
 });
 
