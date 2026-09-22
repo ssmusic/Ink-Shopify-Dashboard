@@ -13,6 +13,7 @@ import {
   stateOfWebhookOrder,
 } from "../services/activation-scope.server";
 import { spendFromCap } from "../services/activation-counter.server";
+import { appFlavor, type AppFlavor } from "../services/app-flavor.server";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -89,6 +90,15 @@ async function fetchProductUrls(
   orderGid: string,
   orderName: string,
 ): Promise<(string | null)[] | null> {
+  // ink holds no read_products and never will (shopify.app.ink.toml): asking
+  // would be a refusal on every order, logged as a warning forever. The
+  // fail-open answer is the same — no product link — without the doomed call.
+  if (appFlavor() === "ink") {
+    console.log(
+      `[orders/create] product URLs not asked for ${orderName} — ink holds no read_products; enroll continues without them`,
+    );
+    return null;
+  }
   try {
     const res = await admin.graphql(PRODUCT_URLS_QUERY, {
       variables: { id: orderGid },
@@ -193,6 +203,47 @@ export const PRODUCT_URLS_QUERY = `
     }
   }
 `;
+
+// THE SAME ENROLL-CRITICAL QUERY, FOR INK — which holds ten scopes, not
+// twenty (shopify.app.ink.toml). `customer { … }` is a Customer object and a
+// Customer object needs `read_customers`; ink has none, and Shopify fails the
+// WHOLE query over one unauthorized selection (that is how #1019 died). So
+// under ink the buyer's email and phone are read off the Order itself —
+// `Order.email` / `Order.phone` need only read_orders — and the recipient's
+// name off the shipping address, which was already the first choice above.
+// Nothing else differs; the Ritualist's string above is untouched and a test
+// pins it byte-for-byte, and pins that this one selects nothing outside
+// ink's list.
+export const ORDER_DETAIL_QUERY_INK = `
+  query AutoEnrollOrder($id: ID!) {
+    order(id: $id) {
+      id
+      name
+      email
+      phone
+      shippingAddress { name address1 address2 city province zip country }
+      totalPriceSet { shopMoney { amount currencyCode } }
+      lineItems(first: 20) {
+        edges {
+          node {
+            title
+            quantity
+            sku
+            originalUnitPriceSet { shopMoney { amount } }
+            image { url }
+          }
+        }
+      }
+      metafield(namespace: "ink", key: "proof_reference") { value }
+      fulfillments { trackingInfo { company number } }
+    }
+  }
+`;
+
+/** The enroll-critical query this flavor may send. */
+export function orderDetailQueryFor(flavor: AppFlavor): string {
+  return flavor === "ink" ? ORDER_DETAIL_QUERY_INK : ORDER_DETAIL_QUERY;
+}
 
 /**
  * Check if order has INK Verified Delivery shipping method selected.
@@ -367,7 +418,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           `[orders/create] No ink_api_key for ${shop} — auto-enroll skipped for ${orderName}`
         );
       } else {
-        const odRes = await admin.graphql(ORDER_DETAIL_QUERY, {
+        const odRes = await admin.graphql(orderDetailQueryFor(appFlavor()), {
           variables: { id: orderGid },
         });
         const odJson = await odRes.json();
@@ -484,7 +535,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               numericOrderId,
               inkToken,
               order.name || numericOrderId,
-              order.customer?.email || "",
+              // ink's query carries the email on the Order (no Customer
+              // object); the Ritualist's never selects `email`, so its
+              // answer is exactly what it was.
+              order.customer?.email || order.email || "",
               shipping_address,
               product_details,
               undefined, // warehouse_location — none at order time
@@ -493,7 +547,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               undefined, // photo_hashes
               carrier_name,
               tracking_number,
-              finalPhone || order.customer?.phone || null,
+              finalPhone || order.customer?.phone || order.phone || null,
               // The buyer's own order-status page on the merchant's site.
               // Shopify has always sent it in this body; we never read it.
               { orderStatusUrl: data?.order_status_url || null, shopDomain: shop || null }
@@ -518,7 +572,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 console.warn(`[orders/create] Cannot re-provision ${shop} without a real Shopify contact email`);
                 throw e;
               }
-              const fresh = await createMerchant(shop, shopIdentity?.name || shop, ownerEmail);
+              const fresh = await createMerchant(
+                shop,
+                shopIdentity?.name || shop,
+                ownerEmail,
+                // The re-provision names the plan the way the install did.
+                appFlavor() === "ink" ? { plan: "ink" } : undefined,
+              );
               const freshKey = fresh?.api_key;
               if (!freshKey) throw e;
               const snap = await firestore

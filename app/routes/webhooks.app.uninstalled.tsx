@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
+import { SESSION_COLLECTION } from "../firestore-session-storage.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, session, topic } = await authenticate.webhook(request);
@@ -11,7 +12,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // If this webhook already ran, the session may have been deleted previously.
   if (session) {
     const snapshot = await firestore
-      .collection("shopify_sessions")
+      .collection(SESSION_COLLECTION)
       .where("shop", "==", shop)
       .get();
 

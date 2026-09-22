@@ -22,6 +22,7 @@ import { EmailService } from "./email.server";
 import { fetchBrandEmailKit, selectEmailCampaign } from "./brand-email.server";
 import { resolveBrandPageUrl } from "./brand-page-url.server";
 import { CUSTOMER_CONSENT_FRAGMENT, mayIncludeMarketing } from "./consent.server";
+import { isInk } from "./app-flavor.server";
 
 const INK_NAMESPACE = "ink";
 const SENT_KEYS = {
@@ -56,6 +57,16 @@ export async function sendStateEmailOnce(args: StateEmailArgs): Promise<void> {
 
   const SENT_KEY = SENT_KEYS[state];
   const label = state === "shipped" ? "shipped email" : "arrival email";
+
+  // ink's embed has no voice of its own in the buyer's inbox — the link it
+  // writes into Shopify's shipping email is the whole of it. The handlers
+  // already skip this call under ink; this is the invariant, kept here so a
+  // new caller cannot forget it. (The idempotency read below also selects
+  // `customer { … }`, which ink's scopes could not answer anyway.)
+  if (isInk()) {
+    console.log(`📧 SKIP ${label} — ink sends no buyer email of its own.`);
+    return;
+  }
 
   if (process.env.SEND_VERIFY_EMAIL !== "true") {
     console.log(`📧 SKIP ${label} (SEND_VERIFY_EMAIL is not 'true').`);

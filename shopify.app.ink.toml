@@ -1,0 +1,94 @@
+# ink — the free app. The SAME codebase as The Ritualist (shopify.app.toml),
+# a SECOND app record, and one env var apart: the Cloud Run service `ink-app`
+# runs this image with APP_FLAVOR=ink and this record's key and secret
+# (app/services/app-flavor.server.ts is the one reader).
+#
+# This is the dormant "INK — Dynamic Receipts" record (shopify.app.smusic.toml,
+# client 45cc…), renamed ink. THE NAME MUST MATCH THE PARTNER DASHBOARD — Sam
+# renames the record by hand; this file overwrites the Dashboard name on the
+# next `shopify app deploy` (his act, never a session's). Never regenerate
+# this record's credentials.
+#
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "45cc130ef59cbeaf9133acea201981ed"
+name = "ink"
+# go.in.ink = a new *.in.ink label the Worker fronts the same way app.in.ink
+# fronts the Ritualist (the label is the Worker session's to rename; this
+# file and the Cloud Run env SHOPIFY_APP_URL move together). The App Store
+# checker rejects app URLs whose DOMAIN contains "shopify", which the
+# ink-app-…run.app host does.
+application_url = "https://go.in.ink"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2025-10"
+
+# Webhook URIs are ABSOLUTE to the ink-app Cloud Run service on purpose, the
+# same shape as the live record: with application_url on the Worker, relative
+# URIs would add a proxy hop to the enrol/delivery heart. The path spellings
+# are the flat-route handler files (webhooks.orders_create.ts → underscore).
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "https://ink-app-250065525755.us-central1.run.app/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "https://ink-app-250065525755.us-central1.run.app/webhooks/app/scopes_update"
+
+  [[webhooks.subscriptions]]
+  topics = [ "orders/create" ]
+  uri = "https://ink-app-250065525755.us-central1.run.app/webhooks/orders_create"
+
+  [[webhooks.subscriptions]]
+  topics = [ "orders/fulfilled" ]
+  uri = "https://ink-app-250065525755.us-central1.run.app/webhooks/orders_fulfilled"
+
+  # GDPR compliance topics — MANDATORY for App Store review (auto-fail if
+  # missing). The handlers are the shared ones; HMAC is verified by
+  # authenticate.webhook() against THIS record's secret.
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request" ]
+  uri = "https://ink-app-250065525755.us-central1.run.app/webhooks/customers/data_request"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/redact" ]
+  uri = "https://ink-app-250065525755.us-central1.run.app/webhooks/customers/redact"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "shop/redact" ]
+  uri = "https://ink-app-250065525755.us-central1.run.app/webhooks/shop/redact"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+#
+# THE MINIMAL LIST — orders, fulfillments, and the three fulfillment-order
+# pairs (they partition by WHO fulfils and `fulfillmentTrackingInfoUpdate`
+# accepts any one of them; holding only `assigned` is why the Ritualist's
+# rewrite once touched nothing — see shopify.app.toml). Nothing else:
+#
+#   · no read_products   — the product link on the buyer's page is asked for
+#                          on its own wire and fails open (PRODUCT_URLS_QUERY);
+#                          under ink it is simply never asked for.
+#   · no read_customers  — `Order.customer` is a Customer object and needs it;
+#                          ink reads the order's own `email`/`phone` instead
+#                          (webhooks.orders_create.ts, ORDER_DETAIL_QUERY_INK).
+#   · no files / metaobjects / online_store_pages / themes / shipping — the
+#                          Ritualist's page, media, order door and carrier
+#                          service. None of those surfaces exist under ink.
+#
+# app/services/ink-scopes.server.ts holds the same list for the running app;
+# a test pins the two equal. Changing scopes re-prompts every installed store.
+scopes = "read_orders,write_orders,read_fulfillments,write_fulfillments,read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://go.in.ink/auth/callback",
+  "https://go.in.ink/auth/shopify/callback"
+]

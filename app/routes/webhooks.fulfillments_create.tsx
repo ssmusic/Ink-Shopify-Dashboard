@@ -3,6 +3,28 @@ import { authenticate } from "../shopify.server";
 import { NFSService } from "../services/nfs.server";
 import firestore from "../firestore.server";
 import { findMerchantDoc } from "../services/merchant-doc.server";
+import { appFlavor } from "../services/app-flavor.server";
+
+// Which proof? The order's ink.proof_reference metafield is the link. The
+// Ritualist also reads the buyer's name and email here for the shipped email.
+const ORDER_QUERY = `query GetOrderMetafield($id: ID!) {
+        order(id: $id) {
+          name
+          customer { email firstName }
+          metafield(namespace: "ink", key: "proof_reference") { value }
+        }
+      }`;
+// INK'S COPY: `customer { … }` is a Customer object and needs read_customers,
+// which ink does not hold — and Shopify fails the whole query over one such
+// selection, which would have made every fulfillment "not an enrolled
+// order" and the tracking rewrite a no-op. ink sends no shipped email, so it
+// has no use for the name or the address anyway.
+export const ORDER_QUERY_INK = `query GetOrderMetafield($id: ID!) {
+        order(id: $id) {
+          name
+          metafield(namespace: "ink", key: "proof_reference") { value }
+        }
+      }`;
 
 // fulfillments/create — THE TRACKING HOP (Phase-1 rehearsal, 2026-07-02).
 //
@@ -51,14 +73,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     // Which proof? The order's ink.proof_reference metafield is the link.
+    const ink = appFlavor() === "ink";
     const response = await admin.graphql(
-      `query GetOrderMetafield($id: ID!) {
-        order(id: $id) {
-          name
-          customer { email firstName }
-          metafield(namespace: "ink", key: "proof_reference") { value }
-        }
-      }`,
+      ink ? ORDER_QUERY_INK : ORDER_QUERY,
       { variables: { id: `gid://shopify/Order/${orderId}` } },
     );
     const orderJson = await response.json();
@@ -108,7 +125,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // The Order status page — where the email's primary button lands —
       // carries the brand's door once this shop metafield exists. One guard
       // read per event, a real write once per merchant ever, and never fatal
-      // (order-door-metafield.server.ts).
+      // (order-door-metafield.server.ts). The door is the Ritualist's
+      // order-page block, which the ink record does not carry: under ink the
+      // rewrite above is the whole of the link, and no door is written.
+      if (!ink) {
       const { assertOrderDoorMetafield } = await import("../services/order-door-metafield.server");
       await assertOrderDoorMetafield({
         admin,
@@ -118,6 +138,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         proofId,
         label: `[${topic}] order-door`,
       });
+      }
     } catch (e: any) {
       console.error(`❌ branded tracking link failed (non-fatal):`, e?.message);
     }
@@ -125,7 +146,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // The SHIPPED email belongs to this moment — tracking just landed on
     // the proof, so the page is live as a tracker. "On its way — track it",
     // CTA = the customer's own page. Gated + deduped inside (one per order);
-    // never blocks the 200.
+    // never blocks the 200. ink sends no buyer email of its own: the link
+    // it wrote above is its whole voice.
+    if (!ink) {
     try {
       const { sendStateEmailOnce } = await import("../services/state-email.server");
       await sendStateEmailOnce({
@@ -141,6 +164,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
     } catch (e: any) {
       console.error(`❌ shipped email failed (non-fatal):`, e?.message);
+    }
     }
   } catch (error: any) {
     console.error(`❌ [${topic}] Tracking hop failed (webhook still 200s):`, error?.message ?? error);

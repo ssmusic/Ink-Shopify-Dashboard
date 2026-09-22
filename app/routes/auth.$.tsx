@@ -2,6 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "re
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import firestore from "../firestore.server";
+import { SESSION_COLLECTION } from "../firestore-session-storage.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -14,7 +15,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (session && payload?.current) {
     const current = payload.current as string[];
-    await firestore.collection("shopify_sessions").doc(session.id).update({
+    await firestore.collection(SESSION_COLLECTION).doc(session.id).update({
       scope: current.toString(),
     });
   }

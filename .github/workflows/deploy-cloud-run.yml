@@ -27,6 +27,23 @@
 # --clear-env-vars PRESERVES the service's existing env vars and settings, and
 # routes 100% traffic to the new revision. Do not add env flags here unless you
 # intend to change them.
+#
+# ── THE SECOND SERVICE: ink-app (2026-09-22) ────────────────────────────────
+# ink is the same code as a second Shopify app record (shopify.app.ink.toml)
+# and runs as its own Cloud Run service, `ink-app`, from this same source with
+# ONE env var of its own: APP_FLAVOR=ink (app/services/app-flavor.server.ts).
+# The `deploy-ink` job below ships it on the same merges. Two rules:
+#   · `--update-env-vars` and NEVER `--set-env-vars`: the latter clears every
+#     other variable on the service first (the record's key and secret among
+#     them). --update keeps them and sets the one named.
+#   · The service is created ONCE, by hand, with its env — a fresh service
+#     deployed without SHOPIFY_* cannot start (shopifyApp() refuses an empty
+#     appUrl at import) and would leave a failed revision. Until it exists
+#     the job skips with a notice and main stays green. The one-time creation
+#     is in the PR that added this (values are Sam's, never in this repo):
+#       gcloud run deploy ink-app --source . --project inink-c76d3 #         --region us-central1 --allow-unauthenticated #         --update-env-vars APP_FLAVOR=ink,SHOPIFY_API_KEY=…,SHOPIFY_API_SECRET=…,SHOPIFY_APP_URL=https://go.in.ink,…
+# The service is inert until the Partner Dashboard points the ink record's
+# URLs at it — Sam's click, not a deploy's.
 # ──────────────────────────────────────────────────────────────────────────
 
 name: Deploy shopify-app · Cloud Run
@@ -73,5 +90,52 @@ jobs:
           echo "shopify-app -> HTTP $code"
           if [ -z "$code" ] || [ "$code" = "000" ] || [ "$code" -ge 500 ]; then
             echo "SMOKE FAILED — shopify-app is unhealthy after deploy"; exit 1
+          fi
+          echo "smoke ok"
+
+  # ink-app — the same source, APP_FLAVOR=ink, its own service. Independent of
+  # the Ritualist's job: neither waits on nor fails the other.
+  deploy-ink:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Is ink-app created yet? (Sam's one-time act — see the header)
+        id: exists
+        run: |
+          if gcloud run services describe ink-app --project inink-c76d3 --region us-central1 --format='value(metadata.name)' >/dev/null 2>&1; then
+            echo "created=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            echo "ink-app does not exist yet — skipping. Create it once with its env (header of this workflow), and every later merge deploys it."
+          fi
+
+      - name: Deploy ink-app to Cloud Run (APP_FLAVOR=ink; every other env var preserved)
+        if: steps.exists.outputs.created == 'true'
+        run: |
+          gcloud run deploy ink-app \
+            --source . \
+            --project inink-c76d3 \
+            --region us-central1 \
+            --update-env-vars APP_FLAVOR=ink \
+            --quiet
+
+      - name: Smoke check ink-app (fail loud if the service is unhealthy)
+        if: steps.exists.outputs.created == 'true'
+        run: |
+          set -euo pipefail
+          url="https://ink-app-250065525755.us-central1.run.app/"
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$url")
+          echo "ink-app -> HTTP $code"
+          if [ -z "$code" ] || [ "$code" = "000" ] || [ "$code" -ge 500 ]; then
+            echo "SMOKE FAILED — ink-app is unhealthy after deploy"; exit 1
           fi
           echo "smoke ok"

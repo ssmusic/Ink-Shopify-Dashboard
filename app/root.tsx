@@ -1,4 +1,4 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, useNavigation } from "react-router";
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, useNavigation, useRouteLoaderData } from "react-router";
 import type { LinksFunction } from "react-router";
 import premiumStyles from "./styles/premium.css?url";
 import globalStyles from "./styles/globals.css?url";
@@ -10,6 +10,11 @@ export const links: LinksFunction = () => [
 
 // Shown while App Bridge / the loader is still initializing
 function GlobalLoadingScreen() {
+  // The wordmark by app: the layout's loader says which flavor this process
+  // is (app.tsx). Outside /app, or before it has loaded, it is the Ritualist's
+  // — exactly what every load showed before ink existed.
+  const appData = useRouteLoaderData("routes/app") as { flavor?: string } | undefined;
+  const wordmark = appData?.flavor === "ink" ? "ink." : "the ritualist.";
   return (
     <div
       id="ink-global-loader"
@@ -37,7 +42,7 @@ function GlobalLoadingScreen() {
         boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
       }}>
         <span style={{ color: "#fff", fontSize: 22, fontWeight: 700, fontFamily: "system-ui, sans-serif" }}>
-          the ritualist.
+          {wordmark}
         </span>
       </div>
 
