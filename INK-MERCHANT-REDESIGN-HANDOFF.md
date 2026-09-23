@@ -2,6 +2,18 @@
 
 **Status: the current design is not approved.** The local preview at `http://127.0.0.1:4173/app/ink` and PR [#133](https://github.com/ssmusic/Ink-Shopify-Dashboard/pull/133) are implementation work, not the design to ship. The preview uses sample data. Do not use it for Shopify listing screenshots or treat it as proof of a live install.
 
+## Honesty pass for Claude
+
+Sam asked for an honesty check before handoff, then emphasized that the Ritualist implementation already works. Continue from it; do not build a second flash, record service or verification system.
+
+- Rechecked backend `8f21214` (#129): the merchant sees the whole audit before purchase. `locked:false, purchased:false` sells the hand-over. This app now preserves that distinction: inspection is available before purchase; all PDF/CSV/JSON actions require the existing merchant export entitlement. Tests cover denial, access, and mismatched proof IDs.
+- The merchant opens and delivery routes already exist. The prior missing-door findings were stale. `/retrieve/:proofId` is now tenant-checked and serves a public key; do not ask for a new key service before evaluating that existing source and Ritualist's verifier.
+- The flash already automatically forwards. The exact saved custom URL is a separate detail: the existing resolver uses order status/carrier rather than `tracking_url`. Keep the accepted flash and reconcile only that difference if needed.
+- Tightened claims: verified **by ink**, no inference that an asserted event is unsigned, location-sharing rate no longer called first-open coverage, separate capped-open notice, time zones on record timestamps, CSV capped-history and signed-byte availability labels. Records now retains its own map address from the merchant opens door.
+- Still unfinished in this app: independent signature verification; PDF fidelity for non-Latin characters (renderer substitutes `?`); Ritualist map/QR export parity; real Shopify purchase/download/reinstall and privacy fulfillment walks. No deployment or Shopify acceptance is claimed.
+
+All required checks passed: typecheck, build, 48 test files / 462 tests. The live preview is synthetic. The existing PR has conflicts against main, including concurrent map work; leave reconciliation to Claude against the frozen final head. Do not use the older checkout findings as an instruction to redo fixes already present.
+
 ## Latest addition: order search, sorting and compact phone rows
 
 Orders now has search by order number, name or email and sorting by date, order number or total in both directions. Production sends these options to Shopify over the available 60-day order window, preserving them while paging. The preview filters synthetic fixtures only. Search/sort changes reset pagination; empty matches are distinct from failed reads.
@@ -38,19 +50,19 @@ The record must make a factual case through the data. Avoid sales language and a
 - Do not judge a customer or a delivery from distance. Use neutral wording such as “Opened 719 m from the delivery address” or “Location not shared.” Do not say “outside the 300 m range.”
 - Replace awkward headings and prose. In particular, do not use “The order, step by step,” “Getting there,” “While they waited,” “What the carrier said,” “Orders through the door,” or “Did it arrive when promised?” Do not invent a promised date. Use sentence case, no all-caps section labels, label arrows or dashes, possessive brand phrasing, or model-sounding copy.
 - The paid record should offer the depth of Ritualist's Advanced view **inside Shopify in Polaris**: six evidence items, a clear account of verification, every open beside the map, event history, event IDs/hashes/signatures, and PDF, CSV, and JSON downloads. Make the pre-purchase view useful and the paid addition unmistakable. Do not invent a plan throttle just because Ritualist has its own plan logic.
-- Explain the workflow plainly: a **one-time Shopify charge** unlocks the record; the merchant downloads files in the app; **no email is sent**; records bought through this ink flow appear in **Records** for repeat downloads while app and backend access remain available.
+- Explain the workflow plainly: a **one-time Shopify charge** unlocks the downloadable hand-over; the full merchant record is viewable before purchase; the merchant downloads files in the app; **no email is sent**; records bought through this ink flow appear in **Records** for repeat downloads while app and backend access remain available.
 
 ## Latest direction from Sam
 
 Sam subsequently supplied the Ritualist screenshots again and said **“must look something like this”** and **“we arent starting from scratch.”** Preserve the existing order panel and use the reference's report structure. Do not replace it with a new navigation system, a separate product concept, or a new dashboard.
 
-The current iteration keeps the lifecycle and one Advanced disclosure, open when the order expands. Within Advanced: purchase/download actions first, six compact evidence rows, browser checks for purchased records, one open list with the blue diagram beside it, full signed-event blocks, and delivery dates. Each open selects its location in the adjacent diagram; missing location clears the previous point. Distance is ordinary row data. Events expose IDs, hashes and signatures without another disclosure. Records history uses the same inspection.
+The current iteration keeps the lifecycle and one Advanced disclosure, open when the order expands. Within Advanced: purchase/download actions first, six compact evidence rows, browser checks for merchant records, one open list with the blue diagram beside it, full signed-event blocks, and delivery dates. Each open selects its location in the adjacent diagram; missing location clears the previous point. Distance is ordinary row data. Events expose IDs, hashes and signatures without another disclosure. Records history uses the same inspection.
 
 Sam then requested background shading for legibility. Grey Polaris sections now distinguish the lifecycle, Advanced header, verification and signed-event group; evidence and opens remain white, with white event details on the grey group.
 
 Sam then requested Dashboard first, clearer Orders cells, a finished Records library and more real KPIs. Navigation is reordered. Order headers are bordered and shaded, with black order-number buttons and prominent recipient names/emails. “Get the record” no longer carries a price; Shopify approval still shows the amount before purchase. Records has compact PDF/CSV/JSON rows and a separate Needs attention group, with no new purchase offer. The preview has four available and one pending record.
 
-Dashboard adds blue Polaris Viz rings for open rate, first-open location coverage and recorded delivery rate. Each uses its own source denominator; a missing rate stays unavailable. Store-wide repeat visits, total opens, post-delivery opens, buyer segments and time-series counts still need a merchant aggregate door. Do not copy Ritualist’s admin list or call a first post-delivery open a repeat visit.
+Dashboard adds blue Polaris Viz rings for open rate, recorded device-location coverage and recorded delivery rate. Each uses its own source denominator; a missing rate stays unavailable. Store-wide repeat visits, total opens, post-delivery opens, buyer segments and time-series counts still need a merchant aggregate door. Do not copy Ritualist’s admin list or call a first post-delivery open a repeat visit.
 
 This iteration is not Sam-approved. The local preview is still sample data. The earlier proposal for a dedicated record view is superseded by Sam's correction above.
 
@@ -58,15 +70,17 @@ This iteration is not Sam-approved. The local preview is still sample data. The 
 
 Sam approved automatic original-destination preservation and removal of the choice from Settings. The selector and save action are removed; stale forms authenticate and return 405. Ink tracking transport now ignores its own URL echoes, protecting the stored external URL while retaining carrier/status updates. The Ritualist transport body is unchanged.
 
-**The final automatic redirect is still incomplete.** The backend/redirect sources remain read-only under the original instructions. They must resolve the saved destination per fulfillment/tracking number, handle old overwritten links and out-of-order events, and preserve Ritualist behavior. Settings does not claim automatic forwarding is active. The concrete remaining change and acceptance cases are in `docs/ink-original-destination.md`. No deployment.
+**The flash already forwards automatically.** Current Ritualist `src/lib/flash-destination.ts` and `src/lib/white-flash/white-flash.ts` provide that behavior. Do not build a second redirect. Exact original custom-URL preservation is a separate potential extension to reconcile with Claude; the current resolver does not read `tracking_url`. Details and acceptance cases are in `docs/ink-original-destination.md`. No backend/flash edits or deployment.
 
 ## Data and honesty boundaries
 
-The supplied `ink-backend` checkout does **not** contain the proposed merchant `proofs/:id/opens` or `merchant-delivery` doors. Before purchase, the app can show a first-open summary from existing merchant reads; it cannot promise a full per-open map from that checkout. After access unlocks, the merchant audit's signed events can reconstruct person opens when their count matches the reported total; otherwise say the history is unavailable. Never fill a gap with a synthetic position or a zero.
+The current backend has merchant `proofs/:id/opens` and `merchant-delivery` doors. Its full audit is viewable before purchase; the purchase gates receipt/export hand-over. The app uses merchant-scoped reads and shows unavailable/capped history explicitly. Never fill a gap with a synthetic position or zero.
 
-The current paid inspector checks supplied event hashes, chain links, sequence, and the reported head in the browser. It **does not verify Ed25519 signatures**: the allowed merchant-scoped key door is missing. Signatures can be displayed as ink-supplied data, with that limit stated plainly. The PDF is a readable rendering of the merchant audit, not an independently verified report; the JSON contains the signed export and exact event bytes. The current PDF also does not reproduce the Ritualist map/QR presentation. Treat full parity as unfinished rather than claiming “all of Advanced” is complete.
+The inspector checks supplied event hashes, links, sequence and reported head in the browser. It does not yet verify Ed25519 signatures. The current merchant `/retrieve/:proofId` returns `public_key` and `key_id`, so reuse that allowed source and the existing Ritualist verifier where suitable, including historical key handling. The earlier claim that no merchant key source exists was wrong.
 
-The record and exports can contain protected customer data and precise location. Keep reads shop-scoped and purchase-gated, avoid raw data in logs, and do not make public proof/key requests to fill the design. The PR audit lists the backend privacy, deletion, protected-data approval, policy, dependency, and fresh-store billing/install work still needed before Shopify submission. Passing local tests is not Shopify acceptance.
+The PDF is a rendering of the merchant audit, not an independently verified report. It lacks the Ritualist map/QR presentation and the inherited renderer replaces unsupported non-Latin characters with `?`. JSON retains the signed export; CSV/JSON preserve their text. Full export parity is unfinished. Do not describe this as all of Ritualist Advanced completed.
+
+The record and exports can contain protected customer data and precise location. Reads stay shop-scoped; file downloads use the export entitlement. The audit distinguishes code defects observed in backend `8f21214` from unresolved deployment/approval checks. Passing local tests is not Shopify acceptance.
 
 ## Reference material and implementation rules
 
