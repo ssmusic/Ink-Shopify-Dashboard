@@ -383,16 +383,19 @@ export const loader = async ({
                     // Best-effort — an order page never fails on it.
                     const { publicVerifyUrl, verifyQrSrc } = await import("../services/verify-url.server");
                     const { getProofAudit } = await import("../services/ink-api.server");
+                    const { handoverLocked } = await import("../lib/record-handover");
                     let recordPublished = false;
                     let recordLocked = false;
                     let recordPriced = false;
                     try {
                         // merchantApiKey is non-null here: getProof returned a proof.
                         const audit = await getProofAudit(merchantApiKey as string, proofId);
-                        // A priced record that is not bought answers its words
-                        // and no chain (ink-backend #124): it is published —
-                        // and locked.
-                        recordLocked = !!audit && audit.record?.locked === true;
+                        // A priced record whose hand-over is not bought: the
+                        // merchant door answers it whole (ink-backend #129) —
+                        // or, before that, its words and no chain (#124). Either
+                        // way it is published, and its hand-over (the PDF, the
+                        // export, the link's proof) is locked.
+                        recordLocked = !!audit && handoverLocked(audit.record);
                         recordPriced = !!audit && !!audit.record;
                         recordPublished = recordLocked || (!!audit && Array.isArray(audit.chain) && audit.chain.length > 0);
                     } catch (auditErr: any) {

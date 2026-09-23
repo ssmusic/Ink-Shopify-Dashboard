@@ -15,10 +15,11 @@ export type VerifiableRecordCardProps = {
   recordExportHref: string;
   /** Whether ink has published a chained record for this order yet. */
   published: boolean;
-  /** THE WORDS ARE FREE, THE PROOF IS PAID (ink-backend #124): the record is
-   *  priced and not bought. The public link shows its words only, so the
-   *  sentence promising a re-check is not said, and the PDF and the export
-   *  (which answer 402) give way to the record's door. */
+  /** THE $29 BUYS THE HAND-OVER (ink-backend #124, #129): the record is
+   *  priced and its hand-over not bought (lib/record-handover.ts). The public
+   *  link shows its words only, so the sentence promising a re-check is not
+   *  said, and the PDF and the export (which answer 402) give way to the
+   *  record's door. */
   locked?: boolean;
   /** The record's door (components/RecordDoor.tsx), drawn under the link. */
   children?: ReactNode;

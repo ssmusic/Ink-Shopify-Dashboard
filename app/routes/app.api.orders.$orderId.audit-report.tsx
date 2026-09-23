@@ -4,6 +4,7 @@ import { getProofAudit } from "../services/ink-api.server";
 import { findMerchantDoc } from "../services/merchant-doc.server";
 import { buildAuditReportPdf } from "../services/audit-report.server";
 import { publicVerifyUrl } from "../services/verify-url.server";
+import { handoverLocked } from "../lib/record-handover";
 
 // GET /app/api/orders/:orderId/audit-report?proof=proof_… — the merchant's
 // printed audit report, as a PDF. The proof id comes from the page; the
@@ -19,9 +20,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   if (!apiKey) return new Response("This shop has no ink key", { status: 409 });
   const packet = await getProofAudit(apiKey, proofId);
   if (!packet) return new Response("Not found", { status: 404 });
-  // A priced record not yet bought answers its words only (ink-backend #124):
-  // the printed report is the proof, and the proof is behind the purchase.
-  if (packet.record?.locked === true) return new Response("The record is not bought yet", { status: 402 });
+  // The printed report is the HAND-OVER, and the hand-over is what the price
+  // buys (Sam, 2026-09-23; ink-backend #129): the merchant door answers the
+  // whole record of a priced order, bought or not, so the packet having a
+  // chain says nothing about the purchase — its `record` block does.
+  if (handoverLocked(packet.record)) return new Response("The record is not bought yet", { status: 402 });
   const tz = (await shopTimezone(request)) ?? "UTC";
   const pdf = buildAuditReportPdf(packet, { verifyUrl: publicVerifyUrl(proofId), tz });
   return new Response(Buffer.from(pdf), {

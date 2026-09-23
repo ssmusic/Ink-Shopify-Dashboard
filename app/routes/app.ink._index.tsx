@@ -76,11 +76,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { rows: recentOrders, readFailed: ordersUnread } = await readRecentOrders(admin);
   const proofIds = recentOrders.map((o) => o.proofId);
   // THE RECORD'S DOOR (services/record-door.server.ts): a price on the row
-  // only when the merchant is priced AND the kill switch is on. THE RECORD'S
-  // WORDS (services/ink-record.server.ts): free, every row, read side by side.
+  // only when the merchant is priced AND the kill switch is on. THE RECORD
+  // (services/ink-record.server.ts): the WHOLE record, every row, read side by
+  // side with the shop's own key — the merchant sees all of it (Sam,
+  // 2026-09-23); the price buys the hand-over.
   const [doors, records, timelines] = await Promise.all([
     readRecordDoors(admin, view, proofIds),
-    readRecords(proofIds),
+    readRecords(proofIds, fetch, apiKey),
     readTimelines(apiKey, proofIds),
   ]);
   const rows = recentOrders.map((o) => ({
