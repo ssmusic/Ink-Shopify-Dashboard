@@ -1,12 +1,18 @@
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData } from "react-router";
+import { Form, redirect, useActionData, useLoaderData } from "react-router";
 
 import { login } from "../../shopify.server";
+import { INK_HOME_URL, isInk } from "../../services/app-flavor.server";
 import { loginErrorMessage } from "./error.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // Under ink this page never asks for a shop domain (App Store requirement
+  // 2.3.1: install only from Shopify's own surfaces). With `?shop=` the
+  // library starts Shopify's install/OAuth as before; without one, the
+  // visitor goes to ink's own page, whose button leads to the listing.
+  if (isInk() && !new URL(request.url).searchParams.get("shop")) throw redirect(INK_HOME_URL);
   const errors = loginErrorMessage(await login(request));
 
   return { errors };

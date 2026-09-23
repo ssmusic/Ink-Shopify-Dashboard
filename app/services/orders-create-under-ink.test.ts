@@ -144,17 +144,33 @@ describe("orders/create under APP_FLAVOR=ink", () => {
     expect(orderQuery).toBeDefined();
     expect(orderQuery).not.toMatch(/\bcustomer\s*\{/);
     expect(orderQuery).not.toMatch(/\bproduct\s*\{/);
-    // The buyer's contact comes off the Order itself.
+    // The buyer's email comes off the Order itself; ink reads no phone at all
+    // (it sends no message and shows no number — the minimum-data rule).
     expect(orderQuery).toMatch(/^\s*email\s*$/m);
-    expect(orderQuery).toMatch(/^\s*phone\s*$/m);
+    expect(orderQuery).not.toMatch(/^\s*phone\s*$/m);
 
     const payload = enrollPayload();
     expect(payload.order_details.customer_email).toBe("dana@example.test");
     expect(payload.order_details.customer_name).toBe("Dana Ruiz");
     expect(payload.order_details.shipping_address.city).toBe("Austin");
     expect(payload.order_details.order_status_url).toBe(webhookBody.order_status_url);
-    // The phone: the webhook body's shipping phone wins, as it always has.
-    expect(payload.order_details.customer_phone).toBe("+15550001111");
+    // No phone reaches ink's record — not even the webhook body's.
+    expect(payload.order_details.customer_phone || null).toBeNull();
+    expect(JSON.stringify(payload)).not.toMatch(/555000(1111|2222)/);
+  });
+
+  it("writes no ink.customer_phone metafield — the buyer's phone is not ink's to copy", async () => {
+    const { INK_SCOPES } = await import("./ink-scopes.server");
+    const admin = fakeAdmin(INK_SCOPES);
+
+    await run(admin);
+
+    const calls = admin.graphql.mock.calls as unknown as [string, { variables?: { metafields?: { key: string }[] } }?][];
+    const call = calls.find(([q]) => /mutation SetInkMetafields\b/.test(String(q)));
+    expect(call).toBeDefined();
+    const keys = (call![1]?.variables?.metafields ?? []).map((m) => m.key);
+    expect(keys).toContain("proof_reference");
+    expect(keys).not.toContain("customer_phone");
   });
 
   it("never asks for the product URLs — the enrichment fails open without a doomed call, and the line carries no product_url", async () => {
