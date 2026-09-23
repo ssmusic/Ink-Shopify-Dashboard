@@ -1,4 +1,4 @@
-// INK'S PILL NAV — Orders · Insights · Settings, at the top of every ink screen.
+// INK'S PILL NAV — Orders · Dashboard · Settings, at the top of every ink screen.
 //
 // Sam, 2026-09-23: "yeah we need a pill nav in the app". The look is the
 // dashboard's own segmented pills (the-ritualist src/components/ViewSwitcher.tsx:
@@ -16,7 +16,8 @@ export type InkSection = "orders" | "insights" | "settings";
 
 const PILLS: { id: InkSection; label: string; to: string }[] = [
   { id: "orders", label: "Orders", to: "/app/ink" },
-  { id: "insights", label: "Insights", to: "/app/ink?view=insights" },
+  // Sam, 2026-09-23: "which prob should be called a dashboard".
+  { id: "insights", label: "Dashboard", to: "/app/ink?view=insights" },
   { id: "settings", label: "Settings", to: "/app/ink/settings" },
 ];
 

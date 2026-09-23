@@ -8,12 +8,17 @@
 // The console's rules, kept where the merchant's own door can carry them:
 //   · the console marks a step only by its SIGNED event (the audit packet's
 //     chain) — that chain sits on the purchase-locked proof layer, so here a
-//     step is done by the proof's own field (enrolled_at, delivered_at,
-//     first_tap_at, a return's start), and the record's words above say what
-//     is signed; Shipped and In transit come from the carrier's feed and say
-//     so; Refund cleared has no event yet;
-//   · 100 m is "within", 300 m is "near", beyond is "outside" — ink's default
-//     rings; the backend's word is kept for not shared / unmeasured / imprecise;
+//     step is done by the proof's own field (delivered_at, first_tap_at), and
+//     the record's words above say what is signed; Shipped and In transit come
+//     from the carrier's feed and say so;
+//   · the rail holds only what ink records for every order: no "Enrolled"
+//     (Sam, 2026-09-23: "enrolled and verified and all that bs is from when
+//     this was nfc - remove"), and no return or refund step — ink has neither,
+//     so those steps could only ever say "not yet";
+//   · an open is said by its distance, never judged against a range (Sam,
+//     2026-09-23: "we dont judge" · "we dont have a default range"); the
+//     backend's word is kept only where there is no distance — not shared,
+//     no position for the address, too wide to measure;
 //   · the delivery window runs from the delivered scan to the window's end,
 //     and the first open sits on it where it fell.
 
@@ -46,6 +51,7 @@ const earliest = (events: JourneyEvent[], stages: string[]): string | null => {
 };
 
 // PLACEHOLDER labels and notes — the console's own words where it has them.
+// Shipped · In transit · Delivered · Opened (see the rules above).
 export function lifecycle(p: LifecycleFields): LifecycleStep[] {
   const journey = p.carrier_journey?.events ?? [];
   const shipped = earliest(journey, ["shipped", "transit", "in_transit", "out", "out_for_delivery", "delivered"]);
@@ -58,46 +64,43 @@ export function lifecycle(p: LifecycleFields): LifecycleStep[] {
     note,
   });
   return [
-    step("enrolled", "Enrolled", p.enrolled_at),
     step("shipped", "Shipped", shipped, "from the carrier"),
     step("in_transit", "In transit", transit, "from the carrier"),
     step("delivered", "Delivered", p.delivered_at),
     step("opened", "Opened", p.first_tap_at),
-    step("return_started", "Return started", p.return_started_at),
-    { key: "refund_cleared", label: "Refund cleared", state: "not_recorded", at: null, note: "no event for refunds yet" },
   ];
 }
 
-export const PASS_M = 100;
-export const NEAR_M = 300;
+export type OpenResult = "measured" | "shared" | "not_shared" | "unmeasured" | "imprecise";
 
-export type OpenResult = "within" | "near" | "outside" | "not_shared" | "unmeasured" | "imprecise";
+const MEASURED_WORDS = new Set(["pass", "near", "flagged"]);
 
-/** One open's result against the address — by distance when there is one. */
+/** What one open says about the address: a distance when there is one, else
+ *  the backend's word. A measured word without its distance still says a
+ *  location was shared — never that none was. */
 export function openResult(distance_m: number | null | undefined, verdict: string | null | undefined): OpenResult {
   const v = (verdict ?? "").toLowerCase();
   if (v === "not_shared") return "not_shared";
   if (v === "imprecise") return "imprecise";
-  if (distance_m == null || !Number.isFinite(distance_m)) return v === "unmeasured" ? "unmeasured" : "not_shared";
-  const d = Math.round(distance_m);
-  return d <= PASS_M ? "within" : d <= NEAR_M ? "near" : "outside";
+  if (distance_m != null && Number.isFinite(distance_m)) return "measured";
+  if (v === "unmeasured") return "unmeasured";
+  return MEASURED_WORDS.has(v) ? "shared" : "not_shared";
 }
 
 export function kmOrM(m: number): string {
   return m >= 1000 ? `${Math.round(m / 100) / 10} km` : `${Math.round(m)} m`;
 }
 
-/** The sentence the console prints — distance and word, never a coordinate. */
+/** The sentence under the map — the distance, never a coordinate, never a
+ *  judgment of it (Sam, 2026-09-23: "we dont judge"). */
 export function openSentence(distance_m: number | null | undefined, verdict: string | null | undefined): string {
   const r = openResult(distance_m, verdict);
-  // PLACEHOLDER copy — the console's sentences.
+  // PLACEHOLDER copy — the console's sentences, with the range verdict removed.
   if (r === "not_shared") return "The customer's phone did not share a location.";
   if (r === "unmeasured") return "A location was shared, but the delivery address has no position to measure against.";
   if (r === "imprecise") return "A location was shared, but too wide to measure against the address.";
-  const d = kmOrM(distance_m as number);
-  if (r === "within") return `Opened ${d} from the delivery address — within the ${PASS_M} m range.`;
-  if (r === "near") return `Opened ${d} from the delivery address — within the ${NEAR_M} m range.`;
-  return `Opened ${d} from the delivery address — outside the ${NEAR_M} m range.`;
+  if (r === "shared") return "A location was shared.";
+  return `Opened ${kmOrM(distance_m as number)} from the delivery address.`;
 }
 
 export type DeliveryWindow = {

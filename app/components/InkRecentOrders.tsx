@@ -195,9 +195,16 @@ function RecordFooter({ row, returnTo }: { row: InkRecentOrderRow; returnTo: str
   );
 }
 
-function Panel({ row, returnTo, onCollapse }: { row: InkRecentOrderRow; returnTo: string; onCollapse: () => void }) {
+/** The order row's location cell: the open's distance, or what its location
+ *  says — never a badge that judges it (Sam, 2026-09-23: "we dont judge"). */
+function LocationCell({ row }: { row: InkRecentOrderRow }) {
+  if (!row.proofId) return <Text as="span" variant="bodyMd">—</Text>;
+  return <Text as="span" variant="bodyMd">{locationWordOf(row.record) || "—"}</Text>;
+}
+
+function Panel({ row, returnTo, onCollapse, mapsKey }: { row: InkRecentOrderRow; returnTo: string; onCollapse: () => void; mapsKey: string | null }) {
   const footer = <RecordFooter row={row} returnTo={returnTo} />;
-  const timeline = row.timeline ? <OrderTimeline data={row.timeline} browsers={browsersLine(row.record?.browsers)} /> : null;
+  const timeline = row.timeline ? <OrderTimeline data={row.timeline} mapsKey={mapsKey} browsers={browsersLine(row.record?.browsers)} /> : null;
   if (!row.detail) {
     // Only the minimal order read answered (protected fields redacted): the record alone.
     return (
@@ -228,9 +235,15 @@ export default function InkRecentOrders({
   orders,
   returnTo = "/app/ink",
   defaultExpandedId = null,
+  mapsKey = null,
+  unread = false,
 }: {
   orders: InkRecentOrderRow[];
   returnTo?: string;
+  /** The Maps JavaScript browser key (GOOGLE_MAPS_BROWSER_KEY); none → no map, the words remain. */
+  mapsKey?: string | null;
+  /** The orders read failed: said as that, never as "No orders yet". */
+  unread?: boolean;
   /** A row opened on first render (the listing screenshot; a deep link one day). */
   defaultExpandedId?: string | null;
 }) {
@@ -275,9 +288,7 @@ export default function InkRecentOrders({
           </Text>
         </IndexTable.Cell>
         <IndexTable.Cell>
-          <Text variant="bodyMd" as="span">
-            {row.proofId ? locationWordOf(row.record) || "—" : "—"}
-          </Text>
+          <LocationCell row={row} />
         </IndexTable.Cell>
       </IndexTable.Row>
     );
@@ -286,7 +297,7 @@ export default function InkRecentOrders({
       tr,
       <tr key={`${row.id}-expanded`}>
         <td colSpan={6} style={{ padding: 0 }}>
-          <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} />
+          <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} mapsKey={mapsKey} />
         </td>
       </tr>,
     ];
@@ -304,7 +315,7 @@ export default function InkRecentOrders({
               <BlockStack gap="200" inlineAlign="center">
                 {/* PLACEHOLDER copy */}
                 <Text as="p" tone="subdued">
-                  No orders yet.
+                  {unread ? "Your orders couldn't be read just now. Try again in a moment." : "No orders yet."}
                 </Text>
               </BlockStack>
             </Box>
@@ -330,7 +341,7 @@ export default function InkRecentOrders({
           <Box padding="400">
             {/* PLACEHOLDER copy */}
             <Text as="p" tone="subdued">
-              No orders yet.
+              {unread ? "Your orders couldn't be read just now. Try again in a moment." : "No orders yet."}
             </Text>
           </Box>
         ) : (
@@ -367,7 +378,7 @@ export default function InkRecentOrders({
                     </div>
                   </div>
                 </div>
-                {isExpanded && <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} />}
+                {isExpanded && <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} mapsKey={mapsKey} />}
               </div>
             );
           })

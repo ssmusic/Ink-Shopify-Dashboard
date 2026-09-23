@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 
-const { RECENT_ORDERS_QUERY, RECENT_ORDERS_DETAIL_QUERY, readRecentOrderRecords, recordUrlFor } = await import("./ink-links.server");
+const { RECENT_ORDERS_QUERY, RECENT_ORDERS_DETAIL_QUERY, readRecentOrderRecords, readRecentOrders, recordUrlFor } = await import("./ink-links.server");
 const { INK_SCOPES } = await import("./ink-scopes.server");
 
 afterEach(() => { vi.unstubAllEnvs(); });
@@ -83,8 +83,9 @@ describe("readRecentOrderRecords", () => {
     ]);
   });
 
-  it("fails open: a refused read shows no orders, never an error page", async () => {
+  it("fails open: a refused read shows no orders, never an error page — and says the read failed", async () => {
     const graphql = vi.fn(async () => { throw new Error("Access denied"); });
     expect(await readRecentOrderRecords({ graphql })).toEqual([]);
+    expect(await readRecentOrders({ graphql })).toEqual({ rows: [], readFailed: true });
   });
 });

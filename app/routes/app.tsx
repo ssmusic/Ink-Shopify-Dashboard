@@ -191,7 +191,7 @@ export default function App() {
                 <NavMenu>
                   {/* PLACEHOLDER copy — Sam writes the nav words. */}
                   <a href="/app/ink" rel="home">Home</a>
-                  <a href="/app/ink?view=insights">Insights</a>
+                  <a href="/app/ink?view=insights">Dashboard</a>
                   <a href="/app/ink/settings">Settings</a>
                 </NavMenu>
               )}

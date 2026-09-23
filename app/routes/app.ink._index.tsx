@@ -12,9 +12,10 @@
 // (components/InkRecentOrders.tsx).
 //
 // Three pills sit on top of it ("yeah we need a pill nav in the app", Sam,
-// 2026-09-23 — components/InkPillNav.tsx): Orders (this screen), Insights
-// (the same route, ?view=insights — the Insights KPIs, services/ink-kpis.server.ts)
-// and Settings (/app/ink/settings). A bought record's dispute packet is read
+// 2026-09-23 — components/InkPillNav.tsx): Orders (this screen), Dashboard
+// (the same route, ?view=insights — three numbers and the orders' funnel,
+// components/DeliveryDashboard.tsx; Sam: "which prob should be called a
+// dashboard") and Settings (/app/ink/settings). A bought record's dispute packet is read
 // here and shown in its row (services/ink-packet.server.ts).
 //
 // The install still captures the storefront's mark and claims the brand's
@@ -32,13 +33,12 @@ import {
   type LinksFunction,
   type LoaderFunctionArgs,
 } from "react-router";
-import leafletCss from "leaflet/dist/leaflet.css?url";
 import polarisVizCss from "@shopify/polaris-viz/build/esm/styles.css?url";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { Banner, BlockStack, Box, Card, Layout, Page, Text } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { readInkMerchant, stageOf } from "../services/ink-merchant.server";
-import { readRecentOrderRecords } from "../services/ink-links.server";
+import { readRecentOrders } from "../services/ink-links.server";
 import { readRecordDoors, recordDoorFor } from "../services/record-charges.server";
 import { readRecords } from "../services/ink-record.server";
 import { readDisputePacket } from "../services/ink-packet.server";
@@ -46,14 +46,11 @@ import { readInkKpis } from "../services/ink-kpis.server";
 import InkRecentOrders from "../components/InkRecentOrders";
 import InkPillNav from "../components/InkPillNav";
 import DeliveryDashboard from "../components/DeliveryDashboard";
-import { readTimelines } from "../services/ink-timeline.server";
+import { readTimelines, withRecordOpen } from "../services/ink-timeline.server";
 import { readDeliveryDashboard } from "../services/ink-delivery.server";
 
-// The map's tiles and controls (Leaflet) and Shopify's charts (Polaris Viz).
-export const links: LinksFunction = () => [
-  { rel: "stylesheet", href: leafletCss },
-  { rel: "stylesheet", href: polarisVizCss },
-];
+// Shopify's charts (Polaris Viz). The map is Google's (components/OpensMap.tsx) and brings its own.
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: polarisVizCss }];
 
 // While a fresh install is still provisioning (no api key yet), the doors
 // cannot be read; the screen asks again every few seconds for a while.
@@ -72,10 +69,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (section === "insights") {
     const [kpis, delivery] = await Promise.all([readInkKpis(apiKey), readDeliveryDashboard(apiKey)]);
-    return { section, stage, kpis, delivery, recentOrders: [] };
+    return { section, stage, kpis, delivery, recentOrders: [], mapsKey: null };
   }
 
-  const recentOrders = await readRecentOrderRecords(admin);
+  // A failed read is said as one — never as "No orders yet".
+  const { rows: recentOrders, readFailed: ordersUnread } = await readRecentOrders(admin);
   const proofIds = recentOrders.map((o) => o.proofId);
   // THE RECORD'S DOOR (services/record-door.server.ts): a price on the row
   // only when the merchant is priced AND the kill switch is on. THE RECORD'S
@@ -92,7 +90,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     detail: o.detail,
     record: o.proofId ? records[o.proofId] ?? null : null,
     door: recordDoorFor(doors, o.proofId),
-    timeline: o.proofId ? timelines[o.proofId] ?? null : null,
+    // Without the opens door, the first open's words are the record's own.
+    timeline: o.proofId ? withRecordOpen(timelines[o.proofId] ?? null, records[o.proofId]) : null,
   }));
   // A BOUGHT RECORD'S PACKET, read with the purchase's own key — only the
   // three texts Shopify's dispute form takes ever reach the screen.
@@ -104,7 +103,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     stage,
     kpis: null,
     delivery: null,
+    ordersUnread,
     recentOrders: rows.map((r, i) => ({ ...r, packet: packets[i] })),
+    // A BROWSER key, referrer-restricted to this app's hosts and to the Maps
+    // JavaScript API alone — never the backend's server key (components/OpensMap.tsx).
+    mapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY || null,
   };
 };
 
@@ -149,7 +152,7 @@ export default function InkHome() {
                   {/* PLACEHOLDER copy */}
                   <Text as="h2" variant="headingMd">Recent orders</Text>
                 </Box>
-                <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />
+                <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" mapsKey={data.mapsKey} unread={"ordersUnread" in data && data.ordersUnread === true} />
               </Card>
             )}
           </BlockStack>

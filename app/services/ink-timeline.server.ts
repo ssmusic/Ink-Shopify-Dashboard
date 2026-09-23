@@ -10,13 +10,21 @@
 //   · GET {api}/proofs/:id/opens  — every open with its verdict, distance,
 //     accuracy and fix (ink-backend routes/api/merchantOpens.js, #126 — until
 //     it is deployed this answers 404 and the order shows its first open in
-//     words, from the proof, with no point on the map).
+//     words, with no point on the map).
+// Without the opens door, the first open's words come from THE RECORD (the
+// backend's words projection, read beside this for the same row —
+// withRecordOpen below), never from the proof's raw rollups: those carry the
+// pre-#99 default 'pass' stamped on opens that shared nothing, and a distance
+// a LATER measurement wrote (ink-backend utils/auditPacket.js "honest, not
+// hopeful" · #122 "one measurement, one line"). The record already reads
+// them honestly; the app says what the record says.
 // Only what the screen draws reaches the browser: the lifecycle, the address
 // and each open's position for the map (never printed), the distances, the
 // words. No device field is ever read. Fail-soft and bounded.
 
 import { deliveryWindow, lifecycle } from "../lib/order-timeline";
 import type { OrderTimelineData, TimelineOpen } from "../components/OrderTimeline";
+import type { RecordRead } from "../lib/record-words";
 
 const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
 const PROOF_ID = /^proof_[0-9a-f]{24}$/;
@@ -76,11 +84,15 @@ export function timelineFrom(proofBody: any, opensBody: any | null): OrderTimeli
         };
       });
   } else {
-    // Before the opens door is live: the first open, in words, from the proof.
+    // Before the opens door is live: the first open, from the proof — its
+    // time only. What it says about the location comes from the record
+    // (withRecordOpen); a measured word with no stored distance is the old
+    // default stamp and is never read as a share.
     const first = str(p.first_tap_at);
-    opens = first
-      ? [{ at: first, verdict: str(p.gps_verdict), distance_m: num(p.first_tap_distance_to_shipping_m), accuracy_m: null, lat: null, lng: null }]
-      : [];
+    const rawVerdict = str(p.gps_verdict);
+    const rawDistance = num(p.first_tap_distance_to_shipping_m);
+    const verdict = rawDistance == null && rawVerdict && MEASURED.has(rawVerdict.toLowerCase()) ? null : rawVerdict;
+    opens = first ? [{ at: first, verdict, distance_m: rawDistance, accuracy_m: null, lat: null, lng: null }] : [];
   }
 
   const window = deliveryWindow({
@@ -91,7 +103,25 @@ export function timelineFrom(proofBody: any, opensBody: any | null): OrderTimeli
     within_expected_window: typeof p.within_expected_window === "boolean" ? p.within_expected_window : null,
   });
 
-  return { steps, address, opens, window };
+  return { steps, address, opens, window, opensFrom: opensBody && Array.isArray(opensBody.opens) ? "opens" : "proof" };
+}
+
+const MEASURED = new Set(["pass", "near", "flagged"]);
+
+/** A timeline built without the opens door takes its first open's location
+ *  words from the order's record — the same words the record prints above
+ *  it in the accordion. With the opens door, or without a record, it is
+ *  returned as it was. */
+export function withRecordOpen(t: OrderTimelineData | null, record: RecordRead | null | undefined): OrderTimelineData | null {
+  if (!t || t.opensFrom !== "proof" || !record || t.opens.length === 0) return t;
+  const open = record.elements.find((e) => e.element === "the_open")?.value as { location?: { verdict?: unknown; distance_m?: unknown } | null } | null | undefined;
+  const loc = open?.location;
+  if (!loc || typeof loc.verdict !== "string") return t;
+  const [first, ...rest] = t.opens;
+  return {
+    ...t,
+    opens: [{ ...first, verdict: loc.verdict, distance_m: num(loc.distance_m) }, ...rest],
+  };
 }
 
 export async function readTimeline(apiKey: string, proofId: string, fetchImpl: typeof fetch = fetch): Promise<OrderTimelineData | null> {

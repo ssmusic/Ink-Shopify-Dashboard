@@ -9,8 +9,15 @@
 // The words are the public record page's own (the-ritualist
 // src/pages/VerifyRecord.tsx LEVEL_WORDS + locationWords + valueWords, and
 // src/lib/audit-packet.ts VALUE_WORDS + VERDICT_WORDS), copied so the app and
-// the page never say the same record two ways. Pure: no server import, so the
-// screen renders the same words on the server and in the browser.
+// the page never say the same record two ways — with ONE departure, Sam's
+// (2026-09-23, on "Opened 719 m … — outside the 300 m range"): "we dont
+// judge" · "we dont have a default range". A distance is said as a distance;
+// the backend's pass / near / flagged word is never printed beside it. (The
+// public page still prints "(flagged)" — the-ritualist's to follow.) Pure: no
+// server import, so the screen renders the same words on the server and in
+// the browser.
+
+import { kmOrM } from "./order-timeline";
 
 import type { CheckoutVsOpens } from "./checkout-words";
 
@@ -90,15 +97,15 @@ export const VALUE_WORDS: Record<string, string> = {
   location: "Location",
 };
 
-/** The distance verdict as the dashboard's order rows say it. */
+/** What an open without a distance says, as the dashboard's order rows say
+ *  it. A measured open says its distance instead — never within / outside. */
 export const VERDICT_WORDS: Record<string, string> = {
-  pass: "within 100 m",
-  near: "within 300 m",
-  flagged: "outside 300 m",
   not_shared: "location not shared",
   unmeasured: "address not geocoded",
   imprecise: "too wide to measure",
 };
+
+const MEASURED = new Set(["pass", "near", "flagged"]);
 
 type LocationLine = { verdict?: string; distance_m?: number | null; later_share?: LocationLine | null };
 
@@ -109,13 +116,15 @@ export function when(iso: unknown): string {
   return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-// One measurement per line: a word and a distance printed together always
-// come from the same signed moment.
+// One measurement per line: a distance printed always comes from one signed
+// moment, and is never judged.
 export function locationWords(loc: LocationLine): string {
   if (loc.verdict === "not_shared") return "Not shared by the buyer";
   if (loc.verdict === "unmeasured") return "Shared — no distance available";
-  if (loc.verdict && loc.distance_m != null) return `${Math.round(loc.distance_m)} m from the delivery address (${loc.verdict})`;
-  return loc.verdict ?? "—";
+  if (loc.verdict === "imprecise") return "Shared — too wide to measure";
+  if (loc.distance_m != null && Number.isFinite(loc.distance_m)) return `${kmOrM(loc.distance_m)} from the delivery address`;
+  if (loc.verdict && MEASURED.has(loc.verdict)) return "Shared";
+  return "—";
 }
 
 export function valueWords(key: string, v: unknown): string {
@@ -126,10 +135,17 @@ export function valueWords(key: string, v: unknown): string {
   return String(v);
 }
 
+// Values the app does not print. `verified_at_door` is the backend's "a fix
+// within 100 m after the carrier's delivered scan" — the same range verdict,
+// said as a yes or no (Sam, 2026-09-23: "we dont judge" · "we dont have a
+// default range").
+const UNSAID = new Set(["verified_at_door"]);
+
 /** Each value of an element as a labelled line; a later share gets its own. */
 export function elementLines(el: RecordElement): { label: string; words: string }[] {
   const lines: { label: string; words: string }[] = [];
   for (const [k, v] of Object.entries(el.value ?? {})) {
+    if (UNSAID.has(k)) continue;
     lines.push({ label: VALUE_WORDS[k] ?? k, words: valueWords(k, v) });
     const later = k === "location" && v && typeof v === "object" ? (v as LocationLine).later_share : null;
     // PLACEHOLDER copy — the page's own label for a later open's share.
@@ -138,13 +154,16 @@ export function elementLines(el: RecordElement): { label: string; words: string 
   return lines;
 }
 
-/** The order row's location word: what the open's location says, in one phrase. */
+/** The order row's location word: the open's distance, or what its location
+ *  says when there is none, in one phrase. */
 export function locationWordOf(record: RecordRead | null | undefined): string {
   const open = record?.elements.find((e) => e.element === "the_open");
   const loc = (open?.value as { location?: LocationLine } | null)?.location;
   if (!loc?.verdict) return record ? "—" : "";
-  const word = VERDICT_WORDS[loc.verdict] ?? loc.verdict;
-  return word.charAt(0).toUpperCase() + word.slice(1);
+  const word = VERDICT_WORDS[loc.verdict];
+  if (word) return word.charAt(0).toUpperCase() + word.slice(1);
+  if (loc.distance_m != null && Number.isFinite(loc.distance_m)) return kmOrM(loc.distance_m);
+  return MEASURED.has(loc.verdict) ? "Location shared" : "—";
 }
 
 // ── The browsers (2026-09-23) ────────────────────────────────────────────

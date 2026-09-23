@@ -173,19 +173,26 @@ function rowsFrom(body: RecentOrdersBody | null, withDetail: boolean): RecentOrd
   return rows;
 }
 
-export async function readRecentOrderRecords(admin: AdminGraphql, first = 5): Promise<RecentOrderRecord[]> {
+/** The recent orders, and whether the read itself failed — so the screen
+ *  can say "couldn't be read" instead of "no orders yet" when it did. */
+export async function readRecentOrders(admin: AdminGraphql, first = 5): Promise<{ rows: RecentOrderRecord[]; readFailed: boolean }> {
   try {
     const res = await admin.graphql(RECENT_ORDERS_DETAIL_QUERY, { variables: { first } });
     const body = (await res.json()) as RecentOrdersBody | null;
-    if (body?.data?.orders) return rowsFrom(body, true);
+    if (body?.data?.orders) return { rows: rowsFrom(body, true), readFailed: false };
   } catch (err) {
     console.warn("[ink] recent orders detail read failed; falling back to the minimal read:", err);
   }
   try {
     const res = await admin.graphql(RECENT_ORDERS_QUERY, { variables: { first } });
-    return rowsFrom((await res.json()) as RecentOrdersBody | null, false);
+    const body = (await res.json()) as RecentOrdersBody | null;
+    return { rows: rowsFrom(body, false), readFailed: !body?.data?.orders };
   } catch (err) {
-    console.warn("[ink] recent orders read failed (the screen shows none):", err);
-    return [];
+    console.warn("[ink] recent orders read failed (the screen says so):", err);
+    return { rows: [], readFailed: true };
   }
+}
+
+export async function readRecentOrderRecords(admin: AdminGraphql, first = 5): Promise<RecentOrderRecord[]> {
+  return (await readRecentOrders(admin, first)).rows;
 }
