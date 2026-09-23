@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { BlockStack, Box, Button, InlineStack, Text } from "@shopify/polaris";
 import { ExternalIcon } from "@shopify/polaris-icons";
 
@@ -42,8 +43,20 @@ interface Order {
 interface OrderExpandedRowProps {
   order: Order;
   onCollapse: () => void;
-  onViewFull: () => void;
+  /** The Ritualist's full-page detail. */
+  onViewFull?: () => void;
+  /** ink's: the header button opens this address (the public record) in a new tab instead. */
+  viewFullUrl?: string | null;
+  /** Replaces the Ritualist-studio sentence under DELIVERY; null drops it. */
+  handoffNote?: ReactNode;
+  /** Drawn full width at the bottom of the panel (ink: the record's door). */
+  footer?: ReactNode;
 }
+
+// THE SAME PANEL FOR BOTH APPS. The Ritualist's Shipments list passes exactly
+// the three props it always has and renders what it always did; ink's Recent
+// orders (components/InkRecentOrders.tsx) passes a record link, its own
+// sentence, and "Get the record" as the footer (Sam, 2026-09-23).
 
 const fmt = (amount: string | number, currency: string) => {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
@@ -70,7 +83,15 @@ const formatTimestamp = (raw: string): string => {
 // handoff. The full delivery proof — tap history, location, signed cryptographic
 // record — lives in the standalone ink. dashboard, never in the embed. Keeping the
 // crypto/forensics out of the embed is deliberate.
-const OrderExpandedRow = ({ order, onCollapse, onViewFull }: OrderExpandedRowProps) => {
+const RITUALIST_HANDOFF = (
+  <Text as="p" variant="bodySm" tone="subdued">
+    Open history, location, and the signed delivery record live in your
+    Ritualist studio.
+  </Text>
+);
+
+const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffNote, footer }: OrderExpandedRowProps) => {
+  const note = handoffNote === undefined ? RITUALIST_HANDOFF : handoffNote;
   const deliveredAt =
     order.metafields?.delivery_verified_at || order.metafields?.delivery_timestamp || "";
 
@@ -93,9 +114,15 @@ const OrderExpandedRow = ({ order, onCollapse, onViewFull }: OrderExpandedRowPro
           Order details
         </Text>
         <InlineStack gap="200">
-          <Button icon={ExternalIcon} size="slim" onClick={onViewFull}>
-            View Full Record
-          </Button>
+          {viewFullUrl ? (
+            <Button icon={ExternalIcon} size="slim" url={viewFullUrl} target="_blank">
+              View Full Record
+            </Button>
+          ) : onViewFull ? (
+            <Button icon={ExternalIcon} size="slim" onClick={onViewFull}>
+              View Full Record
+            </Button>
+          ) : null}
           <Button size="slim" onClick={onCollapse} accessibilityLabel="Collapse order details">
             ▲
           </Button>
@@ -201,15 +228,25 @@ const OrderExpandedRow = ({ order, onCollapse, onViewFull }: OrderExpandedRowPro
                 No delivery recorded yet.
               </Text>
             )}
-            <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
-              <Text as="p" variant="bodySm" tone="subdued">
-                Open history, location, and the signed delivery record live in your
-                Ritualist studio.
-              </Text>
-            </div>
+            {note ? (
+              <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
+                {note}
+              </div>
+            ) : null}
           </BlockStack>
         </Box>
       </div>
+      {footer ? (
+        <div
+          style={{
+            borderTop: "1px solid var(--p-color-border)",
+            padding: "12px 16px",
+            background: "var(--p-color-bg-surface-secondary)",
+          }}
+        >
+          {footer}
+        </div>
+      ) : null}
     </div>
   );
 };

@@ -28,6 +28,8 @@ vi.mock("../services/ink-api.server", () => ({ patchMerchant: vi.fn(), mintMagic
 
 const { default: InkOnboarding } = await import("../routes/app.ink._index");
 const { default: InkSettings } = await import("../routes/app.ink.settings");
+const { default: InkRecentOrders } = await import("../components/InkRecentOrders");
+const { default: OrderExpandedRow } = await import("../components/OrderExpandedRow");
 
 /** Render one route component with its loader data, the way the layout does. */
 function render(Component: React.ComponentType, loaderData: Record<string, unknown>): string {
@@ -116,19 +118,72 @@ describe("the onboarding screen links out (day-one defect, 2026-09-22)", () => {
     }
   });
 
-  it("links each recent order to its public record, and says when an order has none yet", () => {
-    const html = render(InkOnboarding, {
-      ...READY,
-      recentOrders: [
-        { id: "gid://shopify/Order/2", name: "#1002", createdAt: null, recordUrl: "https://www.in.ink/verify/proof_b3ea86a2c6aa96d2d4ee1e8b" },
-        { id: "gid://shopify/Order/1", name: "#1001", createdAt: null, recordUrl: null },
-      ],
-    });
-    expect(text(html)).toContain("#1002");
-    expect(html).toContain('href="https://www.in.ink/verify/proof_b3ea86a2c6aa96d2d4ee1e8b"');
-    expect(text(html)).toContain("View record");
-    expect(text(html)).toContain("#1001");
+  const PROOF = "proof_b3ea86a2c6aa96d2d4ee1e8b";
+  const detail = (over: Record<string, unknown> = {}) => ({
+    id: "2", orderNumber: "#1002", customerName: "Made Up", customerEmail: "buyer@example.com",
+    customerAddress: { address1: "1 Test St", city: "Brooklyn", provinceCode: "NY", zip: "11201" },
+    date: "Sep 21, 2026", total: "58.00", subtotal: "58.00", currency: "USD", status: "enrolled",
+    items: [{ title: "Bar Tape", quantity: 2, price: "29.00", sku: "BT-1" }], metafields: {}, ...over,
+  });
+  const rows = [
+    { id: "gid://shopify/Order/2", name: "#1002", createdAt: null, recordUrl: `https://www.in.ink/verify/${PROOF}`, proofId: PROOF, detail: detail(), door: { offerLine: "Get the record — $29", purchase: null } },
+    { id: "gid://shopify/Order/1", name: "#1001", createdAt: null, recordUrl: null, proofId: null, detail: detail({ id: "1", orderNumber: "#1001", customerName: "Guest", customerEmail: "", status: "pending", items: [] }), door: { offerLine: null, purchase: null } },
+  ];
+
+  it("lists recent orders the way the Ritualist lists shipments — Order · Customer · Date · Total · Status", () => {
+    const html = render(InkOnboarding, { ...READY, recentOrders: rows });
+    const t = text(html);
+    for (const heading of ["Order", "Customer", "Date", "Total", "Status"]) expect(t).toContain(heading);
+    expect(t).toContain("#1002");
+    expect(t).toContain("Made Up");
+    expect(t).toContain("buyer@example.com");
+    expect(t).toContain("Sep 21, 2026");
+    expect(t).toContain("$58.00");
+    expect(t).toContain("Enrolled");
+    expect(t).toContain("#1001");
+    expect(t).toContain("Pending");
+    // Collapsed until clicked: the accordion's contents are not drawn yet.
+    expect(t).not.toContain("Get the record");
+  });
+
+  it("opens a row into the Ritualist's panel with the record's door at the bottom", () => {
+    const html = renderToString(
+      <AppProvider i18n={translations}>
+        {(() => {
+          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <InkRecentOrders orders={rows} defaultExpandedId="gid://shopify/Order/2" /> }]);
+          return <Stub initialEntries={["/"]} />;
+        })()}
+      </AppProvider>,
+    );
+    const t = text(html);
+    // The Ritualist's panel: customer, products, delivery.
+    expect(t).toContain("CUSTOMER");
+    expect(t).toContain("1 Test St");
+    expect(t).toContain("PRODUCTS");
+    expect(t).toContain("Bar Tape");
+    expect(t).toContain("DELIVERY");
+    // ink's header button opens the public record, not the Ritualist's detail view.
+    expect(t).toContain("View Full Record");
+    expect(html).toContain(`href="https://www.in.ink/verify/${PROOF}"`);
+    // Never the Ritualist's studio sentence under ink.
+    expect(t).not.toContain("Ritualist studio");
+    // The door is the LAST thing in the accordion — after the delivery column.
+    expect(t).toContain("Get the record — $29");
+    expect(t.lastIndexOf("Get the record — $29")).toBeGreaterThan(t.indexOf("DELIVERY"));
+    expect(t).toContain("View record");
+  });
+
+  it("says an order has no record yet at the bottom of its accordion", () => {
+    const html = renderToString(
+      <AppProvider i18n={translations}>
+        {(() => {
+          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <InkRecentOrders orders={rows} defaultExpandedId="gid://shopify/Order/1" /> }]);
+          return <Stub initialEntries={["/"]} />;
+        })()}
+      </AppProvider>,
+    );
     expect(text(html)).toContain("No record yet");
+    expect(text(html)).not.toContain("Get the record");
   });
 
   it("says there are no orders when the read found none", () => {
@@ -168,5 +223,26 @@ describe("the settings screen", () => {
     expect(text(html).toLowerCase()).not.toContain("flash");
     const onboarding = render(InkOnboarding, { stage: "ready", mark: "https://cdn.test/mark.svg", brandName: "Made-Up Goods", confirmedAt: null, captureNote: null, canRecapture: true });
     expect(text(onboarding).toLowerCase()).not.toContain("flash");
+  });
+});
+
+describe("the Ritualist's order panel is unchanged by ink's footer", () => {
+  it("renders its three props exactly as before: the full-record button, the studio sentence, no footer", () => {
+    const order = {
+      id: "7", orderNumber: "#1007", customerName: "Made Up", customerEmail: "buyer@example.com",
+      customerAddress: { address1: "1 Test St", city: "Brooklyn", provinceCode: "NY", zip: "11201" },
+      date: "Sep 21, 2026", total: "58.00", subtotal: "58.00", currency: "USD", status: "enrolled",
+      items: [{ title: "Bar Tape", quantity: 2, price: "29.00", sku: "BT-1" }], metafields: {},
+    };
+    const html = renderToString(
+      <AppProvider i18n={translations}>
+        <OrderExpandedRow order={order} onCollapse={() => {}} onViewFull={() => {}} />
+      </AppProvider>,
+    );
+    const t = text(html);
+    expect(t).toContain("View Full Record");
+    expect(html).not.toContain("href=");
+    expect(t).toContain("Open history, location, and the signed delivery record live in your Ritualist studio.");
+    expect(t).not.toContain("Get the record");
   });
 });
