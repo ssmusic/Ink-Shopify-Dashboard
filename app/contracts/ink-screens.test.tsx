@@ -116,9 +116,11 @@ describe('ink screens: facts, working controls and Polaris', () => {
   it('opens an order with its address, products and Advanced disclosure', () => {
     const html = openRow(ROWS[0].id);
     const t = text(html);
-    for (const part of ['Recipient', 'Order email: buyer@example.com', '1 Test St', 'Products', 'Bar Tape', 'Order total $58.00', 'Advanced', 'Get the record ($29 USD)']) expect(t).toContain(part);
+    for (const part of ['Recipient', 'Order email: buyer@example.com', '1 Test St', 'Products', 'Bar Tape', 'Order total $58.00', 'Advanced', 'Get the record']) expect(t).toContain(part);
     expect(html).toContain('aria-expanded="true"');
     expect(html).not.toMatch(/href="https?:\/\//);
+    expect(t).not.toContain('$29');
+    expect(html).toContain('Polaris-Button--variantTertiary');
     for (const gone of ['THE RECORD', 'CUSTOMER', 'attach as a file', 'Checked in this browser', 'Shipping Free']) expect(t).not.toContain(gone);
   });
 
@@ -224,11 +226,23 @@ describe('ink screens: facts, working controls and Polaris', () => {
   it('shows record history with a repeat download and an honest missing-purchase path', () => {
     const html = render(InkHome, { section: 'records', stage: 'ready', recordHistory: [{ proofId: PROOF, orderName: '#1010', createdAt: '2026-09-20T00:00:00Z', state: 'minted', door: { offerLine: null, pending: false, downloadable: true }, record: { ...RECORD, locked: false } }], historyError: false, historyPage: 1, historyHasNext: false, historyHasPrevious: false });
     const t = text(html);
-    expect(t).toContain('Records and approvals');
-    expect(t).toContain('Download record');
+    expect(t).toContain('Your record library');
+    expect(html).toContain('Download PDF for #1010');
+    expect(html).toContain('Download CSV for #1010');
+    expect(html).toContain('Download JSON for #1010');
     expect(t).toContain('View record details');
-    expect(t).toContain('Ink does not email the files');
+    expect(t).toContain('Files are not emailed');
     expect(t).toContain('If a past purchase is missing');
+  });
+
+  it('keeps multiple purchased records downloadable and pending purchases out of the library', () => {
+    const history = [1,2,3].map((n) => ({ proofId: `proof_${String(n).repeat(24)}`, orderName: `#100${n}`, createdAt: '2026-09-20T00:00:00Z', state: 'minted', door: { offerLine: 'Get the record ($29 USD)', downloadable: true }, record: { ...RECORD, locked: false } }));
+    const html = render(InkHome, { section:'records', stage:'ready', recordHistory:[...history, {proofId:PROOF,orderName:'#1004',createdAt:null,state:'paid_pending_record',door:{offerLine:null,downloadable:false,pending:true,paidPendingRecord:true},record:null}], historyError:false, historyHasNext:true, historyHasPrevious:false });
+    for (const n of [1,2,3]) expect(html).toContain(`Download PDF for #100${n}`);
+    expect(html).not.toContain('Download PDF for #1004');
+    expect(text(html)).not.toContain('Get the record');
+    expect(text(html)).toContain('Needs attention');
+    expect(text(html)).toContain('Check record access');
   });
 
   it('uses an accessible blue distance diagram and exact measurements without a range verdict', () => {

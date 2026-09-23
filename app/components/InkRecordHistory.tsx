@@ -8,6 +8,7 @@ import {
   Card,
   Collapsible,
   Divider,
+  InlineGrid,
   InlineStack,
   Link,
   Pagination,
@@ -27,7 +28,7 @@ export type HistoryItem = {
 };
 
 function dateLabel(value: string | null) {
-  if (!value) return "Date unavailable";
+  if (!value || !Number.isFinite(Date.parse(value))) return "Date unavailable";
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
     new Date(value),
   );
@@ -35,7 +36,9 @@ function dateLabel(value: string | null) {
 
 function RecordHistoryItem({ row }: { row: HistoryItem }) {
   const [open, setOpen] = useState(false);
-  const status = row.door?.downloadable
+  const orderLabel = row.orderName || `Record ${row.proofId.slice(-8)}`;
+  const available = row.door?.downloadable === true;
+  const status = available
     ? "Available"
     : row.door?.paidPendingRecord
       ? "Access pending"
@@ -45,57 +48,80 @@ function RecordHistoryItem({ row }: { row: HistoryItem }) {
           ? "Charge status unknown"
           : "Unavailable";
   return (
-    <BlockStack gap="300">
-      <InlineStack align="space-between" gap="200">
-        <Text as="h3" variant="headingSm">
-          {row.orderName || `Record ${row.proofId.slice(-8)}`}
-        </Text>
-        <Text as="span" tone="subdued">
-          {dateLabel(row.createdAt)}
-        </Text>
-      </InlineStack>
-      <InlineStack>
-        <Badge tone="info">{status}</Badge>
-      </InlineStack>
-      {row.door ? (
-        row.door.downloadable || row.door.pending ? (
-          <InkRecordDoor proofId={row.proofId} door={row.door} />
-        ) : (
-          <Text as="p" tone="subdued">
-            Record access is unavailable. Refresh to check again or contact
-            support.
-          </Text>
-        )
-      ) : (
-        <Text as="p" tone="subdued">
-          Record status is unavailable. Refresh to try again.
-        </Text>
-      )}
-      {row.record && row.door?.downloadable && (
-        <BlockStack gap="300">
-          <Button
-            variant="plain"
-            textAlign="left"
-            disclosure={open ? "up" : "down"}
-            ariaExpanded={open}
-            ariaControls={`record-details-${row.proofId}`}
-            onClick={() => setOpen((value) => !value)}
+    <Box
+      borderWidth="025"
+      borderColor="border"
+      borderRadius="200"
+      overflowX="hidden"
+      overflowY="hidden"
+    >
+      <Box padding="400" background="bg-surface">
+        <InlineGrid
+          columns={{ xs: 1, md: "1fr 1fr auto" }}
+          gap="300"
+          alignItems="center"
+        >
+          <BlockStack gap="200">
+            <Text as="h3" variant="headingSm">
+              {orderLabel}
+            </Text>
+            <InlineStack>
+              <Badge tone={available ? "info" : undefined}>{status}</Badge>
+            </InlineStack>
+          </BlockStack>
+          <BlockStack gap="100">
+            <Text as="p" variant="bodySm" tone="subdued">
+              Added to records
+            </Text>
+            <Text as="p">{dateLabel(row.createdAt)}</Text>
+          </BlockStack>
+          {row.door && (available || row.door.pending) ? (
+            <InkRecordDoor
+              proofId={row.proofId}
+              door={{ ...row.door, offerLine: null }}
+              compact
+              orderLabel={orderLabel}
+            />
+          ) : (
+            <Text as="p" tone="subdued">
+              Record access is unavailable. Refresh to check again.
+            </Text>
+          )}
+        </InlineGrid>
+      </Box>
+      {row.record && available && (
+        <>
+          <Divider />
+          <Box
+            paddingInline="400"
+            paddingBlock="200"
+            background="bg-surface-secondary"
           >
-            View record details
-          </Button>
+            <Button
+              variant="plain"
+              textAlign="left"
+              disclosure={open ? "up" : "down"}
+              accessibilityLabel={`View record details for ${orderLabel}`}
+              ariaExpanded={open}
+              ariaControls={`record-details-${row.proofId}`}
+              onClick={() => setOpen((value) => !value)}
+            >
+              View record details
+            </Button>
+          </Box>
           <Collapsible id={`record-details-${row.proofId}`} open={open}>
-            <BlockStack gap="400">
-              {open && (
+            {open && (
+              <Box padding="400">
                 <InkRecordInspection
                   proofId={row.proofId}
                   record={row.record}
                 />
-              )}
-            </BlockStack>
+              </Box>
+            )}
           </Collapsible>
-        </BlockStack>
+        </>
       )}
-    </BlockStack>
+    </Box>
   );
 }
 
@@ -114,51 +140,85 @@ export default function InkRecordHistory({
   onNext: () => void;
   onPrevious: () => void;
 }) {
+  const available = rows.filter((row) => row.door?.downloadable);
+  const pending = rows.filter((row) => !row.door?.downloadable);
   return (
-    <Card>
-      <BlockStack gap="400">
+    <BlockStack gap="400">
+      <Card>
         <BlockStack gap="200">
           <Text as="h2" variant="headingMd">
-            Records and approvals
+            Your record library
           </Text>
           <Text as="p" tone="subdued">
-            Purchased records and approvals started in the app appear here,
-            including orders outside Shopify’s recent-order list. Download the
-            PDF, CSV, or JSON file again while this app and record access remain
-            available. Ink does not email the files. If a past purchase is
-            missing, <Link url="mailto:info@in.ink">contact support</Link>.
+            Buy a record from its order. Records purchased in this app stay here
+            for repeat downloads, including older orders.
+          </Text>
+          <Text as="p" tone="subdued">
+            Choose PDF for a report, CSV for a spreadsheet, or JSON for the
+            signed data. Files are not emailed.
           </Text>
         </BlockStack>
-        {error ? (
-          <Banner tone="critical">
-            Record purchases could not be loaded. Refresh to try again.
-          </Banner>
-        ) : rows.length === 0 ? (
-          <Text as="p" tone="subdued">
-            No record purchases or approvals saved by this app yet. Open an
-            order to review its activity and available record.
-          </Text>
-        ) : (
-          rows.map((row, index) => (
-            <BlockStack key={row.proofId} gap="300">
-              {index > 0 && <Divider />}
-              <RecordHistoryItem row={row} />
+      </Card>
+      {error ? (
+        <Banner tone="critical">
+          Record purchases could not be loaded. Refresh to try again.
+        </Banner>
+      ) : rows.length === 0 ? (
+        <Card>
+          <BlockStack gap="300">
+            <Text as="h2" variant="headingMd">
+              No purchased records yet
+            </Text>
+            <Text as="p">
+              Review an order before choosing whether to buy its complete
+              record.
+            </Text>
+            <InlineStack>
+              <Button url="/app/ink">View orders</Button>
+            </InlineStack>
+          </BlockStack>
+        </Card>
+      ) : (
+        <>
+          {available.length > 0 && (
+            <BlockStack gap="300">
+              <Text as="h2" variant="headingMd">
+                Purchased records
+              </Text>
+              {available.map((row) => (
+                <RecordHistoryItem key={row.proofId} row={row} />
+              ))}
             </BlockStack>
-          ))
-        )}
-        {(hasNext || hasPrevious) && (
-          <Box>
-            <Pagination
-              hasPrevious={hasPrevious}
-              hasNext={hasNext}
-              onPrevious={onPrevious}
-              onNext={onNext}
-              previousTooltip="Newer purchases"
-              nextTooltip="Older purchases"
-            />
-          </Box>
-        )}
-      </BlockStack>
-    </Card>
+          )}
+          {pending.length > 0 && (
+            <BlockStack gap="300">
+              <Text as="h2" variant="headingMd">
+                Needs attention
+              </Text>
+              {pending.map((row) => (
+                <RecordHistoryItem key={row.proofId} row={row} />
+              ))}
+            </BlockStack>
+          )}
+        </>
+      )}
+      {(hasNext || hasPrevious) && (
+        <InlineStack align="center">
+          <Pagination
+            hasPrevious={hasPrevious}
+            hasNext={hasNext}
+            onPrevious={onPrevious}
+            onNext={onNext}
+            previousTooltip="Newer purchases"
+            nextTooltip="Older purchases"
+          />
+        </InlineStack>
+      )}
+      <Text as="p" variant="bodySm" tone="subdued">
+        Downloads remain available while this app and record access are active.
+        If a past purchase is missing,{" "}
+        <Link url="mailto:info@in.ink">contact support</Link>.
+      </Text>
+    </BlockStack>
   );
 }

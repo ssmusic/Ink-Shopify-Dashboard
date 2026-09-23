@@ -25,9 +25,13 @@ function saveBlob(blob: Blob, filename: string) {
 export default function InkRecordDoor({
   proofId,
   door,
+  compact = false,
+  orderLabel,
 }: {
   proofId: string;
   door: InkDoor;
+  compact?: boolean;
+  orderLabel?: string;
 }) {
   const fetcher = useFetcher<typeof action>();
   const revalidator = useRevalidator();
@@ -91,36 +95,47 @@ export default function InkRecordDoor({
   return (
     <BlockStack gap="200">
       <InlineStack align="space-between" gap="300" blockAlign="center">
-        <BlockStack gap="100">
-          <Text as="h3" variant="headingSm">
-            {door.downloadable ? "Export the record" : "The complete record"}
-          </Text>
-          <Text as="p" variant="bodySm" tone="subdued">
-            {door.offerLine
-              ? "Event history, hashes and signatures. PDF, CSV and signed JSON."
-              : "PDF report, CSV data and signed JSON file."}
-          </Text>
-        </BlockStack>
-        <InlineStack gap="300">
+        {!compact && (
+          <BlockStack gap="100">
+            <Text as="h3" variant="headingSm">
+              {door.downloadable ? "Export the record" : "The complete record"}
+            </Text>
+            <Text as="p" variant="bodySm" tone="subdued">
+              {door.offerLine
+                ? "Event history, hashes and signatures. PDF, CSV and signed JSON."
+                : "PDF report, CSV data and signed JSON file."}
+            </Text>
+          </BlockStack>
+        )}
+        <InlineStack gap="200">
           {door.downloadable && (
             <>
               <Button
                 loading={fetcher.state !== "idle"}
+                accessibilityLabel={
+                  orderLabel ? `Download PDF for ${orderLabel}` : undefined
+                }
                 onClick={() => submit("pdf")}
               >
-                Download PDF
+                {compact ? "PDF" : "Download PDF"}
               </Button>
               <Button
                 loading={fetcher.state !== "idle"}
+                accessibilityLabel={
+                  orderLabel ? `Download CSV for ${orderLabel}` : undefined
+                }
                 onClick={() => submit("csv")}
               >
-                Download CSV
+                {compact ? "CSV" : "Download CSV"}
               </Button>
               <Button
                 loading={fetcher.state !== "idle"}
+                accessibilityLabel={
+                  orderLabel ? `Download JSON for ${orderLabel}` : undefined
+                }
                 onClick={() => submit("download")}
               >
-                Download record (JSON)
+                {compact ? "JSON" : "Download record (JSON)"}
               </Button>
             </>
           )}
@@ -130,7 +145,7 @@ export default function InkRecordDoor({
               loading={fetcher.state !== "idle"}
               onClick={() => submit("buy")}
             >
-              {door.offerLine}
+              Get the record
             </Button>
           )}
           {door.pending && door.resumeUrl && (
@@ -156,7 +171,7 @@ export default function InkRecordDoor({
           is sent.
         </Text>
       )}
-      {door.downloadable && (
+      {door.downloadable && !compact && (
         <Text as="p" tone="subdued" variant="bodySm">
           Files can include customer details.{" "}
           {door.inHistory

@@ -237,59 +237,88 @@ export default function InkRecentOrders({
       </Box>
     );
   return (
-    <BlockStack gap="0">
-      {orders.map((row) => {
-        const open = expanded === row.id;
-        const count = opensOf(row.record);
-        return (
-          <BlockStack key={row.id} gap="0">
-            <Divider />
-            <Box padding="400">
-              <BlockStack gap="200">
-                <InlineStack
-                  align="space-between"
-                  gap="300"
-                  blockAlign="center"
+    <Box paddingInline="400" paddingBlockEnd="400">
+      <BlockStack gap="300">
+        {orders.map((row) => {
+          const open = expanded === row.id;
+          const count = opensOf(row.record);
+          return (
+            <Box
+              key={row.id}
+              borderWidth="025"
+              borderColor={open ? "border-info" : "border"}
+              borderRadius="200"
+              overflowX="hidden"
+              overflowY="hidden"
+            >
+              <Box
+                padding="400"
+                background={open ? "bg-surface-info" : "bg-surface-secondary"}
+              >
+                <InlineGrid
+                  columns={{
+                    xs: "100px minmax(0, 1fr)",
+                    md: "100px minmax(0, 1fr) 140px 120px",
+                  }}
+                  gap="400"
+                  alignItems="center"
                 >
-                  <Button
-                    variant="plain"
-                    disclosure={open ? "up" : "down"}
-                    ariaExpanded={open}
-                    ariaControls={`order-${row.id}`}
-                    onClick={() => setExpanded(open ? null : row.id)}
-                  >
-                    {row.name}
-                  </Button>
-                  <Text as="p">{row.detail?.date || "Date unavailable"}</Text>
-                  <Text as="p" fontWeight="semibold">
-                    {row.detail
-                      ? money(row.detail.total, row.detail.currency)
-                      : "Total unavailable"}
-                  </Text>
-                </InlineStack>
-                <InlineStack align="space-between" gap="200">
-                  <Text as="p" breakWord>
-                    {row.detail?.customerName &&
-                    row.detail.customerName !== "Name unavailable"
-                      ? `Recipient ${row.detail.customerName}`
-                      : "Recipient unavailable"}
-                  </Text>
-                  <Box color="text-info">
-                    <Text as="p">
-                      {count == null
-                        ? "Opens unavailable"
-                        : `${count} ${count === 1 ? "open" : "opens"}`}
-                    </Text>
+                  <Box color="text">
+                    <Button
+                      variant="tertiary"
+                      size="large"
+                      textAlign="left"
+                      disclosure={open ? "up" : "down"}
+                      ariaExpanded={open}
+                      ariaControls={`order-${row.id}`}
+                      onClick={() => setExpanded(open ? null : row.id)}
+                    >
+                      {row.name}
+                    </Button>
                   </Box>
-                </InlineStack>
-              </BlockStack>
+                  <BlockStack gap="100">
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Recipient
+                    </Text>
+                    <Text as="p" variant="headingSm" breakWord>
+                      {row.detail?.customerName &&
+                      row.detail.customerName !== "Name unavailable"
+                        ? row.detail.customerName
+                        : "Recipient unavailable"}
+                    </Text>
+                    <Text as="p" tone="subdued" breakWord>
+                      {row.detail?.customerEmail || "Email unavailable"}
+                    </Text>
+                  </BlockStack>
+                  <Text as="p">{row.detail?.date || "Date unavailable"}</Text>
+                  <BlockStack gap="100">
+                    <Text as="p" fontWeight="semibold">
+                      {row.detail
+                        ? money(row.detail.total, row.detail.currency)
+                        : "Total unavailable"}
+                    </Text>
+                    <Box color="text-info">
+                      <Text as="p">
+                        {count == null
+                          ? "Opens unavailable"
+                          : `${count} ${count === 1 ? "open" : "opens"}`}
+                      </Text>
+                    </Box>
+                  </BlockStack>
+                </InlineGrid>
+              </Box>
+              <Collapsible id={`order-${row.id}`} open={open}>
+                {open && (
+                  <>
+                    <Divider />
+                    <Panel row={row} />
+                  </>
+                )}
+              </Collapsible>
             </Box>
-            <Collapsible id={`order-${row.id}`} open={open}>
-              {open && <Panel row={row} />}
-            </Collapsible>
-          </BlockStack>
-        );
-      })}
-    </BlockStack>
+          );
+        })}
+      </BlockStack>
+    </Box>
   );
 }
