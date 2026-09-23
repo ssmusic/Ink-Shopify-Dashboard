@@ -2,6 +2,14 @@
 
 **Status: the current design is not approved.** The local preview at `http://127.0.0.1:4173/app/ink` and PR [#133](https://github.com/ssmusic/Ink-Shopify-Dashboard/pull/133) are implementation work, not the design to ship. The preview uses sample data. Do not use it for Shopify listing screenshots or treat it as proof of a live install.
 
+## Latest addition: Help and Shopify connection
+
+Settings now shows the authenticated store name/domain, its Shopify brand logo (square logo preferred), and blue initials when the logo is missing or cannot load. The logo uses Shopify’s tokenless Storefront branding query; no additional scopes or user profile data. Shopify access and ink data access are checked separately on load/refresh. These checks do not assert successful webhook delivery or complete syncing. The local preview deliberately shows Not checked because Shopify is not connected there.
+
+Help is the final navigation tab. It explains orders, one-time Shopify purchases, PDF/CSV/JSON downloads, no emailed files, repeat downloads in Records, missing data and support. The view requires Shopify authentication but no ink backend read, so it remains available during provisioning or an ink outage. Account login stays in Shopify.
+
+Typecheck, build and 435 tests across 47 files passed. Settings/Help fit at measured 1280 and 391 px. Live installed-store logo and connection verification remain part of the release checks. No deployment.
+
 ## The job
 
 This is the **merchant's app inside Shopify Admin**. The merchant should understand an order, the opens, and the optional $29 record without reading an essay or navigating several nested disclosures. Within a few seconds they should be able to answer:

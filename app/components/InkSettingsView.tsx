@@ -15,7 +15,10 @@ import {
 import type { action } from "../routes/app.ink.settings";
 import type { FlashForward } from "../services/ink-merchant.server";
 import InkPillNav from "./InkPillNav";
+import InkConnectionCard from "./InkConnectionCard";
+import type { InkConnection } from "../services/ink-connection.server";
 export type SettingsData = {
+  connection?: InkConnection;
   flashForward: FlashForward | null;
   canSave: boolean;
   ritualistUrl: string;
@@ -50,6 +53,7 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
         <Layout.Section>
           <BlockStack gap="400">
             <InkPillNav active="settings" />
+            <InkConnectionCard connection={data.connection} checking={revalidator.state !== "idle"} onCheck={() => revalidator.revalidate()} />
             {fetcher.data?.error && (
               <Banner tone="critical">{fetcher.data.error}</Banner>
             )}
@@ -158,7 +162,7 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
               </Card>
             )}
             <Text as="p">
-              <Link url="mailto:info@in.ink">Contact support</Link>
+              <Link url="/app/ink?view=help">Help and support</Link>
             </Text>
           </BlockStack>
         </Layout.Section>

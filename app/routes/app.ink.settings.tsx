@@ -17,6 +17,7 @@ import {
   type FlashForward,
 } from "../services/ink-merchant.server";
 import { readPrivacyRequests } from "../services/ink-privacy.server";
+import { readInkConnection } from "../services/ink-connection.server";
 
 function listingUrl(raw: string | undefined) {
   try {
@@ -32,9 +33,12 @@ function listingUrl(raw: string | undefined) {
   }
 }
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const view = await readInkMerchant(session.shop);
-  const privacy = await readPrivacyRequests(session.shop).catch(() => null);
+  const [privacy, connection] = await Promise.all([
+    readPrivacyRequests(session.shop).catch(() => null),
+    readInkConnection({ admin, shop: session.shop, apiKey: view.doc?.ink_api_key, shopId: view.shopId }),
+  ]);
   return routeData(
     {
       flashForward: (view.backend?.flash_forward ??
@@ -42,6 +46,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       canSave: Boolean(view.shopId),
       ritualistUrl: listingUrl(process.env.RITUALIST_LISTING_URL),
       privacy,
+      connection,
     },
     { headers: { "Cache-Control": "private, no-store" } },
   );

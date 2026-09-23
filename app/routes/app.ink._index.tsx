@@ -32,6 +32,7 @@ import { readTimelines } from "../services/ink-timeline.server";
 import { readDeliveryDashboard } from "../services/ink-delivery.server";
 import { readInkRecordHistory } from "../services/ink-record-history.server";
 import InkRecordHistory from "../components/InkRecordHistory";
+import InkHelp from "../components/InkHelp";
 
 // While a fresh install is still provisioning (no api key yet), the doors
 // cannot be read; the screen asks again every few seconds for a while.
@@ -42,6 +43,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const params = new URL(request.url).searchParams;
   const requestedSection = params.get("view");
+  // Help stays available during provisioning or an ink data outage.
+  // Shopify authentication above still applies.
+  if (requestedSection === "help") {
+    return routeData({ section: "help" as const, stage: null }, {
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  }
   const section: "orders" | "insights" | "records" =
     requestedSection === "insights" || requestedSection === "records"
       ? requestedSection
@@ -214,8 +222,8 @@ export default function InkHome() {
 
   return (
     <Page
-      title={data.section === "insights" ? "Dashboard" : data.section === "records" ? "Records" : "Orders"}
-      secondaryActions={[
+      title={data.section === "insights" ? "Dashboard" : data.section === "records" ? "Records" : data.section === "help" ? "Help" : "Orders"}
+      secondaryActions={data.section === "help" ? [] : [
         {
           content: "Refresh",
           loading: revalidator.state !== "idle",
@@ -236,7 +244,9 @@ export default function InkHome() {
               </Banner>
             )}
 
-            {data.section === "insights" ? (
+            {data.section === "help" ? (
+              <InkHelp />
+            ) : data.section === "insights" ? (
               <DeliveryDashboard kpis={data.kpis} delivery={data.delivery} />
             ) : data.section === "records" ? (
               <InkRecordHistory

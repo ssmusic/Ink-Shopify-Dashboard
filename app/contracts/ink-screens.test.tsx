@@ -26,7 +26,7 @@ vi.mock("../services/ink-merchant.server", () => ({
 vi.mock("../services/merchant.server", () => ({ updateMerchant: vi.fn() }));
 vi.mock("../services/ink-api.server", () => ({ patchMerchant: vi.fn(), mintMagicToken: vi.fn() }));
 
-const { default: InkHome } = await import("../routes/app.ink._index");
+const { default: InkHome, loader: loadInkHome } = await import("../routes/app.ink._index");
 const { default: InkSettings } = await import("../routes/app.ink.settings");
 const { default: InkKpis } = await import("../components/InkKpis");
 const { default: OrderTimeline, DeliveryWindowBar } = await import("../components/OrderTimeline");
@@ -308,6 +308,53 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(t).toContain('awaiting completion');
     expect(t).toContain('Data request 88');
     expect(t).toContain('Contact support');
+  });
+});
+
+describe("help and store connection", () => {
+  it("keeps Help authenticated but independent of ink setup and backend availability", async () => {
+    const { authenticate } = await import("../shopify.server");
+    const { readInkMerchant } = await import("../services/ink-merchant.server");
+    vi.mocked(authenticate.admin).mockResolvedValueOnce({ admin: {}, session: { shop: "sample.myshopify.com" } } as never);
+    vi.mocked(readInkMerchant).mockClear();
+    const result = await loadInkHome({ request: new Request("https://app.test/app/ink?view=help") } as never);
+    expect(result.data).toEqual({ section: "help", stage: null });
+    expect(result.init?.headers).toEqual({ "Cache-Control": "private, no-store" });
+    expect(readInkMerchant).not.toHaveBeenCalled();
+    vi.mocked(authenticate.admin).mockRejectedValueOnce(new Response(null, { status: 401 }));
+    await expect(loadInkHome({ request: new Request("https://app.test/app/ink?view=help") } as never)).rejects.toMatchObject({ status: 401 });
+  });
+
+  it("explains downloads and record limits with working navigation", () => {
+    const html = render(InkHome, { section: "help", stage: null });
+    const t = text(html);
+    for (const part of ["Review an order", "Buy a record", "Download again", "does not email", "Check payment status", "Check record access", "Contact support"]) expect(t).toContain(part);
+    expect(html).toContain('href="/app/ink?view=records"');
+    expect(html).toContain('href="mailto:info@in.ink"');
+    expect(t).not.toContain("Recent orders");
+    expect(html).not.toContain('disabled=""');
+  });
+
+  it("separates Shopify access from ink availability without claiming sync or a second login", () => {
+    const html = render(InkSettings, { flashForward: null, canSave: false, ritualistUrl: "", privacy: [], connection: {
+      shop: "sample.myshopify.com", name: "Sample goods", logoUrl: null,
+      shopify: "connected", ink: "unavailable", checkedAt: "2026-09-23T20:00:00Z",
+    } });
+    const t = text(html);
+    for (const part of ["Sample goods", "sample.myshopify.com", "Connected", "Could not connect", "Check connection", "Account access is managed in Shopify", "They do not confirm that every order"]) expect(t).toContain(part);
+    expect(html).not.toMatch(/type="password"|Sync complete|All orders synced/);
+    expect(t).toContain("SG");
+  });
+
+  it("never labels unchecked preview or incomplete setup as connected", () => {
+    for (const ink of ["not_checked", "setup"]) {
+      const t = text(render(InkSettings, { flashForward: null, canSave: false, ritualistUrl: "", privacy: [], connection: {
+        shop: "sample.myshopify.com", name: "Sample store", logoUrl: null,
+        shopify: "not_checked", ink, checkedAt: null,
+      } }));
+      expect(t).not.toContain("Connected");
+      expect(t).toContain(ink === "setup" ? "Setup incomplete" : "Not checked");
+    }
   });
 });
 
