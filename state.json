@@ -8,10 +8,14 @@
       "request": "Sam explicitly asked to send this unfinished Shopify merchant app work to Claude Code. Register existing PR #133 for a checkpoint and handoff to Claude; do not create a new implementation or merge/deploy.",
       "branch": "codex/ink-audit",
       "pr": 133,
-      "phase": "ready",
+      "phase": "working",
       "assignedAgent": "codex",
-      "owner": null,
-      "handoffTo": "codex",
+      "owner": {
+        "agent": "codex",
+        "sessionId": "01a0cff6-d447-74a3-ad07-19fb5ba51851",
+        "acknowledgedSha": "40229009be214dbac6d76ac1b08f1b9fd0823a3d"
+      },
+      "handoffTo": null,
       "checkpoint": {
         "codeSha": "40229009be214dbac6d76ac1b08f1b9fd0823a3d",
         "summary": "Sam asks Claude Code to continue this ROUGH, UNFINISHED Shopify merchant app. Substantial design, implementation and validation remain; no overall approval or release recommendation. Read INK-MERCHANT-REDESIGN-HANDOFF.md and docs/ink-review-2026-09-23.md at PR #133 / codex/ink-audit, head 40229009be214dbac6d76ac1b08f1b9fd0823a3d. Code baseline e8a9a06; latest commit clarifies unfinished status. Continue existing app and successful Ritualist work, not a rewrite. Merchant can inspect the full record before purchase; PDF/CSV/JSON require existing export entitlement. Existing flash, merchant opens/delivery and tenant-scoped key source already exist: earlier absence findings were stale. Remaining app gaps include signature verification, PDF Unicode/map/QR fidelity, visual hierarchy/mobile polish, record history completeness, live Shopify billing/download/install walks and privacy fulfillment. PR conflicts with main and needs reconciliation. No merge/deployment. Preview is synthetic and its disposable harness/sample logo at /tmp/ink-merchant-preview is outside the PR.",
@@ -31,7 +35,7 @@
         "writer": "codex",
         "sessionId": "01a0cff6-d447-74a3-ad07-19fb5ba51851"
       },
-      "updatedAt": "2026-09-23T22:22:14.506Z"
+      "updatedAt": "2026-09-23T22:22:39.175Z"
     }
   ],
   "projects": [],
@@ -59,6 +63,11 @@
     {
       "id": "78b0b2f8-f393-47c9-a05a-4eabf0429f3b",
       "fingerprint": "2e562d2f7b6a5d67181770dbde0f873fabe8e1620c45a0c7be9de6cad864069d",
+      "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180"
+    },
+    {
+      "id": "9f1a0213-9760-4b14-bc8a-82951caf11ce",
+      "fingerprint": "16961a754793a4e279d8021ddb397820cacb15fcf4f8eb848399242f7f4572b2",
       "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180"
     }
   ],
@@ -92,6 +101,12 @@
       "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
       "action": "handoff",
       "detail": "codex can resume the published work."
+    },
+    {
+      "at": "2026-09-23T22:22:39.175Z",
+      "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
+      "action": "claim",
+      "detail": "codex acknowledged 40229009be214dbac6d76ac1b08f1b9fd0823a3d."
     }
   ]
 }
