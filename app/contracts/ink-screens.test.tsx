@@ -282,6 +282,28 @@ describe("each order's timeline, inside the accordion (Sam, 2026-09-23)", () => 
     expect(t).toContain("100 m and 300 m rings");
   });
 
+  it("says which browsers the opens came from, under the opens (2026-09-23) — and nothing when the record counted none", () => {
+    const browsers = { count: 2, unknown_opens: 1, list: [
+      { label: "A", device: "iPhone", opens: 2, first_open_at: at(45), last_open_at: at(50), first_seen_after_delivered_scan: true },
+      { label: "B", device: "Mac", opens: 1, first_open_at: at(60), last_open_at: at(60), first_seen_after_delivered_scan: true },
+    ] };
+    const html = renderToString(
+      <AppProvider i18n={translations}>
+        {(() => {
+          const rows = [{ ...ROWS[0], record: { ...RECORD, browsers }, timeline }];
+          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <InkRecentOrders orders={rows} defaultExpandedId={ROWS[0].id} /> }]);
+          return <Stub initialEntries={["/"]} />;
+        })()}
+      </AppProvider>,
+    );
+    const t = text(html.slice(0, html.indexOf("lg:hidden")));
+    const line = "Opened from 2 browsers: iPhone ×2, Mac ×1, browser unknown ×1. All 2 were first seen after the carrier's delivered scan.";
+    expect(t).toContain(line);
+    expect(t.indexOf(line)).toBeGreaterThan(t.indexOf("location not shared"));
+    expect(t.indexOf(line)).toBeLessThan(t.indexOf("100 m and 300 m rings"));
+    expect(text(open())).not.toContain("Opened from");
+  });
+
   it("never prints a coordinate as text — the map draws the point, the words say the distance", () => {
     const t = text(open());
     for (const coord of ["34.05", "-118.24", "34.058", "-118.250"]) expect(t).not.toContain(coord);

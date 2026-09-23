@@ -73,3 +73,23 @@ describe("the record in words", () => {
     expect(locationWordOf(null)).toBe("");
   });
 });
+
+describe("recordFromBody — the browsers (2026-09-23)", () => {
+  const ID = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
+  const LIST = [{ label: "A", browser_id: ID, device: "iPhone", opens: 2, first_open_at: "2026-09-13T00:00:00.000Z", last_open_at: "2026-09-14T00:00:00.000Z", first_seen_after_delivered_scan: true, anything_else: "x" }];
+
+  it("keeps the browsers in words — never a browser's id, even when a free record's read serves one", () => {
+    const r = recordFromBody({ ...BODY, browsers: { count: 1, unknown_opens: 3, list: LIST } });
+    expect(r?.browsers).toEqual({
+      count: 1,
+      unknown_opens: 3,
+      list: [{ label: "A", device: "iPhone", opens: 2, first_open_at: "2026-09-13T00:00:00.000Z", last_open_at: "2026-09-14T00:00:00.000Z", first_seen_after_delivered_scan: true }],
+    });
+    expect(JSON.stringify(r)).not.toContain(ID);
+  });
+
+  it("an older read with no browsers reads exactly as it did — no key at all", () => {
+    expect("browsers" in (recordFromBody(BODY) ?? {})).toBe(false);
+    expect("browsers" in (recordFromBody({ ...BODY, browsers: "nope" }) ?? {})).toBe(false);
+  });
+});
