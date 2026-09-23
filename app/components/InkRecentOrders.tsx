@@ -18,11 +18,12 @@
 // Every visible string that is ink's own is PLACEHOLDER copy — Sam's words.
 
 import { useState } from "react";
-import { BlockStack, Box, IndexTable, InlineStack, Text } from "@shopify/polaris";
+import { BlockStack, Box, Button, IndexTable, InlineStack, Text } from "@shopify/polaris";
 import { ChevronDown } from "lucide-react";
 import OrderExpandedRow from "./OrderExpandedRow";
 import RecordDoor, { type RecordDoorProps } from "./RecordDoor";
 import type { InkOrderDetail } from "../services/ink-links.server";
+import type { DisputePacketText } from "../services/ink-packet.server";
 import { LEVEL_WORDS, elementLines, locationWordOf, opensOf, type RecordRead } from "../lib/record-words";
 
 export type InkRecentOrderRow = {
@@ -32,6 +33,8 @@ export type InkRecentOrderRow = {
   detail: InkOrderDetail | null;
   record: RecordRead | null;
   door: RecordDoorProps["door"];
+  /** A bought record's dispute packet, read inside the app. */
+  packet?: DisputePacketText | null;
 };
 
 const money = (amount: string, currency: string) =>
@@ -81,13 +84,90 @@ export function RecordWords({ record }: { record: RecordRead | null }) {
   );
 }
 
-/** The bottom of the accordion: the record's door. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      size="slim"
+      onClick={() => {
+        navigator.clipboard?.writeText(text).then(
+          () => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          },
+          () => {},
+        );
+      }}
+    >
+      {/* PLACEHOLDER labels */}
+      {copied ? "Copied" : "Copy"}
+    </Button>
+  );
+}
+
+/** A bought record's dispute packet: each text Shopify's dispute form asks
+ *  for, ready to paste, with its own Copy button. */
+export function DisputePacketView({ packet }: { packet: DisputePacketText }) {
+  // PLACEHOLDER labels — Shopify's dispute form's own field names.
+  const fields = [
+    { key: "accessActivityLog", label: "Access activity log", text: packet.accessActivityLog },
+    { key: "shippingDocumentation", label: "Shipping documentation (attach as a file)", text: packet.shippingDocumentation },
+    { key: "uncategorizedText", label: "Additional information", text: packet.uncategorizedText },
+  ].filter((f) => f.text);
+  return (
+    <BlockStack gap="300">
+      <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
+        {/* PLACEHOLDER copy */}
+        DISPUTE PACKET
+      </Text>
+      {fields.map((f) => (
+        <BlockStack key={f.key} gap="100">
+          <InlineStack align="space-between" blockAlign="center" gap="200">
+            <Text as="p" variant="bodySm" fontWeight="semibold">
+              {f.label}
+            </Text>
+            <CopyButton text={f.text} />
+          </InlineStack>
+          <pre
+            style={{
+              margin: 0,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              fontSize: "12px",
+              lineHeight: 1.5,
+              padding: "8px 12px",
+              borderRadius: "8px",
+              background: "var(--p-color-bg-surface)",
+              border: "1px solid var(--p-color-border)",
+            }}
+          >
+            {f.text}
+          </pre>
+        </BlockStack>
+      ))}
+    </BlockStack>
+  );
+}
+
+/** The bottom of the accordion: the record's door — or, once bought, the
+ *  record's dispute packet, in the app. */
 function RecordFooter({ row, returnTo }: { row: InkRecentOrderRow; returnTo: string }) {
   if (!row.proofId) return null;
   if (!row.door.offerLine && !row.door.purchase) return null;
+  const door = <RecordDoor proofId={row.proofId} orderName={row.name} returnTo={returnTo} door={row.door} hidePacketLink={Boolean(row.packet)} />;
+  if (row.door.purchase && row.packet) {
+    return (
+      <BlockStack gap="300">
+        <DisputePacketView packet={row.packet} />
+        <InlineStack align="end" blockAlign="center">
+          {door}
+        </InlineStack>
+      </BlockStack>
+    );
+  }
   return (
     <InlineStack align="end" blockAlign="center">
-      <RecordDoor proofId={row.proofId} orderName={row.name} returnTo={returnTo} door={row.door} />
+      {door}
     </InlineStack>
   );
 }
