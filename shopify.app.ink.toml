@@ -26,6 +26,13 @@ name = "ink"
 # ink-app-…run.app host does.
 application_url = "https://install.in.ink"
 embedded = true
+# ink ships NO extension. extensions/ holds the Ritualist's order-status block
+# (the order door), which renders only off an `ink:order_door` metafield that
+# nothing under APP_FLAVOR=ink writes — on this record it would be a dead
+# surface in ink's review. The CLI reads an EMPTY list as the default
+# ("extensions/*"), so the list names a directory that holds nothing.
+# shopify.app.toml sets no such key and keeps shipping the block.
+extension_directories = [ "extensions-ink/*" ]
 
 [build]
 automatically_update_urls_on_dev = true
