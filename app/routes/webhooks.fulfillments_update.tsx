@@ -1,3 +1,5 @@
+import { flavorLogger } from "../services/ink-log.server";
+const console = flavorLogger("webhooks.fulfillments_update");
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { NotificationService } from "../services/notifications.server";
@@ -132,7 +134,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             );
 
             const { assertBrandedTrackingUrl } = await import("../services/branded-tracking-link.server");
-            await assertBrandedTrackingUrl({
+            const rewrite = await assertBrandedTrackingUrl({
               admin,
               shop,
               payload: fulfillment,
@@ -142,6 +144,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               shippoRegistered: patched?.shippo_registered === true,
               label: `[${topic}] branded-tracking-link`,
             });
+
+            if (ink && ["failed", "skipped_no_page_url"].includes(rewrite.outcome)) return new Response("Tracking link pending", { status: 503 });
 
             // The Order status page — where the email's primary button lands —
             // carries the brand's door once this shop metafield exists. One
@@ -160,10 +164,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             });
             }
           } else {
+            if (ink) return new Response("Tracking pending", { status: 503 });
             console.log(`⚠️ No ink_api_key for ${shop}; cannot forward tracking added on update.`);
           }
         }
       } catch (e: any) {
+        if (ink) return new Response("Tracking pending", { status: 503 });
         console.error(`❌ tracking hop on update failed (non-fatal):`, e?.message ?? e);
       }
     }
@@ -195,6 +201,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const merchantHit = await loadMerchant();
 
     if (!merchantHit) {
+      if (ink) return new Response("Delivery pending", { status: 503 });
       console.log(`⚠️ No merchant document found for ${shop}. Exiting.`);
       return new Response("OK", { status: 200 });
     }
@@ -212,6 +219,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const merchantApiKey = merchantData.ink_api_key;
       if (merchantApiKey) {
         try {
+          if (ink && !Number.isFinite(Date.parse(fulfillment.updated_at))) return new Response("Delivery timestamp unavailable", { status: 503 });
           const deliveredAt = fulfillment.updated_at || new Date().toISOString();
           await NFSService.markDelivered(order.proofMetafield.value, merchantApiKey, {
             delivered_at: deliveredAt,
@@ -219,9 +227,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           });
           console.log(`✅ Marked proof ${order.proofMetafield.value} delivered at REAL carrier delivery (${deliveredAt}).`);
         } catch (e: any) {
+          if (ink) return new Response("Delivery pending", { status: 503 });
           console.error(`❌ mark-delivered failed (non-fatal):`, e?.message);
         }
       } else {
+        if (ink) return new Response("Delivery pending", { status: 503 });
         console.log(`⚠️ No ink_api_key for ${shop}; cannot mark proof delivered.`);
       }
 
@@ -304,6 +314,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
   } catch (error: any) {
+    if (appFlavor() === "ink") {
+      if (error instanceof Response) throw error;
+      return new Response("Fulfillment update pending", { status: 503 });
+    }
     console.error("❌ Error processing FULFILLMENTS_UPDATE webhook:", error.message);
   }
 

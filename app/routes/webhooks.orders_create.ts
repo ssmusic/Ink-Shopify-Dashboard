@@ -1,3 +1,5 @@
+import { flavorLogger } from "../services/ink-log.server";
+const console = flavorLogger("webhooks.orders_create");
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
@@ -13,7 +15,7 @@ import {
   stateOfWebhookOrder,
 } from "../services/activation-scope.server";
 import { spendFromCap } from "../services/activation-counter.server";
-import { appFlavor, type AppFlavor } from "../services/app-flavor.server";
+import { isInk, appFlavor, type AppFlavor } from "../services/app-flavor.server";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -208,8 +210,8 @@ export const PRODUCT_URLS_QUERY = `
 // twenty (shopify.app.ink.toml). `customer { … }` is a Customer object and a
 // Customer object needs `read_customers`; ink has none, and Shopify fails the
 // WHOLE query over one unauthorized selection (that is how #1019 died). So
-// under ink the buyer's email and phone are read off the Order itself —
-// `Order.email` / `Order.phone` need only read_orders — and the recipient's
+// under ink the buyer's email is read off the Order itself, with no phone.
+// `Order.email` needs order access, and the recipient's
 // name off the shipping address, which was already the first choice above.
 // Nothing else differs; the Ritualist's string above is untouched and a test
 // pins it byte-for-byte, and pins that this one selects nothing outside
@@ -220,7 +222,6 @@ export const ORDER_DETAIL_QUERY_INK = `
       id
       name
       email
-      phone
       shippingAddress { name address1 address2 city province zip country }
       totalPriceSet { shopMoney { amount currencyCode } }
       lineItems(first: 20) {
@@ -301,9 +302,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   console.log(`\n📦 [orders/create] Processing order ${orderName} (${shop})`);
 
   // Phone selection (ship → order → customer fallback chain)
-  const shippingPhone = data?.shipping_address?.phone;
-  const orderPhone = data?.phone;
-  const customerPhone = data?.customer?.phone;
+  const shippingPhone = isInk() ? null : data?.shipping_address?.phone;
+  const orderPhone = isInk() ? null : data?.phone;
+  const customerPhone = isInk() ? null : data?.customer?.phone;
   const finalPhone = shippingPhone || orderPhone || customerPhone || "";
   console.log(
     `📱 Phone selection — shipping: ${shippingPhone || "—"}, order: ${orderPhone || "—"}, customer: ${customerPhone || "—"} → using: ${finalPhone || "—"}`
@@ -547,7 +548,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               undefined, // photo_hashes
               carrier_name,
               tracking_number,
-              finalPhone || order.customer?.phone || order.phone || null,
+              isInk() ? null : finalPhone || order.customer?.phone || order.phone || null,
               // The buyer's own order-status page on the merchant's site.
               // Shopify has always sent it in this body; we never read it.
               { orderStatusUrl: data?.order_status_url || null, shopDomain: shop || null }
@@ -638,6 +639,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     // THE ANSWER IS SETTLED HERE, and everything below reads it.
+    if (isInk() && !proofReference) return new Response("Enrollment pending", { status: 503 });
     const activates = activatesNow();
 
     // Tag the order — the merchant's own mark, in their own admin, for the
@@ -648,11 +650,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // recoverable) — the behaviour the comment above depends on.
     if (activates) {
       const tagRes = await admin.graphql(TAG_MUTATION, {
-        variables: { id: orderGid, tags: ["INK-Verified-Delivery"] },
+        variables: { id: orderGid, tags: isInk() ? ["Recorded by ink."] : ["INK-Verified-Delivery"] },
       });
       const tagJson = await tagRes.json();
       const tagErrors = tagJson?.data?.tagsAdd?.userErrors;
       if (tagErrors && tagErrors.length > 0) {
+        if (isInk()) throw new Error("Order tag write failed");
         console.error(`[orders/create] tagsAdd userErrors:`, tagErrors);
       } else {
         console.log(
@@ -728,6 +731,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const metafieldJson = await metafieldRes.json();
       const metaErrors = metafieldJson?.data?.metafieldsSet?.userErrors;
       if (metaErrors && metaErrors.length > 0) {
+        if (isInk()) throw new Error("Order record link write failed");
         console.error(`[orders/create] metafieldsSet userErrors:`, metaErrors);
       } else {
         console.log(`✅ [orders/create] Metafields initialized for ${orderName}`);

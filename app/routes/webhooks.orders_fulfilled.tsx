@@ -1,3 +1,5 @@
+import { flavorLogger } from "../services/ink-log.server";
+const console = flavorLogger("webhooks.orders_fulfilled");
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { NFSService } from "../services/nfs.server";

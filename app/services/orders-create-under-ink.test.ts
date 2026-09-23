@@ -67,7 +67,7 @@ const orderRecord = {
  *  one does, for the whole query. */
 function fakeAdmin(scopes: readonly string[]) {
   const sent: string[] = [];
-  const graphql = vi.fn(async (query: string) => {
+  const graphql = vi.fn(async (query: string, _options?: { variables?: Record<string, unknown> }) => {
     sent.push(query);
     const refuse = (field: string, scope: string) => {
       throw new Error(`Access denied for ${field} field. Required access: \`${scope}\` access scope.`);
@@ -146,7 +146,7 @@ describe("orders/create under APP_FLAVOR=ink", () => {
     expect(orderQuery).not.toMatch(/\bproduct\s*\{/);
     // The buyer's contact comes off the Order itself.
     expect(orderQuery).toMatch(/^\s*email\s*$/m);
-    expect(orderQuery).toMatch(/^\s*phone\s*$/m);
+    expect(orderQuery).not.toMatch(/^\s*phone\s*$/m);
 
     const payload = enrollPayload();
     expect(payload.order_details.customer_email).toBe("dana@example.test");
@@ -154,7 +154,7 @@ describe("orders/create under APP_FLAVOR=ink", () => {
     expect(payload.order_details.shipping_address.city).toBe("Austin");
     expect(payload.order_details.order_status_url).toBe(webhookBody.order_status_url);
     // The phone: the webhook body's shipping phone wins, as it always has.
-    expect(payload.order_details.customer_phone).toBe("+15550001111");
+    expect(payload.order_details).not.toHaveProperty("customer_phone");
   });
 
   it("never asks for the product URLs — the enrichment fails open without a doomed call, and the line carries no product_url", async () => {
@@ -176,7 +176,15 @@ describe("orders/create under APP_FLAVOR=ink", () => {
     await run(admin);
 
     expect(admin.sent.some((q) => /mutation AddOrderTag\b/.test(q))).toBe(true);
+    expect(admin.graphql.mock.calls.find(([q]) => /mutation AddOrderTag\b/.test(q))?.[1]?.variables?.tags).toEqual(['Recorded by ink.']);
     expect(admin.sent.some((q) => /mutation SetInkMetafields\b/.test(q))).toBe(true);
+  });
+  it("retries enrollment without marking an order recorded when the backend returned no proof", async () => {
+    const { INK_SCOPES } = await import("./ink-scopes.server");
+    const admin = fakeAdmin(INK_SCOPES);
+    fetchMock.mockResolvedValue({ok:true,status:200,json:async()=>({}),text:async()=>"{}"});
+    expect((await run(admin)).status).toBe(503);
+    expect(admin.sent.some(q=>/mutation AddOrderTag|mutation SetInkMetafields/.test(q))).toBe(false);
   });
 });
 

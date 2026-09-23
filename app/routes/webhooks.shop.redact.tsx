@@ -1,3 +1,5 @@
+import { isInk } from "../services/app-flavor.server";
+import { handleInkPrivacy } from "../services/ink-privacy.server";
 import { type ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
@@ -5,7 +7,8 @@ import { purgeShopInInk } from "../services/ink-api.server";
 import { OTHER_APP, otherAppHoldsSession } from "../firestore-session-storage.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { topic, shop } = await authenticate.webhook(request);
+  const { topic, shop, payload } = await authenticate.webhook(request);
+  if (isInk()) return handleInkPrivacy("shop", shop, payload);
 
   console.log(`Received ${topic} webhook for ${shop}`);
 

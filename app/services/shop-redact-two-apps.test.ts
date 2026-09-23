@@ -26,9 +26,9 @@ const fakeFirestore = {
     collections.push(name);
     return {
       // shopify_sessions*: .where().where().limit().get()
-      where: () => ({ where: () => ({ limit: () => sessionQuery }) }),
+      where: () => ({ where: () => ({ limit: () => sessionQuery }), limit: () => ({ get: async () => ({ empty: true }) }) }),
       // merchants: .doc(shop).delete()
-      doc: () => ({ delete: merchantDelete }),
+      doc: () => ({ delete: merchantDelete, create: async () => {} }),
     };
   },
 };
@@ -94,7 +94,7 @@ describe("shop/redact on ink (APP_FLAVOR=ink)", () => {
   it("asks the Ritualist's session collection, and purges only when the Ritualist is gone too", async () => {
     sessionQuery.get.mockResolvedValue({ empty: false });
     expect((await redact()).status).toBe(200);
-    expect(collections[0]).toBe("shopify_sessions");
+    expect(collections).toContain("shopify_sessions");
     expect(purgeShopInInk).not.toHaveBeenCalled();
 
     sessionQuery.get.mockResolvedValue({ empty: true });

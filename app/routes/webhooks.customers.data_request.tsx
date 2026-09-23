@@ -1,8 +1,11 @@
+import { isInk } from "../services/app-flavor.server";
+import { handleInkPrivacy } from "../services/ink-privacy.server";
 import { type ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { topic, shop, payload } = await authenticate.webhook(request);
+  if (isInk()) return handleInkPrivacy("data_request", shop, payload);
 
   console.log(`Received ${topic} webhook for ${shop}`);
 

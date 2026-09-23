@@ -81,24 +81,10 @@ api_version = "2025-10"
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 #
-# THE MINIMAL LIST — orders, fulfillments, and the three fulfillment-order
-# pairs (they partition by WHO fulfils and `fulfillmentTrackingInfoUpdate`
-# accepts any one of them; holding only `assigned` is why the Ritualist's
-# rewrite once touched nothing — see shopify.app.toml). Nothing else:
-#
-#   · no read_products   — the product link on the buyer's page is asked for
-#                          on its own wire and fails open (PRODUCT_URLS_QUERY);
-#                          under ink it is simply never asked for.
-#   · no read_customers  — `Order.customer` is a Customer object and needs it;
-#                          ink reads the order's own `email`/`phone` instead
-#                          (webhooks.orders_create.ts, ORDER_DETAIL_QUERY_INK).
-#   · no files / metaobjects / online_store_pages / themes / shipping — the
-#                          Ritualist's page, media, order door and carrier
-#                          service. None of those surfaces exist under ink.
-#
-# app/services/ink-scopes.server.ts holds the same list for the running app;
-# a test pins the two equal. Changing scopes re-prompts every installed store.
-scopes = "read_orders,write_orders,read_fulfillments,write_fulfillments,read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders"
+# Write scopes include read. Ink updates order tags/metafields and existing
+# tracking at merchant-managed and third-party locations. It creates no
+# fulfillment service and needs no fulfillment-service or assigned scope.
+scopes = "write_orders,write_merchant_managed_fulfillment_orders,write_third_party_fulfillment_orders"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

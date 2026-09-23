@@ -1,3 +1,5 @@
+import { flavorLogger } from "../services/ink-log.server";
+const console = flavorLogger("webhooks.fulfillments_create");
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { NFSService } from "../services/nfs.server";
@@ -91,6 +93,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const merchantHit = await findMerchantDoc(firestore, shop);
     const merchantApiKey = merchantHit?.apiKey ?? null;
     if (!merchantApiKey) {
+      if (ink) return new Response("Tracking pending", { status: 503 });
       console.error(`[${topic}] No ink_api_key for ${shop} — cannot forward tracking for ${orderName} (${proofId}).`);
       return new Response("OK", { status: 200 });
     }
@@ -111,7 +114,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // never fatal — see branded-tracking-link.server.ts.
     try {
       const { assertBrandedTrackingUrl } = await import("../services/branded-tracking-link.server");
-      await assertBrandedTrackingUrl({
+      const rewrite = await assertBrandedTrackingUrl({
         admin,
         shop,
         payload,
@@ -121,6 +124,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shippoRegistered: patched?.shippo_registered === true,
         label: `[${topic}] branded-tracking-link`,
       });
+
+      if (ink && ["failed", "skipped_no_page_url"].includes(rewrite.outcome)) return new Response("Tracking link pending", { status: 503 });
 
       // The Order status page — where the email's primary button lands —
       // carries the brand's door once this shop metafield exists. One guard
@@ -140,6 +145,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
       }
     } catch (e: any) {
+      if (ink) return new Response("Tracking link pending", { status: 503 });
       console.error(`❌ branded tracking link failed (non-fatal):`, e?.message);
     }
 
@@ -167,6 +173,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     }
   } catch (error: any) {
+    if (appFlavor() === "ink") return new Response("Tracking pending", { status: 503 });
     console.error(`❌ [${topic}] Tracking hop failed (webhook still 200s):`, error?.message ?? error);
   }
 
