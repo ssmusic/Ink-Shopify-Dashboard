@@ -2,13 +2,12 @@ import { useId } from "react";
 import {
   Banner,
   BlockStack,
-  Box,
   Card,
   InlineGrid,
   InlineStack,
-  ProgressBar,
   Text,
 } from "@shopify/polaris";
+import { INK_DATA } from "../lib/ink-palette";
 import InkKpis from "./InkKpis";
 import InkDashboardRates from "./InkDashboardRates";
 import { formatHours } from "../lib/delivery-insights";
@@ -27,6 +26,7 @@ function Bar({
   note?: string;
 }) {
   const labelId = useId();
+  const pct = total > 0 ? Math.min(100, Math.max(0, (count / total) * 100)) : 0;
   return (
     <BlockStack gap="100">
       <InlineStack align="space-between" gap="200">
@@ -37,12 +37,17 @@ function Bar({
           {count.toLocaleString("en-US")}
         </Text>
       </InlineStack>
-      <ProgressBar
-        progress={total > 0 ? (count / total) * 100 : 0}
-        tone="highlight"
-        size="small"
-        ariaLabelledBy={labelId}
-      />
+      {/* One blue for every data mark (lib/ink-palette.ts), on a neutral track. */}
+      <div
+        role="progressbar"
+        aria-labelledby={labelId}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+        style={{ height: 8, borderRadius: 9999, background: "var(--p-color-bg-fill-tertiary)", overflow: "hidden" }}
+      >
+        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 9999, background: INK_DATA }} />
+      </div>
       {note && (
         <Text as="p" variant="bodySm" tone="subdued">
           {note}
@@ -83,15 +88,9 @@ export default function DeliveryDashboard({
           <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
             <Card>
               <BlockStack gap="400">
-                <Box
-                  background="bg-surface-secondary"
-                  padding="300"
-                  borderRadius="200"
-                >
-                  <Text as="h2" variant="headingMd">
-                    Delivery and opens
-                  </Text>
-                </Box>
+                <Text as="h2" variant="headingMd">
+                  Delivery and opens
+                </Text>
                 <Text as="p" tone="subdued">
                   Each count includes only orders in the previous step.
                 </Text>
@@ -112,15 +111,9 @@ export default function DeliveryDashboard({
             </Card>
             <Card>
               <BlockStack gap="400">
-                <Box
-                  background="bg-surface-secondary"
-                  padding="300"
-                  borderRadius="200"
-                >
-                  <Text as="h2" variant="headingMd">
-                    Time to delivery
-                  </Text>
-                </Box>
+                <Text as="h2" variant="headingMd">
+                  Time to delivery
+                </Text>
                 {delivery.transit.measured > 0 ? (
                   <>
                     <Text as="p">{`Median ${formatHours(delivery.transit.medianHours)} from recording to delivery.`}</Text>
@@ -148,15 +141,9 @@ export default function DeliveryDashboard({
           <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
             <Card>
               <BlockStack gap="400">
-                <Box
-                  background="bg-surface-secondary"
-                  padding="300"
-                  borderRadius="200"
-                >
-                  <Text as="h2" variant="headingMd">
-                    Delivery status
-                  </Text>
-                </Box>
+                <Text as="h2" variant="headingMd">
+                  Delivery status
+                </Text>
                 {delivery.carrier.length ? (
                   delivery.carrier.map((c) => (
                     <Bar
@@ -175,22 +162,14 @@ export default function DeliveryDashboard({
             </Card>
             <Card>
               <BlockStack gap="200">
-                <Box
-                  background="bg-surface-secondary"
-                  padding="300"
-                  borderRadius="200"
-                >
-                  <Text as="h2" variant="headingMd">
-                    Opens without a tracking update
-                  </Text>
-                </Box>
+                <Text as="h2" variant="headingMd">
+                  Opens without a tracking update
+                </Text>
                 {delivery.waited.withData > 0 ? (
                   <>
-                    <Box color="text-info">
-                      <Text as="p" variant="headingXl">
-                        {String(delivery.waited.stuck)}
-                      </Text>
-                    </Box>
+                    <Text as="p" variant="headingXl">
+                      {String(delivery.waited.stuck)}
+                    </Text>
                     <Text
                       as="p"
                       tone="subdued"

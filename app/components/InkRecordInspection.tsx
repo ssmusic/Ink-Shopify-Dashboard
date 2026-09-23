@@ -76,24 +76,12 @@ export function RecordEventRow({
           </Text>
           <InlineStack>
             <Badge
-              tone={
-                check?.hash === "mismatch"
-                  ? "critical"
-                  : check?.hash === "matches"
-                    ? "info"
-                    : undefined
-              }
+              tone={check?.hash === "mismatch" ? "critical" : undefined}
             >{`Hash ${check?.hash ?? "not checked"}`}</Badge>
           </InlineStack>
           <InlineStack>
             <Badge
-              tone={
-                check?.link === "mismatch"
-                  ? "critical"
-                  : check?.link === "matches"
-                    ? "info"
-                    : undefined
-              }
+              tone={check?.link === "mismatch" ? "critical" : undefined}
             >{`Link ${check?.link ?? "not checked"}`}</Badge>
           </InlineStack>
         </InlineGrid>

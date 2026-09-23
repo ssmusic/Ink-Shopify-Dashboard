@@ -1,4 +1,4 @@
-import { BlockStack, Box, Card, InlineGrid, Text } from "@shopify/polaris";
+import { BlockStack, Card, InlineGrid, Text } from "@shopify/polaris";
 import type { InkKpis as Kpis } from "../services/ink-kpis.server";
 export default function InkKpis({ kpis }: { kpis: Kpis }) {
   return (
@@ -14,13 +14,11 @@ export default function InkKpis({ kpis }: { kpis: Kpis }) {
               <Text as="h2" variant="headingSm">
                 {label}
               </Text>
-              <Box color="text-info">
-                <Text as="p" variant="headingXl">
-                  {typeof value === "number"
-                    ? value.toLocaleString("en-US")
-                    : "Unavailable"}
-                </Text>
-              </Box>
+              <Text as="p" variant="headingXl">
+                {typeof value === "number"
+                  ? value.toLocaleString("en-US")
+                  : "Unavailable"}
+              </Text>
             </BlockStack>
           </Card>
         ))}

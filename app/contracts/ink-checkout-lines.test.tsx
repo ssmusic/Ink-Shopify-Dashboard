@@ -12,6 +12,8 @@
 // renders byte-identically to none.) It moved back the same evening, when Sam
 // chose Codex's screens as they were at 4022900: the record's markup is Codex's
 // RecordWords again, and the checkout's two lines still follow the elements.
+// The polish pass then drew the level badges neutral (one blue family) —
+// the badge's tone class, nothing else, moved.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

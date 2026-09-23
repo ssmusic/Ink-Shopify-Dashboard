@@ -4,6 +4,7 @@ import { DonutChart, PolarisVizProvider } from "@shopify/polaris-viz";
 import type { InkKpis } from "../services/ink-kpis.server";
 import type { DeliveryDashboardData } from "../services/ink-delivery.server";
 import "@shopify/polaris-viz/build/esm/styles.css";
+import { INK_DATA, INK_HAIRLINE } from "../lib/ink-palette";
 
 const themes = {
   Light: {
@@ -45,12 +46,12 @@ function Rate({
                 data={[
                   {
                     name: label,
-                    color: "#005BD3",
+                    color: INK_DATA,
                     data: [{ key: label, value: rate }],
                   },
                   {
                     name: "Remaining",
-                    color: "#E3E3E3",
+                    color: INK_HAIRLINE,
                     data: [{ key: label, value: 100 - rate }],
                   },
                 ]}

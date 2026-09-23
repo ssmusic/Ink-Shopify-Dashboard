@@ -45,7 +45,7 @@ export function RecordWords({
             <Text as="h4" variant="headingSm">
               {el.label}
             </Text>
-            <Badge tone="info">{LEVEL_WORDS[el.status] || "Unknown"}</Badge>
+            <Badge>{LEVEL_WORDS[el.status] || "Unknown"}</Badge>
           </InlineStack>
           <InlineGrid columns={{ xs: 1, sm: 2 }} gap="100">
             {elementLines(el).map((line, i) => (

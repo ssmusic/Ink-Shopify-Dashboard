@@ -12,6 +12,7 @@ import {
   Text,
 } from "@shopify/polaris";
 import type { InkConnection } from "../services/ink-connection.server";
+import { INK_DATA_TINT } from "../lib/ink-palette";
 
 export default function InkConnectionCard({
   connection,
@@ -74,15 +75,11 @@ export default function InkConnectionCard({
                 accessibilityLabel={`${name} store logo`}
               />
             ) : (
-              <Box
-                background="bg-fill-info-secondary"
-                borderRadius="200"
-                paddingBlock="300"
-              >
+              <div style={{ background: INK_DATA_TINT, borderRadius: "var(--p-border-radius-200)", padding: "var(--p-space-300) 0" }}>
                 <Text as="p" alignment="center" fontWeight="semibold">
                   {initials}
                 </Text>
-              </Box>
+              </div>
             )}
             <BlockStack gap="100">
               <Text as="h3" variant="headingMd" breakWord>
@@ -105,7 +102,7 @@ export default function InkConnectionCard({
                 <Text as="p" fontWeight="semibold">
                   Shopify access
                 </Text>
-                <Badge tone={shopify === "connected" ? "info" : undefined}>
+                <Badge>
                   {status(shopify)}
                 </Badge>
               </InlineStack>
@@ -122,7 +119,7 @@ export default function InkConnectionCard({
                 <Text as="p" fontWeight="semibold">
                   Ink data access
                 </Text>
-                <Badge tone={ink === "connected" ? "info" : undefined}>
+                <Badge>
                   {status(ink)}
                 </Badge>
               </InlineStack>

@@ -21,6 +21,7 @@ import {
   type OrderTimelineData,
 } from "./OrderTimeline";
 import { opensOf, type RecordRead } from "../lib/record-words";
+import { INK_DATA, INK_DATA_TINT } from "../lib/ink-palette";
 import { checkoutLines } from "../lib/checkout-words";
 
 export type InkRecentOrderRow = {
@@ -304,17 +305,19 @@ export default function InkRecentOrders({
           const open = expanded === row.id;
           const count = opensOf(row.record);
           return (
-            <Box
+            <div
               key={row.id}
-              borderWidth="025"
-              borderColor={open ? "border-info" : "border"}
-              borderRadius="200"
-              overflowX="hidden"
-              overflowY="hidden"
+              style={{
+                border: `1px solid ${open ? INK_DATA : "var(--p-color-border)"}`,
+                borderRadius: "var(--p-border-radius-200)",
+                overflow: "hidden",
+              }}
             >
-              <Box
-                padding="300"
-                background={open ? "bg-surface-info" : "bg-surface-secondary"}
+              <div
+                style={{
+                  padding: "var(--p-space-300)",
+                  background: open ? INK_DATA_TINT : "var(--p-color-bg-surface-secondary)",
+                }}
               >
                 <InlineGrid
                   columns={{
@@ -368,16 +371,14 @@ export default function InkRecentOrders({
                         ? money(row.detail.total, row.detail.currency)
                         : "Total unavailable"}
                     </Text>
-                    <Box color="text-info">
-                      <Text as="p" variant="bodySm" alignment="end" breakWord>
-                        {count == null
-                          ? "Opens unavailable"
-                          : `${count} ${count === 1 ? "open" : "opens"}`}
-                      </Text>
-                    </Box>
+                    <Text as="p" variant="bodySm" alignment="end" breakWord>
+                      {count == null
+                        ? "Opens unavailable"
+                        : `${count} ${count === 1 ? "open" : "opens"}`}
+                    </Text>
                   </BlockStack>
                 </InlineGrid>
-              </Box>
+              </div>
               <Collapsible id={`order-${row.id}`} open={open}>
                 {open && (
                   <>
@@ -386,7 +387,7 @@ export default function InkRecentOrders({
                   </>
                 )}
               </Collapsible>
-            </Box>
+            </div>
           );
         })}
       </BlockStack>
