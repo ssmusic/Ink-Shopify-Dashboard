@@ -36,7 +36,7 @@ describe("shopify.app.ink.toml", () => {
 
   it("is the dormant record, renamed ink, at install.in.ink", () => {
     expect(field(toml, "client_id")).toBe("45cc130ef59cbeaf9133acea201981ed");
-    expect(field(toml, "name")).toBe("ink");
+    expect(field(toml, "name")).toBe("ink."); // "ink always has a period after it" (Sam, 2026-09-23)
     expect(field(toml, "application_url")).toBe("https://install.in.ink");
     expect(toml).toMatch(/^embedded = true$/m);
     expect(toml).toMatch(/^use_legacy_install_flow = false$/m);

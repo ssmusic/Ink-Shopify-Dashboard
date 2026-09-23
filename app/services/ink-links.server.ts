@@ -1,12 +1,9 @@
-// WHERE INK'S SCREEN LINKS OUT — the dashboard, and each recent order's record.
+// INK'S RECENT ORDERS — each order, and its record's id.
 //
-// ink's two screens (/app/ink, /app/ink/settings) showed the mark and the dial
-// and led nowhere (day-one defect, 2026-09-22). Two doors, both reused:
+// (The dashboard door this file also held — a magic-token link out to
+// www.in.ink — is gone: "were doing everything inside this shopify app",
+// Sam, 2026-09-23.)
 //
-//   the dashboard — the same single-use magic token the Ritualist's
-//     /app/dashboard mints (POST /auth/magic-tokens, admin-gated), opened at
-//     www.in.ink/welcome, which redeems it and lands signed in. The dashboard
-//     reads the record's plan, so an ink merchant gets ink's menu.
 //   the record — each recent order's public page, www.in.ink/verify/<proof_id>.
 //     The proof id is the order's own ink.proof_reference metafield, written
 //     at enrol under ink's scopes (webhooks.orders_create.ts).
@@ -25,8 +22,6 @@
 //
 // Both fail open: a missing token or a refused read leaves the screen as it
 // was, never an error page.
-
-import { mintMagicToken } from "./ink-api.server";
 
 export const RECENT_ORDERS_QUERY = `#graphql
   query InkRecentOrders($first: Int!) {
@@ -193,11 +188,4 @@ export async function readRecentOrderRecords(admin: AdminGraphql, first = 5): Pr
     console.warn("[ink] recent orders read failed (the screen shows none):", err);
     return [];
   }
-}
-
-/** A signed-in door into the dashboard, minted per press (the token is single-use). */
-export async function dashboardDoorUrl(shop: string): Promise<string> {
-  const { token } = await mintMagicToken(shop);
-  const base = process.env.PARALLEL_APP_URL || "https://www.in.ink";
-  return `${base}/welcome?token=${encodeURIComponent(token)}`;
 }
