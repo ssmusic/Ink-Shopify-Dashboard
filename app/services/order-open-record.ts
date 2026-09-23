@@ -14,6 +14,8 @@
 // A location that was never shared is said so. A distance that was never
 // measured is never "0 m".
 
+import { openLocationOf } from "../lib/open-location";
+
 export type OpenRecord = {
   verification_status: "verified" | "enrolled";
   verification_updated_at: string | null;
@@ -66,7 +68,12 @@ export function locationLine(verdict: string | null | undefined, distanceM: numb
 export function openRecordFromProof(p: any): OpenRecord {
   const proof = p && typeof p === "object" ? p : {};
   const tapCount = Math.max(0, Math.trunc(num(proof.tap_count) ?? 0));
-  const firstDistance = num(proof.first_tap_distance_to_shipping_m);
+  // THE ORDER'S OWN WORD (ink-backend #132): the door's reading of the first
+  // open — its word and its own distance — so the Location line never pairs
+  // the proof's word with a distance another open measured. A door before
+  // #132 carries no reading, and the two stamps are read as they were.
+  const own = openLocationOf(proof.open_location);
+  const firstDistance = own ? own.distance_m : num(proof.first_tap_distance_to_shipping_m);
   const media = Array.isArray(proof.media_items) ? proof.media_items : null;
   const photoUrls = media
     ? media.map((m: any) => (m && (m.url || m.media_url)) || null).filter(Boolean)
@@ -77,7 +84,7 @@ export function openRecordFromProof(p: any): OpenRecord {
     verification_status: tapCount > 0 ? "verified" : "enrolled",
     verification_updated_at: typeof proof.first_tap_at === "string" ? proof.first_tap_at : null,
     distance_meters: firstDistance != null && firstDistance > 0 ? Math.round(firstDistance) : null,
-    gps_verdict: proof.gps_verdict != null && String(proof.gps_verdict).trim() ? String(proof.gps_verdict) : null,
+    gps_verdict: own ? own.verdict : proof.gps_verdict != null && String(proof.gps_verdict).trim() ? String(proof.gps_verdict) : null,
     tap_count: tapCount,
     last_tap_at: typeof proof.last_tap_at === "string" ? proof.last_tap_at : null,
     photo_urls: photoUrls && photoUrls.length ? photoUrls : null,

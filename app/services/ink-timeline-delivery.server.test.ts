@@ -52,12 +52,18 @@ describe("an order's timeline", () => {
     expect(JSON.stringify(t)).not.toMatch(/1 Test St|Made Up/);
   });
 
-  it("before the opens door is deployed (404), says the first open from the proof, with no point on the map", async () => {
+  it("without the opens door (404), says the first open from the proof, with no point on the map — its words only from the door's own reading", async () => {
     const f = vi.fn(async (url: string) => (url.endsWith("/opens") ? new Response("Not found", { status: 404 }) : new Response(JSON.stringify(PROOF_BODY)))) as unknown as typeof fetch;
     const t = await readTimeline("k", PROOF, f);
-    expect(t?.opens).toEqual([{ at: "2026-08-25T20:29:59.868Z", verdict: "flagged", distance_m: 3552, accuracy_m: null, lat: null, lng: null }]);
+    // A proof door before ink-backend #132 carries no reading of the open: no
+    // word, never gps_verdict beside first_tap_distance_to_shipping_m.
+    expect(t?.opens).toEqual([{ at: "2026-08-25T20:29:59.868Z", verdict: null, distance_m: null, accuracy_m: null, lat: null, lng: null }]);
     expect(t?.address).toEqual({ lat: 34.1425, lng: -118.2551 });
     expect(t?.opensFrom).toBe("proof");
+    // Since #132 the door reads the first open itself: its word, its own distance and radius.
+    const measured = { ...PROOF_BODY, open_location: { verdict: "flagged", distance_m: 3552, accuracy_m: 20, later_share: null } };
+    const g = vi.fn(async (url: string) => (url.endsWith("/opens") ? new Response("Not found", { status: 404 }) : new Response(JSON.stringify(measured)))) as unknown as typeof fetch;
+    expect((await readTimeline("k", PROOF, g))?.opens).toEqual([{ at: "2026-08-25T20:29:59.868Z", verdict: "flagged", distance_m: 3552, accuracy_m: 20, lat: null, lng: null }]);
   });
 
   it("never reads the old default stamp as a share: a measured word with no stored distance is no word at all", () => {
