@@ -33,16 +33,6 @@ export type OrderTimelineData = {
   opensAvailable?: boolean;
   opensCapped?: boolean;
 };
-// A step's mark: the one blue when it is recorded, the carrier's grey when only
-// the carrier said so, an empty ring when nothing was recorded — every label
-// starts on the same line (lib/ink-palette.ts).
-function StepMark({ state }: { state: LifecycleStep["state"] }) {
-  const base = { width: 18, height: 18, borderRadius: 9999, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 } as const;
-  if (state === "done") return <span aria-label="Recorded" style={{ ...base, background: INK_DATA, color: "#fff" }}>✓</span>;
-  if (state === "carrier") return <span aria-label="Carrier scan" style={{ ...base, background: INK_MUTED, color: "#fff" }}>✓</span>;
-  return <span aria-label="Not recorded" style={{ ...base, border: `1.5px solid ${INK_HAIRLINE}` }} />;
-}
-
 export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
   return (
     <InlineGrid columns={{ xs: 1, sm: 2, md: 5 }} gap="400">
@@ -70,6 +60,16 @@ export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
         ))}
     </InlineGrid>
   );
+}
+
+// A step's mark: the one blue when it is recorded, the carrier's grey when only
+// the carrier said so, an empty ring when nothing was recorded — every label
+// starts on the same line (lib/ink-palette.ts).
+function StepMark({ state }: { state: LifecycleStep["state"] }) {
+  const base = { width: 18, height: 18, borderRadius: 9999, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 } as const;
+  if (state === "done") return <span aria-label="Recorded" style={{ ...base, background: INK_DATA, color: "#fff" }}>✓</span>;
+  if (state === "carrier") return <span aria-label="Carrier scan" style={{ ...base, background: INK_MUTED, color: "#fff" }}>✓</span>;
+  return <span aria-label="Not recorded" style={{ ...base, border: `1.5px solid ${INK_HAIRLINE}` }} />;
 }
 export function OpensAgainstAddress({
   address,
