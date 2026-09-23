@@ -70,6 +70,7 @@ beforeEach(() => {
   delete process.env.BRANDED_TRACKING_LINK_DISABLED;
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
   delete process.env.BRANDED_TRACKING_LINK_DISABLED;
 });
@@ -210,5 +211,13 @@ describe("isBrandedTrackingUrl — the loop guard's own edges", () => {
     // A lookalike domain must NOT read as ours, or a hostile link would
     // silently disable the rewrite for that fulfillment.
     expect(isBrandedTrackingUrl("https://not-in.ink.example.com/x")).toBe(false);
+  });
+  it("under ink, checks the URL host instead of words in a carrier URL", () => {
+    vi.stubEnv("APP_FLAVOR", "ink");
+    expect(isBrandedTrackingUrl("https://clarev.in.ink/r/tok")).toBe(true);
+    expect(isBrandedTrackingUrl("https://carrier.example/track?next=https://www.in.ink/r/tok")).toBe(false);
+    expect(isBrandedTrackingUrl("https://www.in.ink.attacker.example/r/tok")).toBe(false);
+    expect(isBrandedTrackingUrl("http://clarev.in.ink/r/tok")).toBe(false);
+    expect(isBrandedTrackingUrl("https://ink:secret@clarev.in.ink/r/tok")).toBe(false);
   });
 });

@@ -33,6 +33,7 @@ const console = flavorLogger("branded-tracking-link.server");
 //     never re-send a shipping email to a buyer who already got one.
 
 import { resolveBrandPageUrl } from "./brand-page-url.server";
+import { isInk } from "./app-flavor.server";
 
 /** Every way this can end, so callers log the truth rather than a guess. */
 export type BrandedTrackingOutcome =
@@ -70,6 +71,19 @@ const MUTATION = `#graphql
 
 /** Is this URL already ours? Guards the echo our own mutation causes. */
 export function isBrandedTrackingUrl(url?: string | null): boolean {
+  if (isInk()) {
+    try {
+      const parsed = new URL(String(url || ""));
+      return (
+        parsed.protocol === "https:" &&
+        !parsed.username &&
+        !parsed.password &&
+        (parsed.hostname === "in.ink" || parsed.hostname.endsWith(".in.ink"))
+      );
+    } catch {
+      return false;
+    }
+  }
   return /(^|\/\/|\.)in\.ink(\/|$)/i.test(String(url || ""));
 }
 
