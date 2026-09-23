@@ -239,9 +239,12 @@ describe("under ink, the enrol and tracking queries select nothing outside INK_S
 
   it("ink's enrol query still carries everything a proof is made of", () => {
     const q = templateLiteral(read("app/routes/webhooks.orders_create.ts"), "ORDER_DETAIL_QUERY_INK");
-    for (const required of ["name", "email", "phone", "shippingAddress", "totalPriceSet", "lineItems", "sku", "image", "metafield", "fulfillments"]) {
+    for (const required of ["name", "email", "shippingAddress", "totalPriceSet", "lineItems", "sku", "image", "metafield", "fulfillments"]) {
       expect(q).toContain(required);
     }
+    // …and no phone: ink sends no message and shows no number, so it reads
+    // none (App Store review 2026-09-23 — the minimum-data rule).
+    expect(q).not.toMatch(/\bphone\b/);
   });
 
   it("ink's fulfillment reads still carry the proof link", () => {
