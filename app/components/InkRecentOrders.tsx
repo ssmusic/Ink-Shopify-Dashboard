@@ -183,8 +183,8 @@ export function DisputePacketView({ packet }: { packet: DisputePacketText }) {
   return (
     <BlockStack gap="300">
       <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
-        {/* PLACEHOLDER copy */}
-        DISPUTE PACKET
+        {/* Sam, 2026-09-23: "its called the record" — never "dispute packet". */}
+        THE RECORD
       </Text>
       {fields.map((f) => (
         <BlockStack key={f.key} gap="100">
