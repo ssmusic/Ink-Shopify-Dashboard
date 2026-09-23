@@ -56,6 +56,9 @@ interface OrderExpandedRowProps {
   /** ink: the whole panel shows at once — the record and the door below it are
    *  never behind the Ritualist's 520px inner scroll. */
   uncapped?: boolean;
+  /** Drawn full width under the two columns, above the footer (ink: the
+   *  order's timeline — the rail, the opens on a map, the delivery window). */
+  below?: ReactNode;
 }
 
 // THE SAME PANEL FOR BOTH APPS. The Ritualist's Shipments list passes exactly
@@ -95,7 +98,7 @@ const RITUALIST_HANDOFF = (
   </Text>
 );
 
-const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffNote, footer, aside, uncapped }: OrderExpandedRowProps) => {
+const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffNote, footer, aside, uncapped, below }: OrderExpandedRowProps) => {
   const note = handoffNote === undefined ? RITUALIST_HANDOFF : handoffNote;
   const deliveredAt =
     order.metafields?.delivery_verified_at || order.metafields?.delivery_timestamp || "";
@@ -245,6 +248,7 @@ const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffN
         </Box>
         )}
       </div>
+      {below ? <div style={{ borderTop: "1px solid var(--p-color-border)", background: "var(--p-color-bg-surface)" }}>{below}</div> : null}
       {footer ? (
         <div
           style={{
