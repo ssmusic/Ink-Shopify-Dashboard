@@ -300,14 +300,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   console.log(`\n📦 [orders/create] Processing order ${orderName} (${shop})`);
 
-  // Phone selection (ship → order → customer fallback chain)
+  // Phone selection (ship → order → customer fallback chain). The log says
+  // WHICH source was used, never the number: a phone is the buyer's protected
+  // data, and Cloud Run logs are not where it belongs (App Store review,
+  // 2026-09-23 — B11).
   const shippingPhone = data?.shipping_address?.phone;
   const orderPhone = data?.phone;
   const customerPhone = data?.customer?.phone;
   const finalPhone = shippingPhone || orderPhone || customerPhone || "";
-  console.log(
-    `📱 Phone selection — shipping: ${shippingPhone || "—"}, order: ${orderPhone || "—"}, customer: ${customerPhone || "—"} → using: ${finalPhone || "—"}`
-  );
+  const phoneSource = shippingPhone ? "shipping" : orderPhone ? "order" : customerPhone ? "customer" : "none";
+  console.log(`📱 Phone source: ${phoneSource}`);
 
   const shippingLines = data?.shipping_lines || [];
   console.log(`🚢 ${shippingLines.length} shipping line(s) on order`);

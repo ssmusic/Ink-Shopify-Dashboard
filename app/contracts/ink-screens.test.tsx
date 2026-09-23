@@ -158,7 +158,7 @@ describe("ink's home: the orders and their records, inside Shopify (Sam, 2026-09
   it("writes ink with its period, every time (Sam: \"ink always has a period after it\")", () => {
     const screens = [
       text(render(InkHome, { stage: "ready", recentOrders: ROWS })),
-      text(render(InkSettings, { flashForward: "order_status", canSave: true, ritualistUrl: "" })),
+      text(render(InkSettings, { flashForward: "order_status", canSave: true, ritualistUrl: "https://apps.shopify.com/example-listing" })),
     ];
     for (const t of screens) expect(t).not.toMatch(/\bink\b(?!\.)/i);
     expect(screens[1]).toContain("includes ink.");
@@ -310,11 +310,12 @@ describe("the settings screen", () => {
     expect(text(html)).toContain("Add The Ritualist");
   });
 
-  it("defaults to the order page and disables the Ritualist door without a listing address", () => {
+  it("defaults to the order page and draws no Ritualist card without a listing address — never a disabled button (review B2)", () => {
     const html = render(InkSettings, { flashForward: "order_status", canSave: true, ritualistUrl: "" });
     expect(html).toMatch(/value="order_status"[^>]*checked|checked[^>]*value="order_status"/);
     expect(html).not.toContain("apps.shopify.com");
-    expect(text(html)).toContain("Add The Ritualist");
+    expect(text(html)).not.toContain("Add The Ritualist");
+    expect(text(html)).not.toContain("The Ritualist");
   });
 
   it("holds the dial until the install has landed", () => {
