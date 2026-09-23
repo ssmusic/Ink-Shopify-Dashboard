@@ -36,7 +36,9 @@ vi.mock("../firestore.server", () => ({
 class InkApiError extends Error { status: number; constructor(m: string, s: number) { super(m); this.status = s; } }
 const createRecordPurchase = vi.fn();
 const listRecordPurchases = vi.fn();
-vi.mock("./ink-api.server", () => ({ createRecordPurchase, listRecordPurchases, InkApiError }));
+// The backend's resolved price (GET /admin/purchases/price): null = free.
+const readRecordPrice = vi.fn<(shopId: string) => Promise<{ price_cents: number; currency: string } | null>>();
+vi.mock("./ink-api.server", () => ({ createRecordPurchase, listRecordPurchases, readRecordPrice, InkApiError }));
 
 const { rememberRecordCharge, settleRecordCharges, readRecordDoors, recordDoorFor } = await import("./record-charges.server");
 
@@ -55,7 +57,7 @@ function admin(statuses: Record<string, string | null>) {
   };
 }
 
-beforeEach(() => { docs.clear(); created.length = 0; createRecordPurchase.mockReset(); listRecordPurchases.mockReset(); });
+beforeEach(() => { docs.clear(); created.length = 0; createRecordPurchase.mockReset(); listRecordPurchases.mockReset(); readRecordPrice.mockReset(); readRecordPrice.mockResolvedValue(null); });
 afterEach(() => vi.unstubAllEnvs());
 
 describe("remember", () => {
@@ -102,10 +104,12 @@ describe("settle", () => {
 });
 
 describe("a row's door", () => {
-  const view = (backend: Record<string, unknown> | null, shopId = "shop_1") => ({ shop: SHOP, shopId, backend });
+  const view = (shopId = "shop_1") => ({ shop: SHOP, shopId });
+  const priced = (price_cents: number) => readRecordPrice.mockResolvedValue({ price_cents, currency: "USD" });
 
-  it("no price and nothing minted: no door, and no purchases are read", async () => {
-    const doors = await readRecordDoors(admin({}), view({}), [P1]);
+  it("free (the backend says null — a merchant priced at 0) and nothing minted: no door, and no purchases are read", async () => {
+    const doors = await readRecordDoors(admin({}), view(), [P1]);
+    expect(readRecordPrice).toHaveBeenCalledWith("shop_1");
     expect(doors).toEqual({});
     expect(listRecordPurchases).not.toHaveBeenCalled();
     expect(recordDoorFor(doors, P1)).toEqual({ locked: false, offerLine: null, purchase: null });
@@ -113,15 +117,25 @@ describe("a row's door", () => {
 
   it("priced with the switch off: locked, no price line; with it on: the price line", async () => {
     listRecordPurchases.mockResolvedValue([]);
-    expect((await readRecordDoors(admin({}), view({ retrieval_price_cents: 1500 }), [P1]))[P1]).toEqual({ locked: true, offerLine: null, purchase: null });
+    priced(1500);
+    expect((await readRecordDoors(admin({}), view(), [P1]))[P1]).toEqual({ locked: true, offerLine: null, purchase: null });
     vi.stubEnv("RECORD_PURCHASES_ENABLED", "true");
-    expect((await readRecordDoors(admin({}), view({ retrieval_price_cents: 1500 }), [P1]))[P1]).toEqual({ locked: true, offerLine: "Get the record — $15", purchase: null });
+    expect((await readRecordDoors(admin({}), view(), [P1]))[P1]).toEqual({ locked: true, offerLine: "Get the record — $15", purchase: null });
+  });
+
+  it("the backend's default (a merchant with no price) reads as $29 — the number is the backend's, not this app's", async () => {
+    listRecordPurchases.mockResolvedValue([]);
+    priced(2900);
+    expect((await readRecordDoors(admin({}), view(), [P1]))[P1]).toEqual({ locked: true, offerLine: null, purchase: null });
+    vi.stubEnv("RECORD_PURCHASES_ENABLED", "true");
+    expect((await readRecordDoors(admin({}), view(), [P1]))[P1]).toEqual({ locked: true, offerLine: "Get the record — $29", purchase: null });
   });
 
   it("a bought order shows its purchase and is not locked", async () => {
     vi.stubEnv("RECORD_PURCHASES_ENABLED", "true");
     listRecordPurchases.mockResolvedValue([{ id: "pur_9", proof_id: P1, packet_url: "https://www.in.ink/verify/x?key=k", outcome: "open" }]);
-    const doors = await readRecordDoors(admin({}), view({ retrieval_price_cents: 1500 }), [P1, P2, null]);
+    priced(1500);
+    const doors = await readRecordDoors(admin({}), view(), [P1, P2, null]);
     expect(doors[P1]).toEqual({ locked: false, offerLine: null, purchase: { id: "pur_9", packet_url: "https://www.in.ink/verify/x?key=k", outcome: "open" } });
     expect(doors[P2]).toEqual({ locked: true, offerLine: "Get the record — $15", purchase: null });
   });

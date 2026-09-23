@@ -16,8 +16,8 @@
 // settled_at }.
 
 import firestore from "../firestore.server";
-import { createRecordPurchase, InkApiError, listRecordPurchases } from "./ink-api.server";
-import { readRecordCharge, recordDoorRow, recordOffer, recordPriceOf, recordPriceWords, RECORD_DOOR_LABEL } from "./record-door.server";
+import { createRecordPurchase, InkApiError, listRecordPurchases, readRecordPrice } from "./ink-api.server";
+import { readRecordCharge, recordDoorRow, recordOffer, recordPriceWords, RECORD_DOOR_LABEL } from "./record-door.server";
 import type { InkMerchantView } from "./ink-merchant.server";
 
 const COLLECTION = "record_charges";
@@ -121,16 +121,17 @@ const NO_DOOR: RecordDoorView = { locked: false, offerLine: null, purchase: null
  *  nothing, and nothing but the settle's one query is spent. Fail-soft. */
 export async function readRecordDoors(
   admin: AdminGraphql,
-  view: Pick<InkMerchantView, "shop" | "shopId" | "backend">,
+  view: Pick<InkMerchantView, "shop" | "shopId">,
   proofIds: Array<string | null>,
 ): Promise<Record<string, RecordDoorView>> {
   const out: Record<string, RecordDoorView> = {};
   if (!view.shopId) return out;
   const settled = await settleRecordCharges(admin, view.shop, view.shopId);
-  const priced = recordPriceOf(view.backend);
+  // The backend's resolved price — never the raw field, never a default here.
+  const priced = await readRecordPrice(view.shopId);
   // A purchase can exist only where a price once did; skip the read otherwise.
   if (!priced && settled.minted === 0) return out;
-  const offer = recordOffer(view.backend);
+  const offer = recordOffer(priced);
   const purchases = await listRecordPurchases(view.shopId);
   for (const proofId of proofIds) {
     if (!proofId) continue;

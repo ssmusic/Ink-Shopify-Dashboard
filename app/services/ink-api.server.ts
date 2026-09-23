@@ -784,6 +784,26 @@ export const createRecordPurchase = async (input: {
   return body.purchase as RecordPurchase;
 };
 
+/** The shop's record price as the backend resolves it — the one author
+ *  (`retrievalPriceOf`: $29 unless the merchant names its own; 0 = free).
+ *  null when the record is free, and null when the read fails: the screen
+ *  then draws no door (the backend's own doors still lock). */
+export const readRecordPrice = async (shopId: string): Promise<{ price_cents: number; currency: string } | null> => {
+  if (!shopId) return null;
+  try {
+    const response = await fetch(getAlanUrl(`/admin/purchases/price?shop_id=${encodeURIComponent(shopId)}`), {
+      headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
+    });
+    if (!response.ok) return null;
+    const p = (await response.json())?.price;
+    if (!p || !Number.isInteger(p.price_cents) || p.price_cents <= 0 || typeof p.currency !== "string") return null;
+    return { price_cents: p.price_cents, currency: p.currency };
+  } catch (err) {
+    console.warn("[record] price read failed:", err);
+    return null;
+  }
+};
+
 /** This shop's purchases, newest first; [] when the read fails (the screen
  *  then shows no packet links — never an error page). */
 export const listRecordPurchases = async (shopId: string): Promise<RecordPurchase[]> => {

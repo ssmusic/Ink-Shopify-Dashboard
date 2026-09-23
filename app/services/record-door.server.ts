@@ -2,9 +2,12 @@
 // "the words are free, the proof is paid" · "put a price on the download").
 //
 // MONEY IS SAM'S GATE. Two switches, both his, both off today:
-//   1. the PRICE — `retrieval_price_cents` on the backend merchant record.
-//      Absent: no price is shown, no purchase exists, and the record stays
-//      free to download for that merchant exactly as before.
+//   1. the PRICE — resolved by the BACKEND alone (utils/recordRetrieval.js,
+//      `retrievalPriceOf`; Sam, 2026-09-22: "make it 29"): $29 unless the
+//      merchant names its own `retrieval_price_cents`; 0 = free for that
+//      merchant. This app reads the resolved price from
+//      `GET /admin/purchases/price` (readRecordPrice) and never re-reads the
+//      raw field or carries a default of its own.
 //   2. the KILL SWITCH — `RECORD_PURCHASES_ENABLED=true` in this service's
 //      env. Off (unset): no charge can be created, whatever a record says.
 // A charge is created only when BOTH are on. `RECORD_PURCHASE_TEST=true`
@@ -22,8 +25,6 @@ import type { RecordPurchase } from "./ink-api.server";
 
 export type RecordPrice = { price_cents: number; currency: string };
 
-const MAX_PRICE_CENTS = 1_000_000;
-
 export function recordPurchasesEnabled(): boolean {
   return process.env.RECORD_PURCHASES_ENABLED === "true";
 }
@@ -32,17 +33,10 @@ export function recordPurchaseIsTest(): boolean {
   return process.env.RECORD_PURCHASE_TEST === "true";
 }
 
-/** The backend doc's price, read the way the backend reads it — or null. */
-export function recordPriceOf(backend: Record<string, unknown> | null | undefined): RecordPrice | null {
-  const cents = backend?.retrieval_price_cents;
-  if (typeof cents !== "number" || !Number.isInteger(cents) || cents <= 0 || cents > MAX_PRICE_CENTS) return null;
-  const cur = backend?.retrieval_currency;
-  return { price_cents: cents, currency: typeof cur === "string" && /^[A-Z]{3}$/.test(cur) ? cur : "USD" };
-}
-
-/** The price a buyer of this record is offered: only with the switch on. */
-export function recordOffer(backend: Record<string, unknown> | null | undefined): RecordPrice | null {
-  return recordPurchasesEnabled() ? recordPriceOf(backend) : null;
+/** The price a buyer of this record is offered: the backend's resolved
+ *  price, only with the switch on. */
+export function recordOffer(price: RecordPrice | null): RecordPrice | null {
+  return recordPurchasesEnabled() ? price : null;
 }
 
 // PLACEHOLDER copy — Sam's words replace it.
