@@ -32,7 +32,6 @@ import {
   type LinksFunction,
   type LoaderFunctionArgs,
 } from "react-router";
-import leafletCss from "leaflet/dist/leaflet.css?url";
 import polarisVizCss from "@shopify/polaris-viz/build/esm/styles.css?url";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { Banner, BlockStack, Box, Card, Layout, Page, Text } from "@shopify/polaris";
@@ -49,11 +48,8 @@ import DeliveryDashboard from "../components/DeliveryDashboard";
 import { readTimelines } from "../services/ink-timeline.server";
 import { readDeliveryDashboard } from "../services/ink-delivery.server";
 
-// The map's tiles and controls (Leaflet) and Shopify's charts (Polaris Viz).
-export const links: LinksFunction = () => [
-  { rel: "stylesheet", href: leafletCss },
-  { rel: "stylesheet", href: polarisVizCss },
-];
+// Shopify's charts (Polaris Viz). The map is Google's (components/OpensMap.tsx) and brings its own.
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: polarisVizCss }];
 
 // While a fresh install is still provisioning (no api key yet), the doors
 // cannot be read; the screen asks again every few seconds for a while.
@@ -72,7 +68,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (section === "insights") {
     const [kpis, delivery] = await Promise.all([readInkKpis(apiKey), readDeliveryDashboard(apiKey)]);
-    return { section, stage, kpis, delivery, recentOrders: [] };
+    return { section, stage, kpis, delivery, recentOrders: [], mapsKey: null };
   }
 
   const recentOrders = await readRecentOrderRecords(admin);
@@ -105,6 +101,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     kpis: null,
     delivery: null,
     recentOrders: rows.map((r, i) => ({ ...r, packet: packets[i] })),
+    // A BROWSER key, referrer-restricted to this app's hosts and to the Maps
+    // JavaScript API alone — never the backend's server key (components/OpensMap.tsx).
+    mapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY || null,
   };
 };
 
@@ -149,7 +148,7 @@ export default function InkHome() {
                   {/* PLACEHOLDER copy */}
                   <Text as="h2" variant="headingMd">Recent orders</Text>
                 </Box>
-                <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />
+                <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" mapsKey={data.mapsKey} />
               </Card>
             )}
           </BlockStack>

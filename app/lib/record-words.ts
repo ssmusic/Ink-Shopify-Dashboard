@@ -123,6 +123,12 @@ export function locationWordOf(record: RecordRead | null | undefined): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
+/** The customer's phone confirmed the fix at the door (the record's delivery place). */
+export function seenAtDoor(record: RecordRead | null | undefined): boolean {
+  const place = record?.elements.find((e) => e.element === "delivery_place");
+  return (place?.value as { verified_at_door?: unknown } | null)?.verified_at_door === true;
+}
+
 /** How many times the order's tracking link was opened. */
 export function opensOf(record: RecordRead | null | undefined): number | null {
   const n = record?.summary?.opens;

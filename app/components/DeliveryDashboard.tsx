@@ -6,7 +6,8 @@
 // funnel — ink's: orders → delivered → opened → location shared → seen at the
 // door — and time in transit), What the carrier said, While they waited, Not
 // recorded yet. Charts are Shopify's own (@shopify/polaris-viz) where a twin
-// exists: FunnelChart, BarChart, SimpleBarChart. They draw in the browser only
+// exists: FunnelChart, BarChart; the carrier's last word in the console's plain
+// bars, in the same blue (lib/ink-palette.ts). They draw in the browser only
 // (they measure their box); every number is ALSO printed as text, so the
 // server render, a screen reader and the tests all read the same figures.
 //
@@ -17,6 +18,7 @@ import { BlockStack, Card, EmptyState, InlineGrid, InlineStack, Text } from "@sh
 import { BarChart, FunnelChart, PolarisVizProvider } from "@shopify/polaris-viz";
 import InkKpis from "./InkKpis";
 import { formatHours } from "../lib/delivery-insights";
+import { INK_DATA } from "../lib/ink-palette";
 import type { InkKpis as Kpis } from "../services/ink-kpis.server";
 import type { DeliveryDashboardData } from "../services/ink-delivery.server";
 
@@ -62,7 +64,7 @@ function LeaderBar({ label, count, sharePct }: { label: string; count: number; s
         <Text as="span" variant="bodySm" tone="subdued">{`${count} · ${pct(sharePct)} of orders`}</Text>
       </InlineStack>
       <div style={{ height: 8, borderRadius: 4, background: "var(--p-color-bg-surface-secondary)" }}>
-        <div style={{ height: 8, borderRadius: 4, width: `${w}%`, background: "#1f9ef5" }} />
+        <div style={{ height: 8, borderRadius: 4, width: `${w}%`, background: INK_DATA }} />
       </div>
     </BlockStack>
   );

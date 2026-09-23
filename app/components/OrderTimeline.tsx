@@ -11,7 +11,8 @@
 // Every visible string is PLACEHOLDER copy — Sam's words replace it.
 
 import { BlockStack, Box, InlineGrid, InlineStack, Text } from "@shopify/polaris";
-import OpensMap, { VERDICT_COLOR, type MapOpen, type MapPoint } from "./OpensMap";
+import OpensMap, { type MapOpen, type MapPoint } from "./OpensMap";
+import { INK_DATA, INK_DATA_TINT, INK_HAIRLINE, INK_MUTED, INK_NEUTRAL } from "../lib/ink-palette";
 import { kmOrM, openResult, openSentence, type DeliveryWindow, type LifecycleStep } from "../lib/order-timeline";
 import { when } from "../lib/record-words";
 
@@ -42,17 +43,18 @@ const RESULT_WORD: Record<string, string> = {
   imprecise: "too wide to measure",
 };
 
+// One palette (lib/ink-palette.ts): a located open is the data blue, the rest neutral.
 const RESULT_COLOR: Record<string, string> = {
-  within: VERDICT_COLOR.pass,
-  near: VERDICT_COLOR.near,
-  outside: VERDICT_COLOR.flagged,
+  within: INK_DATA,
+  near: INK_DATA,
+  outside: INK_DATA,
 };
 
 function StepMark({ state }: { state: LifecycleStep["state"] }) {
   const base = { width: 18, height: 18, borderRadius: 9999, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 } as const;
-  if (state === "done") return <span aria-label="done" style={{ ...base, background: VERDICT_COLOR.pass, color: "#fff" }}>✓</span>;
-  if (state === "carrier") return <span aria-label="from the carrier" style={{ ...base, background: "#8a8a8a", color: "#fff" }}>✓</span>;
-  return <span aria-label="not recorded" style={{ ...base, border: "1.5px solid #d4d4d4" }} />;
+  if (state === "done") return <span aria-label="done" style={{ ...base, background: INK_NEUTRAL, color: "#fff" }}>✓</span>;
+  if (state === "carrier") return <span aria-label="from the carrier" style={{ ...base, background: INK_MUTED, color: "#fff" }}>✓</span>;
+  return <span aria-label="not recorded" style={{ ...base, border: `1.5px solid ${INK_HAIRLINE}` }} />;
 }
 
 export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
@@ -78,14 +80,13 @@ export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
   );
 }
 
-export function OpensAgainstAddress({ address, opens }: { address: MapPoint | null; opens: TimelineOpen[] }) {
+export function OpensAgainstAddress({ address, opens, mapsKey = null }: { address: MapPoint | null; opens: TimelineOpen[]; mapsKey?: string | null }) {
   const located = opens.filter((o) => o.lat != null && o.lng != null && o.distance_m != null);
   const first = opens.find((o) => o.distance_m != null) ?? opens[0] ?? null;
   const mapOpens: MapOpen[] = located.map((o, i) => ({
     lat: o.lat as number,
     lng: o.lng as number,
     distance_m: o.distance_m,
-    verdict: openResult(o.distance_m, o.verdict) === "within" ? "pass" : openResult(o.distance_m, o.verdict) === "near" ? "near" : "flagged",
     label: `Open ${opens.indexOf(o) + 1}${o.at ? ` · ${when(o.at)}` : ""}`,
   }));
   return (
@@ -93,7 +94,7 @@ export function OpensAgainstAddress({ address, opens }: { address: MapPoint | nu
       <Text as="p" variant="bodySm">
         {first ? openSentence(first.distance_m, first.verdict) : "Not opened yet."}
       </Text>
-      {address && mapOpens.length > 0 ? <OpensMap address={address} opens={mapOpens} /> : null}
+      {address && mapOpens.length > 0 ? <OpensMap apiKey={mapsKey} address={address} opens={mapOpens} /> : null}
       {opens.length > 0 ? (
         <BlockStack gap="100">
           {opens.map((o, i) => {
@@ -101,7 +102,7 @@ export function OpensAgainstAddress({ address, opens }: { address: MapPoint | nu
             return (
               <InlineStack key={`${o.at ?? ""}-${i}`} align="space-between" blockAlign="center" gap="200" wrap={false}>
                 <InlineStack gap="200" blockAlign="center" wrap={false}>
-                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 9999, background: RESULT_COLOR[r] ?? "#b5b5b5", display: "inline-block" }} />
+                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 9999, background: RESULT_COLOR[r] ?? INK_HAIRLINE, display: "inline-block" }} />
                   <Text as="span" variant="bodySm">
                     {`Open ${i + 1}`}
                   </Text>
@@ -134,10 +135,10 @@ export function DeliveryWindowBar({ w }: { w: DeliveryWindow | null }) {
   }
   return (
     <BlockStack gap="200">
-      <div style={{ position: "relative", height: 28, borderRadius: 6, background: "rgba(41, 132, 90, 0.10)", border: "1px solid var(--p-color-border)" }}>
+      <div style={{ position: "relative", height: 28, borderRadius: 6, background: INK_DATA_TINT, border: "1px solid var(--p-color-border)" }}>
         {w.openPositionPct != null ? (
-          <div aria-label="first open" style={{ position: "absolute", top: 0, bottom: 0, left: `${w.openPositionPct}%`, width: 2, background: "#303030" }}>
-            <span style={{ position: "absolute", top: -4, left: -3, width: 8, height: 8, borderRadius: 9999, background: "#303030" }} />
+          <div aria-label="first open" style={{ position: "absolute", top: 0, bottom: 0, left: `${w.openPositionPct}%`, width: 2, background: INK_DATA }}>
+            <span style={{ position: "absolute", top: -4, left: -3, width: 8, height: 8, borderRadius: 9999, background: INK_DATA }} />
           </div>
         ) : null}
       </div>
@@ -164,7 +165,7 @@ export function DeliveryWindowBar({ w }: { w: DeliveryWindow | null }) {
 }
 
 /** The whole block, as it sits in the accordion under the record's words. */
-export default function OrderTimeline({ data }: { data: OrderTimelineData }) {
+export default function OrderTimeline({ data, mapsKey = null }: { data: OrderTimelineData; mapsKey?: string | null }) {
   const section = (title: string) => (
     <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
       {title}
@@ -180,7 +181,7 @@ export default function OrderTimeline({ data }: { data: OrderTimelineData }) {
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="500">
           <BlockStack gap="300">
             {section("THE OPENS · THE CUSTOMER'S PHONE ↔ THE DELIVERY ADDRESS")}
-            <OpensAgainstAddress address={data.address} opens={data.opens} />
+            <OpensAgainstAddress address={data.address} opens={data.opens} mapsKey={mapsKey} />
           </BlockStack>
           <BlockStack gap="300">
             {section("THE DELIVERY WINDOW")}

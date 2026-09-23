@@ -7,6 +7,8 @@
 // combination or a hook outside its router fails here rather than in a
 // merchant's admin.
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderToString } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { AppProvider } from "@shopify/polaris";
@@ -260,11 +262,11 @@ describe("each order's timeline, inside the accordion (Sam, 2026-09-23)", () => 
     window: { deliveredAt: at(40), windowEnd: at(112), firstOpenAt: at(45), hoursToOpen: 5, openPositionPct: 6.9, withinExpectedWindow: true },
   };
   const withTimeline = [{ ...ROWS[0], timeline }];
-  const open = () =>
+  const open = (mapsKey: string | null = "test-browser-key") =>
     renderToString(
       <AppProvider i18n={translations}>
         {(() => {
-          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <InkRecentOrders orders={withTimeline} defaultExpandedId={ROWS[0].id} /> }]);
+          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <InkRecentOrders orders={withTimeline} defaultExpandedId={ROWS[0].id} mapsKey={mapsKey} /> }]);
           return <Stub initialEntries={["/"]} />;
         })()}
       </AppProvider>,
@@ -282,6 +284,14 @@ describe("each order's timeline, inside the accordion (Sam, 2026-09-23)", () => 
     expect(t).toContain("100 m and 300 m rings");
   });
 
+  it("draws no map without the browser key — the words still say every open", () => {
+    const html = open(null);
+    expect(html).not.toContain('data-testid="opens-map"');
+    const t = text(html.slice(0, html.indexOf("lg:hidden")));
+    expect(t).toContain("56 m · within 100 m");
+    expect(t).toContain("719 m · outside 300 m");
+  });
+
   it("never prints a coordinate as text — the map draws the point, the words say the distance", () => {
     const t = text(open());
     for (const coord of ["34.05", "-118.24", "34.058", "-118.250"]) expect(t).not.toContain(coord);
@@ -296,6 +306,42 @@ describe("each order's timeline, inside the accordion (Sam, 2026-09-23)", () => 
     expect(record).toBeGreaterThan(-1);
     expect(rail).toBeGreaterThan(record);
     expect(door).toBeGreaterThan(rail);
+  });
+});
+
+describe("one palette (Sam, 2026-09-23: \"some pages are blue and others green\")", () => {
+  const INK_FILES = [
+    "app/components/OpensMap.tsx",
+    "app/components/OrderTimeline.tsx",
+    "app/components/DeliveryDashboard.tsx",
+    "app/components/InkKpis.tsx",
+    "app/components/InkRecentOrders.tsx",
+    "app/components/InkPillNav.tsx",
+    "app/routes/app.ink._index.tsx",
+  ];
+  const src = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8");
+
+  it("draws every data mark in the one blue, and no green anywhere but the \"Seen at the door\" badge", () => {
+    for (const f of INK_FILES) {
+      const code = src(f);
+      // No green of any family: Polaris success hexes, the console's emerald, any rgb/hsl green.
+      expect(code, f).not.toMatch(/#29845a|#008060|#16a34a|#22c55e|rgb\(16 185 129\)|rgba\(41, 132, 90|hsl\(1[2-5]\d/i);
+      const successTones = code.match(/tone="success"/g) ?? [];
+      if (f === "app/components/InkRecentOrders.tsx") expect(successTones.length, f).toBe(1);
+      else expect(successTones.length, f).toBe(0);
+    }
+    for (const f of ["app/components/OpensMap.tsx", "app/components/OrderTimeline.tsx", "app/components/DeliveryDashboard.tsx"]) {
+      expect(src(f), f).toContain("INK_DATA");
+    }
+  });
+
+  it("shows the green badge only when the record says the phone confirmed the door", () => {
+    const door = { ...RECORD, elements: RECORD.elements.map((e) => (e.element === "delivery_place" ? { ...e, value: { geocoded: true, verified_at_door: true } } : e)) };
+    const withDoor = text(render(InkHome, { stage: "ready", recentOrders: [{ ...ROWS[0], record: door }] }));
+    expect(withDoor).toContain("Seen at the door");
+    const without = text(render(InkHome, { stage: "ready", recentOrders: ROWS }));
+    expect(without).not.toContain("Seen at the door");
+    expect(without).toContain("Outside 300 m");
   });
 });
 

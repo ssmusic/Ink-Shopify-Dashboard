@@ -18,14 +18,14 @@
 // Every visible string that is ink's own is PLACEHOLDER copy — Sam's words.
 
 import { useState } from "react";
-import { BlockStack, Box, Button, IndexTable, InlineStack, Text } from "@shopify/polaris";
+import { Badge, BlockStack, Box, Button, IndexTable, InlineStack, Text } from "@shopify/polaris";
 import { ChevronDown } from "lucide-react";
 import OrderExpandedRow from "./OrderExpandedRow";
 import RecordDoor, { type RecordDoorProps } from "./RecordDoor";
 import type { InkOrderDetail } from "../services/ink-links.server";
 import type { DisputePacketText } from "../services/ink-packet.server";
 import OrderTimeline, { type OrderTimelineData } from "./OrderTimeline";
-import { LEVEL_WORDS, elementLines, locationWordOf, opensOf, type RecordRead } from "../lib/record-words";
+import { LEVEL_WORDS, elementLines, locationWordOf, opensOf, seenAtDoor, type RecordRead } from "../lib/record-words";
 
 export type InkRecentOrderRow = {
   id: string;
@@ -175,9 +175,17 @@ function RecordFooter({ row, returnTo }: { row: InkRecentOrderRow; returnTo: str
   );
 }
 
-function Panel({ row, returnTo, onCollapse }: { row: InkRecentOrderRow; returnTo: string; onCollapse: () => void }) {
+/** The order row's location cell: green only for a real "seen at the door". */
+function LocationCell({ row }: { row: InkRecentOrderRow }) {
+  if (!row.proofId) return <Text as="span" variant="bodyMd">—</Text>;
+  // PLACEHOLDER label — the record's own words.
+  if (seenAtDoor(row.record)) return <Badge tone="success">Seen at the door</Badge>;
+  return <Text as="span" variant="bodyMd">{locationWordOf(row.record) || "—"}</Text>;
+}
+
+function Panel({ row, returnTo, onCollapse, mapsKey }: { row: InkRecentOrderRow; returnTo: string; onCollapse: () => void; mapsKey: string | null }) {
   const footer = <RecordFooter row={row} returnTo={returnTo} />;
-  const timeline = row.timeline ? <OrderTimeline data={row.timeline} /> : null;
+  const timeline = row.timeline ? <OrderTimeline data={row.timeline} mapsKey={mapsKey} /> : null;
   if (!row.detail) {
     // Only the minimal order read answered (protected fields redacted): the record alone.
     return (
@@ -208,9 +216,12 @@ export default function InkRecentOrders({
   orders,
   returnTo = "/app/ink",
   defaultExpandedId = null,
+  mapsKey = null,
 }: {
   orders: InkRecentOrderRow[];
   returnTo?: string;
+  /** The Maps JavaScript browser key (GOOGLE_MAPS_BROWSER_KEY); none → no map, the words remain. */
+  mapsKey?: string | null;
   /** A row opened on first render (the listing screenshot; a deep link one day). */
   defaultExpandedId?: string | null;
 }) {
@@ -255,9 +266,7 @@ export default function InkRecentOrders({
           </Text>
         </IndexTable.Cell>
         <IndexTable.Cell>
-          <Text variant="bodyMd" as="span">
-            {row.proofId ? locationWordOf(row.record) || "—" : "—"}
-          </Text>
+          <LocationCell row={row} />
         </IndexTable.Cell>
       </IndexTable.Row>
     );
@@ -266,7 +275,7 @@ export default function InkRecentOrders({
       tr,
       <tr key={`${row.id}-expanded`}>
         <td colSpan={6} style={{ padding: 0 }}>
-          <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} />
+          <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} mapsKey={mapsKey} />
         </td>
       </tr>,
     ];
@@ -347,7 +356,7 @@ export default function InkRecentOrders({
                     </div>
                   </div>
                 </div>
-                {isExpanded && <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} />}
+                {isExpanded && <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} mapsKey={mapsKey} />}
               </div>
             );
           })
