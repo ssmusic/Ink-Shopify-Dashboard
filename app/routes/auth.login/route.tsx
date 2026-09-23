@@ -1,3 +1,5 @@
+import { redirect } from "react-router";
+import { isInk } from "../../services/app-flavor.server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
@@ -7,12 +9,14 @@ import { login } from "../../shopify.server";
 import { loginErrorMessage } from "./error.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (isInk() && !new URL(request.url).searchParams.get("shop")) throw redirect("https://www.in.ink");
   const errors = loginErrorMessage(await login(request));
 
   return { errors };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  if (isInk() && !new URL(request.url).searchParams.get("shop")) throw redirect("https://www.in.ink");
   const errors = loginErrorMessage(await login(request));
 
   return {

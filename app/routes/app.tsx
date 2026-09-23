@@ -1,3 +1,5 @@
+import { flavorLogger } from "../services/ink-log.server";
+const console = flavorLogger("app");
 import { forwardRef } from "react";
 import { Outlet, useLoaderData, useRouteError, useRouteLoaderData, Link, type HeadersFunction, type LoaderFunctionArgs, type LinksFunction } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -175,6 +177,13 @@ const PolarisLink = forwardRef<HTMLAnchorElement, any>(function PolarisLink(
 
 export default function App() {
   const { apiKey, flavor } = useLoaderData<typeof loader>();
+  if (flavor === "ink") return <ShopifyAppProvider embedded apiKey={apiKey}>
+    <PolarisAppProvider i18n={translations} linkComponent={PolarisLink}>
+      <NavMenu><a href="/app/ink" rel="home">Orders</a><a href="/app/ink?view=insights">Dashboard</a><a href="/app/ink/settings">Settings</a></NavMenu>
+      <Outlet />
+    </PolarisAppProvider>
+  </ShopifyAppProvider>;
+
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -184,17 +193,6 @@ export default function App() {
             <TooltipProvider>
               <Toaster />
               <Sonner />
-              {/* ink's two screens hang off Shopify's own app nav (App Bridge
-                  NavMenu). The Ritualist renders nothing here — its
-                  navigation is its own TopNav, unchanged. */}
-              {flavor === "ink" && (
-                <NavMenu>
-                  {/* PLACEHOLDER copy — Sam writes the nav words. */}
-                  <a href="/app/ink" rel="home">Home</a>
-                  <a href="/app/ink?view=insights">Insights</a>
-                  <a href="/app/ink/settings">Settings</a>
-                </NavMenu>
-              )}
               <Outlet />
             </TooltipProvider>
           </ShopProvider>

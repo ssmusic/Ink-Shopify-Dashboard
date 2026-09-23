@@ -1,25 +1,5 @@
-// INK'S SETTINGS — the forward dial, and the one line that leads up.
-//
-// Mounted under APP_FLAVOR=ink only (server/ink-mounts.mjs). Two things:
-//
-//   · THE FORWARD DIAL. After the flash — the brand's mark for a moment, one
-//     ask — the buyer is forwarded on. `order_status` sends them to the
-//     merchant's own Shopify order page (shows the tracking, asks nothing);
-//     `carrier` sends them to the carrier's page. The dial lives on the
-//     backend merchant doc (`flash_forward`, ink-backend utils/buyerDoor.js)
-//     and is written through the admin door, PATCH /admin/merchants/:id —
-//     the backend first, nothing recorded locally, the way the Ritualist's
-//     return-window save writes (app.api.settings.notifications.tsx).
-//
-//   · ADD THE RITUALIST. The paid product that includes ink: one link to
-//     its listing, from env RITUALIST_LISTING_URL (a PLACEHOLDER until Sam
-//     has the listing's address; the line renders disabled without it).
-//
-// Every visible string is PLACEHOLDER copy — Sam writes the words.
-
-import { useState } from "react";
 import {
-  useFetcher,
+  data as routeData,
   useLoaderData,
   useRouteError,
   type ActionFunctionArgs,
@@ -27,157 +7,82 @@ import {
   type LoaderFunctionArgs,
 } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import {
-  Banner,
-  BlockStack,
-  Button,
-  Card,
-  ChoiceList,
-  InlineStack,
-  Layout,
-  Page,
-  Text,
-} from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
-import InkPillNav from "../components/InkPillNav";
+import InkSettingsView from "../components/InkSettingsView";
 import { patchMerchant } from "../services/ink-api.server";
+import { updateMerchant } from "../services/merchant.server";
 import {
   FLASH_FORWARDS,
-  flashForwardOf,
   readInkMerchant,
   type FlashForward,
 } from "../services/ink-merchant.server";
+import { readPrivacyRequests } from "../services/ink-privacy.server";
 
+function listingUrl(raw: string | undefined) {
+  try {
+    const u = new URL(raw || "");
+    return u.protocol === "https:" &&
+      u.hostname === "apps.shopify.com" &&
+      !u.username &&
+      !u.password
+      ? u.href
+      : "";
+  } catch {
+    return "";
+  }
+}
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const view = await readInkMerchant(session.shop);
-  return {
-    flashForward: flashForwardOf(view),
-    // No shop_id means the install has not landed yet; the dial cannot be
-    // written until the backend knows this merchant.
-    canSave: Boolean(view.shopId),
-    ritualistUrl: process.env.RITUALIST_LISTING_URL || "",
-  };
+  const privacy = await readPrivacyRequests(session.shop).catch(() => null);
+  return routeData(
+    {
+      flashForward: (view.backend?.flash_forward ??
+        null) as FlashForward | null,
+      canSave: Boolean(view.shopId),
+      ritualistUrl: listingUrl(process.env.RITUALIST_LISTING_URL),
+      privacy,
+    },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 };
-
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const form = await request.formData();
-  const raw = String(form.get("flash_forward") || "");
-  if (!(FLASH_FORWARDS as readonly string[]).includes(raw)) {
-    return { ok: false, flashForward: null as FlashForward | null, error: "Pick where the customer goes next." }; // PLACEHOLDER
-  }
-  const next = raw as FlashForward;
-
+  const next = String(form.get("flash_forward") || "") as FlashForward;
+  const no = (error: string) => ({
+    ok: false,
+    flashForward: null as FlashForward | null,
+    error,
+  });
+  if (!(FLASH_FORWARDS as readonly string[]).includes(next))
+    return no("Choose a destination.");
   const view = await readInkMerchant(session.shop);
-  if (!view.shopId) {
-    return { ok: false, flashForward: null as FlashForward | null, error: "This store is still being set up — try again in a moment." }; // PLACEHOLDER
-  }
-
-  // THE BACKEND FIRST. A refusal comes back as its own sentence and nothing
-  // is recorded — the screen never shows a dial the backend does not hold.
+  if (!view.shopId)
+    return no("Store setup is incomplete. Refresh to try again.");
   try {
     const merchant = await patchMerchant(view.shopId, { flash_forward: next });
-    const written = merchant?.flash_forward === "carrier" ? "carrier" : "order_status";
-    return { ok: true, flashForward: written as FlashForward, error: null as string | null };
-  } catch (err: any) {
-    console.error(`[ink settings] flash_forward save failed for ${session.shop}:`, err?.message ?? err);
-    return { ok: false, flashForward: null as FlashForward | null, error: "Couldn't save that — nothing was changed." }; // PLACEHOLDER
+    if (merchant?.flash_forward !== next)
+      return no(
+        "The destination could not be confirmed. Refresh before trying again.",
+      );
+    await updateMerchant(session.shop, { ink_flash_forward: next } as any);
+    return { ok: true, flashForward: next, error: null };
+  } catch {
+    console.error("[ink settings] save could not be confirmed");
+    return no(
+      "The destination could not be confirmed. Refresh before trying again.",
+    );
   }
 };
-
 export default function InkSettings() {
-  const data = useLoaderData<typeof loader>();
-  const fetcher = useFetcher<typeof action>();
-  const saving = fetcher.state !== "idle";
-  const [choice, setChoice] = useState<FlashForward>(data.flashForward);
-  const saved = fetcher.data?.ok ? fetcher.data.flashForward : data.flashForward;
-  const dirty = choice !== saved;
-
-  return (
-    // PLACEHOLDER: page title.
-    <Page>
-      <Layout>
-        <Layout.Section>
-          <BlockStack gap="400">
-            <InkPillNav active="settings" />
-            {fetcher.data?.error && <Banner tone="critical">{fetcher.data.error}</Banner>}
-            {fetcher.data?.ok && !dirty && (
-              // PLACEHOLDER copy
-              <Banner tone="success">Saved.</Banner>
-            )}
-
-            <Card>
-              <fetcher.Form method="post">
-                <BlockStack gap="400">
-                  {/* PLACEHOLDER copy. Merchant words, not ours: "the flash" is our
-                      name for the moment and no merchant says it (Sam, 09-23). */}
-                  <Text as="h2" variant="headingMd">When a customer opens their tracking link, send them to</Text>
-                  <ChoiceList
-                    title="Where the customer goes next"
-                    titleHidden
-                    name="flash_forward"
-                    choices={[
-                      {
-                        // PLACEHOLDER copy
-                        label: "Your Shopify order page",
-                        value: "order_status",
-                        helpText: "Shows the tracking on your own store and asks for nothing.",
-                      },
-                      {
-                        // PLACEHOLDER copy
-                        label: "The carrier's tracking page",
-                        value: "carrier",
-                        helpText: "UPS, USPS, FedEx — wherever the parcel is.",
-                      },
-                    ]}
-                    selected={[choice]}
-                    onChange={(values) => setChoice((values[0] as FlashForward) ?? "order_status")}
-                    disabled={!data.canSave || saving}
-                  />
-                  <InlineStack gap="300">
-                    {/* PLACEHOLDER label */}
-                    <Button submit variant="primary" loading={saving} disabled={!data.canSave || !dirty}>
-                      Save
-                    </Button>
-                  </InlineStack>
-                  {!data.canSave && (
-                    // PLACEHOLDER copy
-                    <Text as="p" tone="subdued">Your store is still being set up — this will be ready in a moment.</Text>
-                  )}
-                </BlockStack>
-              </fetcher.Form>
-            </Card>
-
-            <Card>
-              <BlockStack gap="200">
-                {/* PLACEHOLDER copy */}
-                <Text as="h2" variant="headingMd">Add The Ritualist</Text>
-                <Text as="p" tone="subdued">
-                  Every order gets its own branded page — live tracking, delivery notifications, returns. The Ritualist includes ink.
-                </Text>
-                <InlineStack>
-                  {data.ritualistUrl ? (
-                    // PLACEHOLDER label; the address comes from RITUALIST_LISTING_URL.
-                    <Button url={data.ritualistUrl} external>Add The Ritualist</Button>
-                  ) : (
-                    // PLACEHOLDER: no listing address yet (RITUALIST_LISTING_URL unset).
-                    <Button disabled>Add The Ritualist</Button>
-                  )}
-                </InlineStack>
-              </BlockStack>
-            </Card>
-          </BlockStack>
-        </Layout.Section>
-      </Layout>
-    </Page>
-  );
+  return <InkSettingsView data={useLoaderData<typeof loader>()} />;
 }
-
-// EVERY EMBEDDED ROUTE NEEDS SHOPIFY'S BOUNDARY (app.settings.tsx tells the
-// story of the "200 error page").
 export function ErrorBoundary() {
   return boundary.error(useRouteError());
 }
-
-export const headers: HeadersFunction = (args) => boundary.headers(args);
+export const headers: HeadersFunction = (args) => {
+  const headers = new Headers(boundary.headers(args));
+  headers.set("Cache-Control", "private, no-store");
+  return headers;
+};

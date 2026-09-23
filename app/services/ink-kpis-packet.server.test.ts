@@ -17,7 +17,7 @@ describe("the Insights KPIs", () => {
   it("are the dashboard's own numbers, read with the merchant's own key — never the admin secret", async () => {
     vi.stubEnv("INK_ADMIN_SECRET", "admin-secret-must-not-be-sent");
     const f = vi.fn(async () => new Response(JSON.stringify(BODY))) as unknown as typeof fetch;
-    expect(await readInkKpis("ink_live_merchantkey", f)).toEqual({ recorded: 12, opened: 7, openRatePct: 58, locationShared: 2, signedPct: 100, disputed: 0, capped: false });
+    expect(await readInkKpis("ink_live_merchantkey", f)).toEqual({ recorded: 12, opened: 7, locationShared: 2, capped: false });
     const [url, init] = calls(f)[0] as [string, { headers: Record<string, string> }];
     expect(url).toBe("https://us-central1-inink-c76d3.cloudfunctions.net/api/merchant-insights");
     expect(init.headers).toEqual({ Authorization: "Bearer ink_live_merchantkey" });

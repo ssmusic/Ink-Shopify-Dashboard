@@ -1,59 +1,35 @@
-// INK'S HOME — the orders and their records, inside Shopify.
-//
-// Mounted under APP_FLAVOR=ink only (server/ink-mounts.mjs).
-//
-// Sam, 2026-09-23, on the first version of this screen: "Your mark? thats
-// weird to see" · "remove the open your dashboard … were doing everything
-// inside this shopify app" · "we need to be showing the record". So the
-// screen is no longer about the merchant's logo (ink's default buyer moment
-// is the white page — nothing of the brand is shown, so there is nothing to
-// confirm) and no longer a door out to the dashboard: it is the orders, each
-// opening on its record, with the record's door at the bottom of it
-// (components/InkRecentOrders.tsx).
-//
-// Three pills sit on top of it ("yeah we need a pill nav in the app", Sam,
-// 2026-09-23 — components/InkPillNav.tsx): Orders (this screen), Insights
-// (the same route, ?view=insights — the Insights KPIs, services/ink-kpis.server.ts)
-// and Settings (/app/ink/settings). A bought record's dispute packet is read
-// here and shown in its row (services/ink-packet.server.ts).
-//
-// The install still captures the storefront's mark and claims the brand's
-// host (services/ink-install.server.ts) — the host is the tracking link's —
-// it simply is not this screen's business.
-//
-// Every visible string is PLACEHOLDER copy — Sam writes the words.
-
-import { useEffect } from "react";
+import { inkDoor } from "../services/ink-billing.server";
+import { useEffect, useRef, useState } from "react";
 import {
+  data as routeData,
   useLoaderData,
+  useSearchParams,
+  useNavigation,
   useRevalidator,
   useRouteError,
   type HeadersFunction,
-  type LinksFunction,
   type LoaderFunctionArgs,
 } from "react-router";
-import leafletCss from "leaflet/dist/leaflet.css?url";
-import polarisVizCss from "@shopify/polaris-viz/build/esm/styles.css?url";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { Banner, BlockStack, Box, Card, Layout, Page, Text } from "@shopify/polaris";
+import {
+  Banner,
+  BlockStack,
+  Box,
+  Card,
+  Layout,
+  Page,
+  Pagination,
+  Text,
+} from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { readInkMerchant, stageOf } from "../services/ink-merchant.server";
-import { readRecentOrderRecords } from "../services/ink-links.server";
-import { readRecordDoors, recordDoorFor } from "../services/record-charges.server";
-import { readRecords } from "../services/ink-record.server";
-import { readDisputePacket } from "../services/ink-packet.server";
+import { readRecentOrderPage } from "../services/ink-links.server";
 import { readInkKpis } from "../services/ink-kpis.server";
 import InkRecentOrders from "../components/InkRecentOrders";
 import InkPillNav from "../components/InkPillNav";
 import DeliveryDashboard from "../components/DeliveryDashboard";
 import { readTimelines } from "../services/ink-timeline.server";
 import { readDeliveryDashboard } from "../services/ink-delivery.server";
-
-// The map's tiles and controls (Leaflet) and Shopify's charts (Polaris Viz).
-export const links: LinksFunction = () => [
-  { rel: "stylesheet", href: leafletCss },
-  { rel: "stylesheet", href: polarisVizCss },
-];
 
 // While a fresh install is still provisioning (no api key yet), the doors
 // cannot be read; the screen asks again every few seconds for a while.
@@ -62,7 +38,11 @@ const POLL_LIMIT = 25;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const section: "orders" | "insights" = new URL(request.url).searchParams.get("view") === "insights" ? "insights" : "orders";
+  const params = new URL(request.url).searchParams;
+  const section: "orders" | "insights" =
+    new URL(request.url).searchParams.get("view") === "insights"
+      ? "insights"
+      : "orders";
   const view = await readInkMerchant(session.shop);
   const stage = stageOf(view.doc);
 
@@ -71,55 +51,115 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const apiKey = view.doc?.ink_api_key ?? null;
 
   if (section === "insights") {
-    const [kpis, delivery] = await Promise.all([readInkKpis(apiKey), readDeliveryDashboard(apiKey)]);
-    return { section, stage, kpis, delivery, recentOrders: [] };
+    const [kpis, delivery] = await Promise.all([
+      readInkKpis(apiKey),
+      readDeliveryDashboard(apiKey),
+    ]);
+    return routeData(
+      {
+        section,
+        stage,
+        kpis,
+        delivery,
+        recentOrders: [],
+        pageInfo: null,
+        ordersError: false,
+      },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   }
 
-  const recentOrders = await readRecentOrderRecords(admin);
-  const proofIds = recentOrders.map((o) => o.proofId);
-  // THE RECORD'S DOOR (services/record-door.server.ts): a price on the row
-  // only when the merchant is priced AND the kill switch is on. THE RECORD'S
-  // WORDS (services/ink-record.server.ts): free, every row, read side by side.
-  const [doors, records, timelines] = await Promise.all([
-    readRecordDoors(admin, view, proofIds),
-    readRecords(proofIds),
-    readTimelines(apiKey, proofIds),
-  ]);
-  const rows = recentOrders.map((o) => ({
-    id: o.id,
-    name: o.name,
-    proofId: o.proofId,
-    detail: o.detail,
-    record: o.proofId ? records[o.proofId] ?? null : null,
-    door: recordDoorFor(doors, o.proofId),
-    timeline: o.proofId ? timelines[o.proofId] ?? null : null,
-  }));
-  // A BOUGHT RECORD'S PACKET, read with the purchase's own key — only the
-  // three texts Shopify's dispute form takes ever reach the screen.
-  const packets = await Promise.all(
-    rows.map((r) => (r.proofId && r.door.purchase?.packet_url ? readDisputePacket(r.proofId, r.door.purchase.packet_url) : Promise.resolve(null))),
-  );
-  return {
-    section,
-    stage,
-    kpis: null,
-    delivery: null,
-    recentOrders: rows.map((r, i) => ({ ...r, packet: packets[i] })),
+  let ordersError = false;
+  const cursor = (key: string) => {
+    const value = params.get(key);
+    return value && value.length <= 1024 ? value : null;
   };
+  const page = await readRecentOrderPage(admin, {
+    after: cursor("after"),
+    before: cursor("before"),
+  }).catch(() => {
+    ordersError = true;
+    return { rows: [], pageInfo: null };
+  });
+  const recentOrders = page.rows;
+  const doors = await Promise.all(
+    recentOrders.map((o) =>
+      inkDoor(admin, session.shop, apiKey, o.proofId).catch(() => ({
+        record: null,
+        offerLine: null,
+        pending: false,
+        resumeUrl: null,
+        downloadable: false,
+      })),
+    ),
+  );
+  const records = Object.fromEntries(
+    recentOrders.flatMap((o, i) =>
+      o.proofId && doors[i].record ? [[o.proofId, doors[i].record!]] : [],
+    ),
+  );
+  const timelines = await readTimelines(
+    apiKey,
+    recentOrders.map((o) => o.proofId),
+    fetch,
+    records,
+  );
+  return routeData(
+    {
+      section,
+      stage,
+      kpis: null,
+      delivery: null,
+      ordersError,
+      pageInfo: page.pageInfo,
+      recentOrders: recentOrders.map((o, i) => ({
+        id: o.id,
+        name: o.name,
+        proofId: o.proofId,
+        detail: o.detail,
+        record: doors[i].record,
+        door: {
+          offerLine: doors[i].offerLine,
+          pending: doors[i].pending,
+          resumeUrl: doors[i].resumeUrl,
+          downloadable: doors[i].downloadable,
+        },
+        timeline: o.proofId ? (timelines[o.proofId] ?? null) : null,
+      })),
+    },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 };
 
 export default function InkHome() {
   const data = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
+  const navigation = useNavigation();
+  const [params, setParams] = useSearchParams();
+  const go = (key: "after" | "before", cursor: string | null) => {
+    if (!cursor) return;
+    const next = new URLSearchParams(params);
+    next.delete("after");
+    next.delete("before");
+    next.set(key, cursor);
+    setParams(next);
+  };
+  const pollDeadline = useRef<number | null>(null);
+  const [pollingEnded, setPollingEnded] = useState(false);
   const settingUp = data.stage === "provisioning";
 
   useEffect(() => {
-    if (!settingUp) return;
-    let polls = 0;
+    if (!settingUp) {
+      pollDeadline.current = null;
+      setPollingEnded(false);
+      return;
+    }
+    if (pollDeadline.current === null)
+      pollDeadline.current = Date.now() + POLL_MS * POLL_LIMIT;
     const timer = setInterval(() => {
-      polls += 1;
-      if (polls > POLL_LIMIT) {
+      if (Date.now() >= pollDeadline.current!) {
         clearInterval(timer);
+        setPollingEnded(true);
         return;
       }
       if (revalidator.state === "idle") revalidator.revalidate();
@@ -128,28 +168,74 @@ export default function InkHome() {
   }, [settingUp, revalidator]);
 
   return (
-    <Page>
+    <Page
+      title={data.section === "insights" ? "Dashboard" : "Orders"}
+      secondaryActions={[
+        {
+          content: "Refresh",
+          loading: revalidator.state !== "idle",
+          onAction: () => revalidator.revalidate(),
+        },
+      ]}
+    >
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
-            <InkPillNav active={data.section === "insights" ? "insights" : "orders"} />
+            <InkPillNav
+              active={data.section === "insights" ? "insights" : "orders"}
+            />
 
             {settingUp && (
-              // PLACEHOLDER copy
-              <Banner tone="info">Setting up your store…</Banner>
+              <Banner tone="info">
+                {pollingEnded
+                  ? "Store setup is taking longer than expected. Refresh to try again."
+                  : "Setting up your store…"}
+              </Banner>
             )}
 
             {data.section === "insights" ? (
               <DeliveryDashboard kpis={data.kpis} delivery={data.delivery} />
             ) : (
-              /* THE ORDERS — the Ritualist's list; each row opens on its
-                 record, and the record's door is at the bottom of it. */
               <Card padding="0">
                 <Box padding="400">
-                  {/* PLACEHOLDER copy */}
-                  <Text as="h2" variant="headingMd">Recent orders</Text>
+                  <BlockStack gap="200">
+                    <Text as="h2" variant="headingMd">
+                      Recent orders
+                    </Text>
+                    <Text as="p" tone="subdued">
+                      Shopify makes orders from the past 60 days available here.
+                    </Text>
+                  </BlockStack>
                 </Box>
-                <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />
+                {data.ordersError ? (
+                  <Banner tone="info">
+                    Orders could not be loaded. Refresh to try again.
+                  </Banner>
+                ) : (
+                  <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />
+                )}
+                {data.pageInfo &&
+                  (data.pageInfo.hasPreviousPage ||
+                    data.pageInfo.hasNextPage) && (
+                    <Box padding="400">
+                      <Pagination
+                        hasPrevious={
+                          data.pageInfo.hasPreviousPage &&
+                          navigation.state === "idle"
+                        }
+                        hasNext={
+                          data.pageInfo.hasNextPage &&
+                          navigation.state === "idle"
+                        }
+                        onPrevious={() =>
+                          go("before", data.pageInfo!.startCursor)
+                        }
+                        onNext={() => go("after", data.pageInfo!.endCursor)}
+                        previousTooltip="Newer orders"
+                        nextTooltip="Older orders"
+                      />
+                    </Box>
+                  )}
               </Card>
             )}
           </BlockStack>
@@ -166,4 +252,8 @@ export function ErrorBoundary() {
   return boundary.error(useRouteError());
 }
 
-export const headers: HeadersFunction = (args) => boundary.headers(args);
+export const headers: HeadersFunction = (args) => {
+  const headers = new Headers(boundary.headers(args));
+  headers.set("Cache-Control", "private, no-store");
+  return headers;
+};

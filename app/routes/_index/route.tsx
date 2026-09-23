@@ -15,6 +15,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(`/app?${url.searchParams.toString()}`);
   }
 
+  if (isInk()) throw redirect("https://www.in.ink");
+
   return { showForm: Boolean(login) };
 };
 
