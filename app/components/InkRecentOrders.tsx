@@ -24,6 +24,7 @@ import OrderExpandedRow from "./OrderExpandedRow";
 import RecordDoor, { type RecordDoorProps } from "./RecordDoor";
 import type { InkOrderDetail } from "../services/ink-links.server";
 import type { DisputePacketText } from "../services/ink-packet.server";
+import OrderTimeline, { type OrderTimelineData } from "./OrderTimeline";
 import { LEVEL_WORDS, elementLines, locationWordOf, opensOf, type RecordRead } from "../lib/record-words";
 
 export type InkRecentOrderRow = {
@@ -35,6 +36,8 @@ export type InkRecentOrderRow = {
   door: RecordDoorProps["door"];
   /** A bought record's dispute packet, read inside the app. */
   packet?: DisputePacketText | null;
+  /** The order's timeline: the rail, the opens on a map, the delivery window. */
+  timeline?: OrderTimelineData | null;
 };
 
 const money = (amount: string, currency: string) =>
@@ -174,6 +177,7 @@ function RecordFooter({ row, returnTo }: { row: InkRecentOrderRow; returnTo: str
 
 function Panel({ row, returnTo, onCollapse }: { row: InkRecentOrderRow; returnTo: string; onCollapse: () => void }) {
   const footer = <RecordFooter row={row} returnTo={returnTo} />;
+  const timeline = row.timeline ? <OrderTimeline data={row.timeline} /> : null;
   if (!row.detail) {
     // Only the minimal order read answered (protected fields redacted): the record alone.
     return (
@@ -181,6 +185,7 @@ function Panel({ row, returnTo, onCollapse }: { row: InkRecentOrderRow; returnTo
         <Box padding="400">
           <RecordWords record={row.record} />
         </Box>
+        {timeline ? <div style={{ borderTop: "1px solid var(--p-color-border)" }}>{timeline}</div> : null}
         <div style={{ borderTop: "1px solid var(--p-color-border)", padding: "12px 16px", background: "var(--p-color-bg-surface-secondary)" }}>
           {footer}
         </div>
@@ -192,6 +197,7 @@ function Panel({ row, returnTo, onCollapse }: { row: InkRecentOrderRow; returnTo
       order={row.detail}
       onCollapse={onCollapse}
       aside={<RecordWords record={row.record} />}
+      below={timeline}
       footer={footer}
       uncapped
     />

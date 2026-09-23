@@ -12,7 +12,7 @@ import type { RecordElement, RecordRead, RecordSummary } from "../lib/record-wor
 
 const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
 const PROOF_ID = /^proof_[0-9a-f]{24}$/;
-const READ_BUDGET_MS = 3_000;
+const READ_BUDGET_MS = 6_000; // five side-by-side reads can meet cold backend instances (measured 2026-09-23: a 0.4 s read timed out at 3 s)
 
 function verifyUrl(proofId: string): string {
   const base = INK_API_URL.endsWith("/") ? INK_API_URL.slice(0, -1) : INK_API_URL;

@@ -29,8 +29,11 @@ import {
   useRevalidator,
   useRouteError,
   type HeadersFunction,
+  type LinksFunction,
   type LoaderFunctionArgs,
 } from "react-router";
+import leafletCss from "leaflet/dist/leaflet.css?url";
+import polarisVizCss from "@shopify/polaris-viz/build/esm/styles.css?url";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { Banner, BlockStack, Box, Card, Layout, Page, Text } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
@@ -41,8 +44,16 @@ import { readRecords } from "../services/ink-record.server";
 import { readDisputePacket } from "../services/ink-packet.server";
 import { readInkKpis } from "../services/ink-kpis.server";
 import InkRecentOrders from "../components/InkRecentOrders";
-import InkKpis from "../components/InkKpis";
 import InkPillNav from "../components/InkPillNav";
+import DeliveryDashboard from "../components/DeliveryDashboard";
+import { readTimelines } from "../services/ink-timeline.server";
+import { readDeliveryDashboard } from "../services/ink-delivery.server";
+
+// The map's tiles and controls (Leaflet) and Shopify's charts (Polaris Viz).
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: leafletCss },
+  { rel: "stylesheet", href: polarisVizCss },
+];
 
 // While a fresh install is still provisioning (no api key yet), the doors
 // cannot be read; the screen asks again every few seconds for a while.
@@ -55,8 +66,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const view = await readInkMerchant(session.shop);
   const stage = stageOf(view.doc);
 
+  // Every merchant read below goes with the merchant's OWN key — the shop is
+  // the key's; the admin secret never scopes a merchant read.
+  const apiKey = view.doc?.ink_api_key ?? null;
+
   if (section === "insights") {
-    return { section, stage, kpis: await readInkKpis(view.shopId), recentOrders: [] };
+    const [kpis, delivery] = await Promise.all([readInkKpis(apiKey), readDeliveryDashboard(apiKey)]);
+    return { section, stage, kpis, delivery, recentOrders: [] };
   }
 
   const recentOrders = await readRecentOrderRecords(admin);
@@ -64,9 +80,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // THE RECORD'S DOOR (services/record-door.server.ts): a price on the row
   // only when the merchant is priced AND the kill switch is on. THE RECORD'S
   // WORDS (services/ink-record.server.ts): free, every row, read side by side.
-  const [doors, records] = await Promise.all([
+  const [doors, records, timelines] = await Promise.all([
     readRecordDoors(admin, view, proofIds),
     readRecords(proofIds),
+    readTimelines(apiKey, proofIds),
   ]);
   const rows = recentOrders.map((o) => ({
     id: o.id,
@@ -75,6 +92,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     detail: o.detail,
     record: o.proofId ? records[o.proofId] ?? null : null,
     door: recordDoorFor(doors, o.proofId),
+    timeline: o.proofId ? timelines[o.proofId] ?? null : null,
   }));
   // A BOUGHT RECORD'S PACKET, read with the purchase's own key — only the
   // three texts Shopify's dispute form takes ever reach the screen.
@@ -85,6 +103,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     section,
     stage,
     kpis: null,
+    delivery: null,
     recentOrders: rows.map((r, i) => ({ ...r, packet: packets[i] })),
   };
 };
@@ -121,14 +140,7 @@ export default function InkHome() {
             )}
 
             {data.section === "insights" ? (
-              data.kpis ? (
-                <InkKpis kpis={data.kpis} />
-              ) : (
-                <Card>
-                  {/* PLACEHOLDER copy */}
-                  <Text as="p" tone="subdued">No numbers yet — they appear once your first order is recorded.</Text>
-                </Card>
-              )
+              <DeliveryDashboard kpis={data.kpis} delivery={data.delivery} />
             ) : (
               /* THE ORDERS — the Ritualist's list; each row opens on its
                  record, and the record's door is at the bottom of it. */

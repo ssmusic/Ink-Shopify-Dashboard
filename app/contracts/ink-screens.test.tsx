@@ -188,8 +188,28 @@ describe("the pill nav, the Insights KPIs, and a bought record in the app (Sam, 
     expect(t).not.toContain("2,000 most recent");
   });
 
-  it("says so when there are no numbers yet", () => {
-    expect(text(render(InkHome, { section: "insights", stage: "ready", kpis: null, recentOrders: [] }))).toContain("No numbers yet");
+  it("says nothing has shipped yet when there are no numbers at all", () => {
+    expect(text(render(InkHome, { section: "insights", stage: "ready", kpis: null, delivery: null, recentOrders: [] }))).toContain("Nothing shipped yet");
+  });
+
+  it("is the big dashboard: the console's Delivery page for this one merchant, every number also in words", () => {
+    const delivery = {
+      orders: 5,
+      funnel: [
+        { key: "orders", label: "Orders", count: 5, ofAbovePct: null },
+        { key: "delivered", label: "Delivered", count: 4, ofAbovePct: 80 },
+        { key: "opened", label: "Opened", count: 3, ofAbovePct: 75 },
+        { key: "shared", label: "Location shared", count: 2, ofAbovePct: 66.7 },
+        { key: "door", label: "Seen at the door", count: 1, ofAbovePct: 50 },
+      ],
+      transit: { buckets: [{ label: "under 1 d", count: 1 }, { label: "1–2 d", count: 1 }, { label: "2–4 d", count: 0 }, { label: "4–7 d", count: 1 }, { label: "over 7 d", count: 0 }], measured: 3, delivered: 4, medianHours: 30 },
+      carrier: [{ status: "DELIVERED", count: 3, ofEnrolledPct: 60 }, { status: "No carrier update", count: 2, ofEnrolledPct: 40 }],
+      waited: { stuck: 1, withData: 2, sharePct: 50 },
+      carrierNamed: 2,
+      capped: false,
+    };
+    const t = text(render(InkHome, { section: "insights", stage: "ready", recentOrders: [], kpis: { recorded: 5, opened: 3, openRatePct: 60, locationShared: 2, signedPct: 100, disputed: 0, capped: false }, delivery }));
+    for (const part of ["Getting there", "Orders through to the door", "Seen at the door", "80% of the step above", "Time in transit", "3 of 4 delivered orders carry both times", "median 30 h", "What the carrier said", "DELIVERED", "60% of orders", "While they waited", "of 2 opens that carry a movement time", "Not recorded yet", "only 2 orders name one so far", "Orders recorded"]) expect(t).toContain(part);
   });
 
   it("shows a bought record's dispute packet inside the accordion — three texts, each with Copy — and no link out", () => {
@@ -214,6 +234,68 @@ describe("the pill nav, the Insights KPIs, and a bought record in the app (Sam, 
     expect(t).not.toContain("Open the record");
     expect(html).not.toMatch(/href="https?:\/\//);
     expect(t.indexOf("DISPUTE PACKET")).toBeGreaterThan(t.indexOf("THE RECORD"));
+  });
+});
+
+describe("each order's timeline, inside the accordion (Sam, 2026-09-23)", () => {
+  const H = 3_600_000;
+  const T0 = Date.parse("2026-09-01T00:00:00Z");
+  const at = (h: number) => new Date(T0 + h * H).toISOString();
+  const timeline = {
+    steps: [
+      { key: "enrolled", label: "Enrolled", state: "done" as const, at: at(0), note: null },
+      { key: "shipped", label: "Shipped", state: "carrier" as const, at: at(10), note: "from the carrier" },
+      { key: "in_transit", label: "In transit", state: "not_recorded" as const, at: null, note: "from the carrier" },
+      { key: "delivered", label: "Delivered", state: "done" as const, at: at(40), note: null },
+      { key: "opened", label: "Opened", state: "done" as const, at: at(45), note: null },
+      { key: "return_started", label: "Return started", state: "not_recorded" as const, at: null, note: null },
+      { key: "refund_cleared", label: "Refund cleared", state: "not_recorded" as const, at: null, note: "no event for refunds yet" },
+    ],
+    address: { lat: 34.052235, lng: -118.243683 },
+    opens: [
+      { at: at(45), verdict: "pass", distance_m: 56, accuracy_m: 12, lat: 34.052701, lng: -118.243311 },
+      { at: at(50), verdict: "flagged", distance_m: 719, accuracy_m: 35, lat: 34.058123, lng: -118.250456 },
+      { at: at(60), verdict: "not_shared", distance_m: null, accuracy_m: null, lat: null, lng: null },
+    ],
+    window: { deliveredAt: at(40), windowEnd: at(112), firstOpenAt: at(45), hoursToOpen: 5, openPositionPct: 6.9, withinExpectedWindow: true },
+  };
+  const withTimeline = [{ ...ROWS[0], timeline }];
+  const open = () =>
+    renderToString(
+      <AppProvider i18n={translations}>
+        {(() => {
+          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <InkRecentOrders orders={withTimeline} defaultExpandedId={ROWS[0].id} /> }]);
+          return <Stub initialEntries={["/"]} />;
+        })()}
+      </AppProvider>,
+    );
+
+  it("draws the address and every open that carried a fix on the map, with the fix-less open in words", () => {
+    const html = open();
+    const desktop = html.slice(0, html.indexOf("lg:hidden"));
+    expect(desktop).toMatch(/data-testid="opens-map"[^>]*data-points="2"|data-points="2"[^>]*data-testid="opens-map"/);
+    const t = text(desktop);
+    expect(t).toContain("Opened 56 m from the delivery address — within the 100 m range.");
+    expect(t).toContain("56 m · within 100 m");
+    expect(t).toContain("719 m · outside 300 m");
+    expect(t).toContain("location not shared");
+    expect(t).toContain("100 m and 300 m rings");
+  });
+
+  it("never prints a coordinate as text — the map draws the point, the words say the distance", () => {
+    const t = text(open());
+    for (const coord of ["34.05", "-118.24", "34.058", "-118.250"]) expect(t).not.toContain(coord);
+  });
+
+  it("shows the lifecycle and the delivery window, under the record's words and above the door", () => {
+    const t = text(open().slice(0, open().indexOf("lg:hidden")));
+    for (const part of ["THE ORDER, STEP BY STEP", "Enrolled", "Shipped", "from the carrier", "Delivered", "Opened", "Refund cleared", "THE DELIVERY WINDOW", "5 h after delivery", "Within the expected window", "Yes"]) expect(t).toContain(part);
+    const record = t.indexOf("THE RECORD");
+    const rail = t.indexOf("THE ORDER, STEP BY STEP");
+    const door = t.lastIndexOf("Get the record — $29");
+    expect(record).toBeGreaterThan(-1);
+    expect(rail).toBeGreaterThan(record);
+    expect(door).toBeGreaterThan(rail);
   });
 });
 
