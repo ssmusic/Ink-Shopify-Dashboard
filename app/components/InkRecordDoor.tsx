@@ -6,6 +6,7 @@ import type { action } from "../routes/app.record";
 export type InkDoor = {
   offerLine: string | null;
   pending?: boolean;
+  paidPendingRecord?: boolean;
   resumeUrl?: string | null;
   downloadable?: boolean;
   purchase?: unknown;
@@ -79,7 +80,9 @@ export default function InkRecordDoor({
             loading={revalidator.state !== "idle"}
             onClick={() => revalidator.revalidate()}
           >
-            Check payment status
+            {door.paidPendingRecord
+              ? "Check record access"
+              : "Check payment status"}
           </Button>
         )}
       </InlineStack>
@@ -96,7 +99,9 @@ export default function InkRecordDoor({
       )}
       {door.pending && (
         <Text as="p">
-          Payment is pending. If this continues,{" "}
+          {door.paidPendingRecord
+            ? "Shopify approved the charge, but the record is not available yet. Check status or "
+            : "Record access is pending. Check status or "}
           <Link url="mailto:info@in.ink">contact support</Link>.
         </Text>
       )}

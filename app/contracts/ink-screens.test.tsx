@@ -173,6 +173,20 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(text(html)).not.toMatch(/PDF|attach as a file|Did you win/);
   });
 
+  it('describes an approved charge as waiting for record access, without a second approval action', () => {
+    const html = render(() => <InkRecentOrders orders={[{
+      ...ROWS[0],
+      door: { offerLine: null, pending: true, paidPendingRecord: true, resumeUrl: null, downloadable: false },
+    }]} defaultExpandedId={ROWS[0].id} />, {});
+    const t = text(html);
+    expect(t).toContain('Shopify approved the charge, but the record is not available yet.');
+    expect(t).toContain('Check record access');
+    expect(t).not.toContain('Check payment status');
+    expect(t).not.toContain('Continue Shopify approval');
+    expect(t).not.toContain('Get the record ($29 USD)');
+    expect(t).not.toContain('Payment is pending');
+  });
+
   it('shows record evidence as reported, without claiming browser verification', () => {
     const t = text(renderToString(<AppProvider i18n={translations}><RecordWords record={RECORD} /></AppProvider>));
     for (const part of ['Evidence levels reported by the record', 'Recorded and signed', 'Device verified', 'First open signed', 'Seen at the door', '719 m from the delivery address']) expect(t).toContain(part);

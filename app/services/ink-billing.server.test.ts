@@ -117,7 +117,8 @@ describe("ink Shopify billing", () => {
   it("will not create a second charge after an uncertain create response", async () => {
     createRecordCharge.mockRejectedValue(new Error("timeout"));
     await inkRecordAction(admin, shop, "own-key", form());
-    await inkRecordAction(admin, shop, "own-key", form());
+    const retry = await inkRecordAction(admin, shop, "own-key", form());
+    expect(retry.note).toContain("Contact support before trying again");
     expect(createRecordCharge).toHaveBeenCalledOnce();
   });
   it("settles a saved, matching ACTIVE charge even if the kill switch has since closed", async () => {
@@ -144,8 +145,37 @@ describe("ink Shopify billing", () => {
     await expect(
       settleInkCharge(admin, shop, "own-key", proof),
     ).rejects.toThrow("did not match");
-    expect([...rows.values()][0].state).toBe("pending");
-    expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({pending:true,offerLine:null,downloadable:false});
+    expect([...rows.values()][0].state).toBe("paid_pending_record");
+    expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({
+      pending: true,
+      paidPendingRecord: true,
+      resumeUrl: null,
+      offerLine: null,
+      downloadable: false,
+    });
+  });
+  it("never offers another charge while an approved purchase is unavailable", async () => {
+    await inkRecordAction(admin, shop, "own-key", form());
+    createRecordPurchase.mockRejectedValue(new Error("backend unavailable"));
+    const door = await inkDoor(admin, shop, "own-key", proof);
+    expect(door).toMatchObject({
+      pending: true,
+      paidPendingRecord: true,
+      resumeUrl: null,
+      offerLine: null,
+    });
+    expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(false);
+    expect(createRecordCharge).toHaveBeenCalledOnce();
+  });
+  it("does not offer a second charge if an earlier purchase is marked complete but the record read is locked", async () => {
+    await inkRecordAction(admin, shop, "own-key", form());
+    await settleInkCharge(admin, shop, "own-key", proof);
+    expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({
+      pending: true,
+      paidPendingRecord: true,
+      offerLine: null,
+      downloadable: false,
+    });
   });
   it.each([
     { price_cents: 1 },

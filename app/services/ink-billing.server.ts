@@ -50,6 +50,11 @@ export async function settleInkCharge(
     return;
   }
   if (charge.status !== "ACTIVE") return;
+  // Shopify has approved the charge. Keep this state even if the backend
+  // purchase is temporarily unavailable, so the merchant is never sent back
+  // to an approval screen or offered a second charge for the same record.
+  if (row.state !== "paid_pending_record")
+    await ref.update({ state: "paid_pending_record" });
   const proof = await merchantRead(apiKey, `proofs/${proofId}`);
   if (!proof || proof.proof_id !== proofId || typeof proof.shop_id !== "string")
     return;
@@ -84,6 +89,7 @@ export async function inkDoor(
       record: null,
       offerLine: null,
       pending: false,
+      paidPendingRecord: false,
       resumeUrl: null,
       downloadable: false,
     };
@@ -94,16 +100,22 @@ export async function inkDoor(
   const saved = await chargeRef(shop, proofId).get();
   const savedRow = saved.exists ? saved.data() : null;
   const state = savedRow?.state;
-  const pending = state === "creating" || state === "pending";
+  const downloadable = Boolean(record && !record.locked);
+  const paidPendingRecord =
+    !downloadable && (state === "paid_pending_record" || state === "minted");
+  const pending =
+    !downloadable &&
+    (state === "creating" || state === "pending" || paidPendingRecord);
   const offer = record?.locked ? recordOffer(record.price ?? null) : null;
   return {
     record,
     pending,
+    paidPendingRecord,
     resumeUrl:
       state === "pending" && typeof savedRow?.confirmationUrl === "string"
         ? savedRow.confirmationUrl
         : null,
-    downloadable: Boolean(record && !record.locked),
+    downloadable,
     offerLine:
       offer && !pending
         ? `Get the record (${recordPriceWords(offer)} ${offer.currency})`
@@ -142,15 +154,30 @@ export async function inkRecordAction(
     };
   }
   if (intent !== "buy") return no("Unknown action.");
-  await settleInkCharge(admin, shop, apiKey, proofId);
+  await settleInkCharge(admin, shop, apiKey, proofId).catch(() =>
+    console.error("[ink billing] settlement pending"),
+  );
   const record = await readRecord(apiKey, proofId);
   if (record && !record.locked)
     return no("This record is already available. Refresh to download it.");
+  const ref = chargeRef(shop, proofId);
+  const existing = await ref.get();
+  if (["paid_pending_record", "minted"].includes(existing.data()?.state))
+    return no(
+      "Shopify approved the charge, but the record is not available yet. Check record access or contact support.",
+    );
+  if (existing.data()?.state === "creating")
+    return no(
+      "The charge status could not be confirmed. Contact support before trying again.",
+    );
+  if (existing.data()?.state === "pending")
+    return no(
+      "A Shopify approval is already in progress. Check payment status before trying again.",
+    );
   const offer = record?.locked ? recordOffer(record.price ?? null) : null;
   if (!offer) return no("This record is not available to purchase.");
   const appKey = process.env.SHOPIFY_API_KEY;
   if (!appKey) return no("Billing is unavailable. Try again later.");
-  const ref = chargeRef(shop, proofId);
   const reserved = await firestore.runTransaction(async (tx) => {
     const previous = await tx.get(ref);
     const state = previous.exists ? previous.data()?.state : null;

@@ -88,6 +88,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         record: null,
         offerLine: null,
         pending: false,
+        paidPendingRecord: false,
         resumeUrl: null,
         downloadable: false,
       })),
@@ -121,6 +122,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         door: {
           offerLine: doors[i].offerLine,
           pending: doors[i].pending,
+          paidPendingRecord: doors[i].paidPendingRecord,
           resumeUrl: doors[i].resumeUrl,
           downloadable: doors[i].downloadable,
         },
