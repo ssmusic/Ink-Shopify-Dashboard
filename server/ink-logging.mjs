@@ -9,8 +9,12 @@ export function configureInkAccessLogging(ink, logger) {
 
 export function protectInkAccessLogs(ink) {
   if (!ink) return;
+  // Resolve morgan the way react-router-serve does: from its own directory.
+  // The package exports only "./package.json" — resolving the bare name threw
+  // "No exports main defined" at start-up and ink-app 00025 never listened.
+  const requireHere = createRequire(import.meta.url);
   const requireServe = createRequire(
-    import.meta.resolve("@react-router/serve"),
+    requireHere.resolve("@react-router/serve/package.json"),
   );
   configureInkAccessLogging(true, requireServe("morgan"));
 }

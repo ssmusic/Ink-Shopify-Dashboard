@@ -1,12 +1,3 @@
-// INK'S PILL NAV — Dashboard · Orders · Records · Settings · Help, at the top of
-// every ink screen, drawn as Polaris's own Tabs (pills).
-//
-// Sam, 2026-09-23: "yeah we need a pill nav in the app" · "which prob should
-// be called a dashboard" · "dashboard should be first in the nav" · "why can
-// you get the record in the order and in records? records seems unfinished" ·
-// "dont we need a help section?".
-//
-// Labels are PLACEHOLDER copy — Sam's words replace them.
 import { Tabs } from "@shopify/polaris";
 export type InkSection = "orders" | "insights" | "records" | "settings" | "help";
 const tabs = [

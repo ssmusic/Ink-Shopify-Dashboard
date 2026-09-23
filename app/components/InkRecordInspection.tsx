@@ -1,17 +1,3 @@
-// A BOUGHT (OR FREE) RECORD, INSPECTED — the hand-over's own detail, in the app.
-//
-// Sam, 2026-09-23: "the ritualist does the advanced thing already and it looks
-// pretty good" · "i want it all" · "has to be so compelling that someone will
-// want to download the $29 record" · "they need to see all the info but not get
-// the signed hash". Every order already shows the whole record in words, with
-// its signatures checked on the server against the published key
-// (components/InkRecordEvidence.tsx, services/ink-record.server.ts). Once the
-// hand-over is the merchant's — bought, or free — this opens the signed events
-// themselves: each event's ids, hashes, key and signature, re-hashed and
-// re-linked here in the browser, each signature said as the server's check
-// found it.
-//
-// Every visible string is PLACEHOLDER copy — Sam's words replace it.
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import {
@@ -31,13 +17,20 @@ import {
   type InkInspection,
   type InspectEvent,
 } from "../lib/ink-record-inspection";
-import { RecordChecksWords, RecordWords, type WordLine } from "./InkRecordEvidence";
-import { eventWords, when, type RecordRead } from "../lib/record-words";
+import { RecordWords, type WordLine } from "./InkRecordEvidence";
+import { when, type RecordRead } from "../lib/record-words";
 import { OpensAgainstAddress, type OrderTimelineData } from "./OrderTimeline";
 
-// One vocabulary for the events on every ink screen (lib/record-words.ts).
 const eventName = (name: string) => {
-  const words = eventWords(name);
+  const known: Record<string, string> = {
+    TAP_RECORDED: "Opened",
+    LOCATION_SHARED: "Location shared",
+    ENROLLED: "Recorded",
+    CARRIER_DELIVERED: "Carrier delivered",
+    DELIVERY_VERIFIED: "Seen at the door",
+  };
+  if (known[name]) return known[name];
+  const words = name.replace(/_/g, " ").toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 const location = (value: { lat: number; lng: number } | null) =>
@@ -46,11 +39,12 @@ const location = (value: { lat: number; lng: number } | null) =>
 export function RecordEventRow({
   event,
   check,
-  signature,
+  signature = null,
 }: {
   event: InspectEvent;
   check: BrowserRecordCheck["events"][number] | undefined;
-  /** What the server's check against the published key found of this event's signature. */
+  /** What the server's check against ink's published key found of this
+   *  event's signature (#137, services/ink-record.server.ts); none when it did not run. */
   signature?: string | null;
 }) {
   return (
@@ -82,12 +76,24 @@ export function RecordEventRow({
           </Text>
           <InlineStack>
             <Badge
-              tone={check?.hash === "mismatch" ? "critical" : undefined}
+              tone={
+                check?.hash === "mismatch"
+                  ? "critical"
+                  : check?.hash === "matches"
+                    ? "info"
+                    : undefined
+              }
             >{`Hash ${check?.hash ?? "not checked"}`}</Badge>
           </InlineStack>
           <InlineStack>
             <Badge
-              tone={check?.link === "mismatch" ? "critical" : undefined}
+              tone={
+                check?.link === "mismatch"
+                  ? "critical"
+                  : check?.link === "matches"
+                    ? "info"
+                    : undefined
+              }
             >{`Link ${check?.link ?? "not checked"}`}</Badge>
           </InlineStack>
         </InlineGrid>
@@ -143,19 +149,13 @@ export default function InkRecordInspection({
   timeline,
   addressLabel,
   checkout = null,
-  mapsKey = null,
-  browsers = null,
 }: {
   proofId: string;
   record: RecordRead | null;
   timeline?: OrderTimelineData | null;
   addressLabel?: string;
-  /** The checkout beside the opens, in words (components/InkRecentOrders.tsx). */
+  /** The checkout beside the opens, in words (#134, components/InkRecentOrders.tsx). */
   checkout?: WordLine[] | null;
-  /** The Maps JavaScript browser key; none → no map. */
-  mapsKey?: string | null;
-  /** The record's line about the browsers the opens came from. */
-  browsers?: string | null;
 }) {
   const fetcher = useFetcher<typeof action>();
   const requested = useRef<string | null>(null);
@@ -209,9 +209,6 @@ export default function InkRecordInspection({
   return (
     <BlockStack gap="400">
       <RecordWords record={record} evidenceIds={inspection?.evidenceIds} checkout={checkout} />
-      <Box background="bg" padding="400" borderRadius="200">
-        <RecordChecksWords checks={record?.checks} />
-      </Box>
       <Box background="bg" padding="400" borderRadius="200">
         <BlockStack gap="200">
           <Text as="h3" variant="headingMd">
@@ -285,6 +282,10 @@ export default function InkRecordInspection({
             <Text as="p">Checking event hashes and links…</Text>
           )}
           <Text as="p" variant="bodySm" tone="subdued">
+            {/* True only while the server's signature check has not run (#137). */}
+            {record?.checks
+              ? ""
+              : "Signatures are supplied by ink and have not been independently verified here. "}
             Hash and link checks do not confirm physical delivery.
           </Text>
         </BlockStack>
@@ -301,8 +302,6 @@ export default function InkRecordInspection({
             : (timeline?.opensCapped ?? false)
         }
         addressLabel={addressLabel && addressLabel !== "Address unavailable" ? addressLabel : inspection?.addressLabel ?? undefined}
-        mapsKey={mapsKey}
-        browsers={browsers}
       />
       <Box background="bg" padding="400" borderRadius="200">
         <BlockStack gap="300">

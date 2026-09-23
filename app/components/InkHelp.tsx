@@ -43,7 +43,8 @@ export default function InkHelp() {
             received the parcel.
           </Text>
           <Text as="p" tone="subdued">
-            Distance is a measurement from the delivery address.
+            Distance is a measurement from the delivery address. The map rings
+            are distance guides.
           </Text>
           <InlineStack>
             <Button url="/app/ink">View orders</Button>
@@ -61,13 +62,14 @@ export default function InkHelp() {
           </Text>
           <Text as="p" tone="subdued">
             A purchase does not add new evidence or guarantee the outcome of a
-            dispute.
+            dispute. Signatures are supplied by ink; this app checks event
+            hashes and links.
           </Text>
         </Topic>
         <Topic title="Download again">
           <Text as="p">
             Records lists purchases and approvals started in this app. Available
-            records have PDF, CSV and JSON download buttons. Ink. does not email
+            records have PDF, CSV and JSON download buttons. Ink does not email
             these files.
           </Text>
           <Text as="p">
@@ -85,9 +87,9 @@ export default function InkHelp() {
         </Topic>
         <Topic title="Connection and missing data">
           <Text as="p">
-            Ink. connects during installation and uses your Shopify session.
+            Ink connects during installation and uses your Shopify session.
             Settings shows the connected store and lets you check Shopify and
-            ink. data access.
+            ink data access.
           </Text>
           <Text as="p">
             Orders shows Shopify orders from the past 60 days. Older purchases

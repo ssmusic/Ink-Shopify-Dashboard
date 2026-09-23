@@ -3,7 +3,8 @@ import { recordFromBody, readRecord } from "./ink-record.server";
 import { kpisFromBody } from "./ink-kpis.server";
 import { merchantRead, flavorFetch } from "./ink-reader.server";
 import { flavorLogger } from "./ink-log.server";
-import { configureInkAccessLogging } from "../../server/ink-logging.mjs";
+import { createRequire } from "node:module";
+import { configureInkAccessLogging, protectInkAccessLogs } from "../../server/ink-logging.mjs";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -153,5 +154,19 @@ describe("ink data boundaries", () => {
         originalUrl: "/app/ink?id_token=secret&shop=private.myshopify.com",
       }),
     ).toBe("[redacted]");
+  });
+  it("reaches the server's own access logger at start-up, where ink-app 00025 crashed", () => {
+    // The morgan react-router-serve itself requires, from its own directory.
+    const here = createRequire(import.meta.url);
+    const morgan = createRequire(here.resolve("@react-router/serve/package.json"))("morgan");
+    const original = morgan.url;
+    try {
+      expect(() => protectInkAccessLogs(false)).not.toThrow();
+      expect(morgan.url).toBe(original);
+      expect(() => protectInkAccessLogs(true)).not.toThrow();
+      expect(morgan.url({ originalUrl: "/app/ink?id_token=secret" })).toBe("[redacted]");
+    } finally {
+      morgan.token("url", original);
+    }
   });
 });
