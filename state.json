@@ -9,9 +9,9 @@
       "branch": "codex/ink-audit",
       "pr": 133,
       "phase": "ready",
-      "assignedAgent": "claude",
+      "assignedAgent": "codex",
       "owner": null,
-      "handoffTo": "claude",
+      "handoffTo": "codex",
       "checkpoint": {
         "codeSha": "40229009be214dbac6d76ac1b08f1b9fd0823a3d",
         "summary": "Sam asks Claude Code to continue this ROUGH, UNFINISHED Shopify merchant app. Substantial design, implementation and validation remain; no overall approval or release recommendation. Read INK-MERCHANT-REDESIGN-HANDOFF.md and docs/ink-review-2026-09-23.md at PR #133 / codex/ink-audit, head 40229009be214dbac6d76ac1b08f1b9fd0823a3d. Code baseline e8a9a06; latest commit clarifies unfinished status. Continue existing app and successful Ritualist work, not a rewrite. Merchant can inspect the full record before purchase; PDF/CSV/JSON require existing export entitlement. Existing flash, merchant opens/delivery and tenant-scoped key source already exist: earlier absence findings were stale. Remaining app gaps include signature verification, PDF Unicode/map/QR fidelity, visual hierarchy/mobile polish, record history completeness, live Shopify billing/download/install walks and privacy fulfillment. PR conflicts with main and needs reconciliation. No merge/deployment. Preview is synthetic and its disposable harness/sample logo at /tmp/ink-merchant-preview is outside the PR.",
@@ -31,7 +31,7 @@
         "writer": "codex",
         "sessionId": "01a0cff6-d447-74a3-ad07-19fb5ba51851"
       },
-      "updatedAt": "2026-09-23T22:19:03.381Z"
+      "updatedAt": "2026-09-23T22:22:14.506Z"
     }
   ],
   "projects": [],
@@ -54,6 +54,11 @@
     {
       "id": "41cb574e-08eb-4c2d-940b-8aaae81b0558",
       "fingerprint": "e3658ee60d3d92859bfe9276fcc2f3f035cd369434a93d213b43deaf18c4b3ed",
+      "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180"
+    },
+    {
+      "id": "78b0b2f8-f393-47c9-a05a-4eabf0429f3b",
+      "fingerprint": "2e562d2f7b6a5d67181770dbde0f873fabe8e1620c45a0c7be9de6cad864069d",
       "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180"
     }
   ],
@@ -81,6 +86,12 @@
       "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
       "action": "handoff",
       "detail": "claude can resume the published work."
+    },
+    {
+      "at": "2026-09-23T22:22:14.506Z",
+      "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
+      "action": "handoff",
+      "detail": "codex can resume the published work."
     }
   ]
 }
