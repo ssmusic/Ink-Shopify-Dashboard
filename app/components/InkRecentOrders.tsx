@@ -1,37 +1,47 @@
-// INK'S ORDERS — THE RITUALIST'S SHIPMENTS LIST, EACH ROW OPENING ON ITS RECORD.
+// INK'S ORDERS — each order a bordered row that opens on its record.
 //
 // Sam, 2026-09-23: "recent orders should show just like the ritualist orders
 // with an accordion and the get the record at the bottom of the accordion" ·
 // "enrolled and verified and all that bs is from when this was nfc - remove" ·
 // "we're doing everything inside this shopify app" · "we need to be showing
-// the record" · "can we have a full record open?".
+// the record" · "can we have a full record open?"; then, of this screen: "the
+// little order numbers with the accordion need to look like cells - maybe
+// they need a hairline box around them" · "the order number should be black
+// and we should see the name clearly" · "if this is the phone - it needs to be
+// spread out horizontaly not so tall" · "you have to make the page more
+// legible with background shading - some sections grey some white" · "the
+// ritualist does the advanced thing already and it looks pretty good" · "i
+// want it all" · "this page should be blue highlights like the insights page".
 //
-// So: the markup of routes/app.tagged-shipments._index.tsx — the IndexTable,
-// the click-to-expand row, the mobile cards, the same expanded panel
-// (components/OrderExpandedRow.tsx) — with what the RECORD says in place of
-// the NFC-era status: the table's last two columns are the opens and the
-// location word, and the panel's right-hand column is the whole record in
-// words (lib/record-words.ts, the public record page's own words). Nothing
-// links out of the app. The bottom of the accordion is the record's door:
-// "Get the record — $X", or once bought "Open the record" + "Did you win?".
+// So each row is a hairline box: the order number (black), its date; the
+// recipient's name and the order's email; the total, the opens and the
+// open's distance. Opened, it shows the recipient and the products, the rail
+// (no title — "THE ORDER, STEP BY STEP is weird"), and Advanced: the record's
+// door, then the whole record in words — the elements, the checkout beside the
+// opens, the checks against the published key, every signed event — with
+// every open listed beside the map, and the delivery window. Once the
+// hand-over is the merchant's (bought, or free), Advanced opens the signed
+// events themselves (components/InkRecordInspection.tsx).
 //
 // THE MERCHANT SEES THE WHOLE RECORD (Sam, 2026-09-23: "the 29 gets it
-// signed"; ink-backend #129): read with the shop's own key, the record also
-// carries its checks against the published key and every signed event, each
-// said in words under the elements (services/ink-record.server.ts).
+// signed"; ink-backend #129); what the price buys is the hand-over
+// (lib/record-handover.ts). The row's highlight is the palette's one blue
+// (lib/ink-palette.ts). Only this file reads the checkout's words
+// (lib/checkout-words.ts): the Ritualist never prints them.
 //
 // Every visible string that is ink's own is PLACEHOLDER copy — Sam's words.
 
-import { useState } from "react";
-import { BlockStack, Box, Button, IndexTable, InlineStack, Text } from "@shopify/polaris";
-import { ChevronDown } from "lucide-react";
-import OrderExpandedRow from "./OrderExpandedRow";
-import RecordDoor, { type RecordDoorProps } from "./RecordDoor";
+import { useState, type ReactNode } from "react";
+import { BlockStack, Box, Button, Collapsible, Divider, InlineGrid, InlineStack, Text } from "@shopify/polaris";
+import InkRecordDoor, { type InkDoor } from "./InkRecordDoor";
+import { RecordWords as EvidenceWords, RecordChecksWords, RecordEventWords, type WordLine } from "./InkRecordEvidence";
+import InkRecordInspection from "./InkRecordInspection";
 import type { InkOrderDetail } from "../services/ink-links.server";
 import type { DisputePacketText } from "../services/ink-packet.server";
-import OrderTimeline, { type OrderTimelineData } from "./OrderTimeline";
-import { LEVEL_WORDS, browsersLine, elementLines, locationWordOf, opensOf, when, type RecordRead } from "../lib/record-words";
+import { LifecycleRail, DeliveryWindowBar, OpensAgainstAddress, type OrderTimelineData } from "./OrderTimeline";
+import { browsersLine, locationWordOf, opensOf, type RecordRead } from "../lib/record-words";
 import { checkoutLines } from "../lib/checkout-words";
+import { INK_DATA, INK_DATA_TINT } from "../lib/ink-palette";
 
 export type InkRecentOrderRow = {
   id: string;
@@ -39,115 +49,31 @@ export type InkRecentOrderRow = {
   proofId: string | null;
   detail: InkOrderDetail | null;
   record: RecordRead | null;
-  door: RecordDoorProps["door"];
+  door: InkDoor;
   /** A bought record's dispute packet, read inside the app. */
   packet?: DisputePacketText | null;
-  /** The order's timeline: the rail, the opens on a map, the delivery window. */
+  /** The order's timeline: the rail, the opens beside the map, the delivery window. */
   timeline?: OrderTimelineData | null;
 };
 
-const money = (amount: string, currency: string) =>
-  parseFloat(amount).toLocaleString("en-US", { style: "currency", currency });
-
-/** The whole record, in the public record page's words. */
-export function RecordWords({ record }: { record: RecordRead | null }) {
-  if (!record) {
-    return (
-      <Text as="p" variant="bodySm" tone="subdued">
-        {/* PLACEHOLDER copy */}
-        No record yet.
-      </Text>
-    );
+const money = (amount: string, currency: string) => {
+  const value = Number.parseFloat(amount);
+  if (!Number.isFinite(value)) return "Unavailable";
+  try {
+    return value.toLocaleString("en-US", { style: "currency", currency });
+  } catch {
+    return "Unavailable";
   }
-  return (
-    <BlockStack gap="300">
-      <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
-        {/* PLACEHOLDER copy — the section's name, as CUSTOMER and PRODUCTS are named */}
-        THE RECORD
-      </Text>
-      {record.elements.map((el) => (
-        <div key={el.element} style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
-          <BlockStack gap="100">
-            <InlineStack align="space-between" blockAlign="baseline" gap="200">
-              <Text as="p" variant="bodySm" fontWeight="semibold">
-                {el.label}
-              </Text>
-              <Text as="span" variant="bodyXs" tone="subdued">
-                {(LEVEL_WORDS[el.status] ?? el.status).toUpperCase()}
-              </Text>
-            </InlineStack>
-            {elementLines(el).map((line) => (
-              <InlineStack key={line.label} align="space-between" gap="200" wrap={false}>
-                <Text as="span" variant="bodySm" tone="subdued">
-                  {line.label}
-                </Text>
-                <Text as="span" variant="bodySm" alignment="end">
-                  {line.words}
-                </Text>
-              </InlineStack>
-            ))}
-          </BlockStack>
-        </div>
-      ))}
-      {record.checkout ? (
-        // THE CHECKOUT BESIDE THE OPENS (lib/checkout-words.ts): two lines under
-        // the open — what the checkout was, and how the opens compare with it.
-        // Only when the backend's words carry it; counts and facts, no verdict.
-        <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
-          <BlockStack gap="100">
-            {checkoutLines(record.checkout).map((line) => (
-              <InlineStack key={line.label} align="space-between" gap="200" wrap={false}>
-                <Text as="span" variant="bodySm" tone="subdued">
-                  {line.label}
-                </Text>
-                <Text as="span" variant="bodySm" alignment="end">
-                  {line.words}
-                </Text>
-              </InlineStack>
-            ))}
-          </BlockStack>
-        </div>
-      ) : null}
-      {record.checks && (
-        <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }} data-record-checks>
-          <BlockStack gap="100">
-            <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
-              {/* PLACEHOLDER copy — the section's name */}
-              CHECKS
-            </Text>
-            <Text as="p" variant="bodySm" fontWeight="semibold">
-              {record.checks.headline}
-            </Text>
-            {record.checks.lines.map((line) => (
-              <Text key={line} as="p" variant="bodyXs" tone="subdued">
-                {line}
-              </Text>
-            ))}
-          </BlockStack>
-        </div>
-      )}
-      {record.events && record.events.length > 0 && (
-        <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }} data-record-events>
-          <BlockStack gap="100">
-            <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
-              {/* PLACEHOLDER copy — the section's name */}
-              SIGNED EVENTS
-            </Text>
-            {record.events.map((e) => (
-              <InlineStack key={e.event_id ?? `${e.seq}-${e.at}`} align="space-between" blockAlign="baseline" gap="200" wrap={false}>
-                <Text as="span" variant="bodySm">
-                  {`${e.seq != null ? `${e.seq} · ` : ""}${e.type}${e.legacy ? " · pre-chain" : ""}`}
-                </Text>
-                <Text as="span" variant="bodyXs" tone="subdued" alignment="end">
-                  {`${when(e.at)} · ${e.check}`}
-                </Text>
-              </InlineStack>
-            ))}
-          </BlockStack>
-        </div>
-      )}
-    </BlockStack>
-  );
+};
+
+/** The checkout beside the opens, in words — only when the backend's words carry it. */
+function checkoutWords(record: RecordRead | null): WordLine[] | null {
+  return record?.checkout ? checkoutLines(record.checkout) : null;
+}
+
+/** The whole record, in the public record page's words, with the checkout's lines after the open. */
+export function RecordWords({ record }: { record: RecordRead | null }) {
+  return <EvidenceWords record={record} checkout={checkoutWords(record)} />;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -171,20 +97,20 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-/** A bought record's dispute packet: each text Shopify's dispute form asks
- *  for, ready to paste, with its own Copy button. */
+/** A bought record's three texts: each one Shopify's dispute form asks for,
+ *  ready to paste, with its own Copy button. It is called the record. */
 export function DisputePacketView({ packet }: { packet: DisputePacketText }) {
   // PLACEHOLDER labels — Shopify's dispute form's own field names.
   const fields = [
     { key: "accessActivityLog", label: "Access activity log", text: packet.accessActivityLog },
-    { key: "shippingDocumentation", label: "Shipping documentation (attach as a file)", text: packet.shippingDocumentation },
+    { key: "shippingDocumentation", label: "Shipping documentation", text: packet.shippingDocumentation },
     { key: "uncategorizedText", label: "Additional information", text: packet.uncategorizedText },
   ].filter((f) => f.text);
   return (
     <BlockStack gap="300">
-      <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
+      <Text as="h3" variant="headingMd">
         {/* Sam, 2026-09-23: "its called the record" — never "dispute packet". */}
-        THE RECORD
+        The record
       </Text>
       {fields.map((f) => (
         <BlockStack key={f.key} gap="100">
@@ -215,218 +141,275 @@ export function DisputePacketView({ packet }: { packet: DisputePacketText }) {
   );
 }
 
-/** The bottom of the accordion: the record's door — or, once bought, the
- *  record's dispute packet, in the app. */
-function RecordFooter({ row, returnTo }: { row: InkRecentOrderRow; returnTo: string }) {
-  if (!row.proofId) return null;
-  if (!row.door.offerLine && !row.door.purchase) return null;
-  const door = <RecordDoor proofId={row.proofId} orderName={row.name} returnTo={returnTo} door={row.door} hidePacketLink={Boolean(row.packet)} />;
-  if (row.door.purchase && row.packet) {
-    return (
-      <BlockStack gap="300">
-        <DisputePacketView packet={row.packet} />
-        <InlineStack align="end" blockAlign="center">
-          {door}
-        </InlineStack>
-      </BlockStack>
-    );
-  }
+/** A grey section inside the panel ("some sections grey some white"). */
+function Shaded({ children }: { children: ReactNode }) {
   return (
-    <InlineStack align="end" blockAlign="center">
-      {door}
-    </InlineStack>
+    <Box background="bg" padding="400" borderRadius="200">
+      {children}
+    </Box>
   );
 }
 
-/** The order row's location cell: the open's distance, or what its location
- *  says — never a badge that judges it (Sam, 2026-09-23: "we dont judge"). */
-function LocationCell({ row }: { row: InkRecentOrderRow }) {
-  if (!row.proofId) return <Text as="span" variant="bodyMd">—</Text>;
-  return <Text as="span" variant="bodyMd">{locationWordOf(row.record) || "—"}</Text>;
-}
-
-function Panel({ row, returnTo, onCollapse, mapsKey }: { row: InkRecentOrderRow; returnTo: string; onCollapse: () => void; mapsKey: string | null }) {
-  const footer = <RecordFooter row={row} returnTo={returnTo} />;
-  const timeline = row.timeline ? <OrderTimeline data={row.timeline} mapsKey={mapsKey} browsers={browsersLine(row.record?.browsers)} /> : null;
-  if (!row.detail) {
-    // Only the minimal order read answered (protected fields redacted): the record alone.
-    return (
-      <div style={{ borderTop: "1px solid var(--p-color-border)" }}>
-        <Box padding="400">
-          <RecordWords record={row.record} />
-        </Box>
-        {timeline ? <div style={{ borderTop: "1px solid var(--p-color-border)" }}>{timeline}</div> : null}
-        <div style={{ borderTop: "1px solid var(--p-color-border)", padding: "12px 16px", background: "var(--p-color-bg-surface-secondary)" }}>
-          {footer}
-        </div>
-      </div>
-    );
-  }
+function Panel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | null }) {
+  const [advanced, setAdvanced] = useState(true);
+  const d = row.detail;
+  const openCount = opensOf(row.record);
+  const address = d?.customerAddress;
+  const addressLabel = address
+    ? [address.address1, address.address2, address.city, address.provinceCode, address.zip, address.country].filter(Boolean).join(", ")
+    : "Address unavailable";
+  const checkout = checkoutWords(row.record);
+  const browsers = browsersLine(row.record?.browsers);
   return (
-    <OrderExpandedRow
-      order={row.detail}
-      onCollapse={onCollapse}
-      aside={<RecordWords record={row.record} />}
-      below={timeline}
-      footer={footer}
-      uncapped
-    />
+    <Box padding="400">
+      <BlockStack gap="500">
+        {d ? (
+          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+            <BlockStack gap="200">
+              <Text as="h3" variant="headingMd">
+                Recipient
+              </Text>
+              <Text as="p" breakWord>
+                {d.customerName}
+              </Text>
+              <Text as="p" breakWord>
+                {`Order email: ${d.customerEmail || "Unavailable"}`}
+              </Text>
+              <Text as="p" breakWord>
+                {addressLabel}
+              </Text>
+            </BlockStack>
+            <BlockStack gap="200">
+              <Text as="h3" variant="headingMd">
+                Products
+              </Text>
+              {d.items.map((item, i) => (
+                <Text key={i} as="p" breakWord>{`${item.title} · Quantity ${item.quantity}`}</Text>
+              ))}
+              {!d.items.length && (
+                <Text as="p" tone="subdued">
+                  Product details are unavailable.
+                </Text>
+              )}
+              {d.itemsTruncated && (
+                <Text as="p" tone="subdued">
+                  Showing the first 20 products.
+                </Text>
+              )}
+              <Text as="p" fontWeight="semibold">{`Order total ${money(d.total, d.currency)}`}</Text>
+            </BlockStack>
+          </InlineGrid>
+        ) : (
+          <Text as="p" tone="subdued">
+            Recipient and product details are unavailable.
+          </Text>
+        )}
+        {row.timeline ? (
+          // The rail — no title over it.
+          <Shaded>
+            <LifecycleRail steps={row.timeline.steps} />
+          </Shaded>
+        ) : row.proofId ? (
+          <Text as="p" tone="subdued">
+            Order activity is unavailable. Refresh to try again.
+          </Text>
+        ) : (
+          <Text as="p" tone="subdued">
+            No record is linked to this order.
+          </Text>
+        )}
+        {row.proofId && (
+          <>
+            <Divider />
+            <Box background="bg" padding="300" borderRadius="200">
+              <InlineStack align="space-between" blockAlign="center">
+                <Button
+                  variant="plain"
+                  textAlign="left"
+                  disclosure={advanced ? "up" : "down"}
+                  ariaExpanded={advanced}
+                  ariaControls={`advanced-${d?.id || row.id}`}
+                  onClick={() => setAdvanced((v) => !v)}
+                >
+                  Advanced
+                </Button>
+                <Text as="span" tone="subdued">
+                  {openCount == null ? "Opens unavailable" : `${openCount} ${openCount === 1 ? "open" : "opens"}`}
+                </Text>
+              </InlineStack>
+            </Box>
+            <Collapsible id={`advanced-${d?.id || row.id}`} open={advanced}>
+              {advanced && (
+                <BlockStack gap="400">
+                  <InkRecordDoor proofId={row.proofId} door={row.door} />
+                  <Divider />
+                  {/* The signed events themselves are the hand-over's: shown once it is
+                      the merchant's (Sam, 2026-09-23: "they need to see all the info but
+                      not get the signed hash"). */}
+                  {row.door.downloadable ? (
+                    <InkRecordInspection
+                      proofId={row.proofId}
+                      record={row.record}
+                      timeline={row.timeline}
+                      addressLabel={addressLabel}
+                      checkout={checkout}
+                      mapsKey={mapsKey}
+                      browsers={browsers}
+                    />
+                  ) : (
+                    <>
+                      <EvidenceWords record={row.record} checkout={checkout} />
+                      {row.record?.checks ? (
+                        <Shaded>
+                          <RecordChecksWords checks={row.record.checks} />
+                        </Shaded>
+                      ) : null}
+                      {row.timeline ? (
+                        <>
+                          <Divider />
+                          <OpensAgainstAddress
+                            address={row.timeline.address}
+                            opens={row.timeline.opens}
+                            available={row.timeline.opensAvailable ?? true}
+                            capped={row.timeline.opensCapped ?? false}
+                            addressLabel={addressLabel}
+                            mapsKey={mapsKey}
+                            browsers={browsers}
+                          />
+                        </>
+                      ) : null}
+                      {row.record?.events && row.record.events.length > 0 ? (
+                        <Shaded>
+                          <RecordEventWords events={row.record.events} />
+                        </Shaded>
+                      ) : null}
+                    </>
+                  )}
+                  {row.packet ? (
+                    // A bought record's three texts for Shopify's dispute form, under the record's words.
+                    <>
+                      <Divider />
+                      <DisputePacketView packet={row.packet} />
+                    </>
+                  ) : null}
+                  {row.timeline?.window && (
+                    <>
+                      <Divider />
+                      <DeliveryWindowBar w={row.timeline.window} />
+                    </>
+                  )}
+                </BlockStack>
+              )}
+            </Collapsible>
+          </>
+        )}
+      </BlockStack>
+    </Box>
   );
 }
 
 export default function InkRecentOrders({
   orders,
-  returnTo = "/app/ink",
   defaultExpandedId = null,
+  searching = false,
   mapsKey = null,
-  unread = false,
 }: {
   orders: InkRecentOrderRow[];
   returnTo?: string;
-  /** The Maps JavaScript browser key (GOOGLE_MAPS_BROWSER_KEY); none → no map, the words remain. */
-  mapsKey?: string | null;
-  /** The orders read failed: said as that, never as "No orders yet". */
-  unread?: boolean;
   /** A row opened on first render (the listing screenshot; a deep link one day). */
   defaultExpandedId?: string | null;
+  searching?: boolean;
+  /** The Maps JavaScript browser key (GOOGLE_MAPS_BROWSER_KEY); none → no map, the words remain. */
+  mapsKey?: string | null;
 }) {
-  const [expandedOrder, setExpandedOrder] = useState<string | null>(defaultExpandedId);
-  const toggle = (id: string) => setExpandedOrder((prev) => (prev === id ? null : id));
-
-  const tableRows = orders.flatMap((row, index) => {
-    const isExpanded = expandedOrder === row.id;
-    const d = row.detail;
-    const opens = opensOf(row.record);
-    const tr = (
-      <IndexTable.Row id={row.id} key={row.id} position={index} onClick={() => toggle(row.id)} selected={false}>
-        <IndexTable.Cell>
-          <Text variant="bodyMd" fontWeight="semibold" as="span">
-            {row.name}
-          </Text>
-        </IndexTable.Cell>
-        <IndexTable.Cell>
-          <div>
-            <Text variant="bodyMd" as="span">
-              {d ? d.customerName : "—"}
-            </Text>
-            <br />
-            <Text variant="bodySm" tone="subdued" as="span">
-              {d?.customerEmail ?? ""}
-            </Text>
-          </div>
-        </IndexTable.Cell>
-        <IndexTable.Cell>
-          <Text variant="bodyMd" as="span">
-            {d?.date || "—"}
-          </Text>
-        </IndexTable.Cell>
-        <IndexTable.Cell>
-          <Text variant="bodyMd" as="span" alignment="end">
-            {d ? money(d.total, d.currency) : "—"}
-          </Text>
-        </IndexTable.Cell>
-        <IndexTable.Cell>
-          <Text variant="bodyMd" as="span" alignment="end">
-            {opens ?? "—"}
-          </Text>
-        </IndexTable.Cell>
-        <IndexTable.Cell>
-          <LocationCell row={row} />
-        </IndexTable.Cell>
-      </IndexTable.Row>
+  const [expanded, setExpanded] = useState(defaultExpandedId);
+  if (!orders.length)
+    return (
+      <Box padding="400">
+        <Text as="p">
+          {searching
+            ? "No orders match this search. Try another order number, name or email, or clear the search."
+            : "No orders are available from the past 60 days."}
+        </Text>
+      </Box>
     );
-    if (!isExpanded) return [tr];
-    return [
-      tr,
-      <tr key={`${row.id}-expanded`}>
-        <td colSpan={6} style={{ padding: 0 }}>
-          <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} mapsKey={mapsKey} />
-        </td>
-      </tr>,
-    ];
-  });
-
   return (
-    <>
-      {/* Desktop table — the Ritualist's */}
-      <div className="hidden lg:block">
-        <IndexTable
-          resourceName={{ singular: "order", plural: "orders" }}
-          itemCount={orders.length}
-          emptyState={
-            <Box padding="400">
-              <BlockStack gap="200" inlineAlign="center">
-                {/* PLACEHOLDER copy */}
-                <Text as="p" tone="subdued">
-                  {unread ? "Your orders couldn't be read just now. Try again in a moment." : "No orders yet."}
-                </Text>
-              </BlockStack>
-            </Box>
-          }
-          headings={[
-            { title: "Order" },
-            { title: "Customer" },
-            { title: "Date" },
-            { title: "Total", alignment: "end" },
-            // PLACEHOLDER headings — the record's two facts a row can carry.
-            { title: "Opens", alignment: "end" },
-            { title: "Location" },
-          ]}
-          selectable={false}
-        >
-          {tableRows}
-        </IndexTable>
-      </div>
-
-      {/* Mobile cards — the Ritualist's */}
-      <div className="lg:hidden space-y-2 p-2">
-        {orders.length === 0 ? (
-          <Box padding="400">
-            {/* PLACEHOLDER copy */}
-            <Text as="p" tone="subdued">
-              {unread ? "Your orders couldn't be read just now. Try again in a moment." : "No orders yet."}
-            </Text>
-          </Box>
-        ) : (
-          orders.map((row) => {
-            const isExpanded = expandedOrder === row.id;
-            const d = row.detail;
-            const opens = opensOf(row.record);
-            return (
-              <div key={row.id}>
-                <div
-                  className={`bg-card border cursor-pointer transition-colors ${
-                    isExpanded ? "border-foreground" : "border-border hover:bg-secondary"
-                  }`}
-                  onClick={() => toggle(row.id)}
-                >
-                  <div className={`px-4 py-3 ${isExpanded ? "bg-muted" : ""}`}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-sm text-foreground">{row.name}</span>
-                      <ChevronDown
-                        className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-foreground">{d ? d.customerName : "—"}</span>
-                      <span className="font-medium text-foreground">{d ? money(d.total, d.currency) : ""}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{d?.date ?? ""}</span>
-                      {/* PLACEHOLDER copy */}
-                      <span>
-                        {opens != null ? `${opens} ${opens === 1 ? "open" : "opens"}` : ""}
-                        {row.proofId && locationWordOf(row.record) ? ` · ${locationWordOf(row.record)}` : ""}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                {isExpanded && <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} mapsKey={mapsKey} />}
+    <Box paddingInline="400" paddingBlockEnd="400">
+      <BlockStack gap="300">
+        {orders.map((row) => {
+          const open = expanded === row.id;
+          const count = opensOf(row.record);
+          // The open's distance (or what its location says) — never a judgment of it.
+          const place = row.proofId ? locationWordOf(row.record) : "";
+          return (
+            <div
+              key={row.id}
+              data-order-row={row.id}
+              style={{
+                border: `1px solid ${open ? INK_DATA : "var(--p-color-border)"}`,
+                borderRadius: "var(--p-border-radius-200)",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ padding: "var(--p-space-300)", background: open ? INK_DATA_TINT : "var(--p-color-bg-surface-secondary)" }}>
+                <InlineGrid columns={{ xs: "84px minmax(0, 1fr) 84px", sm: "110px minmax(0, 1fr) 128px" }} gap="200" alignItems="center">
+                  <BlockStack gap="100">
+                    <Box color="text">
+                      <Button
+                        id={`order-toggle-${row.id}`}
+                        variant="tertiary"
+                        size="medium"
+                        textAlign="left"
+                        disclosure={open ? "up" : "down"}
+                        ariaExpanded={open}
+                        ariaControls={`order-${row.id}`}
+                        onClick={() => setExpanded(open ? null : row.id)}
+                      >
+                        {row.name}
+                      </Button>
+                    </Box>
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      {row.detail?.date || "Date unavailable"}
+                    </Text>
+                  </BlockStack>
+                  <BlockStack gap="100">
+                    <Text as="p" variant="headingSm" breakWord>
+                      <Text as="span" visuallyHidden>
+                        Recipient{" "}
+                      </Text>
+                      {row.detail?.customerName && row.detail.customerName !== "Name unavailable" ? row.detail.customerName : "Recipient unavailable"}
+                    </Text>
+                    <Text as="p" variant="bodySm" tone="subdued" breakWord>
+                      {row.detail?.customerEmail || "Email unavailable"}
+                    </Text>
+                  </BlockStack>
+                  <BlockStack gap="100">
+                    <Text as="p" alignment="end" fontWeight="semibold" breakWord>
+                      {row.detail ? money(row.detail.total, row.detail.currency) : "Total unavailable"}
+                    </Text>
+                    <Text as="p" variant="bodySm" alignment="end" breakWord>
+                      {count == null ? "Opens unavailable" : `${count} ${count === 1 ? "open" : "opens"}`}
+                    </Text>
+                    {place && place !== "—" ? (
+                      <Text as="p" variant="bodySm" tone="subdued" alignment="end" breakWord>
+                        {place}
+                      </Text>
+                    ) : null}
+                  </BlockStack>
+                </InlineGrid>
               </div>
-            );
-          })
-        )}
-      </div>
-    </>
+              <Collapsible id={`order-${row.id}`} open={open}>
+                {open && (
+                  <>
+                    <Divider />
+                    <Panel row={row} mapsKey={mapsKey} />
+                  </>
+                )}
+              </Collapsible>
+            </div>
+          );
+        })}
+      </BlockStack>
+    </Box>
   );
 }

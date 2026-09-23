@@ -1,3 +1,7 @@
+import { merchantRead, flavorFetch as fetch } from "./ink-reader.server";
+import { isInk } from "./app-flavor.server";
+import { flavorLogger } from "./ink-log.server";
+const console = flavorLogger("ink-api.server");
 import { authenticate } from "../shopify.server";
 import type { CheckoutClient } from "./checkout-client.server";
 
@@ -339,7 +343,7 @@ export const enrollOrder = async (
                     ? shippingAddress.name
                     : "") || "",
             customer_email: customerEmail || "",
-            customer_phone: customerPhone || "",
+            ...(!isInk() ? { customer_phone: customerPhone || "" } : {}),
             shipping_address: shippingAddress,
             product_details: productDetails,
         },
@@ -439,6 +443,7 @@ export const getProofReceipt = (apiKey: string, idOrToken: string) => merchantDo
 export const getProofExport = (apiKey: string, idOrToken: string) => merchantDoor(apiKey, idOrToken, "export");
 
 export const getProof = async (apiKey: string, nfcToken: string) => {
+  if (isInk()) return merchantRead(apiKey, `proofs/${encodeURIComponent(nfcToken)}`);
     const url = getAlanUrl(`/api/proofs/${encodeURIComponent(nfcToken)}`);
     console.log(`[ink-api] getProof → ${url} (apiKey prefix: ${apiKey.slice(0, 12)}...)`);
     const response = await fetch(url, {
@@ -706,6 +711,7 @@ export const redactCustomerInInk = async (params: {
   try {
     const response = await fetch(url, {
       method: "POST",
+      ...(isInk() ? { signal: AbortSignal.timeout(3500) } : {}),
       headers: {
         "Content-Type": "application/json",
         "X-Admin-Secret": INK_ADMIN_SECRET as string,
@@ -716,6 +722,7 @@ export const redactCustomerInInk = async (params: {
         customer_email: params.customerEmail ?? null,
         order_ids: Array.isArray(params.orderIds) ? params.orderIds : [],
         source: "shopify_customers_redact",
+        ...(isInk() ? { include_custody: true } : {}),
       }),
     });
     const body = await response.json().catch(() => null);
@@ -736,6 +743,7 @@ export const purgeShopInInk = async (
   try {
     const response = await fetch(url, {
       method: "POST",
+      ...(isInk() ? { signal: AbortSignal.timeout(3500) } : {}),
       headers: {
         "Content-Type": "application/json",
         "X-Admin-Secret": INK_ADMIN_SECRET as string,

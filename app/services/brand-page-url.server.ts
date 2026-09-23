@@ -1,3 +1,6 @@
+import { isInk } from "./app-flavor.server";
+import { flavorLogger } from "./ink-log.server";
+const console = flavorLogger("brand-page-url.server");
 // THE BUYER'S PAGE URL — one author, because two would drift.
 //
 // `https://{brand}.in.ink/r/{nfc_token}` is the address of the thing this
@@ -101,6 +104,14 @@ export async function resolveBrandPageUrl({
   }
 
   let brandDoc: Record<string, any> = merchantData;
+  if (isInk()) {
+    // The install mirror is owned by this app. Without it, the canonical
+    // buyer URL resolves the token; never guess an unclaimed brand host.
+    const brandSlug = brandSlugFromDomain(merchantData.ink_brand_slug) || "www";
+    const pageUrl = nfcToken ? `https://${brandSlug}.in.ink/r/${encodeURIComponent(nfcToken)}` : null;
+    return { pageUrl, emailUrl: pageUrl ?? `https://www.in.ink/r/${proofId}`, nfcToken, brandSlug, proofShopId, brandDoc: merchantData, customerTier };
+  }
+
   if (proofShopId) {
     try {
       const { default: firestore } = await import("../firestore.server");

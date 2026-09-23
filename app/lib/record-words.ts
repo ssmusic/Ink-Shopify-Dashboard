@@ -94,6 +94,13 @@ export type RecordRead = {
   forSale?: { price_cents: number; currency: string } | null;
 };
 
+/** The hand-over is the merchant's — bought, or free (lib/record-handover.ts).
+ *  Only a whole read (the merchant door) can say so: its price is gone once
+ *  bought, and absent when free. The public words of a priced record never do. */
+export function recordDownloadsAvailable(record: RecordRead | null | undefined): boolean {
+  return record?.whole === true && !record.forSale;
+}
+
 export const LEVEL_WORDS: Record<string, string> = {
   verified: "Device-verified",
   attested: "Recorded and signed",
@@ -103,7 +110,9 @@ export const LEVEL_WORDS: Record<string, string> = {
 
 export const VALUE_WORDS: Record<string, string> = {
   order_number: "Order",
-  enrolled_at: "Enrolled",
+  // Sam, 2026-09-23: "enrolled and verified and all that bs is from when this
+  // was nfc - remove" — the record's own moment is said as recorded.
+  enrolled_at: "Recorded",
   tier: "Buyer",
   delivered_at: "Delivered",
   source: "Source",
@@ -138,7 +147,14 @@ export function when(iso: unknown): string {
   if (typeof iso !== "string" || !iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
 }
 
 // One measurement per line: a distance printed always comes from one signed
@@ -155,6 +171,11 @@ export function locationWords(loc: LocationLine): string {
 export function valueWords(key: string, v: unknown): string {
   if (v == null) return "—";
   if (key === "location" && typeof v === "object") return locationWords(v as LocationLine);
+  // The carrier's status arrives as an enum ("OUT_FOR_DELIVERY"): said in sentence case.
+  if (key === "last_status" && typeof v === "string") {
+    const word = v.replace(/_/g, " ").toLowerCase();
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  }
   if (typeof v === "boolean") return v ? "Yes" : "No";
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) return when(v);
   return String(v);
@@ -235,7 +256,7 @@ export function opensOf(record: RecordRead | null | undefined): number | null {
 // the published key rather than of a browser: here the app ran the checks.
 
 export const EVENT_WORDS: Record<string, string> = {
-  ENROLLED: "Order enrolled",
+  ENROLLED: "Order recorded",
   CARRIER_DELIVERED: "Carrier delivered",
   TAP_RECORDED: "Opened",
   DELIVERY_VERIFIED: "Confirmed at the door",

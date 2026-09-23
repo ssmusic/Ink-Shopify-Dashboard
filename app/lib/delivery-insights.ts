@@ -27,9 +27,17 @@ export type DeliveryRow = {
   carrier_name?: string | null;
 };
 
-export type TapRow = { tap_at?: string | null; tracking_last_moved_at?: string | null };
+export type TapRow = {
+  tap_at?: string | null;
+  tracking_last_moved_at?: string | null;
+};
 
-export type FunnelStep = { key: string; label: string; count: number; ofAbovePct: number | null };
+export type FunnelStep = {
+  key: string;
+  label: string;
+  count: number;
+  ofAbovePct: number | null;
+};
 
 const at = (iso: string | null | undefined): number | null => {
   if (!iso) return null;
@@ -37,12 +45,15 @@ const at = (iso: string | null | undefined): number | null => {
   return Number.isFinite(t) ? t : null;
 };
 
-const pct = (n: number, d: number): number | null => (d > 0 ? Math.round((n / d) * 1000) / 10 : null);
+const pct = (n: number, d: number): number | null =>
+  d > 0 ? Math.round((n / d) * 1000) / 10 : null;
 
 /** The phone shared its location on the first open: the distance came from
  *  its own fix. (Older proofs carry a verdict with no source — the NFC era's —
  *  which is not a shared location; merchant-insights counts gps_count alike.) */
-export function sharedLocation(row: Pick<DeliveryRow, "location_source">): boolean {
+export function sharedLocation(
+  row: Pick<DeliveryRow, "location_source">,
+): boolean {
   return (row.location_source ?? "").toLowerCase() === "gps";
 }
 
@@ -55,7 +66,7 @@ export function funnel(rows: DeliveryRow[]): FunnelStep[] {
   const steps: [string, string, DeliveryRow[]][] = [
     ["orders", "Orders", orders],
     ["delivered", "Delivered", delivered],
-    ["opened", "Opened", opened],
+    ["opened", "Open", opened],
     ["shared", "Location shared", shared],
   ];
   return steps.map(([key, label, list], i) => ({
@@ -68,14 +79,19 @@ export function funnel(rows: DeliveryRow[]): FunnelStep[] {
 
 // The console's buckets (stats.ts TRANSIT_BUCKETS), verbatim.
 export const TRANSIT_BUCKETS = [
-  { label: "under 1 d", max: 24 },
-  { label: "1–2 d", max: 48 },
-  { label: "2–4 d", max: 96 },
-  { label: "4–7 d", max: 168 },
-  { label: "over 7 d", max: Infinity },
+  { label: "Under 1 day", max: 24 },
+  { label: "1 to 2 days", max: 48 },
+  { label: "2 to 4 days", max: 96 },
+  { label: "4 to 7 days", max: 168 },
+  { label: "Over 7 days", max: Infinity },
 ] as const;
 
-export type TransitHistogram = { buckets: { label: string; count: number }[]; measured: number; delivered: number; medianHours: number | null };
+export type TransitHistogram = {
+  buckets: { label: string; count: number }[];
+  measured: number;
+  delivered: number;
+  medianHours: number | null;
+};
 
 /** Hours from enrolment to delivery, bucketed; a pair missing or negative is skipped. */
 export function timeInTransit(rows: DeliveryRow[]): TransitHistogram {
@@ -95,7 +111,11 @@ export function timeInTransit(rows: DeliveryRow[]): TransitHistogram {
     buckets[idx === -1 ? buckets.length - 1 : idx].count += 1;
   }
   hours.sort((a, b) => a - b);
-  const mid = hours.length ? (hours.length % 2 ? hours[(hours.length - 1) / 2] : (hours[hours.length / 2 - 1] + hours[hours.length / 2]) / 2) : null;
+  const mid = hours.length
+    ? hours.length % 2
+      ? hours[(hours.length - 1) / 2]
+      : (hours[hours.length / 2 - 1] + hours[hours.length / 2]) / 2
+    : null;
   return { buckets, measured: hours.length, delivered, medianHours: mid };
 }
 
@@ -105,24 +125,42 @@ export function formatHours(h: number | null): string {
   return h < 48 ? `${Math.round(h)} h` : `${Math.round((h / 24) * 10) / 10} d`;
 }
 
-export type CarrierLine = { status: string; count: number; ofEnrolledPct: number | null };
+export type CarrierLine = {
+  status: string;
+  count: number;
+  ofEnrolledPct: number | null;
+};
 
 /** Every order by the carrier's last word; an empty word is "No carrier update". */
 export function carrierSaid(rows: DeliveryRow[]): CarrierLine[] {
   const counts = new Map<string, number>();
   for (const r of rows) {
-    const s = (r.last_tracking_status ?? "").trim() || "No carrier update"; // PLACEHOLDER copy (the console's)
+    const raw = (r.last_tracking_status ?? "")
+      .trim()
+      .replace(/_/g, " ")
+      .toLowerCase();
+    const s = raw
+      ? raw.charAt(0).toUpperCase() + raw.slice(1)
+      : "No delivery status"; // PLACEHOLDER copy (the console's)
     counts.set(s, (counts.get(s) ?? 0) + 1);
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([status, count]) => ({ status, count, ofEnrolledPct: pct(count, rows.length) }));
+    .map(([status, count]) => ({
+      status,
+      count,
+      ofEnrolledPct: pct(count, rows.length),
+    }));
 }
 
 // The console's threshold (engagement.ts STUCK_THRESHOLD_HOURS).
 export const STUCK_THRESHOLD_HOURS = 48;
 
-export type WhileTheyWaited = { stuck: number; withData: number; sharePct: number | null };
+export type WhileTheyWaited = {
+  stuck: number;
+  withData: number;
+  sharePct: number | null;
+};
 
 /** Opens made 48 h or more after the parcel last moved. */
 export function whileTheyWaited(taps: TapRow[]): WhileTheyWaited {
@@ -132,6 +170,7 @@ export function whileTheyWaited(taps: TapRow[]): WhileTheyWaited {
     const a = at(t.tap_at);
     const m = at(t.tracking_last_moved_at);
     if (a == null || m == null) continue;
+    if (a < m) continue;
     withData += 1;
     if ((a - m) / 3_600_000 >= STUCK_THRESHOLD_HOURS) stuck += 1;
   }

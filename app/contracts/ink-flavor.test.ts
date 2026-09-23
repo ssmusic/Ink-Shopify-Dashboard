@@ -247,6 +247,11 @@ describe("under ink, the enrol and tracking queries select nothing outside INK_S
     expect(q).not.toMatch(/\bphone\b/);
   });
 
+  it("does not read a phone or request fulfillment-service access", () => {
+    expect(templateLiteral(read("app/routes/webhooks.orders_create.ts"), "ORDER_DETAIL_QUERY_INK")).not.toMatch(/\bphone\b/);
+    expect(INK_SCOPES).toEqual(["write_orders", "write_merchant_managed_fulfillment_orders", "write_third_party_fulfillment_orders"]);
+  });
+
   it("ink's fulfillment reads still carry the proof link", () => {
     expect(templateLiteral(read("app/routes/webhooks.fulfillments_create.tsx"), "ORDER_QUERY_INK")).toContain('metafield(namespace: "ink", key: "proof_reference")');
     expect(templateLiteral(read("app/routes/webhooks.fulfillments_update.tsx"), "ORDER_QUERY_INK")).toContain('proofMetafield: metafield(namespace: "ink", key: "proof_reference")');
@@ -256,8 +261,8 @@ describe("under ink, the enrol and tracking queries select nothing outside INK_S
     // fulfillmentTrackingInfoUpdate: any one of the three write_*_fulfillment_orders (+ read_orders).
     expect(INK_SCOPES).toContain("write_merchant_managed_fulfillment_orders");
     expect(INK_SCOPES).toContain("write_third_party_fulfillment_orders");
-    expect(INK_SCOPES).toContain("write_assigned_fulfillment_orders");
-    expect(INK_SCOPES).toContain("read_orders");
+    expect(INK_SCOPES).not.toContain("write_assigned_fulfillment_orders");
+    expect(INK_SCOPES).toContain("write_orders"); // includes read_orders
     expect(INK_SCOPES).toContain("write_orders"); // tagsAdd, metafieldsSet on the order
   });
 

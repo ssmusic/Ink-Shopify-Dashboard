@@ -1,3 +1,5 @@
+import { flavorLogger } from "../services/ink-log.server";
+const console = flavorLogger("webhooks.app.uninstalled");
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
@@ -18,7 +20,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // apps are one merchant on one store, and the store leaving is shop/redact's
   // moment, 48 hours on, which asks whether the other app is still there
   // before it purges. Uninstalling one app must never blank the other's key.
-  if (session) {
+  if (session || isInk()) {
     const snapshot = await firestore
       .collection(SESSION_COLLECTION)
       .where("shop", "==", shop)

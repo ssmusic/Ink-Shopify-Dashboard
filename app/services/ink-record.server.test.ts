@@ -2,13 +2,13 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { readRecord, readRecords, recordFromBody } from "./ink-record.server";
-import { elementLines, locationWordOf, opensOf } from "../lib/record-words";
+import { elementLines, locationWordOf, opensOf, recordDownloadsAvailable } from "../lib/record-words";
 
 const PROOF = "proof_aec827b527fb30457c1da890";
-// The backend's public read, as it answered for Corvara #1010 on 2026-09-23.
+// Merchant-audit fixture adapted from the earlier record response.
 const BODY = {
   proof_id: PROOF,
-  audience: "public",
+  audience: "merchant",
   summary: { order_number: "#1010", buyer_initials: "SM", opens: 1 },
   verdict: {
     elements: [
@@ -23,6 +23,32 @@ const BODY = {
 const ok = (body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch;
 
 describe("readRecord", () => {
+  it("keeps the hand-over's purchase distinct from the merchant's whole view", () => {
+    const chain = [{ event_id: "event_12345678", event_type: "TAP_RECORDED", timestamp: "2026-09-20T00:00:00Z", seq: 1 }];
+    const forSale = recordFromBody({ ...BODY, audience: "merchant", chain, legacy_events: [], record: { locked: false, purchased: false, price_cents: 2900, currency: "USD" } });
+    expect(forSale).toMatchObject({ locked: false, whole: true, forSale: { price_cents: 2900, currency: "USD" } });
+    expect(recordDownloadsAvailable(forSale)).toBe(false);
+    const bought = recordFromBody({ ...BODY, audience: "merchant", chain, legacy_events: [], record: { locked: false, purchased: true, price_cents: 2900, currency: "USD" } });
+    expect(bought?.forSale).toBeNull();
+    expect(recordDownloadsAvailable(bought)).toBe(true);
+    // The public words of a priced record hand nothing over.
+    expect(recordDownloadsAvailable(recordFromBody(BODY))).toBe(false);
+  });
+  it("takes a whole record only from this proof's merchant audit", async () => {
+    const whole = { ...BODY, audience: "merchant", chain: [], legacy_events: [], record: { locked: false, purchased: true } };
+    const door = (audit: unknown, words: unknown = BODY) =>
+      vi.fn(async (url: string) =>
+        new Response(JSON.stringify(url.includes("/audit") ? audit : url.endsWith("/jwks.json") ? { keys: [] } : words)),
+      ) as unknown as typeof fetch;
+    expect((await readRecord(PROOF, door(whole), "merchant-test"))?.whole).toBe(true);
+    // Another proof's audit, or a public answer at the merchant door, is never this order's whole record.
+    for (const patch of [{ proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" }, { audience: "public" }]) {
+      const r = await readRecord(PROOF, door({ ...whole, ...patch }), "merchant-test");
+      expect(r?.whole).not.toBe(true);
+    }
+    // Nor are another proof's public words.
+    expect(await readRecord(PROOF, door(null, { ...BODY, proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" }))).toBeNull();
+  });
   it("reads the public words projection — no key, no secret — and keeps the words of a locked record", async () => {
     const f = ok(BODY);
     const r = await readRecord(PROOF, f);
@@ -102,5 +128,61 @@ describe("recordFromBody — the browsers (2026-09-23)", () => {
   it("an older read with no browsers reads exactly as it did — no key at all", () => {
     expect("browsers" in (recordFromBody(BODY) ?? {})).toBe(false);
     expect("browsers" in (recordFromBody({ ...BODY, browsers: "nope" }) ?? {})).toBe(false);
+  });
+});
+
+describe("recordFromBody — only known fields leave the server (the ink review, 2026-09-23)", () => {
+  it("projects each element's values and the location to what the words print — no fix, no unknown field", () => {
+    const body = {
+      ...BODY,
+      verdict: {
+        elements: [
+          {
+            element: "the_open",
+            label: "The open",
+            status: "verified",
+            value: {
+              opens: 1,
+              device_fingerprint: "fp_secret",
+              gps: { lat: 34.11, lng: -118.23 },
+              location: { verdict: "flagged", distance_m: 719, accuracy_m: 35, lat: 34.11, lng: -118.23, later_share: { verdict: "pass", distance_m: 40, lat: 1, later_share: { distance_m: 2 } } },
+            },
+          },
+        ],
+      },
+    };
+    const open = recordFromBody(body)!.elements[0];
+    expect(open.value).toEqual({
+      opens: 1,
+      location: { verdict: "flagged", distance_m: 719, accuracy_m: 35, later_share: { verdict: "pass", distance_m: 40 } },
+    });
+    expect(JSON.stringify(recordFromBody(body))).not.toMatch(/fp_secret|"lat"|"lng"|"gps"/);
+  });
+
+  it("keeps the summary to the screen's fields — never the buyer's initials", () => {
+    expect(recordFromBody(BODY)?.summary).toEqual({ order_number: "#1010", opens: 1 });
+  });
+
+  it("says each signed event in words — never its signed bytes, signature, hash or revealed fix", () => {
+    const whole = recordFromBody({
+      ...BODY,
+      record: { locked: false, purchased: true },
+      chain: [
+        { event_id: "event_12345678", event_type: "TAP_RECORDED", timestamp: "2026-09-20T00:00:00Z", seq: 1, signature: "sig_secret", payload_hash: "hash_secret", signed_bytes: "private address", revealed: { gps: { lat: 34 } } },
+      ],
+      legacy_events: [],
+    });
+    expect(whole?.events).toEqual([{ seq: 1, event_id: "event_12345678", type: "Opened", at: "2026-09-20T00:00:00Z", check: "not checked", legacy: false }]);
+    expect(JSON.stringify(whole)).not.toMatch(/private address|sig_secret|hash_secret|"lat"|"gps"/);
+  });
+
+  it("reads the merchant door over HTTPS with the shop's own key, refusing a redirect", async () => {
+    const f = vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith("/jwks.json") ? { keys: [] } : BODY))) as unknown as typeof fetch;
+    await readRecord(PROOF, f, "merchant-test");
+    const calls = (f as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls;
+    const audit = calls.find(([url]) => url.endsWith(`/proofs/${PROOF}/audit`));
+    expect(audit?.[0]).toBe(`https://us-central1-inink-c76d3.cloudfunctions.net/api/proofs/${PROOF}/audit`);
+    expect(new Headers(audit?.[1].headers).get("Authorization")).toBe("Bearer merchant-test");
+    expect(audit?.[1].redirect).toBe("error");
   });
 });

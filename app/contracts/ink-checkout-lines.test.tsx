@@ -1,8 +1,15 @@
 // INK'S ORDER VIEW SAYS THE CHECKOUT BESIDE THE OPENS — two lines under the
 // record's words, only when the backend's words carry `checkout_vs_opens`
 // (ink-backend, behind its CHECKOUT_DETAILS_ENABLED). Absent, the record reads
-// and renders exactly as it did: the snapshot below was written by TODAY's
-// code, before these lines existed, and must never move.
+// and renders exactly as it did: the snapshot below pins the record's markup
+// with no checkout, and must never move for the checkout's sake.
+//
+// (It moved once, on purpose: 2026-09-23, when the Codex audit's design pass
+// and the rulings pass were reconciled, the record's words took the Polaris
+// look Sam steered — sentence case, a level badge per element. The checkout's
+// two lines, their words and their place after the open did not change, and
+// "switch off, nothing printed" is still pinned below: a malformed comparison
+// renders byte-identically to none.)
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

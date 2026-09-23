@@ -78,7 +78,8 @@ describe("ink's accordion reads the merchant's WHOLE record with the shop's own 
   it("the merchant door: every signed event checked against the published key, and the hand-over for sale", async () => {
     const { f, calls } = doors({
       [`/proofs/${PROOF}/audit`]: json(whole([e1, e2, e3])),
-      [`/proofs/${OTHER}/audit`]: json(whole([e1, e2, e3])),
+      // Each door answers with its own proof's id (a whole read is only ever this proof's).
+      [`/proofs/${OTHER}/audit`]: json({ ...whole([e1, e2, e3]), proof_id: OTHER }),
       "/.well-known/jwks.json": json(JWKS),
       "/verify/": json(WORDS),
     });
@@ -89,7 +90,7 @@ describe("ink's accordion reads the merchant's WHOLE record with the shop's own 
     expect(r.forSale).toEqual({ price_cents: 2900, currency: "USD" });
     expect(r.elements.map((e) => e.element)).toEqual(["order", "the_open"]);
     expect(r.events).toEqual([
-      { seq: 1, event_id: "evt_1", type: "Order enrolled", at: "2026-09-10T12:00:00.000Z", check: "verified", legacy: false },
+      { seq: 1, event_id: "evt_1", type: "Order recorded", at: "2026-09-10T12:00:00.000Z", check: "verified", legacy: false },
       { seq: 2, event_id: "evt_2", type: "Carrier delivered", at: "2026-09-12T12:00:00.000Z", check: "verified", legacy: false },
       { seq: 3, event_id: "evt_3", type: "Opened", at: "2026-09-13T12:00:00.000Z", check: "verified", legacy: false },
     ]);

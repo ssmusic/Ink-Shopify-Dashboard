@@ -1,3 +1,6 @@
+import { isInk } from "./app-flavor.server";
+import { flavorLogger } from "./ink-log.server";
+const console = flavorLogger("record-door");
 // THE RECORD'S DOOR — "Get the record — $X" on an order row (Sam, 2026-09-22:
 // "the words are free, the proof is paid" · "put a price on the download").
 //
@@ -162,6 +165,7 @@ export async function readRecordCharge(admin: AdminGraphql, gid: string): Promis
     const res = await admin.graphql(RECORD_CHARGE_QUERY, { variables: { id: gid } });
     const body = (await res.json()) as { data?: { node?: { id?: string; status?: string; test?: boolean; price?: { amount?: string; currencyCode?: string } } | null } };
     const n = body?.data?.node;
+    if (isInk() && (typeof n?.test !== "boolean" || typeof n?.price?.amount !== "string" || !n.price.amount.trim() || !/^[A-Z]{3}$/.test(n.price?.currencyCode || ""))) return null;
     const amount = Number(n?.price?.amount);
     if (!n?.id || typeof n.status !== "string" || !Number.isFinite(amount)) return null;
     return { id: n.id, status: n.status, test: n.test === true, price_cents: Math.round(amount * 100), currency: n.price?.currencyCode || "USD" };

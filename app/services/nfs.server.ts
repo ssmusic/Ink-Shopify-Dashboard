@@ -1,3 +1,8 @@
+import { flavorLogger } from "./ink-log.server";
+import { flavorFetch as fetch } from "./ink-reader.server";
+import { isInk } from "./app-flavor.server";
+import { originalTrackingDestination } from "./ink-tracking-destination.server";
+const console = flavorLogger("nfs");
 import crypto from "crypto";
 
 // Alan's NFS API Base URL
@@ -231,7 +236,12 @@ export const NFSService = {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(payload),
+      // Ink rewrites the Shopify tracking link. Do not let the resulting
+      // webhook echo overwrite the original external destination.
+      body: JSON.stringify(isInk() ? {
+        ...payload,
+        tracking_url: originalTrackingDestination(payload.tracking_url),
+      } : payload),
     });
 
     if (!response.ok) {

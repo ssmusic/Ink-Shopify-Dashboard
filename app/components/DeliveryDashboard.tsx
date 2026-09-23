@@ -1,5 +1,5 @@
-// THE DASHBOARD PILL — three numbers, and the orders' funnel in the charts'
-// blue under them. Nothing else.
+// THE DASHBOARD — three numbers, the orders' funnel in the charts' blue under
+// them, and three rates in rings.
 //
 // Sam, 2026-09-23, on the first version (the console's Delivery page): "this
 // should just be three up there" · "there should be nothing underneath those
@@ -8,23 +8,27 @@
 // weird" · "did it arrive when promised [is] weird" · "it's weird to say what
 // the carrier said" · "orders through the door is strange" · "the whole thing
 // is just bizarre" — and, of the order page, "blue highlights like the
-// insights page" · "which prob should be called a dashboard".
+// insights page" · "which prob should be called a dashboard". Later, of the
+// Dashboard: "we have other kpi we can offer - real ones from the backend
+// source of truth" · "make the dash better - maybe some circular kpi?".
 //
-// So: the three numbers (components/InkKpis.tsx), then one card — Shopify's
+// So: the three numbers (components/InkKpis.tsx); then one card — Shopify's
 // FunnelChart (@shopify/polaris-viz, its Light theme's own blue) over
-// Orders → Delivered → Opened → Location shared, with no title and one line
-// saying how the steps count (the funnel's "Opened" counts delivered orders
-// only, so without that line it would contradict the number above it). Gone:
-// every section Sam named; "Time in transit" too (it ran from the order's
-// creation, not its shipment, so its name was not true); "Seen at the door"
-// (a verdict against the 100 m range — "we dont judge"). The arithmetic for
-// the rest stays in lib/delivery-insights.ts, undrawn.
+// Orders → Delivered → Open → Location shared, with no title and one line
+// saying how the steps count (the funnel's "Open" counts delivered orders
+// only, so without that line it would contradict the number above it); then
+// the rates (components/InkDashboardRates.tsx), each from one door and one
+// denominator. Gone: every section Sam named; "Time in transit" too (it ran
+// from the order's creation, not its shipment, so its name was not true);
+// "Seen at the door" (a verdict against the 100 m range — "we dont judge").
+// The arithmetic for the rest stays in lib/delivery-insights.ts, undrawn.
 //
 // Three states, each saying only what is true:
 //   · the numbers could not be read (no key yet, a refused or slow read) —
 //     said as that, never as an empty store;
-//   · ink holds no order yet — said as that, never as a row of zeros;
-//   · otherwise the numbers.
+//   · ink holds no order with a record yet — said as that, never as a row of zeros;
+//   · otherwise the numbers, and — when the delivery door did not answer —
+//     a line saying so where the funnel would be.
 //
 // Every visible string is PLACEHOLDER copy — Sam's words replace it.
 
@@ -32,6 +36,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { BlockStack, Box, Card, EmptyState, InlineStack, Text } from "@shopify/polaris";
 import { FunnelChart, PolarisVizProvider } from "@shopify/polaris-viz";
 import InkKpis from "./InkKpis";
+import InkDashboardRates from "./InkDashboardRates";
 import type { InkKpis as Kpis } from "../services/ink-kpis.server";
 import type { DeliveryDashboardData } from "../services/ink-delivery.server";
 
@@ -61,8 +66,8 @@ export default function DeliveryDashboard({ kpis, delivery }: { kpis: Kpis | nul
   if (kpis.recorded === 0) {
     return (
       <Card>
-        {/* PLACEHOLDER copy — the Orders pill's own words for none */}
-        <EmptyState heading="No orders yet" image="" />
+        {/* PLACEHOLDER copy — ink counts orders it holds a record for, not the store's every order. */}
+        <EmptyState heading="No orders with records are available yet." image="" />
       </Card>
     );
   }
@@ -95,7 +100,15 @@ export default function DeliveryDashboard({ kpis, delivery }: { kpis: Kpis | nul
               </Box>
             </BlockStack>
           </Card>
+        ) : !delivery ? (
+          <Card>
+            <Text as="p" tone="subdued">
+              {/* PLACEHOLDER copy */}
+              Delivery details are unavailable. Refresh to try again.
+            </Text>
+          </Card>
         ) : null}
+        <InkDashboardRates kpis={kpis} delivery={delivery} />
       </BlockStack>
     </PolarisVizProvider>
   );

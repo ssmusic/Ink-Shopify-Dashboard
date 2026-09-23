@@ -4,6 +4,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const merchantRead = vi.fn();
+vi.mock("./ink-reader.server", () => ({ merchantRead }));
 const createMerchant = vi.fn();
 const getShopIdByDomain = vi.fn();
 const patchMerchant = vi.fn();
@@ -11,7 +13,11 @@ const getMerchant = vi.fn();
 const updateMerchant = vi.fn();
 const captureBrandMark = vi.fn();
 
-vi.mock("./ink-api.server", () => ({ createMerchant, getShopIdByDomain, patchMerchant }));
+vi.mock("./ink-api.server", () => ({
+  createMerchant,
+  getShopIdByDomain,
+  patchMerchant,
+}));
 vi.mock("./merchant.server", () => ({ getMerchant, updateMerchant }));
 vi.mock("./brand-mark.server", () => ({ captureBrandMark }));
 
@@ -29,7 +35,14 @@ function adminAnswering(shop: Record<string, unknown> | Error) {
 beforeEach(() => {
   vi.resetAllMocks();
   updateMerchant.mockResolvedValue(undefined);
-  captureBrandMark.mockResolvedValue({ ok: true, status: 200, logoUrl: "https://cdn.test/mark.svg", slug: "made-up-goods", slugNote: "made-up-goods.in.ink claimed", note: "mark captured: https://cdn.test/mark.svg; host made-up-goods.in.ink" });
+  captureBrandMark.mockResolvedValue({
+    ok: true,
+    status: 200,
+    logoUrl: "https://cdn.test/mark.svg",
+    slug: "made-up-goods",
+    slugNote: "made-up-goods.in.ink claimed",
+    note: "mark captured: https://cdn.test/mark.svg; host made-up-goods.in.ink",
+  });
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -37,7 +50,10 @@ afterEach(() => vi.unstubAllEnvs());
 describe("provisionInkMerchant", () => {
   it("creates the backend merchant with plan ink, seeds the doc, then captures the mark", async () => {
     getMerchant.mockResolvedValue(null);
-    createMerchant.mockResolvedValue({ shop_id: "shop_abc123", api_key: "ink_live_key" });
+    createMerchant.mockResolvedValue({
+      shop_id: "shop_abc123",
+      api_key: "ink_live_key",
+    });
     const admin = adminAnswering({
       name: "Made-Up Goods",
       email: "owner@example.test",
@@ -48,7 +64,12 @@ describe("provisionInkMerchant", () => {
     const { provisionInkMerchant } = await import("./ink-install.server");
     const out = await provisionInkMerchant({ admin, shop: SHOP });
 
-    expect(createMerchant).toHaveBeenCalledWith(SHOP, "Made-Up Goods", "owner@example.test", { plan: "ink" });
+    expect(createMerchant).toHaveBeenCalledWith(
+      SHOP,
+      "Made-Up Goods",
+      "owner@example.test",
+      { plan: "ink" },
+    );
 
     // The doc: the key, background mode, and the backend id — and nothing
     // the Ritualist seeds (its notification toggles are for rails ink has none of).
@@ -57,21 +78,31 @@ describe("provisionInkMerchant", () => {
       verified_delivery_mode: "background",
       ink_shop_id: "shop_abc123",
     });
-    expect(updateMerchant.mock.calls[0][1]).not.toHaveProperty("notification_settings");
+    expect(updateMerchant.mock.calls[0][1]).not.toHaveProperty(
+      "notification_settings",
+    );
 
     // The capture: the storefront's own address and the backend id.
-    expect(captureBrandMark).toHaveBeenCalledWith({ site: "https://www.made-up-goods.test", shopId: "shop_abc123" });
+    expect(captureBrandMark).toHaveBeenCalledWith({
+      site: "https://www.made-up-goods.test",
+      shopId: "shop_abc123",
+    });
 
     // The attempt recorded, so the onboarding screen can stop waiting.
     expect(updateMerchant).toHaveBeenNthCalledWith(2, SHOP, {
       ink_mark_captured_at: expect.any(String),
-      ink_mark_capture_note: "mark captured: https://cdn.test/mark.svg; host made-up-goods.in.ink",
+      ink_mark_capture_note:
+        "mark captured: https://cdn.test/mark.svg; host made-up-goods.in.ink",
       // The host the Worker claimed in the same call — the label the record
       // now holds, never one derived from the myshopify domain (#1016).
       ink_brand_slug: "made-up-goods",
     });
 
-    expect(out).toMatchObject({ outcome: "provisioned", shopId: "shop_abc123", capture: { ok: true } });
+    expect(out).toMatchObject({
+      outcome: "provisioned",
+      shopId: "shop_abc123",
+      capture: { ok: true },
+    });
   });
 
   it("leaves a doc that already carries an api key exactly as it is — one install per store, whichever app made it", async () => {
@@ -103,7 +134,9 @@ describe("provisionInkMerchant", () => {
     const admin = adminAnswering({ name: "x", email: "e@example.test" });
 
     const { provisionInkMerchant } = await import("./ink-install.server");
-    expect(await provisionInkMerchant({ admin, shop: SHOP })).toEqual({ outcome: "already_provisioned" });
+    expect(await provisionInkMerchant({ admin, shop: SHOP })).toEqual({
+      outcome: "already_provisioned",
+    });
 
     expect(createMerchant).not.toHaveBeenCalled();
     expect(patchMerchant).not.toHaveBeenCalled();
@@ -113,7 +146,11 @@ describe("provisionInkMerchant", () => {
   it("sends plan: ink only on its own create, and nowhere else", async () => {
     getMerchant.mockResolvedValue(null);
     createMerchant.mockResolvedValue({ shop_id: "shop_abc123", api_key: "k" });
-    const admin = adminAnswering({ name: "x", email: "e@example.test", primaryDomain: { url: "https://x.test" } });
+    const admin = adminAnswering({
+      name: "x",
+      email: "e@example.test",
+      primaryDomain: { url: "https://x.test" },
+    });
 
     const { provisionInkMerchant } = await import("./ink-install.server");
     await provisionInkMerchant({ admin, shop: SHOP });
@@ -124,7 +161,11 @@ describe("provisionInkMerchant", () => {
 
   it("waits for a real owner email rather than provisioning with a placeholder", async () => {
     getMerchant.mockResolvedValue(null);
-    const admin = adminAnswering({ name: "x", email: null, contactEmail: null });
+    const admin = adminAnswering({
+      name: "x",
+      email: null,
+      contactEmail: null,
+    });
 
     const { provisionInkMerchant } = await import("./ink-install.server");
     const out = await provisionInkMerchant({ admin, shop: SHOP });
@@ -136,13 +177,27 @@ describe("provisionInkMerchant", () => {
   it("records a failed capture too — the screen offers 'look again' instead of waiting forever", async () => {
     getMerchant.mockResolvedValue(null);
     createMerchant.mockResolvedValue({ shop_id: "shop_abc123", api_key: "k" });
-    captureBrandMark.mockResolvedValue({ ok: false, status: 0, logoUrl: null, slug: null, slugNote: null, note: "brand-mark capture failed: fetch failed" });
-    const admin = adminAnswering({ name: "x", email: "e@example.test", primaryDomain: { url: "https://x.test" } });
+    captureBrandMark.mockResolvedValue({
+      ok: false,
+      status: 0,
+      logoUrl: null,
+      slug: null,
+      slugNote: null,
+      note: "brand-mark capture failed: fetch failed",
+    });
+    const admin = adminAnswering({
+      name: "x",
+      email: "e@example.test",
+      primaryDomain: { url: "https://x.test" },
+    });
 
     const { provisionInkMerchant } = await import("./ink-install.server");
     const out = await provisionInkMerchant({ admin, shop: SHOP });
 
-    expect(out).toMatchObject({ outcome: "provisioned", capture: { ok: false } });
+    expect(out).toMatchObject({
+      outcome: "provisioned",
+      capture: { ok: false },
+    });
     expect(updateMerchant).toHaveBeenLastCalledWith(SHOP, {
       ink_mark_captured_at: expect.any(String),
       ink_mark_capture_note: "brand-mark capture failed: fetch failed",
@@ -153,18 +208,26 @@ describe("provisionInkMerchant", () => {
     getMerchant.mockResolvedValue(null);
     createMerchant.mockResolvedValue({ shop_id: "shop_abc123", api_key: "k" });
     captureBrandMark.mockResolvedValue({
-      ok: false, status: 404, logoUrl: null,
-      slug: "plainbrand", slugNote: "plainbrand.in.ink claimed",
+      ok: false,
+      status: 404,
+      logoUrl: null,
+      slug: "plainbrand",
+      slugNote: "plainbrand.in.ink claimed",
       note: "the Worker refused the capture: no mark could be found on this site; host plainbrand.in.ink",
     });
-    const admin = adminAnswering({ name: "Plain", email: "e@example.test", primaryDomain: { url: "https://www.plainbrand.test" } });
+    const admin = adminAnswering({
+      name: "Plain",
+      email: "e@example.test",
+      primaryDomain: { url: "https://www.plainbrand.test" },
+    });
 
     const { provisionInkMerchant } = await import("./ink-install.server");
     await provisionInkMerchant({ admin, shop: SHOP });
 
     expect(updateMerchant).toHaveBeenLastCalledWith(SHOP, {
       ink_mark_captured_at: expect.any(String),
-      ink_mark_capture_note: "the Worker refused the capture: no mark could be found on this site; host plainbrand.in.ink",
+      ink_mark_capture_note:
+        "the Worker refused the capture: no mark could be found on this site; host plainbrand.in.ink",
       ink_brand_slug: "plainbrand",
     });
   });
@@ -182,18 +245,25 @@ describe("provisionInkMerchant", () => {
 });
 
 describe("resolveInkShopId", () => {
+  beforeEach(() => vi.stubEnv("APP_FLAVOR", "ink"));
   it("uses the id the install recorded and never scans the list for it", async () => {
     const { resolveInkShopId } = await import("./ink-install.server");
-    expect(await resolveInkShopId(SHOP, { ink_shop_id: "shop_from_doc" })).toBe("shop_from_doc");
+    expect(await resolveInkShopId(SHOP, { ink_shop_id: "shop_from_doc" })).toBe(
+      "shop_from_doc",
+    );
     expect(getShopIdByDomain).not.toHaveBeenCalled();
   });
 
-  it("falls back to the list scan for a doc the Ritualist wrote, and to '' when nobody knows", async () => {
+  it("uses a merchant-scoped read for a legacy doc, never an admin scan", async () => {
     const { resolveInkShopId } = await import("./ink-install.server");
-    getShopIdByDomain.mockResolvedValueOnce("shop_from_list");
-    expect(await resolveInkShopId(SHOP, {})).toBe("shop_from_list");
-    getShopIdByDomain.mockRejectedValueOnce(new Error("Merchant not found"));
+    merchantRead.mockResolvedValueOnce({ shop_id: "shop_from_key" });
+    expect(await resolveInkShopId(SHOP, { ink_api_key: "own-key" })).toBe(
+      "shop_from_key",
+    );
+    expect(merchantRead).toHaveBeenCalledWith("own-key", "merchant-insights");
+    merchantRead.mockResolvedValueOnce(null);
     expect(await resolveInkShopId(SHOP, null)).toBe("");
+    expect(getShopIdByDomain).not.toHaveBeenCalled();
   });
 });
 

@@ -1,12 +1,11 @@
+import { isInk } from "./services/app-flavor.server";
+export const loader = () => ({ ink: isInk() });
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useNavigation, useRouteLoaderData } from "react-router";
 import type { LinksFunction } from "react-router";
 import premiumStyles from "./styles/premium.css?url";
 import globalStyles from "./styles/globals.css?url";
 
-export const links: LinksFunction = () => [
-  { rel: "stylesheet", href: globalStyles },
-  { rel: "stylesheet", href: premiumStyles },
-];
+
 
 // Shown while App Bridge / the loader is still initializing
 function GlobalLoadingScreen() {
@@ -67,6 +66,7 @@ function GlobalLoadingScreen() {
 }
 
 export default function App() {
+  const ink = (useRouteLoaderData("root") as { ink?: boolean } | undefined)?.ink === true;
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading";
 
@@ -76,18 +76,21 @@ export default function App() {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <link rel="preconnect" href="https://cdn.shopify.com/" />
+        {!ink && <>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Playfair+Display:wght@300;400;500;600&display=swap"
           rel="stylesheet"
         />
+        </>}
         <Meta />
+        {!ink && <><link rel="stylesheet" href={globalStyles} /><link rel="stylesheet" href={premiumStyles} /></>}
         <Links />
       </head>
       <body>
         {/* Show spinner during route transitions and on cold first-load */}
-        {isLoading && <GlobalLoadingScreen />}
+        {!ink && isLoading && <GlobalLoadingScreen />}
         <Outlet />
         <ScrollRestoration />
         <Scripts />

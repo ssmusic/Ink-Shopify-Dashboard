@@ -10,7 +10,8 @@
 //     chain) — that chain sits on the purchase-locked proof layer, so here a
 //     step is done by the proof's own field (delivered_at, first_tap_at), and
 //     the record's words above say what is signed; Shipped and In transit come
-//     from the carrier's feed and say so;
+//     from the carrier's feed and say so, and only a scan of that very stage
+//     completes one — a later scan never stands in for an earlier one;
 //   · the rail holds only what ink records for every order: no "Enrolled"
 //     (Sam, 2026-09-23: "enrolled and verified and all that bs is from when
 //     this was nfc - remove"), and no return or refund step — ink has neither,
@@ -18,9 +19,14 @@
 //   · an open is said by its distance, never judged against a range (Sam,
 //     2026-09-23: "we dont judge" · "we dont have a default range"); the
 //     backend's word is kept only where there is no distance — not shared,
-//     no position for the address, too wide to measure;
-//   · the delivery window runs from the delivered scan to the window's end,
-//     and the first open sits on it where it fell.
+//     no position for the address, too wide to measure; a measured word with
+//     no distance still says a location was shared (the words here are the
+//     record's own or each open's own, never the proof's old rollup stamp —
+//     services/ink-timeline.server.ts), and an open with no word at all says
+//     only that its distance is unavailable;
+//   · the delivery window runs from the delivered scan to the window's end the
+//     backend recorded — never an end made up here — and the first open sits
+//     on it where it fell.
 
 export type StepState = "done" | "carrier" | "not_recorded";
 export type LifecycleStep = { key: string; label: string; state: StepState; at: string | null; note: string | null };
@@ -54,8 +60,9 @@ const earliest = (events: JourneyEvent[], stages: string[]): string | null => {
 // Shipped · In transit · Delivered · Opened (see the rules above).
 export function lifecycle(p: LifecycleFields): LifecycleStep[] {
   const journey = p.carrier_journey?.events ?? [];
-  const shipped = earliest(journey, ["shipped", "transit", "in_transit", "out", "out_for_delivery", "delivered"]);
-  const transit = earliest(journey, ["transit", "in_transit", "out", "out_for_delivery"]);
+  // Only a recorded scan of the stage completes it.
+  const shipped = earliest(journey, ["shipped"]);
+  const transit = earliest(journey, ["transit", "in_transit"]);
   const step = (key: string, label: string, at: string | null | undefined, note: string | null = null): LifecycleStep => ({
     key,
     label,
@@ -77,28 +84,28 @@ const MEASURED_WORDS = new Set(["pass", "near", "flagged"]);
 
 /** What one open says about the address: a distance when there is one, else
  *  the backend's word. A measured word without its distance still says a
- *  location was shared — never that none was. */
+ *  location was shared — never that none was; no word at all claims neither. */
 export function openResult(distance_m: number | null | undefined, verdict: string | null | undefined): OpenResult {
   const v = (verdict ?? "").toLowerCase();
   if (v === "not_shared") return "not_shared";
   if (v === "imprecise") return "imprecise";
-  if (distance_m != null && Number.isFinite(distance_m)) return "measured";
-  if (v === "unmeasured") return "unmeasured";
-  return MEASURED_WORDS.has(v) ? "shared" : "not_shared";
+  // A distance that is there but not a real one (negative, not finite) is bad data: unavailable.
+  if (distance_m != null) return Number.isFinite(distance_m) && distance_m >= 0 ? "measured" : "unmeasured";
+  return MEASURED_WORDS.has(v) ? "shared" : "unmeasured";
 }
 
 export function kmOrM(m: number): string {
   return m >= 1000 ? `${Math.round(m / 100) / 10} km` : `${Math.round(m)} m`;
 }
 
-/** The sentence under the map — the distance, never a coordinate, never a
+/** One open, in a sentence — the distance, never a coordinate, never a
  *  judgment of it (Sam, 2026-09-23: "we dont judge"). */
 export function openSentence(distance_m: number | null | undefined, verdict: string | null | undefined): string {
   const r = openResult(distance_m, verdict);
-  // PLACEHOLDER copy — the console's sentences, with the range verdict removed.
-  if (r === "not_shared") return "The customer's phone did not share a location.";
-  if (r === "unmeasured") return "A location was shared, but the delivery address has no position to measure against.";
-  if (r === "imprecise") return "A location was shared, but too wide to measure against the address.";
+  // PLACEHOLDER copy.
+  if (r === "not_shared") return "Location not shared.";
+  if (r === "unmeasured") return "Distance unavailable.";
+  if (r === "imprecise") return "Location accuracy too low to measure.";
   if (r === "shared") return "A location was shared.";
   return `Opened ${kmOrM(distance_m as number)} from the delivery address.`;
 }
@@ -114,7 +121,8 @@ export type DeliveryWindow = {
   withinExpectedWindow: boolean | null;
 };
 
-/** The bar exists only once the carrier has said delivered. */
+/** The bar exists only once the carrier has said delivered, and only with the
+ *  window end the backend recorded (no seven-day guess). */
 export function deliveryWindow(p: {
   delivered_at?: string | null;
   interaction_window_end?: string | null;
@@ -124,13 +132,8 @@ export function deliveryWindow(p: {
 }): DeliveryWindow | null {
   const delivered = time(p.delivered_at);
   if (delivered == null) return null;
-  // The console's fallback: no window end → enrolment + 7 days.
-  let end = time(p.interaction_window_end);
-  if (end == null) {
-    const enrolled = time(p.enrolled_at);
-    end = enrolled != null ? enrolled + 7 * 24 * 3_600_000 : null;
-  }
-  if (end == null) return null;
+  const end = time(p.interaction_window_end);
+  if (end == null || end <= delivered) return null;
   const first = time(p.first_tap_at);
   const total = end - delivered;
   return {

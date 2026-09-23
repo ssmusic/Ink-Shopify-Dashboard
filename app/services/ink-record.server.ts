@@ -21,8 +21,16 @@
 //
 // Fail-soft and bounded: a slow or refused read is a row without its record,
 // never a slow or broken screen.
+//
+// ONLY KNOWN FIELDS LEAVE THE SERVER (the ink review, 2026-09-23): each
+// element's values are projected to the keys the record's words print, and a
+// location to its verdict, distances and signed flag — so no nested fix, token
+// or customer identifier a door happens to carry rides the loader into the
+// browser. The key-bearing read goes over services/ink-reader.server.ts
+// (HTTPS only, no redirect, no cache).
 
 import { checkRecord, type Jwks, type WholePacket } from "./record-check.server";
+import { merchantRead } from "./ink-reader.server";
 import { handoverPrice } from "../lib/record-handover";
 import { checkoutFromBody } from "../lib/checkout-words";
 import {
@@ -44,7 +52,6 @@ const READ_BUDGET_MS = 6_000; // five side-by-side reads can meet cold backend i
 
 const base = () => (INK_API_URL.endsWith("/") ? INK_API_URL.slice(0, -1) : INK_API_URL);
 const verifyUrl = (proofId: string) => `${base()}/verify/${encodeURIComponent(proofId)}`;
-const auditUrl = (proofId: string) => `${base()}/proofs/${encodeURIComponent(proofId)}/audit`;
 const jwksUrl = () => `${base()}/.well-known/jwks.json`;
 
 async function readJson(url: string, fetchImpl: typeof fetch, headers?: Record<string, string>): Promise<unknown | null> {
@@ -94,6 +101,66 @@ type Body = {
   legacy_events?: unknown;
 };
 
+// The values the record's words print (lib/record-words.ts VALUE_WORDS).
+const VALUE_KEYS = new Set([
+  "order_number",
+  "enrolled_at",
+  "tier",
+  "delivered_at",
+  "source",
+  "signed",
+  "geocoded",
+  "verified_at_door",
+  "last_status",
+  "last_at",
+  "carrier",
+  "signed_delivered_at",
+  "first_open_at",
+  "first_open_signed",
+  "opens",
+  "signed_opens",
+  "non_human_opens",
+  "location",
+]);
+
+/** A location as the words need it: its verdict, distances and signed flag —
+ *  never a fix. A later share keeps the same fields, one level deep. */
+function locationProjection(value: unknown, includeLater = true): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (typeof v.verdict === "string") out.verdict = v.verdict;
+  for (const key of ["distance_m", "accuracy_m"]) {
+    const n = v[key];
+    if (typeof n === "number" && Number.isFinite(n) && n >= 0) out[key] = n;
+  }
+  if (typeof v.signed === "boolean") out.signed = v.signed;
+  if (includeLater && v.later_share) out.later_share = locationProjection(v.later_share, false);
+  return out;
+}
+
+function valuesOf(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  const out: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    if (!VALUE_KEYS.has(key)) continue;
+    if (key === "location") out[key] = locationProjection(v);
+    else out[key] = typeof v === "string" || typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v)) ? v : null;
+  }
+  return out;
+}
+
+const SUMMARY_KEYS = ["order_number", "enrolled_at", "delivered_at", "delivery_stage", "carrier", "first_open_at", "last_open_at"] as const;
+
+/** The summary as the screen reads it: no buyer initials, no unknown field. */
+function summaryOf(raw: unknown): RecordSummary {
+  const s = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const out: RecordSummary = {};
+  for (const key of SUMMARY_KEYS) if (typeof s[key] === "string") out[key] = s[key] as string;
+  if (typeof s.opens === "number" && Number.isFinite(s.opens) && s.opens >= 0) out.opens = s.opens;
+  return out;
+}
+
 function elementsOf(b: Body): RecordElement[] {
   const elements: RecordElement[] = [];
   for (const e of b.verdict?.elements ?? []) {
@@ -103,7 +170,7 @@ function elementsOf(b: Body): RecordElement[] {
       element: el.element,
       label: el.label,
       status: typeof el.status === "string" ? el.status : "missing",
-      value: el.value && typeof el.value === "object" ? (el.value as Record<string, unknown>) : null,
+      value: valuesOf(el.value),
     });
   }
   return elements;
@@ -123,7 +190,7 @@ export function recordFromBody(body: unknown, jwks: Jwks | null = null): RecordR
   const checkout = checkoutFromBody(b.checkout_vs_opens);
   const browsers = browsersFromBody(b.browsers);
   const words: RecordRead = {
-    summary: b.summary ?? {},
+    summary: summaryOf(b.summary),
     elements: elementsOf(b),
     locked: b.record?.locked === true,
     ...(checkout ? { checkout } : {}),
@@ -150,8 +217,9 @@ export function recordFromBody(body: unknown, jwks: Jwks | null = null): RecordR
   return { ...words, locked: false, whole: true, events, checks, forSale: handoverPrice(b.record) };
 }
 
-/** The published keys, read from their own door; null when they did not load. */
-async function readJwks(fetchImpl: typeof fetch): Promise<Jwks | null> {
+/** The published keys, read from their own door; null when they did not load.
+ *  A screen reads them once and hands the read to every record it shows. */
+export async function readJwks(fetchImpl: typeof fetch = fetch): Promise<Jwks | null> {
   const body = (await readJson(jwksUrl(), fetchImpl)) as Jwks | null;
   return body && Array.isArray(body.keys) ? body : null;
 }
@@ -167,14 +235,16 @@ export async function readRecord(
   if (!PROOF_ID.test(proofId)) return null;
   if (apiKey) {
     const [body, jwks] = await Promise.all([
-      readJson(auditUrl(proofId), fetchImpl, { Authorization: `Bearer ${apiKey}` }),
+      merchantRead(apiKey, `proofs/${encodeURIComponent(proofId)}/audit`, fetchImpl),
       keys ?? readJwks(fetchImpl),
     ]);
-    const read = body ? recordFromBody(body, jwks) : null;
+    // Only this proof's merchant audit is this order's record.
+    const own = body && (body as { proof_id?: unknown }).proof_id === proofId && (body as { audience?: unknown }).audience === "merchant";
+    const read = own ? recordFromBody(body, jwks) : null;
     if (read) return read;
   }
   const words = await readJson(verifyUrl(proofId), fetchImpl);
-  return words ? recordFromBody(words) : null;
+  return words && (words as { proof_id?: unknown }).proof_id === proofId ? recordFromBody(words) : null;
 }
 
 /** Every listed order's record, read side by side — the published key once. */

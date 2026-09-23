@@ -1,3 +1,7 @@
+import { isInk } from "./app-flavor.server";
+import { merchantRead } from "./ink-reader.server";
+import { flavorLogger } from "./ink-log.server";
+const console = flavorLogger("ink-install.server");
 // WHAT AN INSTALL UNDER INK PROVISIONS — the ink flavor's half of app.tsx's
 // self-provision, in its own file so the Ritualist's half stays the verbatim
 // text it has been since managed install landed.
@@ -30,7 +34,9 @@ import { captureBrandMark, type BrandMarkCapture } from "./brand-mark.server";
 import { createMerchant, getShopIdByDomain } from "./ink-api.server";
 import { getMerchant, updateMerchant } from "./merchant.server";
 
-type AdminGraphql = { graphql: (query: string, opts?: any) => Promise<Response> };
+type AdminGraphql = {
+  graphql: (query: string, opts?: any) => Promise<Response>;
+};
 
 // The Ritualist asks `shop { name email contactEmail }` and nothing more; ink
 // also needs the storefront's address for the capture. Its own string, so the
@@ -44,7 +50,10 @@ export interface ShopIdentity {
   siteUrl: string;
 }
 
-export async function readShopIdentity(admin: AdminGraphql, shop: string): Promise<ShopIdentity> {
+export async function readShopIdentity(
+  admin: AdminGraphql,
+  shop: string,
+): Promise<ShopIdentity> {
   let name = shop;
   let ownerEmail = "";
   let siteUrl = "";
@@ -55,7 +64,10 @@ export async function readShopIdentity(admin: AdminGraphql, shop: string): Promi
     ownerEmail = data?.email || data?.contactEmail || "";
     siteUrl = data?.primaryDomain?.url || "";
   } catch (e) {
-    console.warn("[ink] shop identity fetch failed; provisioning will retry:", e);
+    console.warn(
+      "[ink] shop identity fetch failed; provisioning will retry:",
+      e,
+    );
   }
   return { name, ownerEmail, siteUrl };
 }
@@ -70,17 +82,30 @@ export type InkProvisionOutcome =
  *  by ink earlier, or by the Ritualist on a store that holds both apps — is
  *  left exactly as it is; the backend's `plan` on that merchant decides the
  *  experience, never a second install. */
-export async function provisionInkMerchant({ admin, shop }: { admin: AdminGraphql; shop: string }): Promise<InkProvisionOutcome> {
+export async function provisionInkMerchant({
+  admin,
+  shop,
+}: {
+  admin: AdminGraphql;
+  shop: string;
+}): Promise<InkProvisionOutcome> {
   const existing = await getMerchant(shop);
   if (existing?.ink_api_key) return { outcome: "already_provisioned" };
 
   const identity = await readShopIdentity(admin, shop);
   if (!identity.ownerEmail) {
-    console.warn(`[ink] No Shopify owner/contact email for ${shop}; provisioning will retry on the next app load`);
+    console.warn(
+      `[ink] No Shopify owner/contact email for ${shop}; provisioning will retry on the next app load`,
+    );
     return { outcome: "no_owner_email" };
   }
 
-  const inkData = await createMerchant(shop, identity.name, identity.ownerEmail, { plan: "ink" });
+  const inkData = await createMerchant(
+    shop,
+    identity.name,
+    identity.ownerEmail,
+    { plan: "ink" },
+  );
   if (!inkData?.api_key) return { outcome: "no_api_key" };
   const shopId = String(inkData.shop_id || "");
 
@@ -90,7 +115,11 @@ export async function provisionInkMerchant({ admin, shop }: { admin: AdminGraphq
     ...(shopId ? { ink_shop_id: shopId } : {}),
   });
 
-  const capture = await captureInkMark({ shop, shopId, siteUrl: identity.siteUrl });
+  const capture = await captureInkMark({
+    shop,
+    shopId,
+    siteUrl: identity.siteUrl,
+  });
   return { outcome: "provisioned", shopId, capture };
 }
 
@@ -126,10 +155,15 @@ export async function captureInkMark({
 /** The backend merchant id for this shop: the one the install recorded, or
  *  — for a doc the Ritualist wrote before ink existed — the list scan the
  *  Ritualist's own screens use. Empty when neither knows. */
-export async function resolveInkShopId(shop: string, doc: { ink_shop_id?: string } | null | undefined): Promise<string> {
+export async function resolveInkShopId(
+  shop: string,
+  doc: { ink_shop_id?: string; ink_api_key?: string } | null | undefined,
+): Promise<string> {
   if (doc?.ink_shop_id) return doc.ink_shop_id;
   try {
-    return await getShopIdByDomain(shop);
+    if (!isInk()) return await getShopIdByDomain(shop);
+    const body = await merchantRead(doc?.ink_api_key, "merchant-insights");
+    return typeof body?.shop_id === "string" ? body.shop_id : "";
   } catch (e: any) {
     console.warn(`[ink] shop_id unresolved for ${shop}: ${e?.message ?? e}`);
     return "";

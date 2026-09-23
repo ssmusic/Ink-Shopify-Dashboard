@@ -1,3 +1,5 @@
+import { flavorLogger } from "../services/ink-log.server";
+const console = flavorLogger("auth.$");
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";

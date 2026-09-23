@@ -1,15 +1,18 @@
 // ONE ORDER'S TIMELINE, IN THE ACCORDION — the console's Interaction Timeline
-// in Shopify's light look: the lifecycle rail, the opens against the delivery
-// address (the map, every located open with its distance, the fix-less opens
-// as words), and the delivery window.
+// in Shopify's light look: the lifecycle rail, every open listed beside the
+// map of the opens against the delivery address, and the delivery window.
 //
 // Sam, 2026-09-23: "map — and the distance between the delivery address and
 // taps within each order along with your delivery information widget"; then,
 // on the first version: "THE ORDER, STEP BY STEP is weird" · "we dont judge"
 // · "we dont have a default range" · "this page should be blue highlights like
-// the insights page". So: no title over the rail, no rings, no within /
-// outside, and the palette's one blue (lib/ink-palette.ts) for every mark.
-// The rules are lib/order-timeline.ts's; the map is components/OpensMap.tsx.
+// the insights page" · "also wanna get the maps blue and the checkmarks blue";
+// and, on the next: "you have to list the opens with the map next to it" ·
+// "the distance from delivery is just a data point. shouldnt be a giant thing
+// taking up the screen". So: no title over the rail, no rings, no within /
+// outside, the palette's one blue (lib/ink-palette.ts) for every mark, the
+// list beside the map, and each open's distance a word in its row. The rules
+// are lib/order-timeline.ts's; the map is components/OpensMap.tsx (Google's).
 // No coordinate is printed as text: the words say the distance.
 //
 // ONE OPEN, PICKED OUT (Sam, 2026-09-23: "can each one of these have a map if
@@ -24,7 +27,7 @@ import { useState } from "react";
 import { BlockStack, Box, InlineGrid, InlineStack, Text } from "@shopify/polaris";
 import OpensMap, { type MapOpen, type MapPoint } from "./OpensMap";
 import { INK_DATA, INK_DATA_TINT, INK_HAIRLINE, INK_MUTED } from "../lib/ink-palette";
-import { kmOrM, openResult, openSentence, type DeliveryWindow, type LifecycleStep } from "../lib/order-timeline";
+import { kmOrM, openResult, type DeliveryWindow, type LifecycleStep } from "../lib/order-timeline";
 import { when } from "../lib/record-words";
 
 export type TimelineOpen = {
@@ -43,9 +46,10 @@ export type OrderTimelineData = {
   address: MapPoint | null;
   opens: TimelineOpen[];
   window: DeliveryWindow | null;
-  /** Where the opens came from: the opens door, or the proof alone (its first
-   *  open, whose words the record then supplies — services/ink-timeline.server.ts). */
-  opensFrom?: "opens" | "proof";
+  /** The opens door answered: every open is here (else only what the record says). */
+  opensAvailable?: boolean;
+  /** The opens door limited how many it returned. */
+  opensCapped?: boolean;
 };
 
 // What an open without a distance says — facts, never a judgment.
@@ -57,26 +61,29 @@ const RESULT_WORD: Record<string, string> = {
 };
 
 function StepMark({ state }: { state: LifecycleStep["state"] }) {
-  const base = { width: 18, height: 18, borderRadius: 9999, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 } as const;
+  const base = { width: 18, height: 18, borderRadius: 9999, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 } as const;
   if (state === "done") return <span aria-label="done" style={{ ...base, background: INK_DATA, color: "#fff" }}>✓</span>;
   if (state === "carrier") return <span aria-label="from the carrier" style={{ ...base, background: INK_MUTED, color: "#fff" }}>✓</span>;
   return <span aria-label="not recorded" style={{ ...base, border: `1.5px solid ${INK_HAIRLINE}` }} />;
 }
 
+/** The rail: Shipped · In transit · Delivered · Opened — no title over it. */
 export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
   return (
-    <InlineGrid columns={{ xs: 2, sm: 4 }} gap="200">
+    <InlineGrid columns={{ xs: 2, sm: 4 }} gap="400">
       {steps.map((s) => (
         <BlockStack key={s.key} gap="100" inlineAlign="start">
-          <StepMark state={s.state} />
-          <Text as="p" variant="bodySm" fontWeight="semibold">
-            {s.label}
+          <InlineStack gap="150" blockAlign="center" wrap={false}>
+            <StepMark state={s.state} />
+            <Text as="h4" variant="headingSm">
+              {s.label}
+            </Text>
+          </InlineStack>
+          <Text as="p" variant="bodySm" tone={s.at ? undefined : "subdued"}>
+            {s.at ? when(s.at) : "Not recorded"}
           </Text>
-          <Text as="p" variant="bodyXs" tone="subdued">
-            {s.at ? when(s.at) : "not yet"}
-          </Text>
-          {s.state === "carrier" ? (
-            <Text as="p" variant="bodyXs" tone="subdued">
+          {s.state === "carrier" && s.note ? (
+            <Text as="p" variant="bodySm" tone="subdued">
               {s.note}
             </Text>
           ) : null}
@@ -93,13 +100,33 @@ export function nextFocus(current: number | null, pressed: number): number | nul
 
 // A row of the list: the same geometry pressable or not, so the words line up;
 // a pressable row's tint is the palette's, when hovered, pressed or focused.
-const ROW_CSS = `.ink-open-row{display:flex;align-items:center;justify-content:space-between;gap:8px;box-sizing:border-box;width:calc(100% + 16px);margin:0 -8px;padding:4px 8px;border:0;border-radius:8px;background:transparent;font:inherit;color:inherit;text-align:left}button.ink-open-row{cursor:pointer}button.ink-open-row:hover{background:var(--p-color-bg-surface-hover)}button.ink-open-row[aria-pressed=true]{background:${INK_DATA_TINT}}button.ink-open-row:focus-visible{outline:2px solid var(--p-color-border-focus);outline-offset:1px}.ink-open-row-lead{display:flex;align-items:center;gap:8px;min-width:0}`;
+const ROW_CSS = `.ink-open-row{display:flex;align-items:center;justify-content:space-between;gap:8px;box-sizing:border-box;width:calc(100% + 16px);margin:0 -8px;padding:6px 8px;border:0;border-radius:8px;background:transparent;font:inherit;color:inherit;text-align:left}button.ink-open-row{cursor:pointer}button.ink-open-row:hover{background:var(--p-color-bg-surface-hover)}button.ink-open-row[aria-pressed=true]{background:${INK_DATA_TINT}}button.ink-open-row:focus-visible{outline:2px solid var(--p-color-border-focus);outline-offset:1px}.ink-open-row-lead{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}.ink-open-row-end{white-space:nowrap;flex-shrink:0}`;
 
-export function OpensAgainstAddress({ address, opens, mapsKey = null, browsers = null }: { address: MapPoint | null; opens: TimelineOpen[]; mapsKey?: string | null; browsers?: string | null }) {
+export function OpensAgainstAddress({
+  address,
+  opens,
+  mapsKey = null,
+  browsers = null,
+  available = true,
+  capped = false,
+  addressLabel = null,
+}: {
+  address: MapPoint | null;
+  opens: TimelineOpen[];
+  /** The Maps JavaScript browser key; none → no map, the words remain. */
+  mapsKey?: string | null;
+  /** The record's line about the browsers the opens came from. */
+  browsers?: string | null;
+  /** The opens door answered (false: only the record's first open is known). */
+  available?: boolean;
+  /** The opens door limited the history it returned. */
+  capped?: boolean;
+  /** The delivery address in words, from the order. */
+  addressLabel?: string | null;
+}) {
   const [focus, setFocus] = useState<number | null>(null);
   const located = opens.filter((o) => o.lat != null && o.lng != null && o.distance_m != null);
-  const first = opens.find((o) => o.distance_m != null) ?? opens[0] ?? null;
-  const mapOpens: MapOpen[] = located.map((o, i) => ({
+  const mapOpens: MapOpen[] = located.map((o) => ({
     lat: o.lat as number,
     lng: o.lng as number,
     distance_m: o.distance_m,
@@ -109,13 +136,22 @@ export function OpensAgainstAddress({ address, opens, mapsKey = null, browsers =
   const mapShown = !!(address && mapOpens.length > 0 && mapsKey);
   return (
     <BlockStack gap="300">
-      <Text as="p" variant="bodySm">
-        {first ? openSentence(first.distance_m, first.verdict) : "Not opened yet."}
+      <Text as="h3" variant="headingMd">
+        {available && !capped ? "Every open" : "Open history"}
       </Text>
-      {mapShown ? <OpensMap apiKey={mapsKey} address={address} opens={mapOpens} focus={focus} /> : null}
-      {opens.length > 0 ? (
+      {!available ? (
+        <Text as="p" tone="subdued">
+          The full open history is unavailable. Any details below come from the record.
+        </Text>
+      ) : null}
+      <InlineGrid columns={{ xs: 1, md: 2 }} gap="400" alignItems="start">
         <BlockStack gap="100">
           <style>{ROW_CSS}</style>
+          {available && opens.length === 0 ? (
+            <Text as="p" tone="subdued">
+              No opens recorded.
+            </Text>
+          ) : null}
           {opens.map((o, i) => {
             const r = openResult(o.distance_m, o.verdict);
             const onMap = mapShown ? located.indexOf(o) : -1;
@@ -123,16 +159,23 @@ export function OpensAgainstAddress({ address, opens, mapsKey = null, browsers =
               <>
                 <span className="ink-open-row-lead">
                   <span aria-hidden style={{ width: 8, height: 8, borderRadius: 9999, background: r === "measured" ? INK_DATA : INK_HAIRLINE, display: "inline-block", flexShrink: 0 }} />
-                  <Text as="span" variant="bodySm">
+                  <Text as="span" variant="bodySm" fontWeight="semibold">
                     {`Open ${i + 1}`}
                   </Text>
                   <Text as="span" variant="bodySm" tone="subdued">
                     {when(o.at)}
                   </Text>
+                  {o.accuracy_m != null ? (
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      {`± ${kmOrM(o.accuracy_m)}`}
+                    </Text>
+                  ) : null}
                 </span>
-                <Text as="span" variant="bodySm" alignment="end">
-                  {r === "measured" && o.distance_m != null ? kmOrM(o.distance_m) : RESULT_WORD[r]}
-                </Text>
+                <span className="ink-open-row-end">
+                  <Text as="span" variant="bodySm" alignment="end">
+                    {r === "measured" && o.distance_m != null ? kmOrM(o.distance_m) : RESULT_WORD[r]}
+                  </Text>
+                </span>
               </>
             );
             const key = `${o.at ?? ""}-${i}`;
@@ -146,18 +189,41 @@ export function OpensAgainstAddress({ address, opens, mapsKey = null, browsers =
               </div>
             );
           })}
+          {capped ? (
+            <Box paddingBlockStart="200">
+              <Text as="p" tone="subdued">
+                The merchant service limited the open history returned for this order.
+              </Text>
+            </Box>
+          ) : null}
+          {browsers ? (
+            // The browsers the opens came from, in the record's words (lib/record-words.ts browsersLine).
+            <Box paddingBlockStart="200">
+              <Text as="p" variant="bodySm">
+                {browsers}
+              </Text>
+            </Box>
+          ) : null}
         </BlockStack>
-      ) : null}
-      {browsers ? (
-        // The browsers the opens came from, in the record's words (lib/record-words.ts browsersLine).
-        <Text as="p" variant="bodySm">
-          {browsers}
-        </Text>
-      ) : null}
+        <BlockStack gap="200">
+          <Text as="h4" variant="headingSm">
+            Delivery address
+          </Text>
+          <Text as="p" breakWord>
+            {addressLabel || "Address unavailable"}
+          </Text>
+          {mapShown ? <OpensMap apiKey={mapsKey} address={address} opens={mapOpens} focus={focus} /> : null}
+          <Text as="p" variant="bodySm" tone="subdued">
+            A shared device location does not confirm receipt of the parcel.
+          </Text>
+        </BlockStack>
+      </InlineGrid>
     </BlockStack>
   );
 }
 
+/** The delivery window: the delivered scan, the first open where it fell, and
+ *  the end of the recording window the backend set — facts, never a verdict. */
 export function DeliveryWindowBar({ w }: { w: DeliveryWindow | null }) {
   if (!w) {
     return (
@@ -166,8 +232,15 @@ export function DeliveryWindowBar({ w }: { w: DeliveryWindow | null }) {
       </Text>
     );
   }
+  const relative =
+    w.hoursToOpen == null
+      ? null
+      : `${Math.abs(w.hoursToOpen) < 1 ? `${Math.round(Math.abs(w.hoursToOpen) * 60)} minutes` : `${Math.round(Math.abs(w.hoursToOpen) * 10) / 10} hours`} ${w.hoursToOpen < 0 ? "before" : "after"} delivery`;
   return (
-    <BlockStack gap="200">
+    <BlockStack gap="300">
+      <Text as="h3" variant="headingMd">
+        Delivery and first open
+      </Text>
       <div style={{ position: "relative", height: 28, borderRadius: 6, background: INK_DATA_TINT, border: "1px solid var(--p-color-border)" }}>
         {w.openPositionPct != null ? (
           <div aria-label="first open" style={{ position: "absolute", top: 0, bottom: 0, left: `${w.openPositionPct}%`, width: 2, background: INK_DATA }}>
@@ -175,53 +248,53 @@ export function DeliveryWindowBar({ w }: { w: DeliveryWindow | null }) {
           </div>
         ) : null}
       </div>
-      <InlineStack align="space-between">
-        <Text as="span" variant="bodyXs" tone="subdued">{`Delivered · ${when(w.deliveredAt)}`}</Text>
-        <Text as="span" variant="bodyXs" tone="subdued">{`Window closes · ${when(w.windowEnd)}`}</Text>
-      </InlineStack>
-      <InlineGrid columns={3} gap="200">
+      <InlineGrid columns={{ xs: 1, sm: 3 }} gap="300">
         <BlockStack gap="050">
-          <Text as="span" variant="bodyXs" tone="subdued">First open</Text>
-          <Text as="span" variant="bodySm">{w.firstOpenAt ? when(w.firstOpenAt) : "No open yet"}</Text>
+          <Text as="span" variant="bodySm" tone="subdued">Delivered</Text>
+          <Text as="span" variant="bodySm">{when(w.deliveredAt)}</Text>
         </BlockStack>
         <BlockStack gap="050">
-          <Text as="span" variant="bodyXs" tone="subdued">Time to first open</Text>
-          <Text as="span" variant="bodySm">{w.hoursToOpen == null ? "—" : w.hoursToOpen < 0 ? `${Math.abs(w.hoursToOpen)} h before delivery` : `${w.hoursToOpen} h after delivery`}</Text>
+          <Text as="span" variant="bodySm" tone="subdued">First open</Text>
+          <Text as="span" variant="bodySm">{w.firstOpenAt ? when(w.firstOpenAt) : "No open recorded"}</Text>
+          {relative ? <Text as="span" variant="bodySm" tone="subdued">{relative}</Text> : null}
         </BlockStack>
         <BlockStack gap="050">
-          <Text as="span" variant="bodyXs" tone="subdued">Within the expected window</Text>
-          <Text as="span" variant="bodySm">{w.withinExpectedWindow == null ? "—" : w.withinExpectedWindow ? "Yes" : "No"}</Text>
+          <Text as="span" variant="bodySm" tone="subdued">Recording window ends</Text>
+          <Text as="span" variant="bodySm">{when(w.windowEnd)}</Text>
         </BlockStack>
       </InlineGrid>
     </BlockStack>
   );
 }
 
-/** The whole block, as it sits in the accordion under the record's words.
- *  `mapsKey` is the referrer-restricted Google Maps browser key (no key, no map).
- *  `browsers` is the record's line about the browsers the opens came from,
- *  printed under the opens (2026-09-23). */
-export default function OrderTimeline({ data, mapsKey = null, browsers = null }: { data: OrderTimelineData; mapsKey?: string | null; browsers?: string | null }) {
-  const section = (title: string) => (
-    <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
-      {title}
-    </Text>
-  );
+/** The whole block, as it sits in the accordion: the rail, every open beside
+ *  the map, and the delivery window. `mapsKey` is the referrer-restricted
+ *  Google Maps browser key (no key, no map). `browsers` is the record's line
+ *  about the browsers the opens came from, printed under the opens. */
+export default function OrderTimeline({
+  data,
+  mapsKey = null,
+  browsers = null,
+  addressLabel = null,
+}: {
+  data: OrderTimelineData;
+  mapsKey?: string | null;
+  browsers?: string | null;
+  addressLabel?: string | null;
+}) {
   return (
-    <Box padding="400">
-      <BlockStack gap="500">
-        <LifecycleRail steps={data.steps} />
-        <InlineGrid columns={{ xs: 1, md: 2 }} gap="500">
-          <BlockStack gap="300">
-            {section("THE OPENS · THE CUSTOMER'S PHONE ↔ THE DELIVERY ADDRESS")}
-            <OpensAgainstAddress address={data.address} opens={data.opens} mapsKey={mapsKey} browsers={browsers} />
-          </BlockStack>
-          <BlockStack gap="300">
-            {section("THE DELIVERY WINDOW")}
-            <DeliveryWindowBar w={data.window} />
-          </BlockStack>
-        </InlineGrid>
-      </BlockStack>
-    </Box>
+    <BlockStack gap="500">
+      <LifecycleRail steps={data.steps} />
+      <OpensAgainstAddress
+        address={data.address}
+        opens={data.opens}
+        mapsKey={mapsKey}
+        browsers={browsers}
+        available={data.opensAvailable ?? true}
+        capped={data.opensCapped ?? false}
+        addressLabel={addressLabel}
+      />
+      <DeliveryWindowBar w={data.window} />
+    </BlockStack>
   );
 }

@@ -19,6 +19,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // The same door for a posted form: under ink no shop domain is ever typed in.
+  if (isInk() && !new URL(request.url).searchParams.get("shop")) throw redirect(INK_HOME_URL);
   const errors = loginErrorMessage(await login(request));
 
   return {

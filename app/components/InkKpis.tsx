@@ -8,13 +8,13 @@
 // The numbers are GET /api/merchant-insights (services/ink-kpis.server.ts),
 // read with the merchant's own key:
 //   · Orders          — the orders ink holds a record for (throughput.enrollments);
-//   · Opened          — of those, the orders whose tracking link a person opened
+//   · Open            — of those, the orders whose tracking link a person opened
 //                       at least once (a link preview or a bot is never counted:
 //                       ink-backend verify.js keeps proxy opens off tap_count);
 //   · Location shared — the orders whose customer's phone shared a location that
 //                       was measured against the delivery address
 //                       (first_tap_distance_source "gps").
-// Labels are Sam's words. The one line under the row appears only past 2,000
+// Labels are Sam's words ("opened should just be open"). The one line under the row appears only past 2,000
 // orders, where "Orders" would otherwise read as the store's whole count.
 
 import { BlockStack, Card, InlineGrid, Text } from "@shopify/polaris";
@@ -42,7 +42,7 @@ export default function InkKpis({ kpis }: { kpis: Kpis }) {
     <BlockStack gap="200">
       <InlineGrid columns={{ xs: 1, sm: 3 }} gap="300">
         <Stat label="Orders" value={count(kpis.recorded)} />
-        <Stat label="Opened" value={count(kpis.opened)} />
+        <Stat label="Open" value={count(kpis.opened)} />
         <Stat label="Location shared" value={count(kpis.locationShared)} />
       </InlineGrid>
       {kpis.capped ? (

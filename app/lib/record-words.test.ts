@@ -35,3 +35,16 @@ describe("browsersLine — PLACEHOLDER copy", () => {
     expect(browsersLine(undefined)).toBeNull();
   });
 });
+
+describe("the level words (2026-09-23 reconcile)", () => {
+  it("are the public record page's own — and never a bare ink (Sam: \"ink always has a period after it\")", async () => {
+    const { LEVEL_WORDS } = await import("./record-words");
+    expect(LEVEL_WORDS).toEqual({
+      verified: "Device-verified",
+      attested: "Recorded and signed",
+      asserted: "In the record, unsigned",
+      missing: "Missing",
+    });
+    for (const w of Object.values(LEVEL_WORDS)) expect(w).not.toMatch(/(?<![.@\w])ink\b(?!\.)/i);
+  });
+});

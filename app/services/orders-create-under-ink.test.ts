@@ -67,7 +67,7 @@ const orderRecord = {
  *  one does, for the whole query. */
 function fakeAdmin(scopes: readonly string[]) {
   const sent: string[] = [];
-  const graphql = vi.fn(async (query: string) => {
+  const graphql = vi.fn(async (query: string, _options?: { variables?: Record<string, unknown> }) => {
     sent.push(query);
     const refuse = (field: string, scope: string) => {
       throw new Error(`Access denied for ${field} field. Required access: \`${scope}\` access scope.`);
@@ -157,6 +157,7 @@ describe("orders/create under APP_FLAVOR=ink", () => {
     // No phone reaches ink's record — not even the webhook body's.
     expect(payload.order_details.customer_phone || null).toBeNull();
     expect(JSON.stringify(payload)).not.toMatch(/555000(1111|2222)/);
+    expect(payload.order_details).not.toHaveProperty("customer_phone");
   });
 
   it("writes no ink.customer_phone metafield — the buyer's phone is not ink's to copy", async () => {
@@ -192,7 +193,15 @@ describe("orders/create under APP_FLAVOR=ink", () => {
     await run(admin);
 
     expect(admin.sent.some((q) => /mutation AddOrderTag\b/.test(q))).toBe(true);
+    expect(admin.graphql.mock.calls.find(([q]) => /mutation AddOrderTag\b/.test(q))?.[1]?.variables?.tags).toEqual(['Recorded by ink.']);
     expect(admin.sent.some((q) => /mutation SetInkMetafields\b/.test(q))).toBe(true);
+  });
+  it("retries enrollment without marking an order recorded when the backend returned no proof", async () => {
+    const { INK_SCOPES } = await import("./ink-scopes.server");
+    const admin = fakeAdmin(INK_SCOPES);
+    fetchMock.mockResolvedValue({ok:true,status:200,json:async()=>({}),text:async()=>"{}"});
+    expect((await run(admin)).status).toBe(503);
+    expect(admin.sent.some(q=>/mutation AddOrderTag|mutation SetInkMetafields/.test(q))).toBe(false);
   });
 });
 

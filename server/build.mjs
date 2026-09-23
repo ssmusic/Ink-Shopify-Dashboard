@@ -22,12 +22,14 @@
 // two services build from one source (`gcloud run deploy --source .`, no
 // build args). The flavor is a runtime fact, so the mounting is too.
 
+import { protectInkAccessLogs } from "./ink-logging.mjs";
 import * as full from "../build/server/index.js";
 import { inkRouteManifest, ritualistRouteManifest } from "./ink-mounts.mjs";
 
 export * from "../build/server/index.js";
 
 const ink = process.env.APP_FLAVOR === "ink";
+protectInkAccessLogs(ink);
 const mount = ink ? inkRouteManifest : ritualistRouteManifest;
 
 export const routes = mount(full.routes);
