@@ -8,16 +8,30 @@
       "request": "Sam explicitly asked to send this unfinished Shopify merchant app work to Claude Code. Register existing PR #133 for a checkpoint and handoff to Claude; do not create a new implementation or merge/deploy.",
       "branch": "codex/ink-audit",
       "pr": 133,
-      "phase": "working",
+      "phase": "ready",
       "assignedAgent": "codex",
-      "owner": {
-        "agent": "codex",
-        "sessionId": "01a0cff6-d447-74a3-ad07-19fb5ba51851",
-        "acknowledgedSha": "40229009be214dbac6d76ac1b08f1b9fd0823a3d"
-      },
+      "owner": null,
       "handoffTo": null,
-      "checkpoint": null,
-      "updatedAt": "2026-09-23T22:18:40.978Z"
+      "checkpoint": {
+        "codeSha": "40229009be214dbac6d76ac1b08f1b9fd0823a3d",
+        "summary": "Sam asks Claude Code to continue this ROUGH, UNFINISHED Shopify merchant app. Substantial design, implementation and validation remain; no overall approval or release recommendation. Read INK-MERCHANT-REDESIGN-HANDOFF.md and docs/ink-review-2026-09-23.md at PR #133 / codex/ink-audit, head 40229009be214dbac6d76ac1b08f1b9fd0823a3d. Code baseline e8a9a06; latest commit clarifies unfinished status. Continue existing app and successful Ritualist work, not a rewrite. Merchant can inspect the full record before purchase; PDF/CSV/JSON require existing export entitlement. Existing flash, merchant opens/delivery and tenant-scoped key source already exist: earlier absence findings were stale. Remaining app gaps include signature verification, PDF Unicode/map/QR fidelity, visual hierarchy/mobile polish, record history completeness, live Shopify billing/download/install walks and privacy fulfillment. PR conflicts with main and needs reconciliation. No merge/deployment. Preview is synthetic and its disposable harness/sample logo at /tmp/ink-merchant-preview is outside the PR.",
+        "decisions": [
+          "Work in codex-ink-audit; reference backend, console and Ritualist sources were read-only. Never edit shopify.app.toml or deploy.",
+          "Preserve existing successful flash and Ritualist implementation. Recheck versioned audit findings against Claude's latest source rather than duplicate fixes.",
+          "Sam explicitly says substantial work remains; individual changes and passing tests are not product or design approval."
+        ],
+        "checks": [
+          "npm run typecheck passed",
+          "npm run build passed",
+          "npx vitest run: 48 files, 462 tests passed",
+          "Local and remote head verified as 40229009be214dbac6d76ac1b08f1b9fd0823a3d; only unrelated .DS_Store modifications remain"
+        ],
+        "next": "Claude: read the handoff, acknowledge the unfinished state, reconcile PR #133 with current main/your existing work, and continue with Sam. No deployment or merge implied.",
+        "savedAt": "2026-09-23T22:18:56.403Z",
+        "writer": "codex",
+        "sessionId": "01a0cff6-d447-74a3-ad07-19fb5ba51851"
+      },
+      "updatedAt": "2026-09-23T22:18:56.403Z"
     }
   ],
   "projects": [],
@@ -30,6 +44,11 @@
     {
       "id": "c9896aa5-19f1-4187-b362-e834dad9a517",
       "fingerprint": "3b5b52da7e0c69ccc46ff6b3121d64f300a893ed418ccfc25a9c937577d68e13",
+      "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180"
+    },
+    {
+      "id": "10970a58-7573-4f28-b38f-269d0ad5e888",
+      "fingerprint": "13e099158fc16284144190c94fbc462d1d34c023da2645617cf9c1843d5a48e3",
       "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180"
     }
   ],
@@ -45,6 +64,12 @@
       "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
       "action": "claim",
       "detail": "codex acknowledged 40229009be214dbac6d76ac1b08f1b9fd0823a3d."
+    },
+    {
+      "at": "2026-09-23T22:18:56.403Z",
+      "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
+      "action": "checkpoint",
+      "detail": "Verified published code at 40229009be214dbac6d76ac1b08f1b9fd0823a3d; saved context for codex. Ownership released for the next turn or session."
     }
   ]
 }
