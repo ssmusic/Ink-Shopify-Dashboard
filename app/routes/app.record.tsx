@@ -40,7 +40,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const proofId = url.searchParams.get("proof_id") || "";
     const view = await readInkMerchant(session.shop);
     if (PROOF_ID.test(proofId) && view.doc?.ink_api_key) await settleInkCharge(admin, session.shop, view.doc.ink_api_key, proofId).catch(() => console.error("[ink billing] return settlement pending"));
-    return redirect("/app/ink");
+    return redirect("/app/ink?view=records");
   }
 
   const returnTo = safeReturnTo(url.searchParams.get("return_to"));

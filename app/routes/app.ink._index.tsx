@@ -30,6 +30,8 @@ import InkPillNav from "../components/InkPillNav";
 import DeliveryDashboard from "../components/DeliveryDashboard";
 import { readTimelines } from "../services/ink-timeline.server";
 import { readDeliveryDashboard } from "../services/ink-delivery.server";
+import { readInkRecordHistory } from "../services/ink-record-history.server";
+import InkRecordHistory from "../components/InkRecordHistory";
 
 // While a fresh install is still provisioning (no api key yet), the doors
 // cannot be read; the screen asks again every few seconds for a while.
@@ -39,9 +41,10 @@ const POLL_LIMIT = 25;
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const params = new URL(request.url).searchParams;
-  const section: "orders" | "insights" =
-    new URL(request.url).searchParams.get("view") === "insights"
-      ? "insights"
+  const requestedSection = params.get("view");
+  const section: "orders" | "insights" | "records" =
+    requestedSection === "insights" || requestedSection === "records"
+      ? requestedSection
       : "orders";
   const view = await readInkMerchant(session.shop);
   const stage = stageOf(view.doc);
@@ -49,6 +52,37 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Every merchant read below goes with the merchant's OWN key — the shop is
   // the key's; the admin secret never scopes a merchant read.
   const apiKey = view.doc?.ink_api_key ?? null;
+
+  if (section === "records") {
+    const requestedPage = Number(params.get("page") || "1");
+    const history = await readInkRecordHistory(session.shop, requestedPage).catch(() => null);
+    const recordHistory = history
+      ? await Promise.all(history.rows.map(async (row) => {
+          const door = await inkDoor(admin, session.shop, apiKey, row.proofId).catch(() => null);
+          return {
+            ...row,
+            orderName: row.orderName || door?.record?.summary.order_number || null,
+            record: door?.record || null,
+            door: door ? {
+              offerLine: null,
+              pending: door.pending,
+              paidPendingRecord: door.paidPendingRecord,
+              resumeUrl: door.resumeUrl,
+              downloadable: door.downloadable,
+            } : null,
+          };
+        }))
+      : [];
+    return routeData({
+      section,
+      stage,
+      historyError: history === null,
+      recordHistory,
+      historyPage: history?.page || 1,
+      historyHasNext: history?.hasNext || false,
+      historyHasPrevious: history?.hasPrevious || false,
+    }, { headers: { "Cache-Control": "private, no-store" } });
+  }
 
   if (section === "insights") {
     const [kpis, delivery] = await Promise.all([
@@ -146,6 +180,12 @@ export default function InkHome() {
     next.set(key, cursor);
     setParams(next);
   };
+  const goRecordPage = (page: number) => {
+    const next = new URLSearchParams(params);
+    next.set("view", "records");
+    next.set("page", String(page));
+    setParams(next);
+  };
   const pollDeadline = useRef<number | null>(null);
   const [pollingEnded, setPollingEnded] = useState(false);
   const settingUp = data.stage === "provisioning";
@@ -171,7 +211,7 @@ export default function InkHome() {
 
   return (
     <Page
-      title={data.section === "insights" ? "Dashboard" : "Orders"}
+      title={data.section === "insights" ? "Dashboard" : data.section === "records" ? "Records" : "Orders"}
       secondaryActions={[
         {
           content: "Refresh",
@@ -183,9 +223,7 @@ export default function InkHome() {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
-            <InkPillNav
-              active={data.section === "insights" ? "insights" : "orders"}
-            />
+            <InkPillNav active={data.section} />
 
             {settingUp && (
               <Banner tone="info">
@@ -197,6 +235,15 @@ export default function InkHome() {
 
             {data.section === "insights" ? (
               <DeliveryDashboard kpis={data.kpis} delivery={data.delivery} />
+            ) : data.section === "records" ? (
+              <InkRecordHistory
+                rows={data.recordHistory}
+                error={data.historyError}
+                hasNext={data.historyHasNext && navigation.state === "idle"}
+                hasPrevious={data.historyHasPrevious && navigation.state === "idle"}
+                onNext={() => goRecordPage(data.historyPage + 1)}
+                onPrevious={() => goRecordPage(data.historyPage - 1)}
+              />
             ) : (
               <Card padding="0">
                 <Box padding="400">
@@ -206,6 +253,9 @@ export default function InkHome() {
                     </Text>
                     <Text as="p" tone="subdued">
                       Shopify makes orders from the past 60 days available here.
+                    </Text>
+                    <Text as="p" tone="subdued">
+                      Open an order for its details, delivery activity, and recorded opens. Advanced shows the record summary. A downloadable record is a separate purchase when offered.
                     </Text>
                   </BlockStack>
                 </Box>

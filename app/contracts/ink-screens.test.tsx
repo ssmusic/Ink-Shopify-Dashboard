@@ -201,6 +201,26 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(t).not.toMatch(/flagged|Confirmed at the door|Checked in this browser|outside|default range/);
   });
 
+  it('shows purchased event metadata without claiming independent verification', () => {
+    const unlocked = { ...RECORD, locked: false, eventCount: 1, events: [{ id: 'event_12345678', type: 'TAP_RECORDED', at: '2026-09-20T00:00:00Z', sequence: 1, signed: true, hash: true, legacy: false }] };
+    const t = text(renderToString(<AppProvider i18n={translations}><RecordWords record={unlocked} /></AppProvider>));
+    expect(t).toContain('Recorded events');
+    expect(t).toContain('Tap recorded');
+    expect(t).toContain('Signature supplied');
+    expect(t).toContain('this screen does not verify them independently');
+    expect(t).not.toContain('Signature verified');
+  });
+
+  it('shows record history with a repeat download and an honest missing-purchase path', () => {
+    const html = render(InkHome, { section: 'records', stage: 'ready', recordHistory: [{ proofId: PROOF, orderName: '#1010', createdAt: '2026-09-20T00:00:00Z', state: 'minted', door: { offerLine: null, pending: false, downloadable: true }, record: { ...RECORD, locked: false } }], historyError: false, historyPage: 1, historyHasNext: false, historyHasPrevious: false });
+    const t = text(html);
+    expect(t).toContain('Record purchases');
+    expect(t).toContain('Download record');
+    expect(t).toContain('View record details');
+    expect(t).toContain('Ink does not email the file');
+    expect(t).toContain('If a past purchase is missing');
+  });
+
   it('uses an accessible blue distance diagram and exact measurements without a range verdict', () => {
     const html = renderToString(<AppProvider i18n={translations}><OrderTimeline data={timelineFrom({enrolled_at:'2026-09-01T00:00:00Z'}, {address:{lat:34,lng:-118}, opens:[{at:'2026-09-02T00:00:00Z',outcome:'success',gps_verdict:'flagged',distance_m:719,accuracy_m:35,lat:34.005,lng:-118.004}]}, RECORD)!} addressLabel="1 Test St, Brooklyn, NY" /></AppProvider>);
     const t = text(html);

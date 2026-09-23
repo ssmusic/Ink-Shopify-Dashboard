@@ -57,6 +57,22 @@ const ok = (body: unknown) =>
   ) as unknown as typeof fetch;
 
 describe("readRecord", () => {
+  it("shows unlocked event metadata without exposing signed bytes or customer location", () => {
+    const body = {
+      ...BODY,
+      record: { locked: false },
+      chain: [{ event_id: "event_12345678", event_type: "TAP_RECORDED", timestamp: "2026-09-20T00:00:00Z", seq: 1, signature: "signature", payload_hash: "hash", signed_bytes: "private address", revealed: { gps: { lat: 34 } } }],
+      legacy_events: [],
+    };
+    const unlocked = recordFromBody(body);
+    expect(unlocked?.events).toEqual([{
+      id: "event_12345678", type: "TAP_RECORDED", at: "2026-09-20T00:00:00Z", sequence: 1,
+      signed: true, hash: true, legacy: false,
+    }]);
+    expect(unlocked?.eventCount).toBe(1);
+    expect(JSON.stringify(unlocked)).not.toMatch(/private address|"lat"|"gps"|"signature":/);
+    expect(recordFromBody({ ...body, record: { locked: true } })?.events).toEqual([]);
+  });
   it("reads the merchant words projection with its own key — and keeps the words of a locked record", async () => {
     const f = ok(BODY);
     const r = await readRecord("merchant-test", PROOF, f);

@@ -88,13 +88,12 @@ export default function InkRecordDoor({
       </InlineStack>
       {door.downloadable && (
         <Text as="p" tone="subdued" variant="bodySm">
-          JSON file with the signed events and customer information.
+          Downloads a JSON file with a signed manifest, evidence packet, event chain, receipt, and order summary. It can include customer information. You can download it again from Records. Ink does not email the file.
         </Text>
       )}
       {door.offerLine && (
         <Text as="p" tone="subdued" variant="bodySm">
-          One-time charge through Shopify. Includes a JSON download of the
-          record.
+          One-time charge through Shopify. After approval, download the JSON file here or from Records. It contains a signed manifest, evidence packet, event chain, receipt, and order summary, which can include customer information. Ink does not email the file.
         </Text>
       )}
       {door.pending && (

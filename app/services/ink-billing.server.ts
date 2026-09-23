@@ -185,6 +185,7 @@ export async function inkRecordAction(
     tx.set(ref, {
       shop,
       proofId,
+      orderName: record!.summary.order_number || null,
       state: "creating",
       ...offer,
       test: process.env.RECORD_PURCHASE_TEST === "true",
@@ -203,7 +204,7 @@ export async function inkRecordAction(
         shop,
         apiKey: appKey,
         proofId,
-        returnTo: "/app/ink",
+        returnTo: "/app/ink?view=records",
       }),
     });
     await ref.update({

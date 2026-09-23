@@ -38,6 +38,8 @@ export function recordFromBody(body: unknown): RecordRead | null {
       price_cents?: unknown;
       currency?: unknown;
     };
+    chain?: unknown[];
+    legacy_events?: unknown[];
   } | null;
   if (!b || typeof b !== "object" || !Array.isArray(b.verdict?.elements))
     return null;
@@ -118,7 +120,25 @@ export function recordFromBody(body: unknown): RecordRead | null {
     /^[A-Z]{3}$/.test(currency)
       ? { price_cents: Number(cents), currency }
       : null;
-  return { summary, elements, locked: b.record?.locked === true, price };
+  const locked = b.record?.locked === true;
+  const rawEvents = !locked
+    ? [...(Array.isArray(b.chain) ? b.chain : []), ...(Array.isArray(b.legacy_events) ? b.legacy_events : [])]
+    : [];
+  const events = rawEvents.slice(0, 50).flatMap((raw) => {
+    if (!raw || typeof raw !== "object") return [];
+    const event = raw as Record<string, unknown>;
+    if (typeof event.event_id !== "string" || !/^event_[a-zA-Z0-9_-]{8,80}$/.test(event.event_id)) return [];
+    return [{
+      id: event.event_id,
+      type: typeof event.event_type === "string" ? event.event_type.slice(0, 80) : "Event",
+      at: typeof event.timestamp === "string" && !Number.isNaN(Date.parse(event.timestamp)) ? event.timestamp : null,
+      sequence: Number.isSafeInteger(event.seq) ? Number(event.seq) : null,
+      signed: typeof event.signature === "string" && event.signature.length > 0,
+      hash: typeof event.payload_hash === "string" && event.payload_hash.length > 0,
+      legacy: event.legacy === true,
+    }];
+  });
+  return { summary, elements, locked, price, events, eventCount: rawEvents.length };
 }
 
 export async function readRecord(

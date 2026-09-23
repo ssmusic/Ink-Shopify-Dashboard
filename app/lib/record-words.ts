@@ -23,6 +23,16 @@ export type RecordRead = {
   /** Priced and not bought: the proof is behind the purchase; the words are not. */
   locked: boolean;
   price?: { price_cents: number; currency: string } | null;
+  events?: Array<{
+    id: string;
+    type: string;
+    at: string | null;
+    sequence: number | null;
+    signed: boolean;
+    hash: boolean;
+    legacy: boolean;
+  }>;
+  eventCount?: number;
 };
 
 export const LEVEL_WORDS: Record<string, string> = {

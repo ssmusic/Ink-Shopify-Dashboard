@@ -179,7 +179,7 @@ export default function App() {
   const { apiKey, flavor } = useLoaderData<typeof loader>();
   if (flavor === "ink") return <ShopifyAppProvider embedded apiKey={apiKey}>
     <PolarisAppProvider i18n={translations} linkComponent={PolarisLink}>
-      <NavMenu><a href="/app/ink" rel="home">Orders</a><a href="/app/ink?view=insights">Dashboard</a><a href="/app/ink/settings">Settings</a></NavMenu>
+      <NavMenu><a href="/app/ink" rel="home">Orders</a><a href="/app/ink?view=insights">Dashboard</a><a href="/app/ink?view=records">Records</a><a href="/app/ink/settings">Settings</a></NavMenu>
       <Outlet />
     </PolarisAppProvider>
   </ShopifyAppProvider>;
