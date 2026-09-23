@@ -8,12 +8,16 @@
       "request": "Sam explicitly asked to send this unfinished Shopify merchant app work to Claude Code. Register existing PR #133 for a checkpoint and handoff to Claude; do not create a new implementation or merge/deploy.",
       "branch": "codex/ink-audit",
       "pr": 133,
-      "phase": "queued",
+      "phase": "working",
       "assignedAgent": "codex",
-      "owner": null,
+      "owner": {
+        "agent": "codex",
+        "sessionId": "01a0cff6-d447-74a3-ad07-19fb5ba51851",
+        "acknowledgedSha": "40229009be214dbac6d76ac1b08f1b9fd0823a3d"
+      },
       "handoffTo": null,
       "checkpoint": null,
-      "updatedAt": "2026-09-23T22:18:25.662Z"
+      "updatedAt": "2026-09-23T22:18:40.978Z"
     }
   ],
   "projects": [],
@@ -21,6 +25,11 @@
     {
       "id": "14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
       "fingerprint": "a323cbaddb189555f0da69d43efe86d06471db1e9490e5137d52f3cdf1e62465",
+      "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180"
+    },
+    {
+      "id": "c9896aa5-19f1-4187-b362-e834dad9a517",
+      "fingerprint": "3b5b52da7e0c69ccc46ff6b3121d64f300a893ed418ccfc25a9c937577d68e13",
       "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180"
     }
   ],
@@ -30,6 +39,12 @@
       "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
       "action": "adopt",
       "detail": "Existing work registered; receiver must inspect its current checkpoint."
+    },
+    {
+      "at": "2026-09-23T22:18:40.978Z",
+      "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
+      "action": "claim",
+      "detail": "codex acknowledged 40229009be214dbac6d76ac1b08f1b9fd0823a3d."
     }
   ]
 }
