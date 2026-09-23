@@ -19,7 +19,9 @@ import {
 } from "../lib/ink-record-inspection";
 import { RecordWords, type WordLine } from "./InkRecordEvidence";
 import { when, type RecordRead } from "../lib/record-words";
-import { OpensAgainstAddress, type OrderTimelineData } from "./OrderTimeline";
+import type { OrderTimelineData } from "./OrderTimeline";
+import InkOpens from "./InkOpens";
+import { everyOpenRows } from "../lib/every-open";
 
 const eventName = (name: string) => {
   const known: Record<string, string> = {
@@ -137,6 +139,7 @@ export default function InkRecordInspection({
   timeline,
   addressLabel,
   checkout = null,
+  mapsKey = null,
 }: {
   proofId: string;
   record: RecordRead | null;
@@ -144,6 +147,8 @@ export default function InkRecordInspection({
   addressLabel?: string;
   /** The checkout beside the opens, in words (#134, components/InkRecentOrders.tsx). */
   checkout?: WordLine[] | null;
+  /** The Maps JavaScript browser key; none → no map, the words remain. */
+  mapsKey?: string | null;
 }) {
   const fetcher = useFetcher<typeof action>();
   const requested = useRef<string | null>(null);
@@ -183,17 +188,6 @@ export default function InkRecordInspection({
       live = false;
     };
   }, [inspection]);
-  const opens =
-    inspection?.opens != null
-      ? inspection.opens.map((item) => ({
-          at: item.at,
-          verdict: item.verdict ?? null,
-          distance_m: item.distanceM,
-          accuracy_m: item.accuracyM,
-          lat: item.location?.lat ?? null,
-          lng: item.location?.lng ?? null,
-        }))
-      : (timeline?.opens ?? []);
   return (
     <BlockStack gap="400">
       <RecordWords record={record} evidenceIds={inspection?.evidenceIds} checkout={checkout} />
@@ -278,18 +272,35 @@ export default function InkRecordInspection({
           </Text>
         </BlockStack>
       </Box>
-      <OpensAgainstAddress
+      {/* THE OPEN and EVERY OPEN — the record page's open section (components/InkOpens.tsx).
+          The order's timeline carries every open joined to its signed event; a
+          record opened without one (the Records library) joins the
+          inspection's opens to the record's signed opens instead. */}
+      <InkOpens
+        record={record}
+        timeline={timeline}
+        rows={
+          timeline?.rows ??
+          (inspection?.opens
+            ? everyOpenRows(
+                inspection.opens.map((o) => ({
+                  at: o.at,
+                  outcome: null,
+                  verdict: o.verdict ?? null,
+                  distance_m: o.distanceM,
+                  accuracy_m: o.accuracyM,
+                  lat: o.location?.lat ?? null,
+                  lng: o.location?.lng ?? null,
+                })),
+                record?.opens ?? null,
+              )
+            : undefined)
+        }
+        available={timeline?.rows ? (timeline.opensAvailable ?? false) : inspection?.opens != null}
+        capped={timeline?.rows ? (timeline.opensCapped ?? false) : (inspection?.opensCapped ?? false)}
         address={timeline?.address ?? inspection?.address ?? null}
-        opens={opens}
-        available={
-          inspection?.opens != null ? true : (timeline?.opensAvailable ?? false)
-        }
-        capped={
-          inspection?.opens != null
-            ? inspection.opensCapped
-            : (timeline?.opensCapped ?? false)
-        }
-        addressLabel={addressLabel && addressLabel !== "Address unavailable" ? addressLabel : inspection?.addressLabel ?? undefined}
+        addressLabel={addressLabel && addressLabel !== "Address unavailable" ? addressLabel : inspection?.addressLabel ?? null}
+        mapsKey={mapsKey}
       />
       <Box background="bg" padding="400" borderRadius="200">
         <BlockStack gap="300">

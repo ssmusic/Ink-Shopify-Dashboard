@@ -33,6 +33,7 @@ import { checkRecord, type Jwks, type WholePacket } from "./record-check.server"
 import { merchantRead } from "./ink-reader.server";
 import { handoverPrice } from "../lib/record-handover";
 import { checkoutFromBody } from "../lib/checkout-words";
+import { signedOpensFromBody } from "./every-open.server";
 import {
   NOT_CHECKED,
   SIGNATURE_WORDS,
@@ -135,6 +136,9 @@ function locationProjection(value: unknown, includeLater = true): Record<string,
     if (typeof n === "number" && Number.isFinite(n) && n >= 0) out[key] = n;
   }
   if (typeof v.signed === "boolean") out.signed = v.signed;
+  // Where the measured moment stood against the carrier's delivered scan — a
+  // fact THE OPEN's line says ("Before the carrier's scan."), never a verdict.
+  if (includeLater && typeof v.after_carrier_scan === "boolean") out.after_carrier_scan = v.after_carrier_scan;
   if (includeLater && v.later_share) out.later_share = locationProjection(v.later_share, false);
   return out;
 }
@@ -214,7 +218,10 @@ export function recordFromBody(body: unknown, jwks: Jwks | null = null): RecordR
     ];
     checks = UNCHECKED;
   }
-  return { ...words, locked: false, whole: true, events, checks, forSale: handoverPrice(b.record) };
+  // Every signed open, in words, for the Every open table (services/every-open.server.ts):
+  // each with its own event's check — never a hash, a browser's id or a coordinate.
+  const opens = signedOpensFromBody(b, new Map(events.flatMap((e) => (e.event_id ? [[e.event_id, e.check] as [string, string]] : []))));
+  return { ...words, locked: false, whole: true, events, checks, forSale: handoverPrice(b.record), opens };
 }
 
 /** The published keys, read from their own door; null when they did not load.

@@ -17,6 +17,7 @@ import {
 } from "../lib/order-timeline";
 import { when } from "../lib/record-words";
 import { INK_DATA, INK_HAIRLINE, INK_MUTED } from "../lib/ink-palette";
+import type { EveryOpenRow } from "../lib/every-open";
 export type TimelineOpen = {
   at: string | null;
   verdict: string | null;
@@ -32,6 +33,8 @@ export type OrderTimelineData = {
   window: DeliveryWindow | null;
   opensAvailable?: boolean;
   opensCapped?: boolean;
+  /** Every open, joined to its signed event (lib/every-open.ts) — the Every open table's rows. */
+  rows?: EveryOpenRow[];
 };
 export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
   return (

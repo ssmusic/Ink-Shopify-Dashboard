@@ -35,6 +35,7 @@ import type {
 import { merchantRead, PROOF_ID } from "./ink-reader.server";
 import { inspectionFromAudit } from "../lib/ink-record-inspection";
 import { openLocationOf } from "../lib/open-location";
+import { everyOpenRows, type DoorOpen } from "../lib/every-open";
 
 const num = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
@@ -128,6 +129,28 @@ export function timelineFrom(
       : [];
   }
 
+  // EVERY OPEN (lib/every-open.ts): each open the door answered — a reload's
+  // fire and a link scanner's visit included, each said as what it was —
+  // joined to its signed open in the record; the signed opens no row
+  // describes follow in words. Without the door, the record's signed opens
+  // alone, in words, with no point for a map.
+  const doorRows: DoorOpen[] | null =
+    opensBody && Array.isArray(opensBody.opens)
+      ? opensBody.opens.map((o: any) => {
+          const fix = point(o?.lat, o?.lng);
+          return {
+            at: str(o?.at),
+            outcome: str(o?.outcome),
+            verdict: str(o?.gps_verdict),
+            distance_m: nonnegative(o?.distance_m),
+            accuracy_m: nonnegative(o?.accuracy_m),
+            lat: fix?.lat ?? null,
+            lng: fix?.lng ?? null,
+          };
+        })
+      : null;
+  const rows = everyOpenRows(doorRows, record?.opens ?? null);
+
   const window = deliveryWindow({
     delivered_at: str(p.delivered_at),
     interaction_window_end: str(p.interaction_window_closed_at),
@@ -146,6 +169,7 @@ export function timelineFrom(
     window,
     opensAvailable: Array.isArray(opensBody?.opens),
     opensCapped: opensBody?.capped === true,
+    rows,
   };
 }
 
