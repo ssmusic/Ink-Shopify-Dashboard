@@ -2,13 +2,11 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mintMagicToken = vi.fn();
-vi.mock("./ink-api.server", () => ({ mintMagicToken }));
 
-const { RECENT_ORDERS_QUERY, RECENT_ORDERS_DETAIL_QUERY, dashboardDoorUrl, readRecentOrderRecords, recordUrlFor } = await import("./ink-links.server");
+const { RECENT_ORDERS_QUERY, RECENT_ORDERS_DETAIL_QUERY, readRecentOrderRecords, recordUrlFor } = await import("./ink-links.server");
 const { INK_SCOPES } = await import("./ink-scopes.server");
 
-afterEach(() => { vi.unstubAllEnvs(); mintMagicToken.mockReset(); });
+afterEach(() => { vi.unstubAllEnvs(); });
 
 const PROOF = "proof_b3ea86a2c6aa96d2d4ee1e8b";
 
@@ -88,18 +86,5 @@ describe("readRecentOrderRecords", () => {
   it("fails open: a refused read shows no orders, never an error page", async () => {
     const graphql = vi.fn(async () => { throw new Error("Access denied"); });
     expect(await readRecentOrderRecords({ graphql })).toEqual([]);
-  });
-});
-
-describe("dashboardDoorUrl — the Ritualist's own magic-token door, reused", () => {
-  it("mints a single-use token for this shop and opens www.in.ink/welcome with it", async () => {
-    mintMagicToken.mockResolvedValue({ token: "mlt_a+b", shop_id: "shop_1", expires_at: "x" });
-    expect(await dashboardDoorUrl("made-up-shop.myshopify.com")).toBe("https://www.in.ink/welcome?token=mlt_a%2Bb");
-    expect(mintMagicToken).toHaveBeenCalledWith("made-up-shop.myshopify.com");
-  });
-  it("honours PARALLEL_APP_URL exactly as /app/dashboard does", async () => {
-    vi.stubEnv("PARALLEL_APP_URL", "https://staging.example");
-    mintMagicToken.mockResolvedValue({ token: "t" });
-    expect(await dashboardDoorUrl("s")).toBe("https://staging.example/welcome?token=t");
   });
 });

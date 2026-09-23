@@ -51,6 +51,11 @@ interface OrderExpandedRowProps {
   handoffNote?: ReactNode;
   /** Drawn full width at the bottom of the panel (ink: the record's door). */
   footer?: ReactNode;
+  /** Replaces the right-hand DELIVERY column (ink: the order's record, in words). */
+  aside?: ReactNode;
+  /** ink: the whole panel shows at once — the record and the door below it are
+   *  never behind the Ritualist's 520px inner scroll. */
+  uncapped?: boolean;
 }
 
 // THE SAME PANEL FOR BOTH APPS. The Ritualist's Shipments list passes exactly
@@ -90,13 +95,13 @@ const RITUALIST_HANDOFF = (
   </Text>
 );
 
-const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffNote, footer }: OrderExpandedRowProps) => {
+const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffNote, footer, aside, uncapped }: OrderExpandedRowProps) => {
   const note = handoffNote === undefined ? RITUALIST_HANDOFF : handoffNote;
   const deliveredAt =
     order.metafields?.delivery_verified_at || order.metafields?.delivery_timestamp || "";
 
   return (
-    <div style={{ borderTop: "1px solid var(--p-color-border)", maxHeight: "520px", overflowY: "auto" }}>
+    <div style={uncapped ? { borderTop: "1px solid var(--p-color-border)" } : { borderTop: "1px solid var(--p-color-border)", maxHeight: "520px", overflowY: "auto" }}>
       {/* Header — actions only (no forensic tabs) */}
       <div
         style={{
@@ -209,6 +214,9 @@ const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffN
         </Box>
 
         {/* ── Right: Delivery + handoff (no forensics in the embed) ── */}
+        {aside ? (
+          <Box padding="400">{aside}</Box>
+        ) : (
         <Box padding="400">
           <BlockStack gap="300">
             <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
@@ -235,6 +243,7 @@ const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffN
             ) : null}
           </BlockStack>
         </Box>
+        )}
       </div>
       {footer ? (
         <div

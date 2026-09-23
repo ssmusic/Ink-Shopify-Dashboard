@@ -1,71 +1,92 @@
-// INK'S RECENT ORDERS — THE RITUALIST'S SHIPMENTS LIST, AND THE RECORD'S DOOR
-// AT THE BOTTOM OF EACH ROW'S ACCORDION.
+// INK'S ORDERS — THE RITUALIST'S SHIPMENTS LIST, EACH ROW OPENING ON ITS RECORD.
 //
 // Sam, 2026-09-23: "recent orders should show just like the ritualist orders
-// with an accordion and the get the record at the bottom of the accordion".
-// So this is the markup of routes/app.tagged-shipments._index.tsx — the same
-// IndexTable columns (Order · Customer · Date · Total · Status), the same
-// click-to-expand row, the same mobile cards, the same expanded panel
-// (components/OrderExpandedRow.tsx) — with ink's three differences:
-//   · the panel's "View Full Record" opens the order's public record;
-//   · the Ritualist-studio sentence is replaced by ink's own;
-//   · the panel's footer carries the record's door ("Get the record — $X",
-//     or, once bought, "Open the record" + "Did you win?").
-// The Ritualist's route is not imported (it would pull the Ritualist's module
-// into ink's bundle) and not touched; the status words are its words, copied.
+// with an accordion and the get the record at the bottom of the accordion" ·
+// "enrolled and verified and all that bs is from when this was nfc - remove" ·
+// "we're doing everything inside this shopify app" · "we need to be showing
+// the record" · "can we have a full record open?".
+//
+// So: the markup of routes/app.tagged-shipments._index.tsx — the IndexTable,
+// the click-to-expand row, the mobile cards, the same expanded panel
+// (components/OrderExpandedRow.tsx) — with what the RECORD says in place of
+// the NFC-era status: the table's last two columns are the opens and the
+// location word, and the panel's right-hand column is the whole record in
+// words (lib/record-words.ts, the public record page's own words). Nothing
+// links out of the app. The bottom of the accordion is the record's door:
+// "Get the record — $X", or once bought "Open the record" + "Did you win?".
 //
 // Every visible string that is ink's own is PLACEHOLDER copy — Sam's words.
 
 import { useState } from "react";
-import { Badge, BlockStack, Box, IndexTable, InlineStack, Link, Text } from "@shopify/polaris";
-import type { BadgeProps } from "@shopify/polaris";
+import { BlockStack, Box, IndexTable, InlineStack, Text } from "@shopify/polaris";
 import { ChevronDown } from "lucide-react";
 import OrderExpandedRow from "./OrderExpandedRow";
 import RecordDoor, { type RecordDoorProps } from "./RecordDoor";
 import type { InkOrderDetail } from "../services/ink-links.server";
+import { LEVEL_WORDS, elementLines, locationWordOf, opensOf, type RecordRead } from "../lib/record-words";
 
 export type InkRecentOrderRow = {
   id: string;
   name: string;
-  recordUrl: string | null;
   proofId: string | null;
   detail: InkOrderDetail | null;
+  record: RecordRead | null;
   door: RecordDoorProps["door"];
-};
-
-// The Ritualist's badge words (app.tagged-shipments._index.tsx), unchanged.
-const statusBadgeProps: Record<string, { tone: BadgeProps["tone"]; label: string }> = {
-  enrolled: { tone: "warning", label: "Enrolled" },
-  active: { tone: "info", label: "Enrolled" },
-  verified: { tone: "success", label: "Verified" },
-  expired: { tone: undefined, label: "Expired" },
-  cooldown: { tone: "attention", label: "Cooldown" },
-  pending: { tone: undefined, label: "Pending" },
 };
 
 const money = (amount: string, currency: string) =>
   parseFloat(amount).toLocaleString("en-US", { style: "currency", currency });
 
-/** The bottom of the accordion: the record, and the door to buy it. */
-function RecordFooter({ row, returnTo }: { row: InkRecentOrderRow; returnTo: string }) {
-  if (!row.proofId) {
+/** The whole record, in the public record page's words. */
+export function RecordWords({ record }: { record: RecordRead | null }) {
+  if (!record) {
     return (
       <Text as="p" variant="bodySm" tone="subdued">
         {/* PLACEHOLDER copy */}
-        No record yet
+        No record yet.
       </Text>
     );
   }
   return (
-    <InlineStack align="space-between" blockAlign="center" gap="400">
-      {row.recordUrl ? (
-        <Link url={row.recordUrl} target="_blank">
-          {/* PLACEHOLDER label */}
-          View record
-        </Link>
-      ) : (
-        <span />
-      )}
+    <BlockStack gap="300">
+      <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
+        {/* PLACEHOLDER copy — the section's name, as CUSTOMER and PRODUCTS are named */}
+        THE RECORD
+      </Text>
+      {record.elements.map((el) => (
+        <div key={el.element} style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
+          <BlockStack gap="100">
+            <InlineStack align="space-between" blockAlign="baseline" gap="200">
+              <Text as="p" variant="bodySm" fontWeight="semibold">
+                {el.label}
+              </Text>
+              <Text as="span" variant="bodyXs" tone="subdued">
+                {(LEVEL_WORDS[el.status] ?? el.status).toUpperCase()}
+              </Text>
+            </InlineStack>
+            {elementLines(el).map((line) => (
+              <InlineStack key={line.label} align="space-between" gap="200" wrap={false}>
+                <Text as="span" variant="bodySm" tone="subdued">
+                  {line.label}
+                </Text>
+                <Text as="span" variant="bodySm" alignment="end">
+                  {line.words}
+                </Text>
+              </InlineStack>
+            ))}
+          </BlockStack>
+        </div>
+      ))}
+    </BlockStack>
+  );
+}
+
+/** The bottom of the accordion: the record's door. */
+function RecordFooter({ row, returnTo }: { row: InkRecentOrderRow; returnTo: string }) {
+  if (!row.proofId) return null;
+  if (!row.door.offerLine && !row.door.purchase) return null;
+  return (
+    <InlineStack align="end" blockAlign="center">
       <RecordDoor proofId={row.proofId} orderName={row.name} returnTo={returnTo} door={row.door} />
     </InlineStack>
   );
@@ -74,10 +95,15 @@ function RecordFooter({ row, returnTo }: { row: InkRecentOrderRow; returnTo: str
 function Panel({ row, returnTo, onCollapse }: { row: InkRecentOrderRow; returnTo: string; onCollapse: () => void }) {
   const footer = <RecordFooter row={row} returnTo={returnTo} />;
   if (!row.detail) {
-    // Only the minimal read answered (protected fields redacted): the door alone.
+    // Only the minimal order read answered (protected fields redacted): the record alone.
     return (
-      <div style={{ borderTop: "1px solid var(--p-color-border)", padding: "12px 16px", background: "var(--p-color-bg-surface-secondary)" }}>
-        {footer}
+      <div style={{ borderTop: "1px solid var(--p-color-border)" }}>
+        <Box padding="400">
+          <RecordWords record={row.record} />
+        </Box>
+        <div style={{ borderTop: "1px solid var(--p-color-border)", padding: "12px 16px", background: "var(--p-color-bg-surface-secondary)" }}>
+          {footer}
+        </div>
       </div>
     );
   }
@@ -85,14 +111,9 @@ function Panel({ row, returnTo, onCollapse }: { row: InkRecentOrderRow; returnTo
     <OrderExpandedRow
       order={row.detail}
       onCollapse={onCollapse}
-      viewFullUrl={row.recordUrl}
-      handoffNote={
-        <Text as="p" variant="bodySm" tone="subdued">
-          {/* PLACEHOLDER copy */}
-          Every open of this order's tracking link, and where it happened, is in its record.
-        </Text>
-      }
+      aside={<RecordWords record={row.record} />}
       footer={footer}
+      uncapped
     />
   );
 }
@@ -104,20 +125,16 @@ export default function InkRecentOrders({
 }: {
   orders: InkRecentOrderRow[];
   returnTo?: string;
-  /** Tests (and a deep link, one day) open a row on first render. */
+  /** A row opened on first render (the listing screenshot; a deep link one day). */
   defaultExpandedId?: string | null;
 }) {
   const [expandedOrder, setExpandedOrder] = useState<string | null>(defaultExpandedId);
   const toggle = (id: string) => setExpandedOrder((prev) => (prev === id ? null : id));
-  const badgeFor = (row: InkRecentOrderRow) => {
-    const status = row.detail?.status ?? (row.proofId ? "enrolled" : "pending");
-    return statusBadgeProps[status] || { tone: undefined, label: status };
-  };
 
   const tableRows = orders.flatMap((row, index) => {
     const isExpanded = expandedOrder === row.id;
-    const badge = badgeFor(row);
     const d = row.detail;
+    const opens = opensOf(row.record);
     const tr = (
       <IndexTable.Row id={row.id} key={row.id} position={index} onClick={() => toggle(row.id)} selected={false}>
         <IndexTable.Cell>
@@ -147,7 +164,14 @@ export default function InkRecentOrders({
           </Text>
         </IndexTable.Cell>
         <IndexTable.Cell>
-          <Badge tone={badge.tone}>{badge.label}</Badge>
+          <Text variant="bodyMd" as="span" alignment="end">
+            {opens ?? "—"}
+          </Text>
+        </IndexTable.Cell>
+        <IndexTable.Cell>
+          <Text variant="bodyMd" as="span">
+            {row.proofId ? locationWordOf(row.record) || "—" : "—"}
+          </Text>
         </IndexTable.Cell>
       </IndexTable.Row>
     );
@@ -155,7 +179,7 @@ export default function InkRecentOrders({
     return [
       tr,
       <tr key={`${row.id}-expanded`}>
-        <td colSpan={5} style={{ padding: 0 }}>
+        <td colSpan={6} style={{ padding: 0 }}>
           <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} />
         </td>
       </tr>,
@@ -184,7 +208,9 @@ export default function InkRecentOrders({
             { title: "Customer" },
             { title: "Date" },
             { title: "Total", alignment: "end" },
-            { title: "Status" },
+            // PLACEHOLDER headings — the record's two facts a row can carry.
+            { title: "Opens", alignment: "end" },
+            { title: "Location" },
           ]}
           selectable={false}
         >
@@ -204,8 +230,8 @@ export default function InkRecentOrders({
         ) : (
           orders.map((row) => {
             const isExpanded = expandedOrder === row.id;
-            const badge = badgeFor(row);
             const d = row.detail;
+            const opens = opensOf(row.record);
             return (
               <div key={row.id}>
                 <div
@@ -216,10 +242,7 @@ export default function InkRecentOrders({
                 >
                   <div className={`px-4 py-3 ${isExpanded ? "bg-muted" : ""}`}>
                     <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm text-foreground">{row.name}</span>
-                        <Badge tone={badge.tone}>{badge.label}</Badge>
-                      </div>
+                      <span className="font-semibold text-sm text-foreground">{row.name}</span>
                       <ChevronDown
                         className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
                       />
@@ -228,7 +251,14 @@ export default function InkRecentOrders({
                       <span className="text-foreground">{d ? d.customerName : "—"}</span>
                       <span className="font-medium text-foreground">{d ? money(d.total, d.currency) : ""}</span>
                     </div>
-                    {d?.date ? <span className="text-xs text-muted-foreground">{d.date}</span> : null}
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{d?.date ?? ""}</span>
+                      {/* PLACEHOLDER copy */}
+                      <span>
+                        {opens != null ? `${opens} ${opens === 1 ? "open" : "opens"}` : ""}
+                        {row.proofId && locationWordOf(row.record) ? ` · ${locationWordOf(row.record)}` : ""}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 {isExpanded && <Panel row={row} returnTo={returnTo} onCollapse={() => setExpandedOrder(null)} />}

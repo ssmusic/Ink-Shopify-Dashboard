@@ -152,7 +152,7 @@ export default function InkSettings() {
                 {/* PLACEHOLDER copy */}
                 <Text as="h2" variant="headingMd">Add The Ritualist</Text>
                 <Text as="p" tone="subdued">
-                  Every order gets its own branded page — live tracking, delivery notifications, returns. ink is included.
+                  Every order gets its own branded page — live tracking, delivery notifications, returns. The Ritualist includes ink.
                 </Text>
                 <InlineStack>
                   {data.ritualistUrl ? (
