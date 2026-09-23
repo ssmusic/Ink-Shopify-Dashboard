@@ -1,59 +1,156 @@
-// EACH RECENT ORDER'S RECORD — read for the screen, so the record is shown
-// inside the app instead of linked out to (Sam, 2026-09-23: "we're doing
-// everything inside this shopify app" · "we need to be showing the record").
-//
-// One public read per order: GET {INK_API_URL}/verify/:proofId — the words
-// projection every record already serves to anyone holding its id (ink-backend
-// #124). No key, no secret: a priced record answers `record.locked: true` and
-// still carries its words. Fail-soft and bounded: a slow or refused read is a
-// row without its record, never a slow or broken screen.
+import type {
+  RecordElement,
+  RecordRead,
+  RecordSummary,
+} from "../lib/record-words";
 
-import type { RecordElement, RecordRead, RecordSummary } from "../lib/record-words";
+import { merchantRead, PROOF_ID } from "./ink-reader.server";
 
-const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
-const PROOF_ID = /^proof_[0-9a-f]{24}$/;
-const READ_BUDGET_MS = 6_000; // five side-by-side reads can meet cold backend instances (measured 2026-09-23: a 0.4 s read timed out at 3 s)
-
-function verifyUrl(proofId: string): string {
-  const base = INK_API_URL.endsWith("/") ? INK_API_URL.slice(0, -1) : INK_API_URL;
-  return `${base}/verify/${encodeURIComponent(proofId)}`;
+function locationProjection(
+  value: unknown,
+  includeLater = true,
+): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (typeof v.verdict === "string") out.verdict = v.verdict;
+  for (const key of ["distance_m", "accuracy_m"])
+    if (
+      typeof v[key] === "number" &&
+      Number.isFinite(v[key]) &&
+      Number(v[key]) >= 0
+    )
+      out[key] = v[key];
+  if (typeof v.signed === "boolean") out.signed = v.signed;
+  if (includeLater && v.later_share)
+    out.later_share = locationProjection(v.later_share, false);
+  return out;
 }
 
 /** The words of one record, or null. */
 export function recordFromBody(body: unknown): RecordRead | null {
-  const b = body as { summary?: RecordSummary; verdict?: { elements?: unknown[] }; record?: { locked?: unknown } } | null;
-  if (!b || typeof b !== "object" || !Array.isArray(b.verdict?.elements)) return null;
+  const b = body as {
+    summary?: RecordSummary;
+    verdict?: { elements?: unknown[] };
+    record?: {
+      locked?: unknown;
+      purchased?: unknown;
+      price_cents?: unknown;
+      currency?: unknown;
+    };
+  } | null;
+  if (!b || typeof b !== "object" || !Array.isArray(b.verdict?.elements))
+    return null;
   const elements: RecordElement[] = [];
   for (const e of b.verdict!.elements!) {
     const el = e as Partial<RecordElement> | null;
-    if (!el || typeof el.element !== "string" || typeof el.label !== "string") continue;
+    if (!el || typeof el.element !== "string" || typeof el.label !== "string")
+      continue;
     elements.push({
       element: el.element,
       label: el.label,
       status: typeof el.status === "string" ? el.status : "missing",
-      value: el.value && typeof el.value === "object" ? (el.value as Record<string, unknown>) : null,
+      value:
+        el.value && typeof el.value === "object"
+          ? Object.fromEntries(
+              Object.entries(el.value)
+                .filter(([key]) =>
+                  [
+                    "order_number",
+                    "enrolled_at",
+                    "tier",
+                    "delivered_at",
+                    "source",
+                    "signed",
+                    "geocoded",
+                    "verified_at_door",
+                    "last_status",
+                    "last_at",
+                    "carrier",
+                    "signed_delivered_at",
+                    "first_open_at",
+                    "first_open_signed",
+                    "opens",
+                    "signed_opens",
+                    "non_human_opens",
+                    "location",
+                  ].includes(key),
+                )
+                .map(([key, value]) => [
+                  key,
+                  key === "location"
+                    ? locationProjection(value)
+                    : typeof value === "string" ||
+                        typeof value === "boolean" ||
+                        (typeof value === "number" && Number.isFinite(value))
+                      ? value
+                      : null,
+                ]),
+            )
+          : null,
     });
   }
-  return { summary: b.summary ?? {}, elements, locked: b.record?.locked === true };
-}
-
-export async function readRecord(proofId: string, fetchImpl: typeof fetch = fetch): Promise<RecordRead | null> {
-  if (!PROOF_ID.test(proofId)) return null;
-  try {
-    const res = await fetchImpl(verifyUrl(proofId), { signal: AbortSignal.timeout(READ_BUDGET_MS) });
-    if (!res.ok) return null;
-    return recordFromBody(await res.json());
-  } catch (err) {
-    console.warn(`[ink] record read failed for ${proofId}:`, (err as Error)?.message ?? err);
-    return null;
+  const summary: RecordSummary = {};
+  for (const key of [
+    "order_number",
+    "enrolled_at",
+    "delivered_at",
+    "delivery_stage",
+    "carrier",
+    "first_open_at",
+    "last_open_at",
+  ] as const) {
+    if (typeof b.summary?.[key] === "string") summary[key] = b.summary[key];
   }
+  summary.opens =
+    typeof b.summary?.opens === "number" &&
+    Number.isFinite(b.summary.opens) &&
+    b.summary.opens >= 0
+      ? b.summary.opens
+      : null;
+  const cents = b.record?.price_cents;
+  const currency = b.record?.currency;
+  const price =
+    Number.isInteger(cents) &&
+    Number(cents) > 0 &&
+    Number(cents) <= 1000000 &&
+    typeof currency === "string" &&
+    /^[A-Z]{3}$/.test(currency)
+      ? { price_cents: Number(cents), currency }
+      : null;
+  return { summary, elements, locked: b.record?.locked === true, price };
 }
 
-/** Every listed order's record, read side by side. */
-export async function readRecords(proofIds: Array<string | null>, fetchImpl: typeof fetch = fetch): Promise<Record<string, RecordRead>> {
-  const ids = [...new Set(proofIds.filter((p): p is string => typeof p === "string" && PROOF_ID.test(p)))];
-  const reads = await Promise.all(ids.map(async (id) => [id, await readRecord(id, fetchImpl)] as const));
-  const out: Record<string, RecordRead> = {};
-  for (const [id, r] of reads) if (r) out[id] = r;
-  return out;
+export async function readRecord(
+  apiKey: string | null | undefined,
+  proofId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<RecordRead | null> {
+  if (!PROOF_ID.test(proofId)) return null;
+  return recordFromBody(
+    await merchantRead(apiKey, `proofs/${proofId}/audit`, fetchImpl),
+  );
+}
+
+export async function readRecords(
+  apiKey: string | null | undefined,
+  proofIds: Array<string | null>,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Record<string, RecordRead>> {
+  if (!apiKey) return {};
+  const ids = [
+    ...new Set(
+      proofIds.filter(
+        (p): p is string => typeof p === "string" && PROOF_ID.test(p),
+      ),
+    ),
+  ];
+  const reads = await Promise.all(
+    ids.map(
+      async (id) => [id, await readRecord(apiKey, id, fetchImpl)] as const,
+    ),
+  );
+  return Object.fromEntries(
+    reads.filter((r): r is readonly [string, RecordRead] => r[1] !== null),
+  );
 }

@@ -32,6 +32,7 @@ const RITUALIST_SCOPES = [
   ];
 
 const shopify = shopifyApp({
+  ...(isInk() ? { logger: { log: (severity: unknown) => globalThis.console.log(`[ink:shopify] severity ${Number(severity)}`) } } : {}),
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.October25,

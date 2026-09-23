@@ -1,3 +1,4 @@
+import { isInk } from "./app-flavor.server";
 // WHAT INK'S SCREENS READ — the merchant as its two records tell it.
 //
 // A shop has two merchant docs in one Firestore: the embed's own, keyed by
@@ -27,13 +28,23 @@ export async function readInkMerchant(shop: string): Promise<InkMerchantView> {
   // backend for a shop_id now would only scan its list for a merchant that
   // is still being created.
   const shopId = doc?.ink_api_key ? await resolveInkShopId(shop, doc) : "";
+  if (isInk()) {
+    const saved = (doc as any)?.ink_flash_forward;
+    const backend =
+      saved === "carrier" || saved === "order_status"
+        ? { flash_forward: saved }
+        : null;
+    return { shop, doc, shopId, backend };
+  }
   let backend: Record<string, any> | null = null;
   if (shopId) {
     try {
       const snap = await firestore.collection("merchants").doc(shopId).get();
       backend = snap.exists ? (snap.data() ?? null) : null;
     } catch (e: any) {
-      console.warn(`[ink] backend merchant doc unreadable for ${shop} (${shopId}): ${e?.message ?? e}`);
+      console.warn(
+        `[ink] backend merchant doc unreadable for ${shop} (${shopId}): ${e?.message ?? e}`,
+      );
     }
   }
   return { shop, doc, shopId, backend };
@@ -50,9 +61,11 @@ export function markOf(view: InkMerchantView): string | null {
  *  shop_name, then the embed's, then the domain. */
 export function brandNameOf(view: InkMerchantView): string {
   const fromBackend = view.backend?.shop_name;
-  if (typeof fromBackend === "string" && fromBackend.trim()) return fromBackend.trim();
+  if (typeof fromBackend === "string" && fromBackend.trim())
+    return fromBackend.trim();
   const fromEmbed = (view.doc as any)?.shopName;
-  if (typeof fromEmbed === "string" && fromEmbed.trim()) return fromEmbed.trim();
+  if (typeof fromEmbed === "string" && fromEmbed.trim())
+    return fromEmbed.trim();
   return view.shop.replace(/\.myshopify\.com$/i, "");
 }
 
@@ -74,7 +87,14 @@ export type InkStage = "provisioning" | "capturing" | "ready";
  *  (no ink_shop_id) never had an ink capture, so it is "ready" at once and
  *  the screen offers "look again". */
 export function stageOf(
-  doc: { ink_api_key?: string; ink_shop_id?: string; ink_mark_captured_at?: string } | null | undefined,
+  doc:
+    | {
+        ink_api_key?: string;
+        ink_shop_id?: string;
+        ink_mark_captured_at?: string;
+      }
+    | null
+    | undefined,
 ): InkStage {
   if (!doc?.ink_api_key) return "provisioning";
   if (doc.ink_shop_id && !doc.ink_mark_captured_at) return "capturing";

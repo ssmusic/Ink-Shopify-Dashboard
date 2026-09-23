@@ -1,3 +1,5 @@
+import { flavorLogger } from "./ink-log.server";
+const console = flavorLogger("merchant.server");
 import firestore from "../firestore.server";
 import type { NotificationSettings } from "./notification-settings";
 

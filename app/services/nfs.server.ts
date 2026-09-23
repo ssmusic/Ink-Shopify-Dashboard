@@ -1,3 +1,6 @@
+import { flavorLogger } from "./ink-log.server";
+import { flavorFetch as fetch } from "./ink-reader.server";
+const console = flavorLogger("nfs");
 import crypto from "crypto";
 
 // Alan's NFS API Base URL

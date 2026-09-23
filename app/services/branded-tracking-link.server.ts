@@ -1,3 +1,5 @@
+import { flavorLogger } from "./ink-log.server";
+const console = flavorLogger("branded-tracking-link.server");
 // THE AUTO-LINK — Shopify's own outbox becomes the brand's distribution.
 //
 // `fulfillmentTrackingInfoUpdate` accepts a custom tracking URL, and that URL

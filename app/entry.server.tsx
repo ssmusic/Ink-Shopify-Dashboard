@@ -1,3 +1,8 @@
+import { isInk } from "./services/app-flavor.server";
+import { flavorLogger } from "./services/ink-log.server";
+const console = flavorLogger("render");
+// The framework otherwise serializes arbitrary thrown errors into logs.
+export const handleError = isInk() ? () => console.error("Request failed") : undefined;
 import { PassThrough } from "stream";
 import { renderToPipeableStream } from "react-dom/server";
 import { ServerRouter } from "react-router";
@@ -15,6 +20,11 @@ export default async function handleRequest(
   reactRouterContext: EntryContext
 ) {
   addDocumentResponseHeaders(request, responseHeaders);
+  if (isInk()) {
+    responseHeaders.set("Cache-Control", "private, no-store");
+    responseHeaders.set("Referrer-Policy", "no-referrer");
+    responseHeaders.set("X-Content-Type-Options", "nosniff");
+  }
   const userAgent = request.headers.get("user-agent");
   const callbackName = isbot(userAgent ?? '')
     ? "onAllReady"

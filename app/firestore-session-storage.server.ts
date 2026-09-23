@@ -1,3 +1,5 @@
+import { flavorLogger } from "./services/ink-log.server";
+const console = flavorLogger("firestore-session-storage.server");
 import { Session } from "@shopify/shopify-api";
 import type { SessionStorage } from "@shopify/shopify-app-session-storage";
 import firestore from "./firestore.server";

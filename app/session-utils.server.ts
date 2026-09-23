@@ -1,3 +1,5 @@
+import { flavorLogger } from "./services/ink-log.server";
+const console = flavorLogger("session-utils.server");
 import firestore from "./firestore.server";
 import { SESSION_COLLECTION } from "./firestore-session-storage.server";
 
