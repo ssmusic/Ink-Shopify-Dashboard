@@ -23,6 +23,7 @@ import type {
 } from "../components/OrderTimeline";
 
 import { merchantRead, PROOF_ID } from "./ink-reader.server";
+import { inspectionFromAudit } from "../lib/ink-record-inspection";
 
 const num = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
@@ -149,7 +150,23 @@ export async function readTimeline(
     merchantRead(apiKey, `proofs/${id}`, fetchImpl),
     merchantRead(apiKey, `proofs/${id}/opens`, fetchImpl),
   ]);
-  return proof ? timelineFrom(proof, opens, record) : null;
+  let availableOpens = opens;
+  if (!availableOpens && proof && record && !record.locked) {
+    const audit = await merchantRead(apiKey, `proofs/${id}/audit`, fetchImpl);
+    const inspection = inspectionFromAudit(audit, null);
+    if (inspection?.opens)
+      availableOpens = {
+        opens: inspection.opens.map((item) => ({
+          at: item.at,
+          distance_m: item.distanceM,
+          accuracy_m: item.accuracyM,
+          gps_verdict: item.verdict,
+          lat: item.location?.lat,
+          lng: item.location?.lng,
+        })),
+      };
+  }
+  return proof ? timelineFrom(proof, availableOpens, record) : null;
 }
 
 /** Every listed order's timeline, read side by side. */

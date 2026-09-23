@@ -145,6 +145,46 @@ describe("an order's timeline", () => {
     expect(t?.address).toEqual({ lat: 34.1425, lng: -118.2551 });
   });
 
+  it("uses the paid merchant audit to show complete opens and points when the opens door is absent", async () => {
+    const f = vi.fn(async (url: string) => {
+      if (url.endsWith("/opens"))
+        return new Response("Not found", { status: 404 });
+      if (url.endsWith("/audit"))
+        return new Response(
+          JSON.stringify({
+            proof_id: PROOF,
+            summary: { opens: 1 },
+            chain: [
+              {
+                event_id: "event_open",
+                event_type: "TAP_RECORDED",
+                timestamp: PROOF_BODY.first_tap_at,
+                signed_bytes: JSON.stringify({
+                  event_data: {
+                    tap_id: "a",
+                    tap_outcome: "success",
+                    distance_m: 3552,
+                    gps_verdict: "flagged",
+                    accuracy_m: 20,
+                  },
+                }),
+                revealed: { gps: { lat: 34.11, lng: -118.23 } },
+              },
+            ],
+          }),
+        );
+      return new Response(JSON.stringify(PROOF_BODY));
+    }) as unknown as typeof fetch;
+    const timeline = await readTimeline("k", PROOF, f, {
+      ...RECORD,
+      locked: false,
+    });
+    expect(timeline?.opens).toMatchObject([
+      { distance_m: 3552, lat: 34.11, lng: -118.23 },
+    ]);
+    expect(timeline?.opensAvailable).toBe(true);
+  });
+
   it("is nothing for another shop's proof (404), a bad id, or no key — never an error page", async () => {
     const f = vi.fn(
       async () => new Response("{}", { status: 404 }),

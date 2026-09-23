@@ -25,10 +25,10 @@ export default function OpensMap({
   const north = point.lat - address.lat;
   const norm = Math.hypot(east, north) || 1;
   const distance = point.distance_m;
-  const outsideView = distance != null && distance > 360;
-  const radius = distance == null ? 0 : Math.min(108, distance * 0.3);
+  const outsideView = distance != null && distance > 300;
+  const radius = distance == null ? 0 : Math.min(72, distance * 0.16);
   const x = 160 + (east / norm) * radius;
-  const y = 128 - (north / norm) * radius;
+  const y = 80 - (north / norm) * radius;
   return (
     <BlockStack gap="300">
       {opens.length > 1 && (
@@ -45,9 +45,10 @@ export default function OpensMap({
         borderWidth="025"
         borderRadius="200"
         padding="200"
+        maxWidth="360px"
       >
         <svg
-          viewBox="0 0 320 256"
+          viewBox="0 0 320 160"
           width="100%"
           role="img"
           aria-label={`Delivery address and ${point.label}. ${distance == null ? "Distance unavailable." : `${kmOrM(distance)} apart.`}`}
@@ -56,67 +57,61 @@ export default function OpensMap({
         >
           <circle
             cx="160"
-            cy="128"
-            r="90"
+            cy="80"
+            r="48"
             fill="var(--p-color-bg-fill-info-secondary)"
             stroke="var(--p-color-border-info)"
           />
           <circle
             cx="160"
-            cy="128"
-            r="30"
+            cy="80"
+            r="16"
             fill="none"
             stroke="var(--p-color-border-info)"
           />
           <text
             x="160"
-            y="27"
+            y="21"
             textAnchor="middle"
             fontSize="14"
             fill="var(--p-color-text-info)"
           >
             300 m
           </text>
-          <text x="198" y="124" fontSize="14" fill="var(--p-color-text-info)">
+          <text x="182" y="76" fontSize="13" fill="var(--p-color-text-info)">
             100 m
           </text>
           <line
             x1="160"
-            y1="128"
+            y1="80"
             x2={x}
             y2={y}
             stroke="var(--p-color-border-info)"
             strokeWidth="2"
           />
-          <circle cx="160" cy="128" r="7" fill="var(--p-color-text)" />
+          <circle cx="160" cy="80" r="6" fill="var(--p-color-text)" />
           <circle
             cx={x}
             cy={y}
-            r="8"
+            r="7"
             fill="var(--p-color-text-info)"
             stroke="var(--p-color-bg-surface)"
             strokeWidth="2"
           />
           <text
             x="160"
-            y="243"
+            y="151"
             textAnchor="middle"
-            fontSize="14"
+            fontSize="12"
             fill="var(--p-color-text)"
           >
             Delivery address at centre
           </text>
         </svg>
       </Box>
-      <Text as="p" fontWeight="semibold">
-        {point.label}
-        {distance == null
-          ? ""
-          : ` · ${kmOrM(distance)} from the delivery address`}
-      </Text>
       {outsideView && (
-        <Text as="p" tone="subdued">
-          This location is beyond the diagram. The marker shows its direction.
+        <Text as="p" tone="subdued" variant="bodySm">
+          Marker shows direction beyond 300 m.
         </Text>
       )}
     </BlockStack>

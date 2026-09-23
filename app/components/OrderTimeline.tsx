@@ -100,44 +100,66 @@ export function OpensAgainstAddress({
       <Text as="p" breakWord>
         {addressLabel}
       </Text>
-      {address && mapOpens.length > 0 && (
-        <OpensMap address={address} opens={mapOpens} />
-      )}
-      {!available && (
-        <Text as="p" tone="subdued">
-          The full open history is unavailable. Any details below come from the
-          record.
-        </Text>
-      )}
-      {available && !opens.length && (
-        <Text as="p" tone="subdued">
-          No opens recorded.
-        </Text>
-      )}
-      {opens.map((o, i) => (
-        <BlockStack key={`${o.at}-${i}`} gap="100">
-          <Divider />
-          <InlineStack align="space-between" gap="200">
-            <Box color="text-info">
-              <Text as="p" fontWeight="semibold">{`Open ${i + 1}`}</Text>
-            </Box>
-            <Text as="p">{when(o.at)}</Text>
-          </InlineStack>
-          <Text as="p">{openSentence(o.distance_m, o.verdict)}</Text>
-          {o.accuracy_m != null && (
-            <Text
-              as="p"
-              tone="subdued"
-              variant="bodySm"
-            >{`Location accuracy ${kmOrM(o.accuracy_m)}`}</Text>
+      <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+        <BlockStack gap="300">
+          {address && mapOpens.length > 0 ? (
+            <OpensMap address={address} opens={mapOpens} />
+          ) : (
+            <Text as="p" tone="subdued">
+              A distance diagram is unavailable for these opens.
+            </Text>
           )}
         </BlockStack>
-      ))}
-      {capped && (
-        <Text as="p" tone="subdued">
-          The open history is limited to the events returned for this order.
-        </Text>
-      )}
+        <Box
+          background="bg-surface"
+          borderColor="border"
+          borderWidth="025"
+          borderRadius="200"
+          padding="300"
+        >
+          <BlockStack gap="300">
+            <Text as="h4" variant="headingSm">
+              {available && !capped ? "Every open" : "Open history"}
+            </Text>
+            {!available && (
+              <Text as="p" tone="subdued">
+                The full open history is unavailable. Any details below come
+                from the record.
+              </Text>
+            )}
+            {available && !opens.length && (
+              <Text as="p" tone="subdued">
+                No opens recorded.
+              </Text>
+            )}
+            {opens.map((o, i) => (
+              <BlockStack key={`${o.at}-${i}`} gap="100">
+                {i > 0 && <Divider />}
+                <InlineStack align="space-between" gap="200">
+                  <Box color="text-info">
+                    <Text as="p" fontWeight="semibold">{`Open ${i + 1}`}</Text>
+                  </Box>
+                  <Text as="p">{when(o.at)}</Text>
+                </InlineStack>
+                <Text as="p">{openSentence(o.distance_m, o.verdict)}</Text>
+                {o.accuracy_m != null && (
+                  <Text
+                    as="p"
+                    tone="subdued"
+                    variant="bodySm"
+                  >{`Location accuracy ${kmOrM(o.accuracy_m)}`}</Text>
+                )}
+              </BlockStack>
+            ))}
+            {capped && (
+              <Text as="p" tone="subdued">
+                The merchant service limited the open history returned for this
+                order.
+              </Text>
+            )}
+          </BlockStack>
+        </Box>
+      </InlineGrid>
     </BlockStack>
   );
 }
@@ -159,7 +181,7 @@ export function DeliveryWindowBar({ w }: { w: DeliveryWindow | null }) {
           : "No open recorded."}
       </Text>
       {w.hoursToOpen != null && (
-        <Text as="p">{`${Math.abs(w.hoursToOpen)} hours ${w.hoursToOpen < 0 ? "before" : "after"} delivery`}</Text>
+        <Text as="p">{`${Math.abs(w.hoursToOpen) < 1 ? `${Math.round(Math.abs(w.hoursToOpen) * 60)} minutes` : `${Math.round(Math.abs(w.hoursToOpen) * 10) / 10} hours`} ${w.hoursToOpen < 0 ? "before" : "after"} delivery`}</Text>
       )}
     </BlockStack>
   );
@@ -179,26 +201,24 @@ export default function OrderTimeline({
         </Text>
         <LifecycleRail steps={data.steps} />
       </BlockStack>
-      <InlineGrid columns={{ xs: 1, md: 2 }} gap="500">
-        <BlockStack gap="300">
-          <Text as="h3" variant="headingMd">
-            Opens and location
-          </Text>
-          <OpensAgainstAddress
-            address={data.address}
-            opens={data.opens}
-            available={data.opensAvailable}
-            capped={data.opensCapped}
-            addressLabel={addressLabel}
-          />
-        </BlockStack>
-        <BlockStack gap="300">
-          <Text as="h3" variant="headingMd">
-            Delivery and first open
-          </Text>
-          <DeliveryWindowBar w={data.window} />
-        </BlockStack>
-      </InlineGrid>
+      <BlockStack gap="300">
+        <Text as="h3" variant="headingMd">
+          Delivery and first open
+        </Text>
+        <DeliveryWindowBar w={data.window} />
+      </BlockStack>
+      <BlockStack gap="300">
+        <Text as="h3" variant="headingMd">
+          Opens and location
+        </Text>
+        <OpensAgainstAddress
+          address={data.address}
+          opens={data.opens}
+          available={data.opensAvailable}
+          capped={data.opensCapped}
+          addressLabel={addressLabel}
+        />
+      </BlockStack>
     </BlockStack>
   );
 }

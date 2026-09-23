@@ -255,10 +255,7 @@ export default function InkHome() {
                       Recent orders
                     </Text>
                     <Text as="p" tone="subdued">
-                      Shopify makes orders from the past 60 days available here.
-                    </Text>
-                    <Text as="p" tone="subdued">
-                      Open an order for its details, delivery activity, and recorded opens. Advanced shows the record summary. A downloadable record is a separate purchase when offered.
+                      Orders from the past 60 days. Open one to review its delivery and opens.
                     </Text>
                   </BlockStack>
                 </Box>
