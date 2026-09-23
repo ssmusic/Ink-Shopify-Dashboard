@@ -97,8 +97,8 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-/** A bought record's dispute packet: each text Shopify's dispute form asks
- *  for, ready to paste, with its own Copy button. */
+/** A bought record's three texts: each one Shopify's dispute form asks for,
+ *  ready to paste, with its own Copy button. It is called the record. */
 export function DisputePacketView({ packet }: { packet: DisputePacketText }) {
   // PLACEHOLDER labels — Shopify's dispute form's own field names.
   const fields = [
@@ -109,8 +109,8 @@ export function DisputePacketView({ packet }: { packet: DisputePacketText }) {
   return (
     <BlockStack gap="300">
       <Text as="h3" variant="headingMd">
-        {/* PLACEHOLDER copy */}
-        Dispute packet
+        {/* Sam, 2026-09-23: "its called the record" — never "dispute packet". */}
+        The record
       </Text>
       {fields.map((f) => (
         <BlockStack key={f.key} gap="100">
@@ -242,7 +242,6 @@ function Panel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | nul
               {advanced && (
                 <BlockStack gap="400">
                   <InkRecordDoor proofId={row.proofId} door={row.door} />
-                  {row.packet ? <DisputePacketView packet={row.packet} /> : null}
                   <Divider />
                   {/* The signed events themselves are the hand-over's: shown once it is
                       the merchant's (Sam, 2026-09-23: "they need to see all the info but
@@ -286,6 +285,13 @@ function Panel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | nul
                       ) : null}
                     </>
                   )}
+                  {row.packet ? (
+                    // A bought record's three texts for Shopify's dispute form, under the record's words.
+                    <>
+                      <Divider />
+                      <DisputePacketView packet={row.packet} />
+                    </>
+                  ) : null}
                   {row.timeline?.window && (
                     <>
                       <Divider />

@@ -15,6 +15,16 @@ import type { RecordRead } from "../lib/record-words";
 // Only what the screen draws reaches the browser: the lifecycle, the address
 // and each open's position for the map (never printed), the distances, the
 // words. No device field is ever read. Fail-soft and bounded.
+//
+// Without the opens door, the first open's words come from THE RECORD (the
+// backend's words projection, read for the same row) and, when the record has
+// none, from the proof door's own reading of that open (`open_location`,
+// ink-backend #132 — app/lib/open-location.ts): each word with its own
+// distance, one source at a time. Never from the proof's raw rollups side by
+// side: its verdict carried the pre-#99 default 'pass' stamped on opens that
+// shared nothing, and its first measured distance may be a LATER open's
+// (ink-backend utils/auditPacket.js "honest, not hopeful" · #122 "one
+// measurement, one line").
 
 import { deliveryWindow, lifecycle } from "../lib/order-timeline";
 import type {
@@ -24,6 +34,7 @@ import type {
 
 import { merchantRead, PROOF_ID } from "./ink-reader.server";
 import { inspectionFromAudit } from "../lib/ink-record-inspection";
+import { openLocationOf } from "../lib/open-location";
 
 const num = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
@@ -62,10 +73,12 @@ export function timelineFrom(
   const p = proofBody?.proof ?? proofBody;
   if (!p || typeof p !== "object") return null;
 
+  // The first open's moment: the record's own, else the proof's.
+  const firstOpenAt = str(record?.summary.first_open_at) ?? str(p.first_tap_at);
   const steps = lifecycle({
     enrolled_at: str(p.enrolled_at),
     delivered_at: str(p.delivered_at),
-    first_tap_at: record?.summary.first_open_at ?? null,
+    first_tap_at: firstOpenAt,
     return_started_at: str(p.return_initiated_at) ?? str(p.return_started_at),
     carrier_journey:
       p.carrier_journey && Array.isArray(p.carrier_journey.events)
@@ -97,23 +110,21 @@ export function timelineFrom(
         };
       });
   } else {
-    // Before the opens door is live: the first open, in words, from the proof.
+    // Without the opens door: the first open — its words the record's, else
+    // the proof door's own reading of that open; each word with its own
+    // distance and radius, never one source's word beside another's number.
     const element = record?.elements.find(
       (e) => e.element === "the_open",
     )?.value;
-    const first = str(record?.summary.first_open_at);
     const location = element?.location as any;
-    opens = first
-      ? [
-          {
-            at: first,
-            verdict: str(location?.verdict),
-            distance_m: num(location?.distance_m),
-            accuracy_m: num(location?.accuracy_m),
-            lat: null,
-            lng: null,
-          },
-        ]
+    const own = openLocationOf(p.open_location);
+    const words = str(location?.verdict)
+      ? { verdict: str(location?.verdict), distance_m: num(location?.distance_m), accuracy_m: num(location?.accuracy_m) }
+      : own
+        ? { verdict: own.verdict, distance_m: own.distance_m, accuracy_m: own.accuracy_m }
+        : { verdict: null, distance_m: null, accuracy_m: null };
+    opens = firstOpenAt
+      ? [{ at: firstOpenAt, ...words, lat: null, lng: null }]
       : [];
   }
 
@@ -121,7 +132,7 @@ export function timelineFrom(
     delivered_at: str(p.delivered_at),
     interaction_window_end: str(p.interaction_window_closed_at),
     enrolled_at: str(p.enrolled_at),
-    first_tap_at: record?.summary.first_open_at ?? null,
+    first_tap_at: firstOpenAt,
     within_expected_window:
       typeof p.within_expected_window === "boolean"
         ? p.within_expected_window

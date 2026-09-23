@@ -146,10 +146,25 @@ describe("an order's timeline", () => {
     expect(t?.opensAvailable).toBe(false);
   });
 
+  it("without the opens door (404), says the first open from the proof, with no point on the map — its words only from the door's own reading", async () => {
+    const f = vi.fn(async (url: string) => (url.endsWith("/opens") ? new Response("Not found", { status: 404 }) : new Response(JSON.stringify(PROOF_BODY)))) as unknown as typeof fetch;
+    const t = await readTimeline("k", PROOF, f);
+    // A proof door before ink-backend #132 carries no reading of the open: no
+    // word, never gps_verdict beside first_tap_distance_to_shipping_m.
+    expect(t?.opens).toEqual([{ at: "2026-08-25T20:29:59.868Z", verdict: null, distance_m: null, accuracy_m: null, lat: null, lng: null }]);
+    expect(t?.address).toEqual({ lat: 34.1425, lng: -118.2551 });
+    expect(t?.opensAvailable).toBe(false);
+    // Since #132 the door reads the first open itself: its word, its own distance and radius.
+    const measured = { ...PROOF_BODY, open_location: { verdict: "flagged", distance_m: 3552, accuracy_m: 20, later_share: null } };
+    const g = vi.fn(async (url: string) => (url.endsWith("/opens") ? new Response("Not found", { status: 404 }) : new Response(JSON.stringify(measured)))) as unknown as typeof fetch;
+    expect((await readTimeline("k", PROOF, g))?.opens).toEqual([{ at: "2026-08-25T20:29:59.868Z", verdict: "flagged", distance_m: 3552, accuracy_m: 20, lat: null, lng: null }]);
+  });
+
   it("never reads the proof's old default stamp as a share: without the opens door, the words are the record's alone", () => {
     // Rows stamped before ink-backend #99 carry gps_verdict 'pass' on opens that shared nothing.
     const stamped = { ...PROOF_BODY, gps_verdict: "pass", first_tap_distance_to_shipping_m: null };
-    expect(timelineFrom(stamped, null)?.opens).toEqual([]);
+    // No record and no door reading (#132): the open's moment, and no word at all.
+    expect(timelineFrom(stamped, null)?.opens).toEqual([{ at: "2026-08-25T20:29:59.868Z", verdict: null, distance_m: null, accuracy_m: null, lat: null, lng: null }]);
     const t = timelineFrom(stamped, null, RECORD);
     expect(t?.opens.map((o) => o.verdict)).toEqual(["flagged"]);
   });

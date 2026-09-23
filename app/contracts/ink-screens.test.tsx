@@ -279,11 +279,16 @@ describe("the merchant's WHOLE record in the accordion (Sam, 2026-09-23: \"the 2
       packet: { accessActivityLog: "Opened 1 time after the order.", uncategorizedText: "The record of #1010.", shippingDocumentation: "No carrier scan yet." },
     }]);
     const t = text(html);
-    for (const part of ["Dispute packet", "Access activity log", "Opened 1 time after the order.", "Shipping documentation", "No carrier scan yet.", "Additional information", "The record of #1010.", "Did you win?"]) expect(t).toContain(part);
+    for (const part of ["Access activity log", "Opened 1 time after the order.", "Shipping documentation", "No carrier scan yet.", "Additional information", "The record of #1010.", "Did you win?"]) expect(t).toContain(part);
+    // Sam, 2026-09-23: "its called the record" — never "dispute packet".
+    expect(t).not.toMatch(/dispute packet/i);
     expect((t.match(/\bCopy\b/g) ?? []).length).toBe(3);
     expect(t).not.toContain("attach as a file");
     expect(t).not.toContain("Open the record");
     expect(html).not.toMatch(/href="https?:\/\//);
+    // The record's words, then the bought record under the same name.
+    expect((html.match(/<h3[^>]*>The record<\/h3>/g) ?? []).length).toBe(2);
+    expect(t.indexOf("Access activity log")).toBeGreaterThan(t.indexOf("The open"));
   });
 });
 
