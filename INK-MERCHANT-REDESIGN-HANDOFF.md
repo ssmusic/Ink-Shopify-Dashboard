@@ -14,7 +14,7 @@ Typecheck, build and 446 tests across 48 files passed. Layout was checked at mea
 
 Settings now shows the authenticated store name/domain, its Shopify brand logo (square logo preferred), and blue initials when the logo is missing or cannot load. The logo uses Shopify’s tokenless Storefront branding query; no additional scopes or user profile data. Shopify access and ink data access are checked separately on load/refresh. These checks do not assert successful webhook delivery or complete syncing. The local preview deliberately shows Not checked because Shopify is not connected there.
 
-Help is the final navigation tab. It explains orders, one-time Shopify purchases, PDF/CSV/JSON downloads, no emailed files, repeat downloads in Records, missing data and support. The view requires Shopify authentication but no ink backend read, so it remains available during provisioning or an ink outage. Account login stays in Shopify.
+Help is the final navigation tab. Sam rejected the topic grid; Help now uses one reading column with a separate white card for each section and small grey gaps between cards. It explains orders, one-time Shopify purchases, PDF/CSV/JSON downloads, no emailed files, repeat downloads in Records, missing data and support. The view requires Shopify authentication but no ink backend read, so it remains available during provisioning or an ink outage. Account login stays in Shopify.
 
 Typecheck, build and 435 tests across 47 files passed. Settings/Help fit at measured 1280 and 391 px. Live installed-store logo and connection verification remain part of the release checks. No deployment.
 
