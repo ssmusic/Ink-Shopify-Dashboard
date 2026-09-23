@@ -167,8 +167,8 @@ export function orderDetailFrom(n: OrderNode, shopTz: string): InkOrderDetail {
   return {
     id: str(n.id).replace("gid://shopify/Order/", ""),
     orderNumber: str(n.name) || str(n.id),
-    // ink holds no read_customers: the recipient's name on the ship-to stands
-    // in for the Customer's, and "Guest" is the Ritualist's word for none.
+    // Ink holds no read_customers. This is the shipping recipient's name,
+    // labeled as such in Orders; it is not a claim about the buyer.
     customerName: str(addr?.name) || "Name unavailable",
     customerEmail: str(n.email),
     customerAddress: addr

@@ -132,13 +132,13 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
           <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
             <BlockStack gap="200">
               <Text as="h3" variant="headingMd">
-                Customer
+                Recipient
               </Text>
               <Text as="p" breakWord>
                 {d.customerName}
               </Text>
               <Text as="p" breakWord>
-                {d.customerEmail}
+                {`Order email: ${d.customerEmail || "Unavailable"}`}
               </Text>
               <Text as="p" breakWord>
                 {addressLabel}
@@ -155,6 +155,11 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
                   breakWord
                 >{`${item.title} · Quantity ${item.quantity}`}</Text>
               ))}
+              {!d.items.length && (
+                <Text as="p" tone="subdued">
+                  Product details are unavailable.
+                </Text>
+              )}
               {d.itemsTruncated && (
                 <Text as="p" tone="subdued">
                   Showing the first 20 products.
@@ -168,7 +173,7 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
           </InlineGrid>
         ) : (
           <Text as="p" tone="subdued">
-            Customer and product details are unavailable.
+            Recipient and product details are unavailable.
           </Text>
         )}
         {row.timeline ? (
@@ -255,7 +260,10 @@ export default function InkRecentOrders({
                 </InlineStack>
                 <InlineStack align="space-between" gap="200">
                   <Text as="p" breakWord>
-                    {row.detail?.customerName || "Name unavailable"}
+                    {row.detail?.customerName &&
+                    row.detail.customerName !== "Name unavailable"
+                      ? `Recipient ${row.detail.customerName}`
+                      : "Recipient unavailable"}
                   </Text>
                   <Box color="text-info">
                     <Text as="p">

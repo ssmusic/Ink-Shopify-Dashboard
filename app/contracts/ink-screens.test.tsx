@@ -91,7 +91,7 @@ const detail = (over: Record<string, unknown> = {}) => ({
 });
 const ROWS = [
   { id: "gid://shopify/Order/2", name: "#1010", proofId: PROOF, detail: detail(), record: RECORD, door: { offerLine: "Get the record ($29 USD)", purchase: null } },
-  { id: "gid://shopify/Order/1", name: "#1011", proofId: null, detail: detail({ id: "1", orderNumber: "#1011", customerName: "Guest", customerEmail: "", items: [] }), record: null, door: { offerLine: null, purchase: null } },
+  { id: "gid://shopify/Order/1", name: "#1011", proofId: null, detail: detail({ id: "1", orderNumber: "#1011", customerName: "Name unavailable", customerEmail: "", items: [] }), record: null, door: { offerLine: null, purchase: null } },
 ];
 const openRow = (id: string) =>
   renderToString(
@@ -113,10 +113,18 @@ describe('ink screens: facts, working controls and Polaris', () => {
   it('opens an order with its address, products and Advanced disclosure', () => {
     const html = openRow(ROWS[0].id);
     const t = text(html);
-    for (const part of ['Customer', '1 Test St', 'Products', 'Bar Tape', 'Order total $58.00', 'Advanced', 'Get the record ($29 USD)']) expect(t).toContain(part);
+    for (const part of ['Recipient', 'Order email: buyer@example.com', '1 Test St', 'Products', 'Bar Tape', 'Order total $58.00', 'Advanced', 'Get the record ($29 USD)']) expect(t).toContain(part);
     expect(html).toContain('aria-expanded="true"');
     expect(html).not.toMatch(/href="https?:\/\//);
     for (const gone of ['THE RECORD', 'CUSTOMER', 'attach as a file', 'Checked in this browser', 'Shipping Free']) expect(t).not.toContain(gone);
+  });
+
+  it('does not call the shipping recipient the buyer or invent missing contact and product details', () => {
+    const t = text(openRow(ROWS[1].id));
+    expect(t).toContain('Recipient unavailable');
+    expect(t).toContain('Order email: Unavailable');
+    expect(t).toContain('Product details are unavailable');
+    expect(t).not.toContain('Customer');
   });
 
   it('keeps missing records and failed reads distinct from empty orders', () => {
