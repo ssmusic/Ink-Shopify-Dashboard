@@ -165,6 +165,58 @@ describe("ink's home: the orders and their records, inside Shopify (Sam, 2026-09
   });
 });
 
+describe("the pill nav, the Insights KPIs, and a bought record in the app (Sam, 2026-09-23)", () => {
+  const pill = (html: string, id: string) => html.match(new RegExp(`<a[^>]*data-pill="${id}"[^>]*>`))?.[0] ?? "";
+
+  it("puts Orders · Insights · Settings on top of every ink screen, the current one selected", () => {
+    const orders = render(InkHome, { stage: "ready", recentOrders: ROWS });
+    for (const id of ["orders", "insights", "settings"]) expect(pill(orders, id)).not.toBe("");
+    expect(pill(orders, "orders")).toContain('aria-selected="true"');
+    expect(pill(orders, "insights")).toContain('aria-selected="false"');
+    expect(pill(orders, "insights")).toContain('href="/app/ink?view=insights"');
+    expect(pill(orders, "settings")).toContain('href="/app/ink/settings"');
+    const settings = render(InkSettings, { flashForward: "order_status", canSave: true, ritualistUrl: "" });
+    expect(pill(settings, "settings")).toContain('aria-selected="true"');
+    const insights = render(InkHome, { section: "insights", stage: "ready", kpis: null, recentOrders: [] });
+    expect(pill(insights, "insights")).toContain('aria-selected="true"');
+  });
+
+  it("shows the Insights numbers on the Insights pill, and no order list there", () => {
+    const t = text(render(InkHome, { section: "insights", stage: "ready", recentOrders: [], kpis: { recorded: 12, opened: 7, openRatePct: 58, locationShared: 2, signedPct: 100, disputed: 0, capped: false } }));
+    for (const part of ["Orders recorded", "12", "Opened", "7", "58 in every 100", "Location shared", "2", "Signed", "100%", "Disputed"]) expect(t).toContain(part);
+    expect(t).not.toContain("Recent orders");
+    expect(t).not.toContain("2,000 most recent");
+  });
+
+  it("says so when there are no numbers yet", () => {
+    expect(text(render(InkHome, { section: "insights", stage: "ready", kpis: null, recentOrders: [] }))).toContain("No numbers yet");
+  });
+
+  it("shows a bought record's dispute packet inside the accordion — three texts, each with Copy — and no link out", () => {
+    const bought = [{
+      ...ROWS[0],
+      door: { offerLine: null, purchase: { id: "pur_1", packet_url: "https://www.in.ink/verify/x?key=k", outcome: "won" as const } },
+      packet: { accessActivityLog: "Opened 1 time after the order.", uncategorizedText: "The record of #1010.", shippingDocumentation: "No carrier scan yet." },
+    }];
+    const html = renderToString(
+      <AppProvider i18n={translations}>
+        {(() => {
+          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <InkRecentOrders orders={bought} defaultExpandedId={ROWS[0].id} /> }]);
+          return <Stub initialEntries={["/"]} />;
+        })()}
+      </AppProvider>,
+    );
+    const t = text(html);
+    for (const part of ["DISPUTE PACKET", "Access activity log", "Opened 1 time after the order.", "Shipping documentation", "No carrier scan yet.", "Additional information", "The record of #1010.", "Did you win?"]) expect(t).toContain(part);
+    // The static render holds the desktop table AND the phone cards; count in the table.
+    const desktop = text(html.slice(0, html.indexOf("lg:hidden")));
+    expect((desktop.match(/\bCopy\b/g) ?? []).length).toBe(3);
+    expect(t).not.toContain("Open the record");
+    expect(html).not.toMatch(/href="https?:\/\//);
+    expect(t.indexOf("DISPUTE PACKET")).toBeGreaterThan(t.indexOf("THE RECORD"));
+  });
+});
+
 describe("the settings screen", () => {
   it("offers the two forwards with the backend's dial selected, and the Ritualist's door", () => {
     const html = render(InkSettings, { flashForward: "carrier", canSave: true, ritualistUrl: "https://apps.shopify.com/example-listing" });

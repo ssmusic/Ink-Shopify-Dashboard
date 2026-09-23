@@ -39,6 +39,7 @@ import {
   Text,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
+import InkPillNav from "../components/InkPillNav";
 import { patchMerchant } from "../services/ink-api.server";
 import {
   FLASH_FORWARDS,
@@ -95,10 +96,11 @@ export default function InkSettings() {
 
   return (
     // PLACEHOLDER: page title.
-    <Page title="Settings">
+    <Page>
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
+            <InkPillNav active="settings" />
             {fetcher.data?.error && <Banner tone="critical">{fetcher.data.error}</Banner>}
             {fetcher.data?.ok && !dirty && (
               // PLACEHOLDER copy

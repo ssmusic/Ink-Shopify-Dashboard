@@ -144,6 +144,6 @@ describe("the wiring", () => {
     // ink's Recent orders: the door sits at the bottom of each row's accordion
     // (components/InkRecentOrders.tsx — Sam, 2026-09-23).
     expect(src("../routes/app.ink._index.tsx")).toContain('<InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />');
-    expect(src("../components/InkRecentOrders.tsx")).toContain("<RecordDoor proofId={row.proofId} orderName={row.name} returnTo={returnTo} door={row.door} />");
+    expect(src("../components/InkRecentOrders.tsx")).toContain("<RecordDoor proofId={row.proofId} orderName={row.name} returnTo={returnTo} door={row.door} hidePacketLink={Boolean(row.packet)} />");
   });
 });

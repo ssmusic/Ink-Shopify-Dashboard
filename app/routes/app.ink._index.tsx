@@ -11,6 +11,12 @@
 // opening on its record, with the record's door at the bottom of it
 // (components/InkRecentOrders.tsx).
 //
+// Three pills sit on top of it ("yeah we need a pill nav in the app", Sam,
+// 2026-09-23 — components/InkPillNav.tsx): Orders (this screen), Insights
+// (the same route, ?view=insights — the Insights KPIs, services/ink-kpis.server.ts)
+// and Settings (/app/ink/settings). A bought record's dispute packet is read
+// here and shown in its row (services/ink-packet.server.ts).
+//
 // The install still captures the storefront's mark and claims the brand's
 // host (services/ink-install.server.ts) — the host is the tracking link's —
 // it simply is not this screen's business.
@@ -32,7 +38,11 @@ import { readInkMerchant, stageOf } from "../services/ink-merchant.server";
 import { readRecentOrderRecords } from "../services/ink-links.server";
 import { readRecordDoors, recordDoorFor } from "../services/record-charges.server";
 import { readRecords } from "../services/ink-record.server";
+import { readDisputePacket } from "../services/ink-packet.server";
+import { readInkKpis } from "../services/ink-kpis.server";
 import InkRecentOrders from "../components/InkRecentOrders";
+import InkKpis from "../components/InkKpis";
+import InkPillNav from "../components/InkPillNav";
 
 // While a fresh install is still provisioning (no api key yet), the doors
 // cannot be read; the screen asks again every few seconds for a while.
@@ -41,10 +51,15 @@ const POLL_LIMIT = 25;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const [view, recentOrders] = await Promise.all([
-    readInkMerchant(session.shop),
-    readRecentOrderRecords(admin),
-  ]);
+  const section: "orders" | "insights" = new URL(request.url).searchParams.get("view") === "insights" ? "insights" : "orders";
+  const view = await readInkMerchant(session.shop);
+  const stage = stageOf(view.doc);
+
+  if (section === "insights") {
+    return { section, stage, kpis: await readInkKpis(view.shopId), recentOrders: [] };
+  }
+
+  const recentOrders = await readRecentOrderRecords(admin);
   const proofIds = recentOrders.map((o) => o.proofId);
   // THE RECORD'S DOOR (services/record-door.server.ts): a price on the row
   // only when the merchant is priced AND the kill switch is on. THE RECORD'S
@@ -53,16 +68,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     readRecordDoors(admin, view, proofIds),
     readRecords(proofIds),
   ]);
+  const rows = recentOrders.map((o) => ({
+    id: o.id,
+    name: o.name,
+    proofId: o.proofId,
+    detail: o.detail,
+    record: o.proofId ? records[o.proofId] ?? null : null,
+    door: recordDoorFor(doors, o.proofId),
+  }));
+  // A BOUGHT RECORD'S PACKET, read with the purchase's own key — only the
+  // three texts Shopify's dispute form takes ever reach the screen.
+  const packets = await Promise.all(
+    rows.map((r) => (r.proofId && r.door.purchase?.packet_url ? readDisputePacket(r.proofId, r.door.purchase.packet_url) : Promise.resolve(null))),
+  );
   return {
-    stage: stageOf(view.doc),
-    recentOrders: recentOrders.map((o) => ({
-      id: o.id,
-      name: o.name,
-      proofId: o.proofId,
-      detail: o.detail,
-      record: o.proofId ? records[o.proofId] ?? null : null,
-      door: recordDoorFor(doors, o.proofId),
-    })),
+    section,
+    stage,
+    kpis: null,
+    recentOrders: rows.map((r, i) => ({ ...r, packet: packets[i] })),
   };
 };
 
@@ -90,20 +113,33 @@ export default function InkHome() {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
+            <InkPillNav active={data.section === "insights" ? "insights" : "orders"} />
+
             {settingUp && (
               // PLACEHOLDER copy
               <Banner tone="info">Setting up your store…</Banner>
             )}
 
-            {/* THE ORDERS — the Ritualist's list; each row opens on its
-                record, and the record's door is at the bottom of it. */}
-            <Card padding="0">
-              <Box padding="400">
-                {/* PLACEHOLDER copy */}
-                <Text as="h2" variant="headingMd">Recent orders</Text>
-              </Box>
-              <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />
-            </Card>
+            {data.section === "insights" ? (
+              data.kpis ? (
+                <InkKpis kpis={data.kpis} />
+              ) : (
+                <Card>
+                  {/* PLACEHOLDER copy */}
+                  <Text as="p" tone="subdued">No numbers yet — they appear once your first order is recorded.</Text>
+                </Card>
+              )
+            ) : (
+              /* THE ORDERS — the Ritualist's list; each row opens on its
+                 record, and the record's door is at the bottom of it. */
+              <Card padding="0">
+                <Box padding="400">
+                  {/* PLACEHOLDER copy */}
+                  <Text as="h2" variant="headingMd">Recent orders</Text>
+                </Box>
+                <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />
+              </Card>
+            )}
           </BlockStack>
         </Layout.Section>
       </Layout>

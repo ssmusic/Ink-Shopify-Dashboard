@@ -24,6 +24,8 @@ export type RecordDoorProps = {
     offerLine: string | null;
     purchase: { id: string; packet_url: string | null; outcome: "open" | "won" | "lost" | "unknown" } | null;
   };
+  /** ink shows the bought packet inside the app, so its link out is not drawn. */
+  hidePacketLink?: boolean;
 };
 
 // PLACEHOLDER labels.
@@ -34,7 +36,7 @@ const OUTCOME_OPTIONS = [
   { label: "Don't know", value: "unknown" },
 ];
 
-export default function RecordDoor({ proofId, orderName, returnTo, door }: RecordDoorProps) {
+export default function RecordDoor({ proofId, orderName, returnTo, door, hidePacketLink = false }: RecordDoorProps) {
   const buy = useFetcher<typeof recordAction>();
   const outcome = useFetcher<typeof recordAction>();
 
@@ -48,7 +50,7 @@ export default function RecordDoor({ proofId, orderName, returnTo, door }: Recor
     const current = (outcome.formData?.get("outcome") as string | null) ?? door.purchase.outcome;
     return (
       <InlineStack gap="300" blockAlign="center" wrap={false}>
-        {door.purchase.packet_url && (
+        {door.purchase.packet_url && !hidePacketLink && (
           // PLACEHOLDER label
           <Link url={door.purchase.packet_url} target="_blank">Open the record</Link>
         )}
