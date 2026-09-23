@@ -107,10 +107,17 @@ describe("the record in words", () => {
     const open = record.elements.find((e) => e.element === "the_open")!;
     expect(JSON.stringify(elementLines(open))).not.toMatch(/\((pass|near|flagged)\)/);
   });
-  // PARKED, 2026-09-23: Codex's record, as Sam chose it, prints the delivery
-  // place's "Seen at the door" (the backend's 100 m yes/no). Sam's answer on the
-  // range words (the orchestrator's open question) decides whether it stays.
-  it.todo("never prints the at-the-door yes/no — it judges against the 100 m range");
+  // Sam, 2026-09-23 23:22Z, on the range words: "we dont judge delivery so this
+  // is weird" — no verdict word on a distance anywhere; the distance is a data
+  // row. A real "seen at the door" signed event is data, not a distance verdict,
+  // so the delivery place's yes/no stays as Codex had it (the orchestrator).
+  it("says the delivery place's at-the-door yes/no as data, beside the address on file", () => {
+    const place = { element: "delivery_place", label: "Delivery place", status: "attested", value: { geocoded: true, verified_at_door: false } };
+    expect(elementLines(place)).toEqual([
+      { label: "Address on file", words: "Yes" },
+      { label: "Seen at the door", words: "No" },
+    ]);
+  });
 });
 
 describe("recordFromBody — the browsers (2026-09-23)", () => {
