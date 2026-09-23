@@ -1,14 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import {
   Badge,
   BlockStack,
   Box,
   Button,
-  Collapsible,
-  Divider,
   InlineGrid,
   InlineStack,
+  SkeletonBodyText,
   Text,
 } from "@shopify/polaris";
 import type { action } from "../routes/app.record";
@@ -18,7 +17,9 @@ import {
   type InkInspection,
   type InspectEvent,
 } from "../lib/ink-record-inspection";
-import { when } from "../lib/record-words";
+import { RecordWords } from "./InkRecordEvidence";
+import { when, type RecordRead } from "../lib/record-words";
+import { OpensAgainstAddress, type OrderTimelineData } from "./OrderTimeline";
 
 const eventName = (name: string) => {
   const known: Record<string, string> = {
@@ -35,101 +36,148 @@ const eventName = (name: string) => {
 const location = (value: { lat: number; lng: number } | null) =>
   value ? `${value.lat.toFixed(4)}, ${value.lng.toFixed(4)}` : "Not shared";
 
-function EventRow({
+export function RecordEventRow({
   event,
   check,
 }: {
   event: InspectEvent;
   check: BrowserRecordCheck["events"][number] | undefined;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <BlockStack gap="200">
-      <InlineStack align="space-between" gap="200" blockAlign="center">
-        <Button
-          variant="plain"
-          textAlign="left"
-          disclosure={open ? "up" : "down"}
-          ariaExpanded={open}
-          ariaControls={`event-${event.id}`}
-          onClick={() => setOpen((value) => !value)}
-        >
-          {event.sequence != null ? `${event.sequence}. ` : ""}
-          {eventName(event.type)}
-          {event.legacy ? " (earlier event)" : ""}
-        </Button>
-        <Text as="span" tone="subdued">
-          {when(event.at)}
-        </Text>
-      </InlineStack>
-      <InlineStack gap="200">
-        <Badge
-          tone={check?.hash === "mismatch" ? "critical" : "info"}
-        >{`Hash ${check?.hash ?? "unavailable"}`}</Badge>
-        <Badge
-          tone={check?.link === "mismatch" ? "critical" : "info"}
-        >{`Link ${check?.link ?? "unavailable"}`}</Badge>
-      </InlineStack>
-      <Collapsible id={`event-${event.id}`} open={open}>
-        <Box padding="300" background="bg-surface-secondary">
-          <BlockStack gap="200">
-            {[
-              ["Event ID", event.id],
-              ["Sequence", event.sequence ?? "Not applicable"],
-              ["Key ID", event.keyId ?? "Unavailable"],
-              ["Payload hash", event.payloadHash ?? "Unavailable"],
-              [
-                "Previous event ID",
-                event.previousEventId ?? "First or earlier event",
-              ],
-              ["Previous hash", event.previousHash ?? "First or earlier event"],
-              ["Signature supplied by ink", event.signature ?? "Unavailable"],
-              ["Location", location(event.location)],
-            ].map(([label, value]) => (
-              <InlineGrid
-                key={String(label)}
-                columns={{ xs: 1, sm: ["oneThird", "twoThirds"] }}
-                gap="100"
-              >
-                <Text as="span" tone="subdued">
-                  {label}
-                </Text>
-                <Text as="span" breakWord>
-                  {String(value)}
-                </Text>
-              </InlineGrid>
-            ))}
-            {event.unverifiable && (
-              <Text as="p" tone="subdued">
-                The stored bytes for this earlier event could not be reproduced.
-              </Text>
-            )}
+    <Box
+      background="bg-surface"
+      borderColor="border"
+      borderWidth="025"
+      borderRadius="200"
+      padding="300"
+    >
+      <BlockStack gap="200">
+        <InlineStack align="space-between" gap="200" blockAlign="center">
+          <Text as="h4" variant="headingSm">
+            {event.sequence != null ? `${event.sequence}. ` : ""}
+            {eventName(event.type)}
+            {event.legacy ? " (earlier event)" : ""}
+          </Text>
+          <Text as="span" tone="subdued" variant="bodySm">
+            {when(event.at)}
+          </Text>
+        </InlineStack>
+        <InlineGrid columns={{ xs: 1, sm: 3 }} gap="200">
+          <Text as="p" variant="bodySm">
+            {event.signature
+              ? "Signature supplied, not checked"
+              : "Signature unavailable"}
+          </Text>
+          <InlineStack>
+            <Badge
+              tone={
+                check?.hash === "mismatch"
+                  ? "critical"
+                  : check?.hash === "matches"
+                    ? "info"
+                    : undefined
+              }
+            >{`Hash ${check?.hash ?? "not checked"}`}</Badge>
+          </InlineStack>
+          <InlineStack>
+            <Badge
+              tone={
+                check?.link === "mismatch"
+                  ? "critical"
+                  : check?.link === "matches"
+                    ? "info"
+                    : undefined
+              }
+            >{`Link ${check?.link ?? "not checked"}`}</Badge>
+          </InlineStack>
+        </InlineGrid>
+        {[
+          ["Event ID", event.id],
+          ["Payload hash", event.payloadHash ?? "Unavailable"],
+          [
+            "Previous event ID",
+            event.previousEventId ?? "First or earlier event",
+          ],
+          ["Previous hash", event.previousHash ?? "First or earlier event"],
+        ].map(([label, value]) => (
+          <BlockStack key={label} gap="050">
+            <Text as="p" variant="bodySm" tone="subdued">
+              {label}
+            </Text>
+            <Text as="p" variant="bodySm" breakWord>
+              {value}
+            </Text>
           </BlockStack>
-        </Box>
-      </Collapsible>
-    </BlockStack>
+        ))}
+        <BlockStack gap="100">
+          <Text
+            as="p"
+            variant="bodySm"
+            tone="subdued"
+          >{`Signature · Key ${event.keyId ?? "unavailable"}`}</Text>
+          <Box background="bg" padding="200" borderRadius="100">
+            <Text as="p" variant="bodySm" breakWord>
+              {event.signature ?? "Unavailable"}
+            </Text>
+          </Box>
+        </BlockStack>
+        {event.location && (
+          <Text
+            as="p"
+            variant="bodySm"
+          >{`Location ${location(event.location)}`}</Text>
+        )}
+        {event.unverifiable && (
+          <Text as="p" tone="subdued">
+            The stored bytes for this earlier event could not be reproduced.
+          </Text>
+        )}
+      </BlockStack>
+    </Box>
   );
 }
 
-export default function InkRecordInspection({ proofId }: { proofId: string }) {
+export default function InkRecordInspection({
+  proofId,
+  record,
+  timeline,
+  addressLabel,
+}: {
+  proofId: string;
+  record: RecordRead | null;
+  timeline?: OrderTimelineData | null;
+  addressLabel?: string;
+}) {
   const fetcher = useFetcher<typeof action>();
-  const [open, setOpen] = useState(false);
+  const requested = useRef<string | null>(null);
   const [check, setCheck] = useState<BrowserRecordCheck | null>(null);
   const [checkError, setCheckError] = useState(false);
   const result = fetcher.data;
   const inspection: InkInspection | null =
-    result && "inspection" in result && result.inspection
+    result && "inspection" in result && result.inspection?.proofId === proofId
       ? result.inspection
       : null;
+  const load = () =>
+    fetcher.submit(
+      { intent: "inspect", proof_id: proofId },
+      { method: "post", action: "/app/record" },
+    );
   useEffect(() => {
+    if (requested.current === proofId) return;
+    requested.current = proofId;
+    fetcher.submit(
+      { intent: "inspect", proof_id: proofId },
+      { method: "post", action: "/app/record" },
+    );
+  }, [proofId, fetcher]);
+  useEffect(() => {
+    setCheck(null);
+    setCheckError(false);
     if (!inspection) return;
     let live = true;
     checkInkInspection(inspection)
       .then((value) => {
-        if (live) {
-          setCheck(value);
-          setCheckError(false);
-        }
+        if (live) setCheck(value);
       })
       .catch(() => {
         if (live) setCheckError(true);
@@ -138,149 +186,144 @@ export default function InkRecordInspection({ proofId }: { proofId: string }) {
       live = false;
     };
   }, [inspection]);
-  const toggle = () => {
-    if (!open && !inspection)
-      fetcher.submit(
-        { intent: "inspect", proof_id: proofId },
-        { method: "post", action: "/app/record" },
-      );
-    setOpen((value) => !value);
-  };
+  const opens =
+    inspection?.opens != null
+      ? inspection.opens.map((item) => ({
+          at: item.at,
+          verdict: item.verdict ?? null,
+          distance_m: item.distanceM,
+          accuracy_m: item.accuracyM,
+          lat: item.location?.lat ?? null,
+          lng: item.location?.lng ?? null,
+        }))
+      : (timeline?.opens ?? []);
   return (
-    <BlockStack gap="300">
-      <Button
-        variant="plain"
-        textAlign="left"
-        disclosure={open ? "up" : "down"}
-        ariaExpanded={open}
-        ariaControls={`inspection-${proofId}`}
-        loading={fetcher.state !== "idle"}
-        onClick={toggle}
-      >
-        Inspect full record
-      </Button>
-      <Collapsible id={`inspection-${proofId}`} open={open}>
-        <BlockStack gap="500">
-          {result && !result.ok && result.note && (
-            <Text as="p" tone="critical">
-              {result.note}
-            </Text>
-          )}
-          {checkError && (
-            <Text as="p" tone="critical">
-              The browser could not check the event hashes. Download the JSON
-              file to inspect the exact event bytes.
-            </Text>
-          )}
-          {inspection && (
+    <BlockStack gap="400">
+      <RecordWords record={record} evidenceIds={inspection?.evidenceIds} />
+      <Box background="bg" padding="400" borderRadius="200">
+        <BlockStack gap="200">
+          <Text as="h3" variant="headingMd">
+            Checked in this browser
+          </Text>
+          {result && !result.ok ? (
+            <BlockStack gap="200">
+              <Text as="p" tone="critical">
+                {result.note || "The full record could not be loaded."}
+              </Text>
+              <InlineStack>
+                <Button onClick={load} loading={fetcher.state !== "idle"}>
+                  Try again
+                </Button>
+              </InlineStack>
+            </BlockStack>
+          ) : !inspection ? (
+            <SkeletonBodyText lines={2} />
+          ) : check ? (
             <>
-              <BlockStack gap="200">
-                <Text as="h3" variant="headingMd">
-                  Hash and link checks
-                </Text>
-                {check ? (
-                  <>
-                    <Text as="p">{`${check.hashesChecked} event hashes checked; ${check.hashFailures} did not match. ${check.linksChecked} chain links checked; ${check.linkFailures} did not match.`}</Text>
-                    <Text as="p">
-                      {check.sequenceComplete == null
-                        ? "No linked event sequence was supplied."
-                        : check.sequenceComplete
-                          ? "No gap found in the supplied chain sequence."
-                          : "The supplied chain sequence has a gap."}
-                    </Text>
-                    <Text as="p">
-                      {check.head === "matches"
-                        ? "The last supplied event matches ink’s reported chain head."
-                        : check.head === "mismatch"
-                          ? "The supplied events do not match ink’s reported chain head."
-                          : "A chain head was not supplied for comparison."}
-                    </Text>
-                  </>
-                ) : !checkError ? (
-                  <Text as="p" tone="subdued">
-                    Checking supplied hashes and links in this browser…
+              <InlineGrid columns={{ xs: 1, sm: 3 }} gap="300">
+                <BlockStack gap="100">
+                  <Text as="h4" variant="headingSm">
+                    Event hashes
                   </Text>
-                ) : null}
-                <Text as="p" tone="subdued">
-                  Signatures are shown below as supplied by ink. This app cannot
-                  verify them in the browser until ink provides a
-                  merchant-scoped public-key endpoint. A matching hash or link
-                  does not establish physical delivery.
-                </Text>
-              </BlockStack>
-              <Divider />
-              <BlockStack gap="300">
-                <Text as="h3" variant="headingMd">
-                  {inspection.opens != null && !inspection.opensCapped
-                    ? "Every open"
-                    : "Open history"}
-                </Text>
-                {inspection.opens == null ? (
-                  <Text as="p" tone="subdued">
-                    Detailed open history is unavailable from the merchant
-                    service. The order summary still shows any recorded first
-                    open.
+                  <Text
+                    as="p"
+                    tone={check.hashFailures ? "critical" : undefined}
+                  >{`${check.hashesChecked} of ${inspection.events.length} checked, ${check.hashFailures} mismatches`}</Text>
+                </BlockStack>
+                <BlockStack gap="100">
+                  <Text as="h4" variant="headingSm">
+                    Chain links
                   </Text>
-                ) : inspection.opens.length === 0 ? (
-                  <Text as="p" tone="subdued">
-                    No person opens were returned.
+                  <Text
+                    as="p"
+                    tone={check.linkFailures ? "critical" : undefined}
+                  >{`${check.linksChecked} of ${inspection.events.filter((event) => !event.legacy).length} checked, ${check.linkFailures} mismatches`}</Text>
+                </BlockStack>
+                <BlockStack gap="100">
+                  <Text as="h4" variant="headingSm">
+                    Sequence
                   </Text>
-                ) : (
-                  inspection.opens.map((item, index) => (
-                    <BlockStack key={`${item.at}-${index}`} gap="100">
-                      <Text as="h4" variant="headingSm">
-                        Open {index + 1}
-                      </Text>
-                      <Text as="p">{when(item.at)}</Text>
-                      <Text as="p">
-                        {item.distanceM == null
-                          ? "Distance unavailable"
-                          : `${Math.round(item.distanceM)} m from the delivery address`}
-                      </Text>
-                      {item.accuracyM != null && (
-                        <Text as="p" tone="subdued">
-                          Location accuracy {Math.round(item.accuracyM)} m
-                        </Text>
-                      )}
-                      {item.location && (
-                        <Text as="p" tone="subdued">
-                          Location shared {location(item.location)}
-                        </Text>
-                      )}
-                    </BlockStack>
-                  ))
-                )}
-                {inspection.opensCapped && (
-                  <Text as="p" tone="subdued">
-                    The merchant service limited the open history returned for
-                    this order.
+                  <Text as="p">
+                    {check.sequenceComplete == null
+                      ? "No linked sequence supplied"
+                      : check.sequenceComplete
+                        ? "No gaps in supplied events"
+                        : "Gap in supplied events"}
                   </Text>
-                )}
-              </BlockStack>
-              <Divider />
-              <BlockStack gap="300">
-                <Text as="h3" variant="headingMd">
-                  Signed events
-                </Text>
-                <Text
-                  as="p"
-                  tone="subdued"
-                >{`${inspection.events.length} events supplied by ink. Select an event to inspect its hashes, signature, and any shared location.`}</Text>
-                {inspection.events.length === 0 && (
-                  <Text as="p">No signed events were supplied.</Text>
-                )}
-                {inspection.events.map((event) => (
-                  <EventRow
-                    key={event.id}
-                    event={event}
-                    check={check?.events.find((item) => item.id === event.id)}
-                  />
-                ))}
-              </BlockStack>
+                </BlockStack>
+              </InlineGrid>
+              <Text
+                as="p"
+                variant="bodySm"
+                tone={check.head === "mismatch" ? "critical" : "subdued"}
+              >
+                {check.head === "matches"
+                  ? "The final event matches the reported chain head."
+                  : check.head === "mismatch"
+                    ? "The events do not match the reported chain head."
+                    : "A chain head was not supplied for comparison."}
+              </Text>
             </>
+          ) : checkError ? (
+            <Text as="p" tone="critical">
+              The browser could not check the hashes. Download the JSON file to
+              inspect the event bytes.
+            </Text>
+          ) : (
+            <Text as="p">Checking event hashes and links…</Text>
           )}
+          <Text as="p" variant="bodySm" tone="subdued">
+            Signatures are supplied by ink and have not been independently
+            verified here. Hash and link checks do not confirm physical
+            delivery.
+          </Text>
         </BlockStack>
-      </Collapsible>
+      </Box>
+      <OpensAgainstAddress
+        address={timeline?.address ?? null}
+        opens={opens}
+        available={
+          inspection?.opens != null ? true : (timeline?.opensAvailable ?? false)
+        }
+        capped={
+          inspection?.opens != null
+            ? inspection.opensCapped
+            : (timeline?.opensCapped ?? false)
+        }
+        addressLabel={addressLabel}
+      />
+      <Box background="bg" padding="400" borderRadius="200">
+        <BlockStack gap="300">
+          <InlineStack align="space-between" blockAlign="center" gap="200">
+            <Text as="h3" variant="headingMd">
+              Signed events
+            </Text>
+            {inspection && (
+              <Text
+                as="span"
+                tone="subdued"
+              >{`${inspection.events.length} events supplied`}</Text>
+            )}
+          </InlineStack>
+          {!inspection && (
+            <Text as="p" tone="subdued">
+              {result && !result.ok
+                ? "Event details are unavailable. Retry the record above."
+                : "Loading event details…"}
+            </Text>
+          )}
+          {inspection?.events.length === 0 && (
+            <Text as="p">No signed events were supplied.</Text>
+          )}
+          {inspection?.events.map((event) => (
+            <RecordEventRow
+              key={event.id}
+              event={event}
+              check={check?.events.find((item) => item.id === event.id)}
+            />
+          ))}
+        </BlockStack>
+      </Box>
     </BlockStack>
   );
 }

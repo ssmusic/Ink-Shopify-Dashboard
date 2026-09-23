@@ -15,7 +15,6 @@ import {
 } from "@shopify/polaris";
 import InkRecordDoor, { type InkDoor } from "./InkRecordDoor";
 import InkRecordInspection from "./InkRecordInspection";
-import { RecordWords } from "./InkRecentOrders";
 import type { RecordRead } from "../lib/record-words";
 
 export type HistoryItem = {
@@ -86,8 +85,12 @@ function RecordHistoryItem({ row }: { row: HistoryItem }) {
           </Button>
           <Collapsible id={`record-details-${row.proofId}`} open={open}>
             <BlockStack gap="400">
-              <RecordWords record={row.record} />
-              <InkRecordInspection proofId={row.proofId} />
+              {open && (
+                <InkRecordInspection
+                  proofId={row.proofId}
+                  record={row.record}
+                />
+              )}
             </BlockStack>
           </Collapsible>
         </BlockStack>

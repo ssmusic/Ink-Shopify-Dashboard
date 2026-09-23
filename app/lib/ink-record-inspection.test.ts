@@ -39,6 +39,34 @@ const audit = {
 };
 
 describe("ink on-demand record inspection", () => {
+  it("projects evidence references only for the six record items", () => {
+    const inspection = inspectionFromAudit(
+      {
+        ...audit,
+        verdict: {
+          elements: [
+            {
+              element: "the_open",
+              evidence_event_ids: [
+                "event_first",
+                "event_first",
+                "https://example.com/private-token",
+                { token: "private" },
+              ],
+            },
+            { element: "order", evidence_event_ids: [] },
+            { element: "__proto__", evidence_event_ids: ["event_untrusted"] },
+          ],
+        },
+      },
+      null,
+    )!;
+    expect(inspection.evidenceIds).toEqual({
+      the_open: ["event_first"],
+      order: [],
+    });
+    expect(JSON.stringify(inspection)).not.toContain("private-token");
+  });
   it("projects all events and person opens without leaking arbitrary revealed fields", () => {
     const inspection = inspectionFromAudit(audit, {
       opens: [

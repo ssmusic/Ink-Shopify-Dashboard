@@ -33,6 +33,7 @@ const { default: OrderTimeline, DeliveryWindowBar } = await import("../component
 const { timelineFrom } = await import("../services/ink-timeline.server");
 const { dashboardFrom } = await import("../services/ink-delivery.server");
 const { default: InkRecentOrders, RecordWords } = await import("../components/InkRecentOrders");
+const { RecordEventRow } = await import("../components/InkRecordInspection");
 const { default: OrderExpandedRow } = await import("../components/OrderExpandedRow");
 
 /** Render one route component with its loader data, the way the layout does. */
@@ -104,9 +105,11 @@ const openRow = (id: string) =>
   );
 
 describe('ink screens: facts, working controls and Polaris', () => {
-  it('shows recent orders with neutral distances and no invented shipping price', () => {
+  it('keeps distance inside order details and shows no invented shipping price', () => {
     const t = text(render(InkHome, { stage: 'ready', recentOrders: ROWS }));
-    for (const part of ['Orders', '#1010', 'Made Up', '$58.00', '1 open', '719 m from the delivery address']) expect(t).toContain(part);
+    for (const part of ['Orders', '#1010', 'Made Up', '$58.00', '1 open']) expect(t).toContain(part);
+    expect(t).not.toContain('719 m');
+    expect(text(openRow(ROWS[0].id))).toContain('719 m from the delivery address');
     for (const gone of ['Outside 300', 'flagged', 'Shipping Free', 'Your mark', 'Upload your own', 'PLACEHOLDER']) expect(t).not.toContain(gone);
   });
 
@@ -184,6 +187,12 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(text(html)).not.toMatch(/attach as a file|Did you win/);
   });
 
+  it('does not offer file formats when access is unavailable', () => {
+    const t = text(render(() => <InkRecentOrders orders={[{...ROWS[0],door:{offerLine:null,downloadable:false,pending:false}}]} defaultExpandedId={ROWS[0].id} />, {}));
+    expect(t).toContain('Record access is unavailable');
+    expect(t).not.toMatch(/Export the record|PDF report|Download PDF|Get the record/);
+  });
+
   it('describes an approved charge as waiting for record access, without a second approval action', () => {
     const html = render(() => <InkRecentOrders orders={[{
       ...ROWS[0],
@@ -225,10 +234,29 @@ describe('ink screens: facts, working controls and Polaris', () => {
   it('uses an accessible blue distance diagram and exact measurements without a range verdict', () => {
     const html = renderToString(<AppProvider i18n={translations}><OrderTimeline data={timelineFrom({enrolled_at:'2026-09-01T00:00:00Z'}, {address:{lat:34,lng:-118}, opens:[{at:'2026-09-02T00:00:00Z',outcome:'success',gps_verdict:'flagged',distance_m:719,accuracy_m:35,lat:34.005,lng:-118.004}]}, RECORD)!} addressLabel="1 Test St, Brooklyn, NY" /></AppProvider>);
     const t = text(html);
-    for (const part of ['Order activity','1 Test St','100 m','300 m','Opened 719 m from the delivery address.','Location accuracy 35 m']) expect(t).toContain(part);
+    for (const part of ['Order activity','1 Test St','100 m','300 m','Opened 719 m from the delivery address.','Location accuracy 35 m','34.0050, -118.0040']) expect(t).toContain(part);
     expect(html).toContain('role="img"');
     expect(html).toContain('var(--p-color-text-info)');
-    for (const gone of ['default range','outside the 300','within the 100','THE ORDER','34.005','-118.004','OpenStreetMap']) expect(t).not.toContain(gone);
+    for (const gone of ['default range','outside the 300','within the 100','THE ORDER','OpenStreetMap']) expect(t).not.toContain(gone);
+  });
+
+  it('shows purchased event evidence without another disclosure and never labels supplied signatures verified', () => {
+    const event = { id: 'event_12345678', type: 'TAP_RECORDED', at: '2026-09-20T00:00:00Z', sequence: 1, legacy: false, keyId: 'key_001', payloadHash: 'a'.repeat(64), previousEventId: null, previousHash: null, signature: 'b'.repeat(128), signedBytes: '{}', unverifiable: false, location: {lat:34.005, lng:-118.004} };
+    const html = renderToString(<AppProvider i18n={translations}><RecordEventRow event={event} check={{id:event.id,hash:'matches',link:'first'}} /></AppProvider>);
+    const t = text(html);
+    for (const part of [event.id, event.payloadHash, event.signature, 'key_001', 'Signature supplied, not checked', 'Hash matches', 'Link first', '34.0050, -118.0040']) expect(t).toContain(part);
+    expect(t).not.toContain('Signature verified');
+    expect(html).not.toContain('Polaris-Collapsible');
+  });
+
+  it('puts record downloads before evidence and shows each open only once', () => {
+    const timeline = timelineFrom({enrolled_at:'2026-09-01T00:00:00Z'}, {address:{lat:34,lng:-118}, opens:[{at:'2026-09-02T00:00:00Z',outcome:'success',gps_verdict:'flagged',distance_m:719,accuracy_m:35,lat:34.005,lng:-118.004}]}, RECORD);
+    const t = text(render(() => <InkRecentOrders orders={[{...ROWS[0],timeline,door:{offerLine:null,downloadable:true}}]} defaultExpandedId={ROWS[0].id} />, {}));
+    expect(t.indexOf('Download PDF')).toBeLessThan(t.indexOf('What this record contains'));
+    expect(t.indexOf('What this record contains')).toBeLessThan(t.indexOf('Checked in this browser'));
+    expect(t.match(/Every open/g)?.length).toBe(1);
+    expect(t).not.toContain('Inspect full record');
+    expect(t).toContain('No email is sent');
   });
 
   it('never guesses arrival against a promised window', () => {

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Badge,
   BlockStack,
   Box,
   Button,
@@ -12,17 +11,17 @@ import {
   TextField,
 } from "@shopify/polaris";
 import InkRecordDoor, { type InkDoor } from "./InkRecordDoor";
+import { RecordWords } from "./InkRecordEvidence";
 import InkRecordInspection from "./InkRecordInspection";
 import type { InkOrderDetail } from "../services/ink-links.server";
 import type { DisputePacketText } from "../services/ink-packet.server";
-import OrderTimeline, { type OrderTimelineData } from "./OrderTimeline";
 import {
-  LEVEL_WORDS,
-  elementLines,
-  locationWordOf,
-  opensOf,
-  type RecordRead,
-} from "../lib/record-words";
+  LifecycleRail,
+  DeliveryWindowBar,
+  OpensAgainstAddress,
+  type OrderTimelineData,
+} from "./OrderTimeline";
+import { opensOf, type RecordRead } from "../lib/record-words";
 
 export type InkRecentOrderRow = {
   id: string;
@@ -43,49 +42,7 @@ const money = (amount: string, currency: string) => {
     return "Unavailable";
   }
 };
-export function RecordWords({ record }: { record: RecordRead | null }) {
-  if (!record)
-    return (
-      <Text as="p" tone="subdued">
-        Record details are unavailable. Refresh to try again.
-      </Text>
-    );
-  return (
-    <BlockStack gap="400">
-      <Text as="h3" variant="headingMd">
-        Record details
-      </Text>
-      <Text as="p" tone="subdued">
-        Evidence levels reported by the record.
-      </Text>
-      {record.elements.map((el) => (
-        <BlockStack key={el.element} gap="200">
-          <Divider />
-          <InlineStack align="space-between" gap="200">
-            <Text as="h4" variant="headingSm">
-              {el.label}
-            </Text>
-            <Badge tone="info">{LEVEL_WORDS[el.status] || "Unknown"}</Badge>
-          </InlineStack>
-          {elementLines(el).map((line, i) => (
-            <InlineGrid
-              key={i}
-              columns={{ xs: 1, sm: ["oneThird", "twoThirds"] }}
-              gap="100"
-            >
-              <Text as="p" tone="subdued">
-                {line.label}
-              </Text>
-              <Text as="p" breakWord>
-                {line.words}
-              </Text>
-            </InlineGrid>
-          ))}
-        </BlockStack>
-      ))}
-    </BlockStack>
-  );
-}
+export { RecordWords } from "./InkRecordEvidence";
 
 /** Compatibility renderer for stored packet text. No invented file instruction. */
 export function DisputePacketView({ packet }: { packet: DisputePacketText }) {
@@ -111,8 +68,9 @@ export function DisputePacketView({ packet }: { packet: DisputePacketText }) {
   );
 }
 function Panel({ row }: { row: InkRecentOrderRow }) {
-  const [advanced, setAdvanced] = useState(false);
+  const [advanced, setAdvanced] = useState(true);
   const d = row.detail;
+  const openCount = opensOf(row.record);
   const address = d?.customerAddress;
   const addressLabel = address
     ? [
@@ -127,7 +85,7 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
         .join(", ")
     : "Address unavailable";
   return (
-    <Box padding="400" background="bg-surface-secondary">
+    <Box padding="400">
       <BlockStack gap="500">
         {d ? (
           <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
@@ -178,7 +136,14 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
           </Text>
         )}
         {row.timeline ? (
-          <OrderTimeline data={row.timeline} addressLabel={addressLabel} />
+          <Box padding="400" background="bg" borderRadius="200">
+            <BlockStack gap="300">
+              <Text as="h3" variant="headingMd">
+                Order activity
+              </Text>
+              <LifecycleRail steps={row.timeline.steps} />
+            </BlockStack>
+          </Box>
         ) : row.proofId ? (
           <Text as="p" tone="subdued">
             Order activity is unavailable. Refresh to try again.
@@ -191,23 +156,63 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
         {row.proofId && (
           <>
             <Divider />
-            <Button
-              variant="plain"
-              textAlign="left"
-              disclosure={advanced ? "up" : "down"}
-              ariaExpanded={advanced}
-              ariaControls={`advanced-${d?.id || row.id}`}
-              onClick={() => setAdvanced((v) => !v)}
-            >
-              Advanced
-            </Button>
+            <Box background="bg" padding="300" borderRadius="200">
+              <InlineStack align="space-between" blockAlign="center">
+                <Button
+                  variant="plain"
+                  textAlign="left"
+                  disclosure={advanced ? "up" : "down"}
+                  ariaExpanded={advanced}
+                  ariaControls={`advanced-${d?.id || row.id}`}
+                  onClick={() => setAdvanced((v) => !v)}
+                >
+                  Advanced
+                </Button>
+                <Text as="span" tone="subdued">
+                  {openCount == null
+                    ? "Opens unavailable"
+                    : `${openCount} ${openCount === 1 ? "open" : "opens"}`}
+                </Text>
+              </InlineStack>
+            </Box>
             <Collapsible id={`advanced-${d?.id || row.id}`} open={advanced}>
-              <BlockStack gap="400">
-                <RecordWords record={row.record} />
-                {row.door.downloadable && row.proofId && <InkRecordInspection proofId={row.proofId} />}
-              </BlockStack>
+              {advanced && (
+                <BlockStack gap="400">
+                  <InkRecordDoor proofId={row.proofId} door={row.door} />
+                  <Divider />
+                  {row.door.downloadable ? (
+                    <InkRecordInspection
+                      proofId={row.proofId}
+                      record={row.record}
+                      timeline={row.timeline}
+                      addressLabel={addressLabel}
+                    />
+                  ) : (
+                    <>
+                      <RecordWords record={row.record} />
+                      {row.timeline && (
+                        <>
+                          <Divider />
+                          <OpensAgainstAddress
+                            address={row.timeline.address}
+                            opens={row.timeline.opens}
+                            available={row.timeline.opensAvailable}
+                            capped={row.timeline.opensCapped}
+                            addressLabel={addressLabel}
+                          />
+                        </>
+                      )}
+                    </>
+                  )}
+                  {row.timeline?.window && (
+                    <>
+                      <Divider />
+                      <DeliveryWindowBar w={row.timeline.window} />
+                    </>
+                  )}
+                </BlockStack>
+              )}
             </Collapsible>
-            <InkRecordDoor proofId={row.proofId} door={row.door} />
           </>
         )}
       </BlockStack>
@@ -277,11 +282,6 @@ export default function InkRecentOrders({
                     </Text>
                   </Box>
                 </InlineStack>
-                {locationWordOf(row.record) && (
-                  <Text as="p" tone="subdued">
-                    {locationWordOf(row.record)}
-                  </Text>
-                )}
               </BlockStack>
             </Box>
             <Collapsible id={`order-${row.id}`} open={open}>

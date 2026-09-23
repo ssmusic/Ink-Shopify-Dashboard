@@ -31,6 +31,7 @@ export type InkInspection = {
     payloadHash: string | null;
   } | null;
   events: InspectEvent[];
+  evidenceIds?: Record<string, string[]>;
   opens: InspectOpen[] | null;
   opensCapped: boolean;
 };
@@ -197,8 +198,36 @@ export function inspectionFromAudit(
         ];
       })
     : opensFromAudit(a, rawEvents);
+  const verdict = obj(a.verdict);
+  const evidenceIds = Object.fromEntries(
+    (Array.isArray(verdict?.elements) ? verdict.elements : []).flatMap(
+      (raw) => {
+        const row = obj(raw);
+        if (
+          !row ||
+          ![
+            "order",
+            "buyer",
+            "delivery_date",
+            "delivery_place",
+            "carrier_scan",
+            "the_open",
+          ].includes(String(row.element))
+        )
+          return [];
+        const ids = Array.isArray(row.evidence_event_ids)
+          ? row.evidence_event_ids.filter(
+              (id): id is string =>
+                typeof id === "string" && /^event_[a-zA-Z0-9_-]+$/.test(id),
+            )
+          : [];
+        return [[String(row.element), [...new Set(ids)]]];
+      },
+    ),
+  );
   return {
     proofId: str(a.proof_id)!,
+    evidenceIds,
     chainHead:
       head && Number.isSafeInteger(head.seq)
         ? {

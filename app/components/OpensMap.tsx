@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { BlockStack, Box, Select, Text } from "@shopify/polaris";
+import { BlockStack, Box, Text } from "@shopify/polaris";
 import { kmOrM } from "../lib/order-timeline";
 export type MapPoint = { lat: number; lng: number };
 export type MapOpen = MapPoint & {
@@ -17,8 +16,7 @@ export default function OpensMap({
   address: MapPoint;
   opens: MapOpen[];
 }) {
-  const [selected, setSelected] = useState("0");
-  const point = opens[Number(selected)] || opens[0];
+  const point = opens[0];
   if (!point) return null;
   const east =
     (point.lng - address.lng) * Math.cos((address.lat * Math.PI) / 180);
@@ -26,29 +24,19 @@ export default function OpensMap({
   const norm = Math.hypot(east, north) || 1;
   const distance = point.distance_m;
   const outsideView = distance != null && distance > 300;
-  const radius = distance == null ? 0 : Math.min(72, distance * 0.16);
+  const radius = distance == null ? 0 : outsideView ? 72 : distance * 0.16;
   const x = 160 + (east / norm) * radius;
   const y = 80 - (north / norm) * radius;
   return (
     <BlockStack gap="300">
-      {opens.length > 1 && (
-        <Select
-          label="Open on the diagram"
-          options={opens.map((p, i) => ({ label: p.label, value: String(i) }))}
-          value={selected}
-          onChange={setSelected}
-        />
-      )}
       <Box
         background="bg-surface"
-        borderColor="border"
-        borderWidth="025"
         borderRadius="200"
         padding="200"
-        maxWidth="360px"
+        maxWidth="300px"
       >
         <svg
-          viewBox="0 0 320 160"
+          viewBox="0 0 320 190"
           width="100%"
           role="img"
           aria-label={`Delivery address and ${point.label}. ${distance == null ? "Distance unavailable." : `${kmOrM(distance)} apart.`}`}
@@ -100,18 +88,21 @@ export default function OpensMap({
           />
           <text
             x="160"
-            y="151"
+            y="170"
             textAnchor="middle"
             fontSize="12"
             fill="var(--p-color-text)"
           >
-            Delivery address at centre
+            Delivery address
           </text>
         </svg>
       </Box>
+      <Text as="p" tone="subdued" variant="bodySm">
+        100 m and 300 m distance guides.
+      </Text>
       {outsideView && (
         <Text as="p" tone="subdued" variant="bodySm">
-          Marker shows direction beyond 300 m.
+          Direction only beyond the 300 m guide.
         </Text>
       )}
     </BlockStack>

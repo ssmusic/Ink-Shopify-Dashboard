@@ -81,75 +81,88 @@ export default function InkRecordDoor({
       { method: "post", action: "/app/record" },
     );
   };
+  if (!door.offerLine && !door.downloadable && !door.pending) {
+    return (
+      <Text as="p" tone="subdued">
+        Record access is unavailable. Refresh to check again.
+      </Text>
+    );
+  }
   return (
     <BlockStack gap="200">
+      <InlineStack align="space-between" gap="300" blockAlign="center">
+        <BlockStack gap="100">
+          <Text as="h3" variant="headingSm">
+            {door.downloadable ? "Export the record" : "The complete record"}
+          </Text>
+          <Text as="p" variant="bodySm" tone="subdued">
+            {door.offerLine
+              ? "Event history, hashes and signatures. PDF, CSV and signed JSON."
+              : "PDF report, CSV data and signed JSON file."}
+          </Text>
+        </BlockStack>
+        <InlineStack gap="300">
+          {door.downloadable && (
+            <>
+              <Button
+                loading={fetcher.state !== "idle"}
+                onClick={() => submit("pdf")}
+              >
+                Download PDF
+              </Button>
+              <Button
+                loading={fetcher.state !== "idle"}
+                onClick={() => submit("csv")}
+              >
+                Download CSV
+              </Button>
+              <Button
+                loading={fetcher.state !== "idle"}
+                onClick={() => submit("download")}
+              >
+                Download record (JSON)
+              </Button>
+            </>
+          )}
+          {door.offerLine && (
+            <Button
+              variant="primary"
+              loading={fetcher.state !== "idle"}
+              onClick={() => submit("buy")}
+            >
+              {door.offerLine}
+            </Button>
+          )}
+          {door.pending && door.resumeUrl && (
+            <Button onClick={() => window.open(door.resumeUrl!, "_top")}>
+              Continue Shopify approval
+            </Button>
+          )}
+          {door.pending && (
+            <Button
+              loading={revalidator.state !== "idle"}
+              onClick={() => revalidator.revalidate()}
+            >
+              {door.paidPendingRecord
+                ? "Check record access"
+                : "Check payment status"}
+            </Button>
+          )}
+        </InlineStack>
+      </InlineStack>
       {door.offerLine && (
-        <Text as="p" variant="bodySm">
-          The record adds the event history behind this order: timestamps, event
-          IDs, hashes, signatures, and any location shared with an open. Pay
-          once through Shopify to download a PDF, CSV, and the signed JSON file
-          here or later in Records. The files can include customer details. Ink
-          does not email them.
+        <Text as="p" variant="bodySm" tone="subdued">
+          One-time Shopify charge. Download here or again in Records. No email
+          is sent.
         </Text>
       )}
-      <InlineStack gap="300">
-        {door.downloadable && (
-          <>
-            <Button
-              loading={fetcher.state !== "idle"}
-              onClick={() => submit("pdf")}
-            >
-              Download PDF
-            </Button>
-            <Button
-              loading={fetcher.state !== "idle"}
-              onClick={() => submit("csv")}
-            >
-              Download CSV
-            </Button>
-            <Button
-              loading={fetcher.state !== "idle"}
-              onClick={() => submit("download")}
-            >
-              Download record (JSON)
-            </Button>
-          </>
-        )}
-        {door.offerLine && (
-          <Button
-            variant="primary"
-            loading={fetcher.state !== "idle"}
-            onClick={() => submit("buy")}
-          >
-            {door.offerLine}
-          </Button>
-        )}
-        {door.pending && door.resumeUrl && (
-          <Button onClick={() => window.open(door.resumeUrl!, "_top")}>
-            Continue Shopify approval
-          </Button>
-        )}
-        {door.pending && (
-          <Button
-            loading={revalidator.state !== "idle"}
-            onClick={() => revalidator.revalidate()}
-          >
-            {door.paidPendingRecord
-              ? "Check record access"
-              : "Check payment status"}
-          </Button>
-        )}
-      </InlineStack>
       {door.downloadable && (
         <Text as="p" tone="subdued" variant="bodySm">
-          The PDF is a readable copy. The CSV organizes the evidence and event
-          details. The JSON file contains the signed manifest, evidence packet,
-          complete event chain, receipt, and order summary. The files can
-          include customer information.{" "}
+          Files can include customer details.{" "}
           {door.inHistory
             ? "You can download them again from Records."
             : "You can download them again from this order while it remains in the recent-order list."}{" "}
-          Ink does not email them.
+          No email is sent.
         </Text>
       )}
       {door.pending && (
