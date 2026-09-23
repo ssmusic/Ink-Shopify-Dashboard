@@ -1,6 +1,22 @@
 # Ink merchant app: redesign handoff
 
-**Status: the current design is not approved.** The local preview at `http://127.0.0.1:4173/app/ink` and PR [#133](https://github.com/ssmusic/Ink-Shopify-Dashboard/pull/133) are implementation work, not the design to ship. The preview uses sample data. Do not use it for Shopify listing screenshots or treat it as proof of a live install.
+**Status: rough, unfinished work in progress. Substantial design, implementation and validation work remains. Sam explicitly says we are not finished with it.** This handoff transfers ongoing work to Claude; it is not a completion report, design approval or release recommendation. Individual requested fixes and passing tests do not make the overall app finished.
+
+The local preview at `http://127.0.0.1:4173/app/ink` and PR [#133](https://github.com/ssmusic/Ink-Shopify-Dashboard/pull/133) show the current iteration. The preview uses sample data and stubbed actions. Do not use it for Shopify listing screenshots or treat it as proof of a live install, successful payment or working production downloads.
+
+## Where to resume
+
+Implementation baseline: `e8a9a06` on `codex/ink-audit`, pushed to PR #133. This handoff update changes documentation only. At this check, the PR is open and conflicts with main. Reconcile against the latest main and Claude's existing work before integrating; the specific conflict resolution has not been reviewed here. No merge or deployment is authorized by this handoff.
+
+Continue the existing app and the working Ritualist implementations. Do not start over. The next pass still needs to:
+
+- Refine the overall merchant experience: hierarchy and density in expanded orders, readable evidence and opens beside the map, desktop/phone behavior, and a useful Dashboard with only supported metrics. Current components are an iteration, not a finished design system or approved screen set.
+- Finish the record experience using the existing Ritualist work: clear free inspection versus paid downloads, independent signature verification, faithful PDF output including non-Latin text, and the required map/QR/export detail. Keep distance as neutral supporting data. Make the value clear through evidence, not stronger claims.
+- Verify the whole merchant journey in an installed Shopify store: connection/logo, real orders and search, approval/decline/cancel, file saving, repeat downloads in Records, old purchases and reinstall behavior. Fixture tests do not establish those results.
+- Reconcile the audit's privacy, retention, protected-data approval and dependency findings with the latest backend and deployed revisions. Findings tied to an older checkout are evidence to recheck, not instructions to redo already completed work. The customer access-request queue alone is not fulfillment.
+- Review the revised screens with Sam. Acceptance of a particular adjustment, such as Help's white cards, is not approval of the whole app.
+
+The disposable preview harness is in `/tmp/ink-merchant-preview`, outside the repository. Its sample logo and fixtures are not production assets and are not included in the PR. Real app components are imported from the working repository. Preserve this distinction when continuing or rebuilding the preview.
 
 ## Honesty pass for Claude
 
@@ -12,15 +28,17 @@ Sam asked for an honesty check before handoff, then emphasized that the Ritualis
 - Tightened claims: verified **by ink**, no inference that an asserted event is unsigned, location-sharing rate no longer called first-open coverage, separate capped-open notice, time zones on record timestamps, CSV capped-history and signed-byte availability labels. Records now retains its own map address from the merchant opens door.
 - Still unfinished in this app: independent signature verification; PDF fidelity for non-Latin characters (renderer substitutes `?`); Ritualist map/QR export parity; real Shopify purchase/download/reinstall and privacy fulfillment walks. No deployment or Shopify acceptance is claimed.
 
-All required checks passed: typecheck, build, 48 test files / 462 tests. The live preview is synthetic. The existing PR has conflicts against main, including concurrent map work; leave reconciliation to Claude against the frozen final head. Do not use the older checkout findings as an instruction to redo fixes already present.
+Accuracy check for this handoff update: the local backend has since advanced to `db62e37` (#131). The full-view/purchase split, merchant opens/delivery routes, retrieve tenant check and key projection were rechecked there and remain present. The broader privacy findings were reviewed at `8f21214`; this update is not a fresh audit of every backend change or deployed service. File line numbers in that audit refer to the reviewed revision and can shift.
+
+At the implementation baseline, typecheck, build and 48 test files / 462 tests passed. These are local code checks, not an end-to-end product sign-off. Do not use the older checkout findings as an instruction to redo fixes already present.
 
 ## Latest addition: order search, sorting and compact phone rows
 
-Orders now has search by order number, name or email and sorting by date, order number or total in both directions. Production sends these options to Shopify over the available 60-day order window, preserving them while paging. The preview filters synthetic fixtures only. Search/sort changes reset pagination; empty matches are distinct from failed reads.
+Orders now has search by order number, name or email and sorting by date, order number or total in both directions. The app code sends these options to Shopify over the available 60-day order window, preserving them while paging. The preview filters synthetic fixtures only. Search/sort changes reset pagination; empty matches are distinct from failed reads.
 
 Phone headers use three compact columns: black order number and date; prominent recipient and email; total and opens. Back navigation belongs beside the page title and leads to Dashboard. Sam explicitly rejected Back to orders inside the accordion; those controls were removed. The order-number disclosure opens and closes details.
 
-Typecheck, build and 446 tests across 48 files passed. Layout was checked at measured 1280 and 391 px without page overflow; phone sample headers are about 78 px tall. Search, sorting, clear, empty results, browser back and page navigation were exercised using sample data. Live Shopify search remains unverified. No deployment.
+Earlier validation of this addition: typecheck, build and 446 tests across 48 files passed. Layout was checked at measured 1280 and 391 px without page overflow; phone sample headers are about 78 px tall. Search, sorting, clear, empty results, browser back and page navigation were exercised using sample data. These measurements apply to that fixture iteration and are not a design approval. Live Shopify search remains unverified. No deployment.
 
 ## Previous addition: Help and Shopify connection
 
@@ -28,7 +46,7 @@ Settings now shows the authenticated store name/domain, its Shopify brand logo (
 
 Help is the final navigation tab. Sam rejected the topic grid; Help now uses one reading column with a separate white card for each section and small grey gaps between cards. It explains orders, one-time Shopify purchases, PDF/CSV/JSON downloads, no emailed files, repeat downloads in Records, missing data and support. The view requires Shopify authentication but no ink backend read, so it remains available during provisioning or an ink outage. Account login stays in Shopify.
 
-Typecheck, build and 435 tests across 47 files passed. Settings/Help fit at measured 1280 and 391 px. Live installed-store logo and connection verification remain part of the release checks. No deployment.
+Earlier validation of this addition: typecheck, build and 435 tests across 47 files passed. Settings/Help fit at measured 1280 and 391 px. Live installed-store logo and connection verification remain part of the release checks. No deployment.
 
 ## The job
 

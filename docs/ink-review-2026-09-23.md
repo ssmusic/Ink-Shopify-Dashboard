@@ -1,5 +1,7 @@
 # Ink review, September 23, 2026
 
+**Work in progress: rough and unfinished.** Sam explicitly says substantial work remains. The fixes below are individual code changes, not approval of the overall design or completion of the merchant experience. Continue from the existing app and Ritualist implementations. [The handoff](https://github.com/ssmusic/Ink-Shopify-Dashboard/blob/codex/ink-audit/INK-MERCHANT-REDESIGN-HANDOFF.md) separates the current implementation, fixture checks and unfinished work. This PR is not a release recommendation.
+
 Ink could show invented shipping and delivery claims, drop failed webhooks, expose sensitive data through logs, and accept a returning charge without a saved order binding. This change fixes those paths under `APP_FLAVOR=ink` and rebuilds Orders, Dashboard, Records, Settings and Help with Polaris, blue highlights and neutral location words.
 
 **Submission verdict: not ready yet.** The code fixes do not resolve the backend privacy holes, complete customer access requests, obtain protected customer data approval, update the public policy, remediate shared dependency advisories, or prove a fresh-store install and Shopify billing walk. Those remain release blockers. Nothing was deployed or merged.
