@@ -4,7 +4,7 @@ import {
   wrapWords,
   type PdfLine,
 } from "./pdf-lite.server";
-import { elementLines, when, type RecordRead } from "../lib/record-words";
+import { elementLines, LEVEL_WORDS, when, type RecordRead } from "../lib/record-words";
 import type { InkInspection } from "../lib/ink-record-inspection";
 
 type Event = {
@@ -126,7 +126,7 @@ export function buildInkRecordPdf(
   push("What the record contains", { font: "sans-bold", size: 12, gap: 17 });
   record.elements.forEach((element) => {
     push(
-      `${element.label}: ${element.status === "verified" ? "Verified event" : element.status === "attested" ? "Recorded and signed" : element.status === "asserted" ? "In the record, unsigned" : "Missing"}`,
+      `${element.label}: ${LEVEL_WORDS[element.status] || "Unknown"}`,
       { font: "sans-bold", size: 10, gap: 9 },
     );
     for (const line of elementLines(element))

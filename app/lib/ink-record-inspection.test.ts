@@ -39,6 +39,12 @@ const audit = {
 };
 
 describe("ink on-demand record inspection", () => {
+  it("preserves the merchant address for inspection from Records without an Orders timeline", () => {
+    const inspection = inspectionFromAudit({ ...audit, summary: { ship_to: { line1: "1 Test St", city: "Brooklyn", postal_code: "11201", phone: "do not render" } } }, { proof_id: proof, address: { lat: 40.7, lng: -73.9 }, opens: [], capped: false });
+    expect(inspection).toMatchObject({ address: { lat: 40.7, lng: -73.9 }, addressLabel: "1 Test St, Brooklyn, 11201" });
+    expect(JSON.stringify(inspection)).not.toContain("do not render");
+    expect(inspectionFromAudit(audit, { proof_id: "wrong", address: { lat: 40.7, lng: -73.9 }, opens: [] })?.address).toBeNull();
+  });
   it("projects evidence references only for the six record items", () => {
     const inspection = inspectionFromAudit(
       {

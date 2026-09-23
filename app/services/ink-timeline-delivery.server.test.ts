@@ -271,6 +271,9 @@ describe("the delivery dashboard", () => {
     expect(Object.keys(d ?? {})).not.toContain("rows");
   });
 
+  it("keeps the independently capped tap sample visible to the dashboard", () => {
+    expect(dashboardFrom({ ...BODY, capped: false, taps_capped: true })).toMatchObject({ capped: false, tapsCapped: true });
+  });
   it("is nothing before the door is deployed, or without a key", async () => {
     const f = vi.fn(
       async () => new Response("Not found", { status: 404 }),

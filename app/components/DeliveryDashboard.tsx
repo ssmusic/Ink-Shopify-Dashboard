@@ -26,7 +26,7 @@
 // Three states, each saying only what is true:
 //   · the numbers could not be read (no key yet, a refused or slow read) —
 //     said as that, never as an empty store;
-//   · ink holds no order yet — said as that, never as a row of zeros;
+//   · ink holds no order with a record yet — said as that, never as a row of zeros;
 //   · otherwise the numbers, and — when the delivery door did not answer —
 //     a line saying so where the funnel would be.
 //
@@ -66,8 +66,8 @@ export default function DeliveryDashboard({ kpis, delivery }: { kpis: Kpis | nul
   if (kpis.recorded === 0) {
     return (
       <Card>
-        {/* PLACEHOLDER copy — the Orders pill's own words for none */}
-        <EmptyState heading="No orders yet" image="" />
+        {/* PLACEHOLDER copy — ink counts orders it holds a record for, not the store's every order. */}
+        <EmptyState heading="No orders with records are available yet." image="" />
       </Card>
     );
   }

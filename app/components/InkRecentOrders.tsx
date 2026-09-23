@@ -244,6 +244,9 @@ function Panel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | nul
                   <InkRecordDoor proofId={row.proofId} door={row.door} />
                   {row.packet ? <DisputePacketView packet={row.packet} /> : null}
                   <Divider />
+                  {/* The signed events themselves are the hand-over's: shown once it is
+                      the merchant's (Sam, 2026-09-23: "they need to see all the info but
+                      not get the signed hash"). */}
                   {row.door.downloadable ? (
                     <InkRecordInspection
                       proofId={row.proofId}

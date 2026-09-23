@@ -8,13 +8,15 @@ Sam approved automatic preservation of the original destination and removal of t
 - The ink tracking transport preserves the external URL exactly as supplied, including its query and fragment. An ink URL echoed by Shopify is omitted from the backend update, so it cannot replace an existing original URL. Carrier, tracking number and shipment status still update. Invalid schemes and URLs carrying credentials are also omitted.
 - The Ritualist transport body is unchanged when `APP_FLAVOR` is unset. No backend or redirect files were edited. No flows, notification templates or Klaviyo settings were changed.
 
-This protects the app's writes. **It does not yet change the buyer's final redirect.** Settings makes no claim that automatic forwarding is active.
+This protects the app's writes. It does not change the existing buyer flash. **Automatic forwarding already exists; do not build a second redirect.**
 
-## Required backend and redirect changes
+## Existing flash and the remaining distinction
 
-The supplied backend's `functions/utils/buyerDoor.js:77` permits only `order_status` and `carrier`; line 162 defaults to `order_status`. `functions/routes/api/proofs.js:542` currently accepts any truthy tracking URL. The backend knows one tracking URL per proof, while Shopify can provide several tracking numbers and URLs per fulfillment. The buyer redirect implementation must be located and reviewed before changing the routing contract; the supplied Ritualist checkout does not establish its current production implementation.
+Claude correctly pointed to the existing flash. Current Ritualist main contains `src/lib/flash-destination.ts`; `src/lib/white-flash/white-flash.ts` calls it and uses `window.location.replace`. Both flash implementations use the same destination rule. It prefers the Shopify order-status page, avoids returning straight to that origin, then uses a generated carrier URL or the existing `?page=1` fallback. The older local Ritualist checkout did not contain this implementation; its absence there was not evidence that forwarding was missing.
 
-The intended behavior is:
+The resolver does not read stored `tracking_url`. Keeping an exact original custom tracking URL, including its parameters, is distinct from having an automatic forward. Claude should reconcile that detail with the accepted existing flow; if an extension is needed, extend the existing resolver, not a second redirect. The backend currently stores one tracking URL per proof. None of this authorizes changes to the read-only references or deployment.
+
+The following are acceptance cases for exact original-URL preservation, not a claim that the current flash is missing:
 
 1. For the ink flash flow, save the original destination before installing an ink tracking link. Use the merchant-authenticated proof ownership check. Keep the association with the fulfillment and tracking number; do not collapse distinct parcel destinations into the first URL.
 2. Return an ink link bound to that saved destination. The buyer redirect resolves that binding from server-held data; it must not accept an arbitrary destination query parameter. For example, a merchant's original `https://tracking.example/parcel/ABC?source=shipping` remains the destination after the ink visit.
@@ -37,4 +39,4 @@ The intended behavior is:
 | Ritualist or dual-installed merchant | Existing Ritualist behavior is unchanged. |
 | Shopify or Klaviyo message | No extra send; verify the actual message link and its final destination in an installed test store. |
 
-This backend/redirect work is outside the original read-only scope. It must be implemented and verified before automatic destination preservation can be called complete or released.
+Keep the existing successful flash flow. These exact-URL cases remain for Claude to reconcile; do not block handoff on permission to build a duplicate forward. Source review does not prove which revision is deployed.

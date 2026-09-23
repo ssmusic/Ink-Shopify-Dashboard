@@ -318,6 +318,16 @@ describe("the record's door and the hand-over", () => {
     expect(t).not.toContain("Payment is pending");
   });
 
+  it("shows the whole record in words before purchase — never its signed detail — and offers the hand-over", () => {
+    const t = text(render(() => <InkRecentOrders orders={[{
+      ...ROWS[0], record: { ...RECORD, locked: false, whole: true, forSale: { price_cents: 2900, currency: "USD" } },
+      door: { offerLine: "Get the record ($29 USD)", downloadable: false },
+    }]} defaultExpandedId={ROWS[0].id} />, {}));
+    for (const part of ["The record", "The open", "Get the record", "The signed copy to hand over."]) expect(t).toContain(part);
+    // Sam, 2026-09-23: "they need to see all the info but not get the signed hash".
+    expect(t).not.toMatch(/Checked in this browser|Event history|Download PDF|Download CSV|Download record/);
+  });
+
   it("says the record's words as the record page does — no verdict word, no browser-verification claim", () => {
     const t = text(renderToString(<AppProvider i18n={translations}><RecordWords record={RECORD as never} /></AppProvider>));
     for (const part of ["The record", "Recorded and signed", "Device-verified", "First open signed", "719 m from the delivery address"]) expect(t).toContain(part);
@@ -403,9 +413,9 @@ describe("the Dashboard: three numbers, the orders' funnel, and the rates (Sam, 
     expect(t).not.toMatch(/No orders|Nothing shipped/);
   });
 
-  it("says there are no orders yet when ink holds none — never a row of zeros", () => {
+  it("says there are no orders with records yet when ink holds none — never a row of zeros, never a claim about the store's orders", () => {
     const t = text(render(InkHome, { section: "insights", stage: "ready", delivery: null, kpis: { recorded: 0, opened: 0, openRate: null, locationShared: 0, capped: false } }));
-    expect(t).toContain("No orders yet");
+    expect(t).toContain("No orders with records are available yet.");
     expect(t).not.toMatch(/NaN|Infinity|0%/);
   });
 

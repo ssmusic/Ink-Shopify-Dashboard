@@ -138,7 +138,7 @@ export default function InkDashboardRates({
               rate={percent(kpis.locationShared, kpis.recorded)}
               detail={
                 kpis.recorded > 0
-                  ? `${kpis.locationShared.toLocaleString("en-US")} of ${kpis.recorded.toLocaleString("en-US")} orders have a device location from the first open.`
+                  ? `${kpis.locationShared.toLocaleString("en-US")} of ${kpis.recorded.toLocaleString("en-US")} orders have a recorded device location.`
                   : "No recorded orders yet."
               }
             />

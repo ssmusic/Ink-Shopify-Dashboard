@@ -30,10 +30,11 @@ export type DeliveryDashboardData = {
   waited: WhileTheyWaited;
   carrierNamed: number;
   capped: boolean;
+  tapsCapped?: boolean;
 };
 
 export function dashboardFrom(body: unknown): DeliveryDashboardData | null {
-  const b = body as { rows?: unknown; taps?: unknown; capped?: unknown } | null;
+  const b = body as { rows?: unknown; taps?: unknown; capped?: unknown; taps_capped?: unknown } | null;
   if (!b || !Array.isArray(b.rows)) return null;
   const rows = b.rows as DeliveryRow[];
   const taps = (Array.isArray(b.taps) ? b.taps : []) as TapRow[];
@@ -45,6 +46,7 @@ export function dashboardFrom(body: unknown): DeliveryDashboardData | null {
     waited: whileTheyWaited(taps),
     carrierNamed: carrierNamed(rows),
     capped: b.capped === true,
+    tapsCapped: b.taps_capped === true,
   };
 }
 

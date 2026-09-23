@@ -170,8 +170,8 @@ export default function InkRecordHistory({
               No purchased records yet
             </Text>
             <Text as="p">
-              Review an order before choosing whether to buy its complete
-              record.
+              Review an order before choosing whether to buy its record
+              downloads.
             </Text>
             <InlineStack>
               <Button url="/app/ink">View orders</Button>

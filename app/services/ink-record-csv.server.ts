@@ -71,6 +71,8 @@ export function buildInkRecordCsv(
       );
       lines.push(row("Open history", label, "Location", point(open.location)));
     });
+  if (inspection.opensCapped)
+    lines.push(row("Open history", "", "Availability", "Limited by the merchant service; this is not the complete open history"));
   for (const event of inspection.events) {
     const name = event.id;
     for (const [field, value] of [
@@ -84,7 +86,8 @@ export function buildInkRecordCsv(
       ["Previous hash", event.previousHash],
       ["Signature supplied by ink", event.signature],
       ["Location", point(event.location)],
-      ["Stored bytes reproducible", !event.unverifiable],
+      ["Signed bytes supplied", event.signedBytes != null],
+      ["Stored bytes reported unverifiable by ink", event.unverifiable],
     ] as [string, unknown][])
       lines.push(row("Event", name, field, value));
   }

@@ -94,10 +94,17 @@ export type RecordRead = {
   forSale?: { price_cents: number; currency: string } | null;
 };
 
+/** The hand-over is the merchant's — bought, or free (lib/record-handover.ts).
+ *  Only a whole read (the merchant door) can say so: its price is gone once
+ *  bought, and absent when free. The public words of a priced record never do. */
+export function recordDownloadsAvailable(record: RecordRead | null | undefined): boolean {
+  return record?.whole === true && !record.forSale;
+}
+
 export const LEVEL_WORDS: Record<string, string> = {
   verified: "Device-verified",
   attested: "Recorded and signed",
-  asserted: "In the record, unsigned",
+  asserted: "Not verified by ink",
   missing: "Missing",
 };
 
@@ -140,7 +147,14 @@ export function when(iso: unknown): string {
   if (typeof iso !== "string" || !iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
 }
 
 // One measurement per line: a distance printed always comes from one signed

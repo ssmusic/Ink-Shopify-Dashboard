@@ -238,11 +238,13 @@ export async function readRecord(
       merchantRead(apiKey, `proofs/${encodeURIComponent(proofId)}/audit`, fetchImpl),
       keys ?? readJwks(fetchImpl),
     ]);
-    const read = body ? recordFromBody(body, jwks) : null;
+    // Only this proof's merchant audit is this order's record.
+    const own = body && (body as { proof_id?: unknown }).proof_id === proofId && (body as { audience?: unknown }).audience === "merchant";
+    const read = own ? recordFromBody(body, jwks) : null;
     if (read) return read;
   }
   const words = await readJson(verifyUrl(proofId), fetchImpl);
-  return words ? recordFromBody(words) : null;
+  return words && (words as { proof_id?: unknown }).proof_id === proofId ? recordFromBody(words) : null;
 }
 
 /** Every listed order's record, read side by side — the published key once. */

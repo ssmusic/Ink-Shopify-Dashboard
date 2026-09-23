@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Card,
-  InlineGrid,
   InlineStack,
   Link,
   Text,
@@ -17,23 +16,21 @@ function Topic({
   children: React.ReactNode;
 }) {
   return (
-    <Card padding="0">
-      <Box background="bg-surface-secondary" padding="400">
+    <Card padding={{ xs: "400", sm: "500" }}>
+      <BlockStack gap="300">
         <Text as="h2" variant="headingMd">
           {title}
         </Text>
-      </Box>
-      <Box padding="400">
-        <BlockStack gap="300">{children}</BlockStack>
-      </Box>
+        {children}
+      </BlockStack>
     </Card>
   );
 }
 
 export default function InkHelp() {
   return (
-    <BlockStack gap="400">
-      <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+    <Box maxWidth="800px" width="100%">
+      <BlockStack gap="400">
         <Topic title="Review an order">
           <Text as="p">
             Open an order to see its recipient, delivery updates and tracking
@@ -63,8 +60,8 @@ export default function InkHelp() {
             the data available for that order.
           </Text>
           <Text as="p" tone="subdued">
-            A record documents the available events. It does not guarantee the
-            outcome of a dispute.
+            A purchase does not add new evidence or guarantee the outcome of a
+            dispute.
           </Text>
         </Topic>
         <Topic title="Download again">
@@ -105,12 +102,7 @@ export default function InkHelp() {
             <Button url="/app/ink/settings">View settings</Button>
           </InlineStack>
         </Topic>
-      </InlineGrid>
-      <Card>
-        <BlockStack gap="200">
-          <Text as="h2" variant="headingMd">
-            Contact support
-          </Text>
+        <Topic title="Contact support">
           <Text as="p">
             For billing, missing records or customer privacy requests, email{" "}
             <Link url="mailto:info@in.ink">info@in.ink</Link>.
@@ -119,8 +111,8 @@ export default function InkHelp() {
             Include your store name, the order number if relevant, and what you
             need help with.
           </Text>
-        </BlockStack>
-      </Card>
-    </BlockStack>
+        </Topic>
+      </BlockStack>
+    </Box>
   );
 }

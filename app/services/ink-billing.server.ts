@@ -18,6 +18,7 @@ import type { RecordRead } from "../lib/record-words";
 import { buildInkRecordPdf } from "./ink-record-pdf.server";
 import { buildInkRecordCsv } from "./ink-record-csv.server";
 import { inspectionFromAudit } from "../lib/ink-record-inspection";
+import { recordDownloadsAvailable } from "../lib/record-words";
 import { merchantRead, PROOF_ID } from "./ink-reader.server";
 import {
   createRecordCharge,
@@ -101,8 +102,7 @@ export async function settleInkCharge(
  *  read here). */
 export function handoverOf(record: RecordRead | null | undefined): { forSale: HandoverPrice | null; downloadable: boolean } {
   if (!record?.whole) return { forSale: null, downloadable: false };
-  const forSale = record.forSale ?? null;
-  return { forSale, downloadable: forSale === null };
+  return { forSale: record.forSale ?? null, downloadable: recordDownloadsAvailable(record) };
 }
 
 /** The door's own word on the hand-over: closed while it is for sale, or
@@ -183,14 +183,26 @@ export async function inkRecordAction(
   });
   if (!apiKey || !PROOF_ID.test(proofId))
     return no("The record is unavailable. Refresh and try again.");
+  // The merchant audit can be viewable before purchase. Only the export door
+  // authorizes handing over files; this also covers genuinely free records.
+  let bundle: any = null;
+  if (["download", "pdf", "csv"].includes(intent)) {
+    bundle = await merchantRead(apiKey, `proofs/${proofId}/export`);
+    if (
+      bundle?.manifest?.proof_id !== proofId ||
+      !bundle.files ||
+      typeof bundle.files !== "object" ||
+      Array.isArray(bundle.files)
+    )
+      return no("Downloads are unavailable. Check record access and try again.");
+  }
   if (intent === "download") {
-    // The signed JSON is the hand-over itself: never while it is for sale.
+    // The signed JSON is the hand-over itself: never while it is for sale —
+    // the export door must answer for this record (above), and the audit's
+    // record block must say the hand-over is the merchant's.
     const audit = await merchantRead(apiKey, `proofs/${proofId}/audit`);
     if (audit?.proof_id !== proofId || handoverClosed(audit?.record))
       return no("The record is unavailable. Check record access and try again.");
-    const bundle = await merchantRead(apiKey, `proofs/${proofId}/export`);
-    if (!bundle?.manifest || !bundle?.files)
-      return no("The record could not be downloaded. Try again.");
     return {
       ok: true as const,
       note: null,

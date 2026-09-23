@@ -2,13 +2,13 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { readRecord, readRecords, recordFromBody } from "./ink-record.server";
-import { elementLines, locationWordOf, opensOf } from "../lib/record-words";
+import { elementLines, locationWordOf, opensOf, recordDownloadsAvailable } from "../lib/record-words";
 
 const PROOF = "proof_aec827b527fb30457c1da890";
-// The backend's public read, as it answered for Corvara #1010 on 2026-09-23.
+// Merchant-audit fixture adapted from the earlier record response.
 const BODY = {
   proof_id: PROOF,
-  audience: "public",
+  audience: "merchant",
   summary: { order_number: "#1010", buyer_initials: "SM", opens: 1 },
   verdict: {
     elements: [
@@ -23,6 +23,32 @@ const BODY = {
 const ok = (body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch;
 
 describe("readRecord", () => {
+  it("keeps the hand-over's purchase distinct from the merchant's whole view", () => {
+    const chain = [{ event_id: "event_12345678", event_type: "TAP_RECORDED", timestamp: "2026-09-20T00:00:00Z", seq: 1 }];
+    const forSale = recordFromBody({ ...BODY, audience: "merchant", chain, legacy_events: [], record: { locked: false, purchased: false, price_cents: 2900, currency: "USD" } });
+    expect(forSale).toMatchObject({ locked: false, whole: true, forSale: { price_cents: 2900, currency: "USD" } });
+    expect(recordDownloadsAvailable(forSale)).toBe(false);
+    const bought = recordFromBody({ ...BODY, audience: "merchant", chain, legacy_events: [], record: { locked: false, purchased: true, price_cents: 2900, currency: "USD" } });
+    expect(bought?.forSale).toBeNull();
+    expect(recordDownloadsAvailable(bought)).toBe(true);
+    // The public words of a priced record hand nothing over.
+    expect(recordDownloadsAvailable(recordFromBody(BODY))).toBe(false);
+  });
+  it("takes a whole record only from this proof's merchant audit", async () => {
+    const whole = { ...BODY, audience: "merchant", chain: [], legacy_events: [], record: { locked: false, purchased: true } };
+    const door = (audit: unknown, words: unknown = BODY) =>
+      vi.fn(async (url: string) =>
+        new Response(JSON.stringify(url.includes("/audit") ? audit : url.endsWith("/jwks.json") ? { keys: [] } : words)),
+      ) as unknown as typeof fetch;
+    expect((await readRecord(PROOF, door(whole), "merchant-test"))?.whole).toBe(true);
+    // Another proof's audit, or a public answer at the merchant door, is never this order's whole record.
+    for (const patch of [{ proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" }, { audience: "public" }]) {
+      const r = await readRecord(PROOF, door({ ...whole, ...patch }), "merchant-test");
+      expect(r?.whole).not.toBe(true);
+    }
+    // Nor are another proof's public words.
+    expect(await readRecord(PROOF, door(null, { ...BODY, proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" }))).toBeNull();
+  });
   it("reads the public words projection — no key, no secret — and keeps the words of a locked record", async () => {
     const f = ok(BODY);
     const r = await readRecord(PROOF, f);

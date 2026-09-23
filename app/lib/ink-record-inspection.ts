@@ -34,6 +34,8 @@ export type InkInspection = {
   evidenceIds?: Record<string, string[]>;
   opens: InspectOpen[] | null;
   opensCapped: boolean;
+  address?: { lat: number; lng: number } | null;
+  addressLabel?: string | null;
 };
 
 const obj = (value: unknown): Record<string, unknown> | null =>
@@ -174,7 +176,9 @@ export function inspectionFromAudit(
   const a = obj(audit);
   if (!a || !str(a.proof_id)) return null;
   const head = obj(a.chain_head);
-  const o = obj(opensBody);
+  const suppliedOpens = obj(opensBody);
+  const o = suppliedOpens?.proof_id && suppliedOpens.proof_id !== a.proof_id
+    ? null : suppliedOpens;
   const rawEvents = [
     ...(Array.isArray(a.chain) ? a.chain : []),
     ...(Array.isArray(a.legacy_events) ? a.legacy_events : []),
@@ -227,6 +231,14 @@ export function inspectionFromAudit(
   );
   return {
     proofId: str(a.proof_id)!,
+    address: point(o?.address),
+    addressLabel: (() => {
+      const ship = obj(obj(a.summary)?.ship_to);
+      if (!ship) return null;
+      return ["line1", "line2", "city", "region", "postal_code", "country"]
+        .map((key) => str(ship[key]))
+        .filter(Boolean).join(", ") || null;
+    })(),
     evidenceIds,
     chainHead:
       head && Number.isSafeInteger(head.seq)
