@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mintMagicToken = vi.fn();
 vi.mock("./ink-api.server", () => ({ mintMagicToken }));
 
-const { RECENT_ORDERS_QUERY, dashboardDoorUrl, readRecentOrderRecords, recordUrlFor } = await import("./ink-links.server");
+const { RECENT_ORDERS_QUERY, RECENT_ORDERS_DETAIL_QUERY, dashboardDoorUrl, readRecentOrderRecords, recordUrlFor } = await import("./ink-links.server");
 const { INK_SCOPES } = await import("./ink-scopes.server");
 
 afterEach(() => { vi.unstubAllEnvs(); mintMagicToken.mockReset(); });
@@ -22,19 +22,66 @@ describe("recordUrlFor", () => {
 });
 
 describe("readRecentOrderRecords", () => {
-  it("reads the recent orders with read_orders alone and links the enrolled ones", async () => {
-    // ink holds read_orders; the query selects no customer, address or line.
+  const detailBody = { data: { shop: { ianaTimezone: "America/New_York" }, orders: { nodes: [
+    {
+      id: "gid://shopify/Order/2", name: "#1002", createdAt: "2026-09-22T03:30:00Z", email: "buyer@example.com",
+      totalPriceSet: { shopMoney: { amount: "58.00", currencyCode: "USD" } },
+      shippingAddress: { name: "Made Up", address1: "1 Test St", city: "Brooklyn", provinceCode: "NY", zip: "11201" },
+      lineItems: { nodes: [{ title: "Bar Tape", quantity: 2, sku: "BT-1", originalUnitPriceSet: { shopMoney: { amount: "29.00" } } }] },
+      metafields: { nodes: [{ key: "verification_status", value: "active" }, { key: "proof_reference", value: PROOF }] },
+      proof: { value: PROOF },
+    },
+    { id: "gid://shopify/Order/1", name: "#1001", createdAt: "2026-09-21T10:00:00Z", email: null, totalPriceSet: null, shippingAddress: null, lineItems: { nodes: [] }, metafields: { nodes: [] }, proof: null },
+  ] } } };
+
+  it("reads what the Ritualist's Shipments row shows, with ink's scopes alone", () => {
+    // Never a Customer object (read_customers) and never a line image
+    // (read_products): Shopify fails the whole query over either (#1019).
     expect(INK_SCOPES).toContain("read_orders");
+    expect(RECENT_ORDERS_DETAIL_QUERY).not.toMatch(/customer\s*\{/);
+    expect(RECENT_ORDERS_DETAIL_QUERY).not.toMatch(/\bimage\b/);
+    expect(RECENT_ORDERS_DETAIL_QUERY).toMatch(/\bemail\b/);
+    expect(RECENT_ORDERS_DETAIL_QUERY).toMatch(/shippingAddress \{ name address1 city provinceCode zip \}/);
+    expect(RECENT_ORDERS_DETAIL_QUERY).toMatch(/lineItems\(first: 20\)/);
+    // The fallback stays the minimal read it always was.
     expect(RECENT_ORDERS_QUERY).not.toMatch(/customer|shippingAddress|lineItems|email/);
-    const graphql = vi.fn(async () => ({ json: async () => ({ data: { orders: { nodes: [
-      { id: "gid://shopify/Order/2", name: "#1002", createdAt: "2026-09-22T10:00:00Z", proof: { value: PROOF } },
-      { id: "gid://shopify/Order/1", name: "#1001", createdAt: "2026-09-21T10:00:00Z", proof: null },
-    ] } } }) }));
+  });
+
+  it("builds each row's accordion the way the Ritualist's loader does, and links the enrolled ones", async () => {
+    const graphql = vi.fn(async () => ({ json: async () => detailBody }));
     const rows = await readRecentOrderRecords({ graphql }, 5);
-    expect(graphql).toHaveBeenCalledWith(RECENT_ORDERS_QUERY, { variables: { first: 5 } });
+    expect(graphql).toHaveBeenCalledTimes(1);
+    expect(graphql).toHaveBeenCalledWith(RECENT_ORDERS_DETAIL_QUERY, { variables: { first: 5 } });
+    expect(rows[0]).toMatchObject({ id: "gid://shopify/Order/2", name: "#1002", recordUrl: `https://www.in.ink/verify/${PROOF}`, proofId: PROOF });
+    expect(rows[0].detail).toEqual({
+      id: "2",
+      orderNumber: "#1002",
+      customerName: "Made Up",
+      customerEmail: "buyer@example.com",
+      customerAddress: { address1: "1 Test St", city: "Brooklyn", provinceCode: "NY", zip: "11201" },
+      date: "Sep 21, 2026", // the store's timezone, as the Ritualist's list does
+      total: "58.00",
+      subtotal: "58.00",
+      currency: "USD",
+      status: "enrolled", // "active" reads as enrolled — the Ritualist's rule
+      items: [{ title: "Bar Tape", quantity: 2, price: "29.00", sku: "BT-1" }],
+      metafields: { verification_status: "active", proof_reference: PROOF },
+    });
+    expect(rows[1]).toMatchObject({ name: "#1001", recordUrl: null, proofId: null });
+    expect(rows[1].detail).toMatchObject({ customerName: "Guest", customerEmail: "", status: "pending", items: [] });
+  });
+
+  it("falls back to the minimal read when the detail read is refused — the list never disappears", async () => {
+    const graphql = vi.fn(async (query: string) => {
+      if (query === RECENT_ORDERS_DETAIL_QUERY) throw new Error("This app is not approved to use the email field.");
+      return { json: async () => ({ data: { orders: { nodes: [
+        { id: "gid://shopify/Order/2", name: "#1002", createdAt: "2026-09-22T10:00:00Z", proof: { value: PROOF } },
+      ] } } }) };
+    });
+    const rows = await readRecentOrderRecords({ graphql }, 5);
+    expect(graphql).toHaveBeenLastCalledWith(RECENT_ORDERS_QUERY, { variables: { first: 5 } });
     expect(rows).toEqual([
-      { id: "gid://shopify/Order/2", name: "#1002", createdAt: "2026-09-22T10:00:00Z", recordUrl: `https://www.in.ink/verify/${PROOF}`, proofId: PROOF },
-      { id: "gid://shopify/Order/1", name: "#1001", createdAt: "2026-09-21T10:00:00Z", recordUrl: null, proofId: null },
+      { id: "gid://shopify/Order/2", name: "#1002", createdAt: "2026-09-22T10:00:00Z", recordUrl: `https://www.in.ink/verify/${PROOF}`, proofId: PROOF, detail: null },
     ]);
   });
 

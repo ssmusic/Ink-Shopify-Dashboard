@@ -141,6 +141,9 @@ describe("the wiring", () => {
     expect(orderPage).toContain("locked={order.localProof.record_locked}");
     // An unpriced merchant pays no extra call on the order page.
     expect(orderPage).toContain("if (order.localProof?.proof_id && order.localProof.record_priced) {");
-    expect(src("../routes/app.ink._index.tsx")).toContain('<RecordDoor proofId={order.proofId} orderName={order.name} returnTo="/app/ink" door={order.door} />');
+    // ink's Recent orders: the door sits at the bottom of each row's accordion
+    // (components/InkRecentOrders.tsx — Sam, 2026-09-23).
+    expect(src("../routes/app.ink._index.tsx")).toContain('<InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />');
+    expect(src("../components/InkRecentOrders.tsx")).toContain("<RecordDoor proofId={row.proofId} orderName={row.name} returnTo={returnTo} door={row.door} />");
   });
 });

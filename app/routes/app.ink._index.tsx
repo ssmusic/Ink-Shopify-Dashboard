@@ -32,7 +32,6 @@ import {
   Card,
   InlineStack,
   Layout,
-  Link,
   Page,
   Spinner,
   Text,
@@ -43,7 +42,7 @@ import { brandNameOf, markOf, readInkMerchant, stageOf } from "../services/ink-m
 import { updateMerchant } from "../services/merchant.server";
 import { dashboardDoorUrl, readRecentOrderRecords } from "../services/ink-links.server";
 import { readRecordDoors, recordDoorFor } from "../services/record-charges.server";
-import RecordDoor from "../components/RecordDoor";
+import InkRecentOrders from "../components/InkRecentOrders";
 
 // How long the screen keeps asking before it stops and offers "try again":
 // the capture's own timeout (45s) plus the install's two backend calls.
@@ -183,34 +182,15 @@ export default function InkOnboarding() {
               </InlineStack>
             </Card>
 
-            <Card>
-              <BlockStack gap="200">
+            {/* RECENT ORDERS — the Ritualist's Shipments list: click a row, its
+                accordion opens, and the record's door is at the bottom of it
+                (Sam, 2026-09-23; components/InkRecentOrders.tsx). */}
+            <Card padding="0">
+              <Box padding="400">
                 {/* PLACEHOLDER copy */}
                 <Text as="h2" variant="headingMd">Recent orders</Text>
-                {data.recentOrders.length === 0 ? (
-                  <Text as="p" tone="subdued">No orders yet.</Text>
-                ) : (
-                  <BlockStack gap="100">
-                    {data.recentOrders.map((order) => (
-                      <InlineStack key={order.id} align="space-between" blockAlign="center" gap="400">
-                        <Text as="span">{order.name}</Text>
-                        <InlineStack gap="400" blockAlign="center">
-                          {order.proofId && (
-                            <RecordDoor proofId={order.proofId} orderName={order.name} returnTo="/app/ink" door={order.door} />
-                          )}
-                          {order.recordUrl ? (
-                            // PLACEHOLDER label
-                            <Link url={order.recordUrl} target="_blank">View record</Link>
-                          ) : (
-                            // PLACEHOLDER copy
-                            <Text as="span" tone="subdued">No record yet</Text>
-                          )}
-                        </InlineStack>
-                      </InlineStack>
-                    ))}
-                  </BlockStack>
-                )}
-              </BlockStack>
+              </Box>
+              <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />
             </Card>
 
             {waiting ? (
