@@ -92,6 +92,7 @@ export async function inkDoor(
       paidPendingRecord: false,
       resumeUrl: null,
       downloadable: false,
+      inHistory: false,
     };
   await settleInkCharge(admin, shop, apiKey, proofId).catch(() =>
     console.error("[ink billing] settlement pending"),
@@ -101,6 +102,7 @@ export async function inkDoor(
   const savedRow = saved.exists ? saved.data() : null;
   const state = savedRow?.state;
   const downloadable = Boolean(record && !record.locked);
+  const inHistory = state === "minted";
   const paidPendingRecord =
     !downloadable && (state === "paid_pending_record" || state === "minted");
   const pending =
@@ -116,6 +118,7 @@ export async function inkDoor(
         ? savedRow.confirmationUrl
         : null,
     downloadable,
+    inHistory,
     offerLine:
       offer && !pending
         ? `Get the record (${recordPriceWords(offer)} ${offer.currency})`

@@ -240,4 +240,23 @@ describe("ink Shopify billing", () => {
       `proofs/${proof}/export`,
     );
   });
+  it("distinguishes a free unlocked record from one saved in purchase history", async () => {
+    readRecord.mockResolvedValue({ locked: false, summary: {} });
+    expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({
+      downloadable: true,
+      inHistory: false,
+    });
+    readRecord.mockResolvedValue({
+      locked: true,
+      summary: { order_number: "#1010" },
+      price: { price_cents: 2900, currency: "USD" },
+    });
+    await inkRecordAction(admin, shop, "own-key", form());
+    await settleInkCharge(admin, shop, "own-key", proof);
+    readRecord.mockResolvedValue({ locked: false, summary: {} });
+    expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({
+      downloadable: true,
+      inHistory: true,
+    });
+  });
 });

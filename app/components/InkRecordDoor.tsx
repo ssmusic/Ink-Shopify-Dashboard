@@ -9,6 +9,7 @@ export type InkDoor = {
   paidPendingRecord?: boolean;
   resumeUrl?: string | null;
   downloadable?: boolean;
+  inHistory?: boolean;
   purchase?: unknown;
 };
 export default function InkRecordDoor({
@@ -88,7 +89,7 @@ export default function InkRecordDoor({
       </InlineStack>
       {door.downloadable && (
         <Text as="p" tone="subdued" variant="bodySm">
-          Downloads a JSON file with a signed manifest, evidence packet, event chain, receipt, and order summary. It can include customer information. You can download it again from Records. Ink does not email the file.
+          Downloads a JSON file with a signed manifest, evidence packet, event chain, receipt, and order summary. It can include customer information. {door.inHistory ? "You can download it again from Records." : "You can download it again from this order while it remains in the recent-order list."} Ink does not email the file.
         </Text>
       )}
       {door.offerLine && (
@@ -100,7 +101,9 @@ export default function InkRecordDoor({
         <Text as="p">
           {door.paidPendingRecord
             ? "Shopify approved the charge, but the record is not available yet. Check status or "
-            : "Record access is pending. Check status or "}
+            : door.resumeUrl
+              ? "Shopify approval has not completed. Continue approval or check status. If you need help, "
+              : "The charge status could not be confirmed. Check status or "}
           <Link url="mailto:info@in.ink">contact support</Link>.
         </Text>
       )}

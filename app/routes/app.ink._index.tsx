@@ -69,6 +69,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               paidPendingRecord: door.paidPendingRecord,
               resumeUrl: door.resumeUrl,
               downloadable: door.downloadable,
+              inHistory: true,
             } : null,
           };
         }))
@@ -125,6 +126,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         paidPendingRecord: false,
         resumeUrl: null,
         downloadable: false,
+        inHistory: false,
       })),
     ),
   );
@@ -159,6 +161,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           paidPendingRecord: doors[i].paidPendingRecord,
           resumeUrl: doors[i].resumeUrl,
           downloadable: doors[i].downloadable,
+          inHistory: doors[i].inHistory,
         },
         timeline: o.proofId ? (timelines[o.proofId] ?? null) : null,
       })),

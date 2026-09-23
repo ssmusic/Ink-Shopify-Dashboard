@@ -178,6 +178,8 @@ describe('ink screens: facts, working controls and Polaris', () => {
     const html = render(() => <InkRecentOrders orders={[{...ROWS[0], door:{offerLine:null, downloadable:true}}]} defaultExpandedId={ROWS[0].id} />, {});
     expect(text(html)).toContain('Download record');
     expect(text(html)).toContain('JSON file');
+    expect(text(html)).toContain('while it remains in the recent-order list');
+    expect(text(html)).not.toContain('You can download it again from Records');
     expect(text(html)).not.toMatch(/PDF|attach as a file|Did you win/);
   });
 
@@ -214,7 +216,7 @@ describe('ink screens: facts, working controls and Polaris', () => {
   it('shows record history with a repeat download and an honest missing-purchase path', () => {
     const html = render(InkHome, { section: 'records', stage: 'ready', recordHistory: [{ proofId: PROOF, orderName: '#1010', createdAt: '2026-09-20T00:00:00Z', state: 'minted', door: { offerLine: null, pending: false, downloadable: true }, record: { ...RECORD, locked: false } }], historyError: false, historyPage: 1, historyHasNext: false, historyHasPrevious: false });
     const t = text(html);
-    expect(t).toContain('Record purchases');
+    expect(t).toContain('Records and approvals');
     expect(t).toContain('Download record');
     expect(t).toContain('View record details');
     expect(t).toContain('Ink does not email the file');
