@@ -116,15 +116,18 @@ describe("ink Shopify billing", () => {
     expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(true);
     expect(createRecordCharge).toHaveBeenCalledOnce();
   });
-  it("keeps the signed detail and all three files for the hand-over: refused before purchase, and each file needs the export door", async () => {
+  it("shows the whole record on screen before purchase; the three files wait for the hand-over, and each needs the export door", async () => {
     const bundle = { manifest: { proof_id: proof, signed: true }, files: { "packet.json": "{}" } };
     const audit = (record: unknown) => ({ proof_id: proof, audience: "merchant", record, summary: { opens: 0 }, verdict: { elements: [] }, chain: [] });
-    // For sale: the merchant sees the record in words (the screen), never its signed detail or files
-    // (Sam, 2026-09-23: "they need to see all the info but not get the signed hash").
+    // For sale: on screen is not the hand-over; the files are (orchestrator,
+    // relaying Sam, 2026-09-23). The inspector opens; no file leaves.
     merchantRead.mockImplementation(async (_key: string, path: string) =>
       path.endsWith("/export") ? bundle : audit({ locked: false, purchased: false, price_cents: 2900, currency: "USD" }),
     );
-    for (const intent of ["inspect", "pdf", "csv", "download"]) {
+    const onScreen = await inkRecordAction(admin, shop, "own-key", form("inspect"));
+    expect(onScreen.ok).toBe(true);
+    expect(onScreen.inspection?.proofId).toBe(proof);
+    for (const intent of ["pdf", "csv", "download"]) {
       const out = await inkRecordAction(admin, shop, "own-key", form(intent));
       expect(out.ok, intent).toBe(false);
       expect(out.pdfBase64).toBeNull();
@@ -338,7 +341,7 @@ describe("ink Shopify billing", () => {
       expect((await inkRecordAction(admin, shop, "own-key", form("pdf"))).ok).toBe(false);
     }
   });
-  it("gates the full inspector and CSV behind the same owned record", async () => {
+  it("opens the inspector on the merchant's own record, and gates the CSV behind the hand-over", async () => {
     const audit = {
       proof_id: proof,
       audience: "merchant",
@@ -356,10 +359,18 @@ describe("ink Shopify billing", () => {
     const csv = await inkRecordAction(admin, shop, "own-key", form("csv"));
     expect(csv.csvText).toContain("event_12345678");
     expect(csv.filename).toBe(`ink-record-${proof}.csv`);
+    // The hand-over's lock, in either backend contract, is not the screen's:
+    // the merchant's own record is inspected; its CSV waits for the hand-over.
     for (const record of [{ locked: true }, { locked: false, purchased: false, price_cents: 2900, currency: "USD" }]) {
-      merchantRead.mockResolvedValue({ ...audit, record });
+      merchantRead.mockImplementation(async (_key: string, path: string) =>
+        path.endsWith("/export") ? bundle : path.endsWith("/opens") ? { opens: [] } : { ...audit, record });
+      expect((await inkRecordAction(admin, shop, "own-key", form("inspect"))).ok, JSON.stringify(record)).toBe(true);
+      expect((await inkRecordAction(admin, shop, "own-key", form("csv"))).ok, JSON.stringify(record)).toBe(false);
+    }
+    // Another shop's audit, or another proof's, is never inspected.
+    for (const other of [{ ...audit, audience: "public" }, { ...audit, proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" }]) {
+      merchantRead.mockResolvedValue(other);
       expect((await inkRecordAction(admin, shop, "own-key", form("inspect"))).ok).toBe(false);
-      expect((await inkRecordAction(admin, shop, "own-key", form("csv"))).ok).toBe(false);
     }
   });
   it("distinguishes a free unlocked record from one saved in purchase history", async () => {

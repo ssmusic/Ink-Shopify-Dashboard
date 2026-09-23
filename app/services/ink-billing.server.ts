@@ -217,7 +217,13 @@ export async function inkRecordAction(
   if (intent === "pdf" || intent === "csv" || intent === "inspect") {
     const audit = await merchantRead(apiKey, `proofs/${proofId}/audit`);
     const record = recordFromBody(audit);
-    if (audit?.proof_id !== proofId || audit?.audience !== "merchant" || !record || record.locked || handoverClosed(audit?.record))
+    if (audit?.proof_id !== proofId || audit?.audience !== "merchant" || !record || record.locked)
+      return no("The record is unavailable. Check record access and try again.");
+    // On screen is not the hand-over; the files are (orchestrator, relaying
+    // Sam's ruling, 2026-09-23): the merchant inspects the whole record —
+    // events, hashes, signatures — before buying. The PDF and the CSV are
+    // files, so they wait for the hand-over like the signed JSON.
+    if (intent !== "inspect" && handoverClosed(audit?.record))
       return no("The record is unavailable. Check record access and try again.");
     const opens = await merchantRead(apiKey, `proofs/${proofId}/opens`);
     const inspection = inspectionFromAudit(audit, opens);

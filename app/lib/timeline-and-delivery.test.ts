@@ -77,14 +77,21 @@ describe("the delivery dashboard", () => {
     },
   ];
 
-  it("runs the funnel orders → delivered → opened → location shared, each as a share of the step above — and stops there (no \"seen at the door\": ink does not judge a distance)", () => {
+  it("runs the funnel orders → delivered → opened → location shared → seen at the door, each as a share of the step above", () => {
     expect(funnel(rows)).toEqual([
       { key: "orders", label: "Orders", count: 6, ofAbovePct: null },
       { key: "delivered", label: "Delivered", count: 5, ofAbovePct: 83.3 },
       { key: "opened", label: "Open", count: 4, ofAbovePct: 80 },
       { key: "shared", label: "Location shared", count: 2, ofAbovePct: 50 },
+      { key: "door", label: "Seen at the door", count: 1, ofAbovePct: 50 },
     ]);
-    expect(funnel([]).map((s) => s.ofAbovePct)).toEqual([null, null, null, null]);
+    expect(funnel([]).map((s) => s.ofAbovePct)).toEqual([
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
   });
 
   it("buckets time in transit with the console's buckets, skipping a missing or negative pair", () => {
@@ -138,17 +145,21 @@ describe("one order's timeline", () => {
         ],
       },
     });
-    // No "Enrolled" (the NFC era's word — Sam), no return or refund step (ink has neither).
     expect(steps.map((s) => [s.key, s.state, s.at])).toEqual([
+      ["enrolled", "done", iso(0)],
       ["shipped", "carrier", iso(25)],
       ["in_transit", "carrier", iso(30)],
       ["delivered", "done", iso(40)],
       ["opened", "done", iso(45)],
+      ["return_started", "not_recorded", null],
+      ["refund_cleared", "not_recorded", null],
     ]);
     // No journey: the carrier's steps are not recorded, never guessed.
-    expect(lifecycle({ enrolled_at: iso(0) }).slice(0, 2).map((s) => s.state)).toEqual(["not_recorded", "not_recorded"]);
-    // A later scan never stands in for an earlier stage: delivered alone is not "Shipped".
-    expect(lifecycle({ carrier_journey: { events: [{ at: iso(40), stage: "delivered" }] } }).slice(0, 2).map((s) => s.state)).toEqual(["not_recorded", "not_recorded"]);
+    expect(
+      lifecycle({ enrolled_at: iso(0) })
+        .slice(1, 3)
+        .map((s) => s.state),
+    ).toEqual(["not_recorded", "not_recorded"]);
   });
 
   it("reports measurements without a range judgment and distinguishes missing data from declined location", () => {
@@ -163,16 +174,8 @@ describe("one order's timeline", () => {
     expect(openSentence(3552, "flagged")).toBe(
       "Opened 3.6 km from the delivery address.",
     );
-    expect(openSentence(56, "pass")).toBe("Opened 56 m from the delivery address.");
-    expect(openResult(null, "unmeasured")).toBe("unmeasured");
     expect(openSentence(null, null)).toBe("Distance unavailable.");
     expect(openSentence(-5, "pass")).toBe("Distance unavailable.");
-    // A measured word without its distance still says a location was shared —
-    // never that none was; no word at all claims neither.
-    expect(openResult(null, "pass")).toBe("shared");
-    expect(openSentence(null, "pass")).toBe("A location was shared.");
-    expect(openResult(null, null)).toBe("unmeasured");
-    for (const d of [56, 250, 719, 3552]) expect(openSentence(d, "pass")).not.toMatch(/range|within|outside|near/i);
     expect(kmOrM(56)).toBe("56 m");
   });
 

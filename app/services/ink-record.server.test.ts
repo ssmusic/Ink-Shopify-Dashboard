@@ -89,25 +89,34 @@ describe("the record in words", () => {
     expect(JSON.stringify(elementLines(open))).not.toMatch(/accuracy|lat|lng/);
   });
 
-  it("gives the order row its distance, never a judgment of it (Sam: \"we dont judge\")", () => {
-    expect(locationWordOf(record)).toBe("719 m");
+  it("says an open's location as a distance in Codex's words, never a judgment of it (Sam: \"we dont judge\")", () => {
+    // Codex's words (4022900), as Sam chose them on 2026-09-23.
+    expect(locationWordOf(record)).toBe("719 m from the delivery address");
     const say = (verdict: string, distance_m: number | null = null) =>
       locationWordOf({ ...record, elements: [{ element: "the_open", label: "The open", status: "verified", value: { location: { verdict, distance_m } } }] });
-    expect(say("pass", 56)).toBe("56 m");
-    expect(say("flagged", 1_994_000)).toBe("1994 km");
-    expect(say("pass")).toBe("Location shared");
+    expect(say("pass", 56)).toBe("56 m from the delivery address");
+    expect(say("pass")).toBe("Distance unavailable");
     expect(say("not_shared")).toBe("Location not shared");
-    expect(say("unmeasured")).toBe("Address not geocoded");
-    expect(say("imprecise")).toBe("Too wide to measure");
+    expect(say("unmeasured")).toBe("Distance unavailable");
+    expect(say("imprecise")).toBe("Location accuracy too low to measure");
     for (const v of ["pass", "near", "flagged"]) expect(say(v, 250)).not.toMatch(/within|outside|near|pass|flag/i);
     expect(locationWordOf(null)).toBe("");
   });
 
-  it("never prints the backend's verdict word or the at-the-door yes/no — both judge against the range", () => {
-    const place = { element: "delivery_place", label: "Delivery place", status: "attested", value: { geocoded: true, verified_at_door: false } };
-    expect(elementLines(place)).toEqual([{ label: "Address on file", words: "Yes" }]);
+  it("never prints the backend's verdict word beside a distance", () => {
     const open = record.elements.find((e) => e.element === "the_open")!;
     expect(JSON.stringify(elementLines(open))).not.toMatch(/\((pass|near|flagged)\)/);
+  });
+  // Sam, 2026-09-23 23:22Z, on the range words: "we dont judge delivery so this
+  // is weird" — no verdict word on a distance anywhere; the distance is a data
+  // row. A real "seen at the door" signed event is data, not a distance verdict,
+  // so the delivery place's yes/no stays as Codex had it (the orchestrator).
+  it("says the delivery place's at-the-door yes/no as data, beside the address on file", () => {
+    const place = { element: "delivery_place", label: "Delivery place", status: "attested", value: { geocoded: true, verified_at_door: false } };
+    expect(elementLines(place)).toEqual([
+      { label: "Address on file", words: "Yes" },
+      { label: "Seen at the door", words: "No" },
+    ]);
   });
 });
 

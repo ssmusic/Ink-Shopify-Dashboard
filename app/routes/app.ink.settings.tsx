@@ -1,23 +1,3 @@
-// INK'S SETTINGS — the store's connection, its privacy requests, and the one
-// line that leads up.
-//
-// Mounted under APP_FLAVOR=ink only (server/ink-mounts.mjs).
-//
-//   · NO DESTINATION CHOICE. The forward dial (`flash_forward`, where the buyer
-//     goes after the white page) is gone from Settings: Sam, 2026-09-23, "we
-//     shouldnt get involved with their flow if we dont have to" · "preserve the
-//     original destination automatically and remove this choice from normal
-//     Settings". The retired form answers 405, so nothing here writes the
-//     shared backend dial (docs/ink-original-destination.md).
-//
-//   · ADD THE RITUALIST. The paid product that includes ink: one link to its
-//     listing, from env RITUALIST_LISTING_URL (an https apps.shopify.com
-//     address, nothing else). Without the address the card is not drawn at
-//     all — a disabled button is a dead control, and App Store review fails a
-//     screen for one (review, 2026-09-23, B2).
-//
-// Every visible string is PLACEHOLDER copy — Sam writes the words.
-
 import {
   data as routeData,
   useLoaderData,

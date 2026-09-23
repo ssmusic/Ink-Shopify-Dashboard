@@ -9,7 +9,9 @@
 // look Sam steered — sentence case, a level badge per element. The checkout's
 // two lines, their words and their place after the open did not change, and
 // "switch off, nothing printed" is still pinned below: a malformed comparison
-// renders byte-identically to none.)
+// renders byte-identically to none.) It moved back the same evening, when Sam
+// chose Codex's screens as they were at 4022900: the record's markup is Codex's
+// RecordWords again, and the checkout's two lines still follow the elements.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

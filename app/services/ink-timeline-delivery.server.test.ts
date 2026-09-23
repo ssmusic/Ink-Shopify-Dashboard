@@ -109,13 +109,16 @@ describe("an order's timeline", () => {
       [3552, "flagged", true],
       [null, "not_shared", false],
     ]);
-    // The rail is Shipped · In transit · Delivered · Opened (Sam's rulings:
-    // no Enrolled, no return or refund step).
+    // Codex's rail, as Sam chose it on 2026-09-23: Recorded · Shipped · In
+    // transit · Delivered · Opened, then the return and refund steps.
     expect(t?.steps.map((s) => [s.key, s.state])).toEqual([
+      ["enrolled", "done"],
       ["shipped", "not_recorded"],
       ["in_transit", "not_recorded"],
       ["delivered", "done"],
       ["opened", "done"],
+      ["return_started", "not_recorded"],
+      ["refund_cleared", "not_recorded"],
     ]);
     expect(t?.opensAvailable).toBe(true);
     expect(t?.window).toMatchObject({
@@ -276,7 +279,7 @@ describe("the delivery dashboard", () => {
       Authorization: "Bearer ink_live_key",
     });
     expect(d?.orders).toBe(2);
-    expect(d?.funnel.map((s) => s.count)).toEqual([2, 1, 1, 1]);
+    expect(d?.funnel.map((s) => s.count)).toEqual([2, 1, 1, 1, 1]);
     expect(d?.waited).toEqual({ stuck: 1, withData: 1, sharePct: 100 });
     expect(d?.carrier[0]).toEqual({
       status: "Delivered",

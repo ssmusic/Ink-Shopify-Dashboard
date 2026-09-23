@@ -149,8 +149,9 @@ describe("the wiring", () => {
     // (components/InkRecentOrders.tsx — Sam, 2026-09-23).
     expect(src("../routes/app.ink._index.tsx")).toMatch(/<InkRecentOrders\s[^]*?orders=\{data\.recentOrders\}\s+returnTo="\/app\/ink"/);
     expect(src("../components/InkRecentOrders.tsx")).toContain("<InkRecordDoor proofId={row.proofId} door={row.door} />");
-    // The Google map's browser key reaches the list (components/OpensMap.tsx).
-    expect(src("../routes/app.ink._index.tsx")).toContain("mapsKey={data.mapsKey}");
+    // The Google map's browser key (components/OpensMap.tsx) is parked with
+    // the map: Codex's screens, restored 2026-09-23, draw Codex's diagram; the
+    // THE OPEN port threads the key back through the list.
   });
 });
 

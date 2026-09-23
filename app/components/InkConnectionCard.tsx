@@ -12,7 +12,6 @@ import {
   Text,
 } from "@shopify/polaris";
 import type { InkConnection } from "../services/ink-connection.server";
-import { INK_DATA_TINT } from "../lib/ink-palette";
 
 export default function InkConnectionCard({
   connection,
@@ -75,12 +74,15 @@ export default function InkConnectionCard({
                 accessibilityLabel={`${name} store logo`}
               />
             ) : (
-              // The palette's one blue tint (lib/ink-palette.ts), never a second blue.
-              <div style={{ background: INK_DATA_TINT, borderRadius: "var(--p-border-radius-200)", padding: "var(--p-space-300) 0" }}>
+              <Box
+                background="bg-fill-info-secondary"
+                borderRadius="200"
+                paddingBlock="300"
+              >
                 <Text as="p" alignment="center" fontWeight="semibold">
                   {initials}
                 </Text>
-              </div>
+              </Box>
             )}
             <BlockStack gap="100">
               <Text as="h3" variant="headingMd" breakWord>
@@ -103,7 +105,7 @@ export default function InkConnectionCard({
                 <Text as="p" fontWeight="semibold">
                   Shopify access
                 </Text>
-                <Badge>
+                <Badge tone={shopify === "connected" ? "info" : undefined}>
                   {status(shopify)}
                 </Badge>
               </InlineStack>
@@ -111,27 +113,27 @@ export default function InkConnectionCard({
                 {shopify === "connected"
                   ? "Shopify returned this store’s details."
                   : shopify === "unavailable"
-                    ? "Shopify could not be reached. Check again, or reopen ink. from Shopify Admin."
+                    ? "Shopify could not be reached. Check again, or reopen ink from Shopify Admin."
                     : "Shopify access has not been checked."}
               </Text>
             </BlockStack>
             <BlockStack gap="200">
               <InlineStack align="space-between" gap="200">
                 <Text as="p" fontWeight="semibold">
-                  Ink. data access
+                  Ink data access
                 </Text>
-                <Badge>
+                <Badge tone={ink === "connected" ? "info" : undefined}>
                   {status(ink)}
                 </Badge>
               </InlineStack>
               <Text as="p" tone="subdued">
                 {ink === "connected"
-                  ? "Ink. returned this store’s dashboard data."
+                  ? "Ink returned this store’s dashboard data."
                   : ink === "setup"
                     ? "Store setup is incomplete. Check again shortly. Contact support if it remains incomplete."
                     : ink === "unavailable"
-                      ? "Ink. data could not be reached. Check again. Contact support if the problem continues."
-                      : "Ink. data access has not been checked."}
+                      ? "Ink data could not be reached. Check again. Contact support if the problem continues."
+                      : "Ink data access has not been checked."}
               </Text>
             </BlockStack>
           </InlineGrid>

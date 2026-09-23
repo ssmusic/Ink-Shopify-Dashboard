@@ -1,22 +1,7 @@
-// INK'S RECORD DOOR — at the top of an order's Advanced section.
-//
-// THE $29 BUYS THE HAND-OVER (Sam, 2026-09-23: "the 29 gets it signed" · "they
-// need to see all the info but not get the signed hash"; lib/record-handover.ts):
-// the merchant already sees the whole record, so the door sells the signed
-// copy to hand over — the PDF, the CSV and the signed JSON. "Get the record"
-// carries no price beside it (Sam, 2026-09-23: "loose the price next to the
-// get the record button"); Shopify's approval screen states it. The charge is
-// reserved before that screen and bound to this shop and record
-// (services/ink-billing.server.ts). Once bought: the files, "Did you win?" —
-// the merchant's word, recorded from day one and never scored — and, beside
-// this door, the record's texts for Shopify's dispute form.
-//
-// Every visible string is PLACEHOLDER copy — Sam's words replace it.
 import { useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import { BlockStack, Button, InlineStack, Link, Select, Text } from "@shopify/polaris";
 import type { action } from "../routes/app.record";
-import { HANDOVER_SENTENCE } from "../lib/record-handover";
 
 export type InkPurchase = { id: string; packet_url: string | null; outcome: "open" | "won" | "lost" | "unknown" };
 
@@ -31,7 +16,8 @@ export type InkDoor = {
   purchase?: InkPurchase | null;
 };
 
-// PLACEHOLDER labels.
+// "Did you win?" — the merchant's word on a bought record's dispute, recorded
+// and never scored (the record door's, kept for a bought record). PLACEHOLDER labels.
 const OUTCOME_OPTIONS = [
   { label: "Still open", value: "open" },
   { label: "Won", value: "won" },
@@ -39,7 +25,6 @@ const OUTCOME_OPTIONS = [
   { label: "Don't know", value: "unknown" },
 ];
 
-/** "Did you win?" — the merchant's word on a bought record's dispute. */
 function DidYouWin({ purchase }: { purchase: InkPurchase }) {
   const outcome = useFetcher<typeof action>();
   const current = (outcome.formData?.get("outcome") as string | null) ?? purchase.outcome;
@@ -194,11 +179,6 @@ export default function InkRecordDoor({
             >
               Get the record
             </Button>
-          )}
-          {door.offerLine && (
-            <Text as="span" variant="bodySm" tone="subdued">
-              {HANDOVER_SENTENCE}
-            </Text>
           )}
           {door.pending && door.resumeUrl && (
             <Button onClick={() => window.open(door.resumeUrl!, "_top")}>
