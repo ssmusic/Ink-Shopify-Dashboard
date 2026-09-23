@@ -64,7 +64,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const form = await request.formData();
   const raw = String(form.get("flash_forward") || "");
   if (!(FLASH_FORWARDS as readonly string[]).includes(raw)) {
-    return { ok: false, flashForward: null as FlashForward | null, error: "Pick where the buyer goes next." }; // PLACEHOLDER
+    return { ok: false, flashForward: null as FlashForward | null, error: "Pick where the customer goes next." }; // PLACEHOLDER
   }
   const next = raw as FlashForward;
 
@@ -108,10 +108,11 @@ export default function InkSettings() {
             <Card>
               <fetcher.Form method="post">
                 <BlockStack gap="400">
-                  {/* PLACEHOLDER copy */}
-                  <Text as="h2" variant="headingMd">After the flash, send the buyer to</Text>
+                  {/* PLACEHOLDER copy. Merchant words, not ours: "the flash" is our
+                      name for the moment and no merchant says it (Sam, 09-23). */}
+                  <Text as="h2" variant="headingMd">When a customer opens their tracking link, send them to</Text>
                   <ChoiceList
-                    title="Where the buyer goes next"
+                    title="Where the customer goes next"
                     titleHidden
                     name="flash_forward"
                     choices={[
