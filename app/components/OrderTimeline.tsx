@@ -78,7 +78,7 @@ export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
   );
 }
 
-export function OpensAgainstAddress({ address, opens }: { address: MapPoint | null; opens: TimelineOpen[] }) {
+export function OpensAgainstAddress({ address, opens, browsers = null }: { address: MapPoint | null; opens: TimelineOpen[]; browsers?: string | null }) {
   const located = opens.filter((o) => o.lat != null && o.lng != null && o.distance_m != null);
   const first = opens.find((o) => o.distance_m != null) ?? opens[0] ?? null;
   const mapOpens: MapOpen[] = located.map((o, i) => ({
@@ -116,6 +116,12 @@ export function OpensAgainstAddress({ address, opens }: { address: MapPoint | nu
             );
           })}
         </BlockStack>
+      ) : null}
+      {browsers ? (
+        // The browsers the opens came from, in the record's words (lib/record-words.ts browsersLine).
+        <Text as="p" variant="bodySm">
+          {browsers}
+        </Text>
       ) : null}
       <Text as="p" variant="bodyXs" tone="subdued">
         100 m and 300 m rings — ink.'s default range.
@@ -163,8 +169,10 @@ export function DeliveryWindowBar({ w }: { w: DeliveryWindow | null }) {
   );
 }
 
-/** The whole block, as it sits in the accordion under the record's words. */
-export default function OrderTimeline({ data }: { data: OrderTimelineData }) {
+/** The whole block, as it sits in the accordion under the record's words.
+ *  `browsers` is the record's line about the browsers the opens came from,
+ *  printed under the opens (2026-09-23). */
+export default function OrderTimeline({ data, browsers = null }: { data: OrderTimelineData; browsers?: string | null }) {
   const section = (title: string) => (
     <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
       {title}
@@ -180,7 +188,7 @@ export default function OrderTimeline({ data }: { data: OrderTimelineData }) {
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="500">
           <BlockStack gap="300">
             {section("THE OPENS · THE CUSTOMER'S PHONE ↔ THE DELIVERY ADDRESS")}
-            <OpensAgainstAddress address={data.address} opens={data.opens} />
+            <OpensAgainstAddress address={data.address} opens={data.opens} browsers={browsers} />
           </BlockStack>
           <BlockStack gap="300">
             {section("THE DELIVERY WINDOW")}

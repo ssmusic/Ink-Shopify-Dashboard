@@ -25,7 +25,7 @@ import RecordDoor, { type RecordDoorProps } from "./RecordDoor";
 import type { InkOrderDetail } from "../services/ink-links.server";
 import type { DisputePacketText } from "../services/ink-packet.server";
 import OrderTimeline, { type OrderTimelineData } from "./OrderTimeline";
-import { LEVEL_WORDS, elementLines, locationWordOf, opensOf, type RecordRead } from "../lib/record-words";
+import { LEVEL_WORDS, browsersLine, elementLines, locationWordOf, opensOf, type RecordRead } from "../lib/record-words";
 import { checkoutLines } from "../lib/checkout-words";
 
 export type InkRecentOrderRow = {
@@ -197,7 +197,7 @@ function RecordFooter({ row, returnTo }: { row: InkRecentOrderRow; returnTo: str
 
 function Panel({ row, returnTo, onCollapse }: { row: InkRecentOrderRow; returnTo: string; onCollapse: () => void }) {
   const footer = <RecordFooter row={row} returnTo={returnTo} />;
-  const timeline = row.timeline ? <OrderTimeline data={row.timeline} /> : null;
+  const timeline = row.timeline ? <OrderTimeline data={row.timeline} browsers={browsersLine(row.record?.browsers)} /> : null;
   if (!row.detail) {
     // Only the minimal order read answered (protected fields redacted): the record alone.
     return (
