@@ -143,7 +143,7 @@ describe("the wiring", () => {
     expect(orderPage).toContain("if (order.localProof?.proof_id && order.localProof.record_priced) {");
     // ink's Recent orders: the door sits at the bottom of each row's accordion
     // (components/InkRecentOrders.tsx — Sam, 2026-09-23).
-    expect(src("../routes/app.ink._index.tsx")).toContain('<InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" mapsKey={data.mapsKey} />');
+    expect(src("../routes/app.ink._index.tsx")).toContain('<InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" mapsKey={data.mapsKey} unread={"ordersUnread" in data && data.ordersUnread === true} />');
     expect(src("../components/InkRecentOrders.tsx")).toContain("<RecordDoor proofId={row.proofId} orderName={row.name} returnTo={returnTo} door={row.door} hidePacketLink={Boolean(row.packet)} />");
   });
 });

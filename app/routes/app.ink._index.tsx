@@ -38,7 +38,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { Banner, BlockStack, Box, Card, Layout, Page, Text } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { readInkMerchant, stageOf } from "../services/ink-merchant.server";
-import { readRecentOrderRecords } from "../services/ink-links.server";
+import { readRecentOrders } from "../services/ink-links.server";
 import { readRecordDoors, recordDoorFor } from "../services/record-charges.server";
 import { readRecords } from "../services/ink-record.server";
 import { readDisputePacket } from "../services/ink-packet.server";
@@ -72,7 +72,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return { section, stage, kpis, delivery, recentOrders: [], mapsKey: null };
   }
 
-  const recentOrders = await readRecentOrderRecords(admin);
+  // A failed read is said as one — never as "No orders yet".
+  const { rows: recentOrders, readFailed: ordersUnread } = await readRecentOrders(admin);
   const proofIds = recentOrders.map((o) => o.proofId);
   // THE RECORD'S DOOR (services/record-door.server.ts): a price on the row
   // only when the merchant is priced AND the kill switch is on. THE RECORD'S
@@ -102,6 +103,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     stage,
     kpis: null,
     delivery: null,
+    ordersUnread,
     recentOrders: rows.map((r, i) => ({ ...r, packet: packets[i] })),
     // A BROWSER key, referrer-restricted to this app's hosts and to the Maps
     // JavaScript API alone — never the backend's server key (components/OpensMap.tsx).
@@ -150,7 +152,7 @@ export default function InkHome() {
                   {/* PLACEHOLDER copy */}
                   <Text as="h2" variant="headingMd">Recent orders</Text>
                 </Box>
-                <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" mapsKey={data.mapsKey} />
+                <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" mapsKey={data.mapsKey} unread={"ordersUnread" in data && data.ordersUnread === true} />
               </Card>
             )}
           </BlockStack>

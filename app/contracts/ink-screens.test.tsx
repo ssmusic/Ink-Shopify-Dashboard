@@ -162,6 +162,12 @@ describe("ink's home: the orders and their records, inside Shopify (Sam, 2026-09
     expect(text(render(InkHome, { stage: "ready", recentOrders: [] }))).toContain("No orders yet");
   });
 
+  it("says the orders could not be read when the read failed — never \"No orders yet\"", () => {
+    const t = text(render(InkHome, { stage: "ready", recentOrders: [], ordersUnread: true }));
+    expect(t).toContain("couldn't be read");
+    expect(t).not.toContain("No orders yet");
+  });
+
   it("writes ink with its period, every time (Sam: \"ink always has a period after it\")", () => {
     const screens = [
       text(render(InkHome, { stage: "ready", recentOrders: ROWS })),

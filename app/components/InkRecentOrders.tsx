@@ -216,11 +216,14 @@ export default function InkRecentOrders({
   returnTo = "/app/ink",
   defaultExpandedId = null,
   mapsKey = null,
+  unread = false,
 }: {
   orders: InkRecentOrderRow[];
   returnTo?: string;
   /** The Maps JavaScript browser key (GOOGLE_MAPS_BROWSER_KEY); none → no map, the words remain. */
   mapsKey?: string | null;
+  /** The orders read failed: said as that, never as "No orders yet". */
+  unread?: boolean;
   /** A row opened on first render (the listing screenshot; a deep link one day). */
   defaultExpandedId?: string | null;
 }) {
@@ -292,7 +295,7 @@ export default function InkRecentOrders({
               <BlockStack gap="200" inlineAlign="center">
                 {/* PLACEHOLDER copy */}
                 <Text as="p" tone="subdued">
-                  No orders yet.
+                  {unread ? "Your orders couldn't be read just now. Try again in a moment." : "No orders yet."}
                 </Text>
               </BlockStack>
             </Box>
@@ -318,7 +321,7 @@ export default function InkRecentOrders({
           <Box padding="400">
             {/* PLACEHOLDER copy */}
             <Text as="p" tone="subdued">
-              No orders yet.
+              {unread ? "Your orders couldn't be read just now. Try again in a moment." : "No orders yet."}
             </Text>
           </Box>
         ) : (
