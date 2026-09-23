@@ -1,6 +1,7 @@
-// THE OPENS ON A MAP — the delivery address, the 100 m and 300 m rings, and
-// every open that carried a fix, each drawn as a point with a line to the
-// address and its distance on the line.
+// THE OPENS ON A MAP — the delivery address and every open that carried a
+// fix, each drawn as a point with a line to the address and its distance on
+// the line. No rings: ink has no default range and does not judge a distance
+// (Sam, 2026-09-23: "we dont judge" · "we dont have a default range").
 //
 // Sam, 2026-09-23: "map — and the distance between the delivery address and
 // taps within each order" · "i have the google map api". Google Maps
@@ -21,7 +22,7 @@
 // Colours are lib/ink-palette.ts's: one blue for every open, neutral otherwise.
 
 import { useEffect, useRef, useState } from "react";
-import { INK_DATA, INK_HAIRLINE, INK_MUTED, INK_NEUTRAL } from "../lib/ink-palette";
+import { INK_DATA, INK_HAIRLINE, INK_NEUTRAL } from "../lib/ink-palette";
 
 export type MapPoint = { lat: number; lng: number };
 export type MapOpen = MapPoint & {
@@ -30,9 +31,6 @@ export type MapOpen = MapPoint & {
   /** Shown when the point is hovered, e.g. "Open 2, Aug 20, 11:52 AM". */
   label: string;
 };
-
-// The record's rings (ink-backend utils/gps.js: pass ≤ 100 m, near ≤ 300 m).
-export const RINGS_M = [100, 300] as const;
 
 export function distanceLabel(m: number | null | undefined): string {
   if (m == null || !Number.isFinite(m)) return "";
@@ -93,22 +91,12 @@ export default function OpensMap({ apiKey, address, opens, height = 280 }: { api
         gestureHandling: "cooperative",
       });
       const bounds = new g.LatLngBounds(home, home);
-
-      for (const r of RINGS_M) {
-        const ring = new g.Circle({
-          map,
-          center: home,
-          radius: r,
-          strokeColor: INK_MUTED,
-          strokeOpacity: r === 100 ? 0.7 : 0.45,
-          strokeWeight: 1,
-          fillColor: INK_MUTED,
-          fillOpacity: r === 100 ? 0.1 : 0.05,
-          clickable: false,
-        });
-        made.push(ring);
-        bounds.union(ring.getBounds());
-      }
+      // Some room around the address (about 150 m each way), so an open on
+      // the doorstep does not zoom the map to the pavement.
+      const dLat = 150 / 111_320;
+      const dLng = 150 / (111_320 * Math.max(0.2, Math.cos((home.lat * Math.PI) / 180)));
+      bounds.extend({ lat: home.lat + dLat, lng: home.lng + dLng });
+      bounds.extend({ lat: home.lat - dLat, lng: home.lng - dLng });
 
       for (const o of opens) {
         const at = { lat: o.lat, lng: o.lng };

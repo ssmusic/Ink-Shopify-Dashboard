@@ -57,19 +57,30 @@ describe("the record in words", () => {
     expect(elementLines(open)).toEqual([
       { label: "Opens", words: "1" },
       { label: "First open signed", words: "Yes" },
-      { label: "Location", words: "719 m from the delivery address (flagged)" },
-      { label: "Later share", words: "40 m from the delivery address (pass)" },
+      { label: "Location", words: "719 m from the delivery address" },
+      { label: "Later share", words: "40 m from the delivery address" },
     ]);
     expect(JSON.stringify(elementLines(open))).not.toMatch(/accuracy|lat|lng/);
   });
 
-  it("gives the order row its location word", () => {
-    expect(locationWordOf(record)).toBe("Outside 300 m");
-    const say = (verdict: string) => locationWordOf({ ...record, elements: [{ element: "the_open", label: "The open", status: "verified", value: { location: { verdict } } }] });
-    expect(say("pass")).toBe("Within 100 m");
-    expect(say("near")).toBe("Within 300 m");
+  it("gives the order row its distance, never a judgment of it (Sam: \"we dont judge\")", () => {
+    expect(locationWordOf(record)).toBe("719 m");
+    const say = (verdict: string, distance_m: number | null = null) =>
+      locationWordOf({ ...record, elements: [{ element: "the_open", label: "The open", status: "verified", value: { location: { verdict, distance_m } } }] });
+    expect(say("pass", 56)).toBe("56 m");
+    expect(say("flagged", 1_994_000)).toBe("1994 km");
+    expect(say("pass")).toBe("Location shared");
     expect(say("not_shared")).toBe("Location not shared");
+    expect(say("unmeasured")).toBe("Address not geocoded");
     expect(say("imprecise")).toBe("Too wide to measure");
+    for (const v of ["pass", "near", "flagged"]) expect(say(v, 250)).not.toMatch(/within|outside|near|pass|flag/i);
     expect(locationWordOf(null)).toBe("");
+  });
+
+  it("never prints the backend's verdict word or the at-the-door yes/no — both judge against the range", () => {
+    const place = { element: "delivery_place", label: "Delivery place", status: "attested", value: { geocoded: true, verified_at_door: false } };
+    expect(elementLines(place)).toEqual([{ label: "Address on file", words: "Yes" }]);
+    const open = record.elements.find((e) => e.element === "the_open")!;
+    expect(JSON.stringify(elementLines(open))).not.toMatch(/\((pass|near|flagged)\)/);
   });
 });

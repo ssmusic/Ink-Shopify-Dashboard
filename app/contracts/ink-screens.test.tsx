@@ -123,7 +123,9 @@ describe("ink's home: the orders and their records, inside Shopify (Sam, 2026-09
     expect(t).toContain("#1010");
     expect(t).toContain("Made Up");
     expect(t).toContain("$58.00");
-    expect(t).toContain("Outside 300 m");
+    // The Location column says the distance, never a judgment of it (Sam: "we dont judge").
+    expect(t).toContain("719 m");
+    expect(t).not.toMatch(/Outside 300 m|Within 100 m|Within 300 m/);
     // Collapsed until clicked.
     expect(t).not.toContain("THE RECORD");
     expect(t).not.toContain("Get the record");
@@ -135,7 +137,10 @@ describe("ink's home: the orders and their records, inside Shopify (Sam, 2026-09
     for (const part of ["CUSTOMER", "1 Test St", "PRODUCTS", "Bar Tape", "THE RECORD"]) expect(t).toContain(part);
     for (const label of ["Order", "Buyer", "Delivery date", "Delivery place", "Carrier scan", "The open"]) expect(t).toContain(label);
     for (const level of ["RECORDED AND SIGNED", "MISSING", "DEVICE-VERIFIED"]) expect(t).toContain(level);
-    for (const line of ["Address on file", "Confirmed at the door", "First open signed", "Opens not a person's", "719 m from the delivery address (flagged)"]) expect(t).toContain(line);
+    for (const line of ["Address on file", "First open signed", "Opens not a person's", "719 m from the delivery address"]) expect(t).toContain(line);
+    // Neither the backend's verdict word nor the at-the-door yes/no: both judge against the range.
+    expect(t).not.toContain("(flagged)");
+    expect(t).not.toContain("Confirmed at the door");
     // The door is the last thing in the accordion.
     expect(t).toContain("Get the record — $29");
     expect(t.lastIndexOf("Get the record — $29")).toBeGreaterThan(t.indexOf("THE RECORD"));
@@ -170,9 +175,12 @@ describe("ink's home: the orders and their records, inside Shopify (Sam, 2026-09
 describe("the pill nav, the Insights KPIs, and a bought record in the app (Sam, 2026-09-23)", () => {
   const pill = (html: string, id: string) => html.match(new RegExp(`<a[^>]*data-pill="${id}"[^>]*>`))?.[0] ?? "";
 
-  it("puts Orders · Insights · Settings on top of every ink screen, the current one selected", () => {
+  it("puts Orders · Dashboard · Settings on top of every ink screen, the current one selected", () => {
     const orders = render(InkHome, { stage: "ready", recentOrders: ROWS });
     for (const id of ["orders", "insights", "settings"]) expect(pill(orders, id)).not.toBe("");
+    // Sam: "which prob should be called a dashboard".
+    expect(text(orders)).toContain("Dashboard");
+    expect(text(orders)).not.toContain("Insights");
     expect(pill(orders, "orders")).toContain('aria-selected="true"');
     expect(pill(orders, "insights")).toContain('aria-selected="false"');
     expect(pill(orders, "insights")).toContain('href="/app/ink?view=insights"');
@@ -183,18 +191,30 @@ describe("the pill nav, the Insights KPIs, and a bought record in the app (Sam, 
     expect(pill(insights, "insights")).toContain('aria-selected="true"');
   });
 
-  it("shows the Insights numbers on the Insights pill, and no order list there", () => {
-    const t = text(render(InkHome, { section: "insights", stage: "ready", recentOrders: [], kpis: { recorded: 12, opened: 7, openRatePct: 58, locationShared: 2, signedPct: 100, disputed: 0, capped: false } }));
-    for (const part of ["Orders recorded", "12", "Opened", "7", "58 in every 100", "Location shared", "2", "Signed", "100%", "Disputed"]) expect(t).toContain(part);
+  it("shows three numbers on the Dashboard pill — Orders, Opened, Location shared — with nothing under them, and no order list there", () => {
+    const t = text(render(InkHome, { section: "insights", stage: "ready", recentOrders: [], delivery: null, kpis: { recorded: 12, opened: 7, openRatePct: 58, locationShared: 2, signedPct: 100, disputed: 0, capped: false } }));
+    for (const part of ["Orders", "12", "Opened", "7", "Location shared", "2"]) expect(t).toContain(part);
+    // Sam: "orders recorded is just be called orders" · "nothing underneath those numbers" ·
+    // "the signed 100% should not be there" · "disputed should be gone" · "just be three".
+    for (const gone of ["Orders recorded", "since your first order", "in every 100", "by the customer's phone", "Signed", "100%", "Disputed"]) expect(t).not.toContain(gone);
     expect(t).not.toContain("Recent orders");
     expect(t).not.toContain("2,000 most recent");
   });
 
-  it("says nothing has shipped yet when there are no numbers at all", () => {
-    expect(text(render(InkHome, { section: "insights", stage: "ready", kpis: null, delivery: null, recentOrders: [] }))).toContain("Nothing shipped yet");
+  it("says the numbers could not be read when the read failed — never an empty store", () => {
+    const t = text(render(InkHome, { section: "insights", stage: "ready", kpis: null, delivery: null, recentOrders: [] }));
+    expect(t).toContain("couldn't be read");
+    expect(t).not.toContain("No orders yet");
+    expect(t).not.toContain("Nothing shipped yet");
   });
 
-  it("is the big dashboard: the console's Delivery page for this one merchant, every number also in words", () => {
+  it("says there are no orders yet when ink holds none — never a row of zeros", () => {
+    const t = text(render(InkHome, { section: "insights", stage: "ready", delivery: null, recentOrders: [], kpis: { recorded: 0, opened: 0, openRatePct: 0, locationShared: 0, signedPct: 0, disputed: 0, capped: false } }));
+    expect(t).toContain("No orders yet");
+    expect(t).not.toContain("Opened");
+  });
+
+  it("draws the orders' funnel under the three numbers — no title, one line on how it counts, none of the sections Sam called weird", () => {
     const delivery = {
       orders: 5,
       funnel: [
@@ -202,7 +222,6 @@ describe("the pill nav, the Insights KPIs, and a bought record in the app (Sam, 
         { key: "delivered", label: "Delivered", count: 4, ofAbovePct: 80 },
         { key: "opened", label: "Opened", count: 3, ofAbovePct: 75 },
         { key: "shared", label: "Location shared", count: 2, ofAbovePct: 66.7 },
-        { key: "door", label: "Seen at the door", count: 1, ofAbovePct: 50 },
       ],
       transit: { buckets: [{ label: "under 1 d", count: 1 }, { label: "1–2 d", count: 1 }, { label: "2–4 d", count: 0 }, { label: "4–7 d", count: 1 }, { label: "over 7 d", count: 0 }], measured: 3, delivered: 4, medianHours: 30 },
       carrier: [{ status: "DELIVERED", count: 3, ofEnrolledPct: 60 }, { status: "No carrier update", count: 2, ofEnrolledPct: 40 }],
@@ -211,7 +230,12 @@ describe("the pill nav, the Insights KPIs, and a bought record in the app (Sam, 
       capped: false,
     };
     const t = text(render(InkHome, { section: "insights", stage: "ready", recentOrders: [], kpis: { recorded: 5, opened: 3, openRatePct: 60, locationShared: 2, signedPct: 100, disputed: 0, capped: false }, delivery }));
-    for (const part of ["Getting there", "Orders through to the door", "Seen at the door", "80% of the step above", "Time in transit", "3 of 4 delivered orders carry both times", "median 30 h", "What the carrier said", "DELIVERED", "60% of orders", "While they waited", "of 2 opens that carry a movement time", "Not recorded yet", "only 2 orders name one so far", "Orders recorded"]) expect(t).toContain(part);
+    // The funnel's figures, in words for a screen reader (the chart draws in the browser).
+    for (const part of ["Each step counts the orders that also passed the step above.", "Delivered", "4 · 80% of the step above", "Location shared"]) expect(t).toContain(part);
+    for (const gone of [
+      "Getting there", "From the order being recorded", "Orders through to the door", "Seen at the door",
+      "Time in transit", "What the carrier said", "DELIVERED", "While they waited", "Not recorded yet", "Did it arrive", "Orders recorded",
+    ]) expect(t).not.toContain(gone);
   });
 
   it("shows a bought record's dispute packet inside the accordion — three texts, each with Copy — and no link out", () => {
@@ -245,13 +269,10 @@ describe("each order's timeline, inside the accordion (Sam, 2026-09-23)", () => 
   const at = (h: number) => new Date(T0 + h * H).toISOString();
   const timeline = {
     steps: [
-      { key: "enrolled", label: "Enrolled", state: "done" as const, at: at(0), note: null },
       { key: "shipped", label: "Shipped", state: "carrier" as const, at: at(10), note: "from the carrier" },
       { key: "in_transit", label: "In transit", state: "not_recorded" as const, at: null, note: "from the carrier" },
       { key: "delivered", label: "Delivered", state: "done" as const, at: at(40), note: null },
       { key: "opened", label: "Opened", state: "done" as const, at: at(45), note: null },
-      { key: "return_started", label: "Return started", state: "not_recorded" as const, at: null, note: null },
-      { key: "refund_cleared", label: "Refund cleared", state: "not_recorded" as const, at: null, note: "no event for refunds yet" },
     ],
     address: { lat: 34.052235, lng: -118.243683 },
     opens: [
@@ -277,19 +298,21 @@ describe("each order's timeline, inside the accordion (Sam, 2026-09-23)", () => 
     const desktop = html.slice(0, html.indexOf("lg:hidden"));
     expect(desktop).toMatch(/data-testid="opens-map"[^>]*data-points="2"|data-points="2"[^>]*data-testid="opens-map"/);
     const t = text(desktop);
-    expect(t).toContain("Opened 56 m from the delivery address — within the 100 m range.");
-    expect(t).toContain("56 m · within 100 m");
-    expect(t).toContain("719 m · outside 300 m");
+    expect(t).toContain("Opened 56 m from the delivery address.");
+    expect(t).toContain("56 m");
+    expect(t).toContain("719 m");
     expect(t).toContain("location not shared");
-    expect(t).toContain("100 m and 300 m rings");
+    // Sam: "we dont judge" · "we dont have a default range".
+    for (const judged of ["within 100 m", "outside 300 m", "within 300 m", "range", "rings"]) expect(t).not.toContain(judged);
   });
 
   it("draws no map without the browser key — the words still say every open", () => {
     const html = open(null);
     expect(html).not.toContain('data-testid="opens-map"');
     const t = text(html.slice(0, html.indexOf("lg:hidden")));
-    expect(t).toContain("56 m · within 100 m");
-    expect(t).toContain("719 m · outside 300 m");
+    expect(t).toContain("Opened 56 m from the delivery address.");
+    expect(t).toContain("719 m");
+    expect(t).toContain("location not shared");
   });
 
   it("never prints a coordinate as text — the map draws the point, the words say the distance", () => {
@@ -299,9 +322,12 @@ describe("each order's timeline, inside the accordion (Sam, 2026-09-23)", () => 
 
   it("shows the lifecycle and the delivery window, under the record's words and above the door", () => {
     const t = text(open().slice(0, open().indexOf("lg:hidden")));
-    for (const part of ["THE ORDER, STEP BY STEP", "Enrolled", "Shipped", "from the carrier", "Delivered", "Opened", "Refund cleared", "THE DELIVERY WINDOW", "5 h after delivery", "Within the expected window", "Yes"]) expect(t).toContain(part);
+    for (const part of ["Shipped", "from the carrier", "In transit", "Delivered", "Opened", "THE DELIVERY WINDOW", "5 h after delivery", "Within the expected window", "Yes"]) expect(t).toContain(part);
+    // Sam: "THE ORDER, STEP BY STEP is weird"; no "Enrolled" (the NFC era's word); no return or refund step (ink has neither).
+    for (const gone of ["THE ORDER, STEP BY STEP", "Return started", "Refund cleared"]) expect(t).not.toContain(gone);
+    expect(t).not.toMatch(/✓ Enrolled/);
     const record = t.indexOf("THE RECORD");
-    const rail = t.indexOf("THE ORDER, STEP BY STEP");
+    const rail = t.indexOf("Shipped");
     const door = t.lastIndexOf("Get the record — $29");
     expect(record).toBeGreaterThan(-1);
     expect(rail).toBeGreaterThan(record);
@@ -321,27 +347,26 @@ describe("one palette (Sam, 2026-09-23: \"some pages are blue and others green\"
   ];
   const src = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8");
 
-  it("draws every data mark in the one blue, and no green anywhere but the \"Seen at the door\" badge", () => {
+  it("draws every data mark in the one blue, and no green, amber or red anywhere — no colour judges a distance", () => {
     for (const f of INK_FILES) {
       const code = src(f);
-      // No green of any family: Polaris success hexes, the console's emerald, any rgb/hsl green.
-      expect(code, f).not.toMatch(/#29845a|#008060|#16a34a|#22c55e|rgb\(16 185 129\)|rgba\(41, 132, 90|hsl\(1[2-5]\d/i);
-      const successTones = code.match(/tone="success"/g) ?? [];
-      if (f === "app/components/InkRecentOrders.tsx") expect(successTones.length, f).toBe(1);
-      else expect(successTones.length, f).toBe(0);
+      // No green of any family (Polaris success hexes, the console's emerald, any rgb/hsl green),
+      // and no Polaris caution amber or critical red.
+      expect(code, f).not.toMatch(/#29845a|#008060|#16a34a|#22c55e|rgb\(16 185 129\)|rgba\(41, 132, 90|hsl\(1[2-5]\d|#b98900|#c70a24/i);
+      expect(code.match(/tone="(success|critical|warning|caution)"/g) ?? [], f).toEqual([]);
     }
-    for (const f of ["app/components/OpensMap.tsx", "app/components/OrderTimeline.tsx", "app/components/DeliveryDashboard.tsx"]) {
+    for (const f of ["app/components/OpensMap.tsx", "app/components/OrderTimeline.tsx"]) {
       expect(src(f), f).toContain("INK_DATA");
     }
+    // The funnel is Polaris Viz's own, in its Light theme — the blue INK_DATA is taken from.
+    expect(src("app/components/DeliveryDashboard.tsx")).toContain('theme="Light"');
   });
 
-  it("shows the green badge only when the record says the phone confirmed the door", () => {
+  it("never badges an order \"seen at the door\" — that is the 100 m range, said as a verdict (Sam: \"we dont judge\")", () => {
     const door = { ...RECORD, elements: RECORD.elements.map((e) => (e.element === "delivery_place" ? { ...e, value: { geocoded: true, verified_at_door: true } } : e)) };
     const withDoor = text(render(InkHome, { stage: "ready", recentOrders: [{ ...ROWS[0], record: door }] }));
-    expect(withDoor).toContain("Seen at the door");
-    const without = text(render(InkHome, { stage: "ready", recentOrders: ROWS }));
-    expect(without).not.toContain("Seen at the door");
-    expect(without).toContain("Outside 300 m");
+    expect(withDoor).not.toContain("Seen at the door");
+    expect(withDoor).toContain("719 m");
   });
 });
 

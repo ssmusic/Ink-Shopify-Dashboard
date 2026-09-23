@@ -1,7 +1,7 @@
 // EACH ORDER'S TIMELINE AND THE DELIVERY DASHBOARD — read with the merchant's own key.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readTimeline, readTimelines, timelineFrom } from "./ink-timeline.server";
+import { readTimeline, readTimelines, timelineFrom, withRecordOpen } from "./ink-timeline.server";
 import { dashboardFrom, readDeliveryDashboard } from "./ink-delivery.server";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -46,16 +46,40 @@ describe("an order's timeline", () => {
     expect(t?.address).toEqual({ lat: 34.1425, lng: -118.2551 });
     // The open the record calls not a person's is not drawn; the rest keep their order.
     expect(t?.opens.map((o) => [o.distance_m, o.verdict, o.lat != null])).toEqual([[3552, "flagged", true], [null, "not_shared", false]]);
-    expect(t?.steps.map((s) => s.state)).toEqual(["done", "not_recorded", "not_recorded", "done", "done", "not_recorded", "not_recorded"]);
+    expect(t?.steps.map((s) => [s.key, s.state])).toEqual([["shipped", "not_recorded"], ["in_transit", "not_recorded"], ["delivered", "done"], ["opened", "done"]]);
+    expect(t?.opensFrom).toBe("opens");
     expect(t?.window).toMatchObject({ withinExpectedWindow: true, windowEnd: "2026-08-28T20:29:50.138Z" });
     expect(JSON.stringify(t)).not.toMatch(/1 Test St|Made Up/);
   });
 
-  it("before the opens door is deployed (404), says the first open in words from the proof, with no point on the map", async () => {
+  it("before the opens door is deployed (404), says the first open from the proof, with no point on the map", async () => {
     const f = vi.fn(async (url: string) => (url.endsWith("/opens") ? new Response("Not found", { status: 404 }) : new Response(JSON.stringify(PROOF_BODY)))) as unknown as typeof fetch;
     const t = await readTimeline("k", PROOF, f);
     expect(t?.opens).toEqual([{ at: "2026-08-25T20:29:59.868Z", verdict: "flagged", distance_m: 3552, accuracy_m: null, lat: null, lng: null }]);
     expect(t?.address).toEqual({ lat: 34.1425, lng: -118.2551 });
+    expect(t?.opensFrom).toBe("proof");
+  });
+
+  it("never reads the old default stamp as a share: a measured word with no stored distance is no word at all", () => {
+    // Rows stamped before ink-backend #99 carry gps_verdict 'pass' on opens that shared nothing.
+    const t = timelineFrom({ ...PROOF_BODY, gps_verdict: "pass", first_tap_distance_to_shipping_m: null }, null);
+    expect(t?.opens).toEqual([{ at: "2026-08-25T20:29:59.868Z", verdict: null, distance_m: null, accuracy_m: null, lat: null, lng: null }]);
+  });
+
+  it("without the opens door, takes the first open's words from the record — the words the accordion prints above it", () => {
+    const fromProof = timelineFrom(PROOF_BODY, null);
+    // The record read the same order honestly: the stored 3,552 m was a later measurement's, the first open shared nothing.
+    const record = {
+      summary: {},
+      locked: true,
+      elements: [{ element: "the_open", label: "The open", status: "verified", value: { location: { verdict: "not_shared", distance_m: null } } }],
+    };
+    expect(withRecordOpen(fromProof, record)?.opens[0]).toMatchObject({ verdict: "not_shared", distance_m: null, at: "2026-08-25T20:29:59.868Z" });
+    // With the opens door, or without a record, the timeline stands as read.
+    const fromOpens = timelineFrom(PROOF_BODY, OPENS_BODY);
+    expect(withRecordOpen(fromOpens, record)).toBe(fromOpens);
+    expect(withRecordOpen(fromProof, null)).toBe(fromProof);
+    expect(withRecordOpen(null, record)).toBeNull();
   });
 
   it("is nothing for another shop's proof (404), a bad id, or no key — never an error page", async () => {
@@ -85,7 +109,7 @@ describe("the delivery dashboard", () => {
     expect(calls(f)[0][0]).toBe(`${API}/merchant-delivery`);
     expect(calls(f)[0][1].headers).toEqual({ Authorization: "Bearer ink_live_key" });
     expect(d?.orders).toBe(2);
-    expect(d?.funnel.map((s) => s.count)).toEqual([2, 1, 1, 1, 1]);
+    expect(d?.funnel.map((s) => s.count)).toEqual([2, 1, 1, 1]);
     expect(d?.waited).toEqual({ stuck: 1, withData: 1, sharePct: 100 });
     expect(d?.carrier[0]).toEqual({ status: "DELIVERED", count: 1, ofEnrolledPct: 50 });
     expect(Object.keys(d ?? {})).not.toContain("rows");

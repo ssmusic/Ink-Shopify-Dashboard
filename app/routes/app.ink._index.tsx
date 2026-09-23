@@ -12,9 +12,10 @@
 // (components/InkRecentOrders.tsx).
 //
 // Three pills sit on top of it ("yeah we need a pill nav in the app", Sam,
-// 2026-09-23 — components/InkPillNav.tsx): Orders (this screen), Insights
-// (the same route, ?view=insights — the Insights KPIs, services/ink-kpis.server.ts)
-// and Settings (/app/ink/settings). A bought record's dispute packet is read
+// 2026-09-23 — components/InkPillNav.tsx): Orders (this screen), Dashboard
+// (the same route, ?view=insights — three numbers and the orders' funnel,
+// components/DeliveryDashboard.tsx; Sam: "which prob should be called a
+// dashboard") and Settings (/app/ink/settings). A bought record's dispute packet is read
 // here and shown in its row (services/ink-packet.server.ts).
 //
 // The install still captures the storefront's mark and claims the brand's
@@ -45,7 +46,7 @@ import { readInkKpis } from "../services/ink-kpis.server";
 import InkRecentOrders from "../components/InkRecentOrders";
 import InkPillNav from "../components/InkPillNav";
 import DeliveryDashboard from "../components/DeliveryDashboard";
-import { readTimelines } from "../services/ink-timeline.server";
+import { readTimelines, withRecordOpen } from "../services/ink-timeline.server";
 import { readDeliveryDashboard } from "../services/ink-delivery.server";
 
 // Shopify's charts (Polaris Viz). The map is Google's (components/OpensMap.tsx) and brings its own.
@@ -88,7 +89,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     detail: o.detail,
     record: o.proofId ? records[o.proofId] ?? null : null,
     door: recordDoorFor(doors, o.proofId),
-    timeline: o.proofId ? timelines[o.proofId] ?? null : null,
+    // Without the opens door, the first open's words are the record's own.
+    timeline: o.proofId ? withRecordOpen(timelines[o.proofId] ?? null, records[o.proofId]) : null,
   }));
   // A BOUGHT RECORD'S PACKET, read with the purchase's own key — only the
   // three texts Shopify's dispute form takes ever reach the screen.

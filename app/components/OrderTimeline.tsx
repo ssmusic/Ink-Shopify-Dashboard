@@ -4,15 +4,19 @@
 // as words), and the delivery window.
 //
 // Sam, 2026-09-23: "map — and the distance between the delivery address and
-// taps within each order along with your delivery information widget".
+// taps within each order along with your delivery information widget"; then,
+// on the first version: "THE ORDER, STEP BY STEP is weird" · "we dont judge"
+// · "we dont have a default range" · "this page should be blue highlights like
+// the insights page". So: no title over the rail, no rings, no within /
+// outside, and the palette's one blue (lib/ink-palette.ts) for every mark.
 // The rules are lib/order-timeline.ts's; the map is components/OpensMap.tsx.
-// No coordinate is printed as text: the words say the distance and the word.
+// No coordinate is printed as text: the words say the distance.
 //
 // Every visible string is PLACEHOLDER copy — Sam's words replace it.
 
 import { BlockStack, Box, InlineGrid, InlineStack, Text } from "@shopify/polaris";
 import OpensMap, { type MapOpen, type MapPoint } from "./OpensMap";
-import { INK_DATA, INK_DATA_TINT, INK_HAIRLINE, INK_MUTED, INK_NEUTRAL } from "../lib/ink-palette";
+import { INK_DATA, INK_DATA_TINT, INK_HAIRLINE, INK_MUTED } from "../lib/ink-palette";
 import { kmOrM, openResult, openSentence, type DeliveryWindow, type LifecycleStep } from "../lib/order-timeline";
 import { when } from "../lib/record-words";
 
@@ -32,34 +36,29 @@ export type OrderTimelineData = {
   address: MapPoint | null;
   opens: TimelineOpen[];
   window: DeliveryWindow | null;
+  /** Where the opens came from: the opens door, or the proof alone (its first
+   *  open, whose words the record then supplies — services/ink-timeline.server.ts). */
+  opensFrom?: "opens" | "proof";
 };
 
+// What an open without a distance says — facts, never a judgment.
 const RESULT_WORD: Record<string, string> = {
-  within: "within 100 m",
-  near: "within 300 m",
-  outside: "outside 300 m",
+  shared: "location shared",
   not_shared: "location not shared",
   unmeasured: "no distance available",
   imprecise: "too wide to measure",
 };
 
-// One palette (lib/ink-palette.ts): a located open is the data blue, the rest neutral.
-const RESULT_COLOR: Record<string, string> = {
-  within: INK_DATA,
-  near: INK_DATA,
-  outside: INK_DATA,
-};
-
 function StepMark({ state }: { state: LifecycleStep["state"] }) {
   const base = { width: 18, height: 18, borderRadius: 9999, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 } as const;
-  if (state === "done") return <span aria-label="done" style={{ ...base, background: INK_NEUTRAL, color: "#fff" }}>✓</span>;
+  if (state === "done") return <span aria-label="done" style={{ ...base, background: INK_DATA, color: "#fff" }}>✓</span>;
   if (state === "carrier") return <span aria-label="from the carrier" style={{ ...base, background: INK_MUTED, color: "#fff" }}>✓</span>;
   return <span aria-label="not recorded" style={{ ...base, border: `1.5px solid ${INK_HAIRLINE}` }} />;
 }
 
 export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
   return (
-    <InlineGrid columns={{ xs: 2, sm: 4, md: 7 }} gap="200">
+    <InlineGrid columns={{ xs: 2, sm: 4 }} gap="200">
       {steps.map((s) => (
         <BlockStack key={s.key} gap="100" inlineAlign="start">
           <StepMark state={s.state} />
@@ -67,7 +66,7 @@ export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
             {s.label}
           </Text>
           <Text as="p" variant="bodyXs" tone="subdued">
-            {s.at ? when(s.at) : s.note && s.key === "refund_cleared" ? s.note : "not yet"}
+            {s.at ? when(s.at) : "not yet"}
           </Text>
           {s.state === "carrier" ? (
             <Text as="p" variant="bodyXs" tone="subdued">
@@ -102,7 +101,7 @@ export function OpensAgainstAddress({ address, opens, mapsKey = null }: { addres
             return (
               <InlineStack key={`${o.at ?? ""}-${i}`} align="space-between" blockAlign="center" gap="200" wrap={false}>
                 <InlineStack gap="200" blockAlign="center" wrap={false}>
-                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 9999, background: RESULT_COLOR[r] ?? INK_HAIRLINE, display: "inline-block" }} />
+                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 9999, background: r === "measured" ? INK_DATA : INK_HAIRLINE, display: "inline-block" }} />
                   <Text as="span" variant="bodySm">
                     {`Open ${i + 1}`}
                   </Text>
@@ -111,16 +110,13 @@ export function OpensAgainstAddress({ address, opens, mapsKey = null }: { addres
                   </Text>
                 </InlineStack>
                 <Text as="span" variant="bodySm" alignment="end">
-                  {o.distance_m != null && (r === "within" || r === "near" || r === "outside") ? `${kmOrM(o.distance_m)} · ${RESULT_WORD[r]}` : RESULT_WORD[r]}
+                  {r === "measured" && o.distance_m != null ? kmOrM(o.distance_m) : RESULT_WORD[r]}
                 </Text>
               </InlineStack>
             );
           })}
         </BlockStack>
       ) : null}
-      <Text as="p" variant="bodyXs" tone="subdued">
-        100 m and 300 m rings — ink.'s default range.
-      </Text>
     </BlockStack>
   );
 }
@@ -174,10 +170,7 @@ export default function OrderTimeline({ data, mapsKey = null }: { data: OrderTim
   return (
     <Box padding="400">
       <BlockStack gap="500">
-        <BlockStack gap="300">
-          {section("THE ORDER, STEP BY STEP")}
-          <LifecycleRail steps={data.steps} />
-        </BlockStack>
+        <LifecycleRail steps={data.steps} />
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="500">
           <BlockStack gap="300">
             {section("THE OPENS · THE CUSTOMER'S PHONE ↔ THE DELIVERY ADDRESS")}

@@ -18,14 +18,14 @@
 // Every visible string that is ink's own is PLACEHOLDER copy — Sam's words.
 
 import { useState } from "react";
-import { Badge, BlockStack, Box, Button, IndexTable, InlineStack, Text } from "@shopify/polaris";
+import { BlockStack, Box, Button, IndexTable, InlineStack, Text } from "@shopify/polaris";
 import { ChevronDown } from "lucide-react";
 import OrderExpandedRow from "./OrderExpandedRow";
 import RecordDoor, { type RecordDoorProps } from "./RecordDoor";
 import type { InkOrderDetail } from "../services/ink-links.server";
 import type { DisputePacketText } from "../services/ink-packet.server";
 import OrderTimeline, { type OrderTimelineData } from "./OrderTimeline";
-import { LEVEL_WORDS, elementLines, locationWordOf, opensOf, seenAtDoor, type RecordRead } from "../lib/record-words";
+import { LEVEL_WORDS, elementLines, locationWordOf, opensOf, type RecordRead } from "../lib/record-words";
 
 export type InkRecentOrderRow = {
   id: string;
@@ -175,11 +175,10 @@ function RecordFooter({ row, returnTo }: { row: InkRecentOrderRow; returnTo: str
   );
 }
 
-/** The order row's location cell: green only for a real "seen at the door". */
+/** The order row's location cell: the open's distance, or what its location
+ *  says — never a badge that judges it (Sam, 2026-09-23: "we dont judge"). */
 function LocationCell({ row }: { row: InkRecentOrderRow }) {
   if (!row.proofId) return <Text as="span" variant="bodyMd">—</Text>;
-  // PLACEHOLDER label — the record's own words.
-  if (seenAtDoor(row.record)) return <Badge tone="success">Seen at the door</Badge>;
   return <Text as="span" variant="bodyMd">{locationWordOf(row.record) || "—"}</Text>;
 }
 
