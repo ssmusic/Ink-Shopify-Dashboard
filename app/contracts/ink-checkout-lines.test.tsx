@@ -50,13 +50,23 @@ const html = (body: unknown) =>
   );
 const text = (h: string) => h.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ");
 
+// The snapshot's record carries no instant: a time renders in the machine's
+// own clock, and CI's clock is not this laptop's.
+const UNTIMED = {
+  ...BODY,
+  verdict: {
+    ...BODY.verdict,
+    elements: BODY.verdict.elements.map((e) => (e.element === "order" ? { ...e, value: { order_number: "#1010" } } : e)),
+  },
+};
+
 describe("the record without the checkout — today's, byte for byte", () => {
   it("reads to today's three keys", () => {
     expect(Object.keys(recordFromBody(BODY)!)).toEqual(["summary", "elements", "locked"]);
   });
 
   it("renders today's markup", () => {
-    const h = html(BODY);
+    const h = html(UNTIMED);
     expect(h).toMatchSnapshot();
     expect(text(h)).not.toContain("Checkout");
     expect(text(h)).not.toContain("Opens compared");
