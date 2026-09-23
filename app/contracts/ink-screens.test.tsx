@@ -158,4 +158,15 @@ describe("the settings screen", () => {
     const html = render(InkSettings, { flashForward: "order_status", canSave: false, ritualistUrl: "" });
     expect(text(html)).toContain("still being set up");
   });
+
+  it("names the moment in the merchant's words, never ours", () => {
+    // "The flash" is our word for the buyer's moment; no merchant says it
+    // (Sam, 2026-09-23). The form field keeps its wire name — only the words
+    // a merchant reads are pinned.
+    const html = render(InkSettings, { flashForward: "order_status", canSave: true, ritualistUrl: "" });
+    expect(text(html)).toContain("When a customer opens their tracking link");
+    expect(text(html).toLowerCase()).not.toContain("flash");
+    const onboarding = render(InkOnboarding, { stage: "ready", mark: "https://cdn.test/mark.svg", brandName: "Made-Up Goods", confirmedAt: null, captureNote: null, canRecapture: true });
+    expect(text(onboarding).toLowerCase()).not.toContain("flash");
+  });
 });
