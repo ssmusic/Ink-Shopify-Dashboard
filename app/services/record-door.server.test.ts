@@ -144,6 +144,18 @@ describe("the wiring", () => {
     // ink's Recent orders: the door sits at the bottom of each row's accordion
     // (components/InkRecentOrders.tsx — Sam, 2026-09-23).
     expect(src("../routes/app.ink._index.tsx")).toContain('<InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />');
-    expect(src("../components/InkRecentOrders.tsx")).toContain("<RecordDoor proofId={row.proofId} orderName={row.name} returnTo={returnTo} door={row.door} hidePacketLink={Boolean(row.packet)} />");
+    expect(src("../components/InkRecentOrders.tsx")).toContain("<InkRecordDoor proofId={row.proofId} door={row.door} />");
+  });
+});
+
+describe('ink charge response completeness', () => {
+  it('rejects missing currency or test mode instead of filling in a successful charge', async () => {
+    vi.stubEnv('APP_FLAVOR','ink');
+    const node = { id:'gid://shopify/AppPurchaseOneTime/77', status:'ACTIVE', test:false, price:{amount:'29.00',currencyCode:'USD'} };
+    const read = async (value: unknown) => readRecordCharge({graphql:async()=>({json:async()=>({data:{node:value}})})},node.id);
+    expect(await read({...node,price:{amount:'29.00'}})).toBeNull();
+    expect(await read({...node,test:undefined})).toBeNull();
+    expect(await read({...node,price:{amount:'',currencyCode:'USD'}})).toBeNull();
+    expect(await read(node)).toMatchObject({price_cents:2900,currency:'USD',test:false});
   });
 });

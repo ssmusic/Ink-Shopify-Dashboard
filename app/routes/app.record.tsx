@@ -1,3 +1,6 @@
+import { isInk } from "../services/app-flavor.server";
+import { inkRecordAction, settleInkCharge } from "../services/ink-billing.server";
+import { data } from "react-router";
 // /app/record — THE RECORD'S DOOR, both flavors (services/record-door.server.ts).
 //
 //   POST intent=buy      the press on "Get the record — $X": re-reads the
@@ -33,6 +36,13 @@ const OUTCOMES: RecordPurchase["outcome"][] = ["open", "won", "lost", "unknown"]
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session, redirect } = await authenticate.admin(request);
   const url = new URL(request.url);
+  if (isInk()) {
+    const proofId = url.searchParams.get("proof_id") || "";
+    const view = await readInkMerchant(session.shop);
+    if (PROOF_ID.test(proofId) && view.doc?.ink_api_key) await settleInkCharge(admin, session.shop, view.doc.ink_api_key, proofId).catch(() => console.error("[ink billing] return settlement pending"));
+    return redirect("/app/ink");
+  }
+
   const returnTo = safeReturnTo(url.searchParams.get("return_to"));
   const proofId = url.searchParams.get("proof_id") ?? "";
   const gid = recordChargeGid(url.searchParams.get("charge_id"));
@@ -47,6 +57,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
+  if (isInk()) {
+    const view = await readInkMerchant(session.shop);
+    const result = await inkRecordAction(admin, session.shop, view.doc?.ink_api_key, form).catch(() => ({ ok: false, note: "The record is unavailable. Try again.", confirmationUrl: null, download: null, filename: null }));
+    return data(result, { headers: { "Cache-Control": "private, no-store" } });
+  }
+
   const intent = String(form.get("intent") || "");
 
   if (intent === "buy") {
