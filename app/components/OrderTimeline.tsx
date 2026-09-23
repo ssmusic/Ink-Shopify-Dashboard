@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Icon,
   Button,
   BlockStack,
   Box,
@@ -9,7 +8,6 @@ import {
   InlineStack,
   Text,
 } from "@shopify/polaris";
-import { CheckCircleIcon } from "@shopify/polaris-icons";
 import OpensMap, { type MapOpen, type MapPoint } from "./OpensDiagram";
 import {
   kmOrM,
@@ -18,6 +16,7 @@ import {
   type LifecycleStep,
 } from "../lib/order-timeline";
 import { when } from "../lib/record-words";
+import { INK_DATA, INK_HAIRLINE, INK_MUTED } from "../lib/ink-palette";
 export type TimelineOpen = {
   at: string | null;
   verdict: string | null;
@@ -34,6 +33,16 @@ export type OrderTimelineData = {
   opensAvailable?: boolean;
   opensCapped?: boolean;
 };
+// A step's mark: the one blue when it is recorded, the carrier's grey when only
+// the carrier said so, an empty ring when nothing was recorded — every label
+// starts on the same line (lib/ink-palette.ts).
+function StepMark({ state }: { state: LifecycleStep["state"] }) {
+  const base = { width: 18, height: 18, borderRadius: 9999, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 } as const;
+  if (state === "done") return <span aria-label="Recorded" style={{ ...base, background: INK_DATA, color: "#fff" }}>✓</span>;
+  if (state === "carrier") return <span aria-label="Carrier scan" style={{ ...base, background: INK_MUTED, color: "#fff" }}>✓</span>;
+  return <span aria-label="Not recorded" style={{ ...base, border: `1.5px solid ${INK_HAIRLINE}` }} />;
+}
+
 export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
   return (
     <InlineGrid columns={{ xs: 1, sm: 2, md: 5 }} gap="400">
@@ -43,12 +52,8 @@ export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
         )
         .map((s) => (
           <BlockStack key={s.key} gap="100">
-            <InlineStack align="start" blockAlign="center" gap="100">
-              {s.at && (
-                <Box maxWidth="20px">
-                  <Icon source={CheckCircleIcon} tone="info" />
-                </Box>
-              )}
+            <InlineStack align="start" blockAlign="center" gap="150" wrap={false}>
+              <StepMark state={s.at ? s.state : "not_recorded"} />
               <Text as="h4" variant="headingSm">
                 {s.label}
               </Text>
