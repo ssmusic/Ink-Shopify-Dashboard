@@ -1,220 +1,115 @@
-import { useId } from "react";
-import {
-  Banner,
-  BlockStack,
-  Box,
-  Card,
-  InlineGrid,
-  InlineStack,
-  ProgressBar,
-  Text,
-} from "@shopify/polaris";
+// THE DASHBOARD — three numbers, the orders' funnel in the charts' blue under
+// them, and three rates in rings.
+//
+// Sam, 2026-09-23, on the first version (the console's Delivery page): "this
+// should just be three up there" · "there should be nothing underneath those
+// numbers" · "getting there from the order being recorded to the parcel
+// arriving and what happened after that's weird" · "while they waited [is]
+// weird" · "did it arrive when promised [is] weird" · "it's weird to say what
+// the carrier said" · "orders through the door is strange" · "the whole thing
+// is just bizarre" — and, of the order page, "blue highlights like the
+// insights page" · "which prob should be called a dashboard". Later, of the
+// Dashboard: "we have other kpi we can offer - real ones from the backend
+// source of truth" · "make the dash better - maybe some circular kpi?".
+//
+// So: the three numbers (components/InkKpis.tsx); then one card — Shopify's
+// FunnelChart (@shopify/polaris-viz, its Light theme's own blue) over
+// Orders → Delivered → Open → Location shared, with no title and one line
+// saying how the steps count (the funnel's "Open" counts delivered orders
+// only, so without that line it would contradict the number above it); then
+// the rates (components/InkDashboardRates.tsx), each from one door and one
+// denominator. Gone: every section Sam named; "Time in transit" too (it ran
+// from the order's creation, not its shipment, so its name was not true);
+// "Seen at the door" (a verdict against the 100 m range — "we dont judge").
+// The arithmetic for the rest stays in lib/delivery-insights.ts, undrawn.
+//
+// Three states, each saying only what is true:
+//   · the numbers could not be read (no key yet, a refused or slow read) —
+//     said as that, never as an empty store;
+//   · ink holds no order yet — said as that, never as a row of zeros;
+//   · otherwise the numbers, and — when the delivery door did not answer —
+//     a line saying so where the funnel would be.
+//
+// Every visible string is PLACEHOLDER copy — Sam's words replace it.
+
+import { useEffect, useState, type ReactNode } from "react";
+import { BlockStack, Box, Card, EmptyState, InlineStack, Text } from "@shopify/polaris";
+import { FunnelChart, PolarisVizProvider } from "@shopify/polaris-viz";
 import InkKpis from "./InkKpis";
 import InkDashboardRates from "./InkDashboardRates";
-import { formatHours } from "../lib/delivery-insights";
 import type { InkKpis as Kpis } from "../services/ink-kpis.server";
 import type { DeliveryDashboardData } from "../services/ink-delivery.server";
 
-function Bar({
-  label,
-  count,
-  total,
-  note,
-}: {
-  label: string;
-  count: number;
-  total: number;
-  note?: string;
-}) {
-  const labelId = useId();
-  return (
-    <BlockStack gap="100">
-      <InlineStack align="space-between" gap="200">
-        <Text as="span" id={labelId}>
-          {label}
-        </Text>
-        <Text as="span" fontWeight="semibold">
-          {count.toLocaleString("en-US")}
-        </Text>
-      </InlineStack>
-      <ProgressBar
-        progress={total > 0 ? (count / total) * 100 : 0}
-        tone="highlight"
-        size="small"
-        ariaLabelledBy={labelId}
-      />
-      {note && (
-        <Text as="p" variant="bodySm" tone="subdued">
-          {note}
-        </Text>
-      )}
-    </BlockStack>
-  );
+function useMounted() {
+  const [m, setM] = useState(false);
+  useEffect(() => setM(true), []);
+  return m;
 }
-export default function DeliveryDashboard({
-  kpis,
-  delivery,
-}: {
-  kpis: Kpis | null;
-  delivery: DeliveryDashboardData | null;
-}) {
-  if (!kpis && !delivery)
-    return (
-      <Banner tone="info">Dashboard unavailable. Refresh to try again.</Banner>
-    );
-  if (kpis?.recorded === 0 && delivery?.orders === 0)
+
+// Polaris Viz measures its box, so it draws in the browser only.
+function Chart({ height, children }: { height: number; children: ReactNode }) {
+  const mounted = useMounted();
+  return <div style={{ height, width: "100%" }}>{mounted ? children : null}</div>;
+}
+
+export default function DeliveryDashboard({ kpis, delivery }: { kpis: Kpis | null; delivery: DeliveryDashboardData | null }) {
+  if (!kpis) {
     return (
       <Card>
-        <Text as="p">
-          No orders yet. New orders will appear here after installation.
+        <Text as="p" tone="subdued">
+          {/* PLACEHOLDER copy */}
+          Your numbers couldn't be read just now. Try again in a moment.
         </Text>
       </Card>
     );
+  }
+  if (kpis.recorded === 0) {
+    return (
+      <Card>
+        {/* PLACEHOLDER copy — the Orders pill's own words for none */}
+        <EmptyState heading="No orders yet" image="" />
+      </Card>
+    );
+  }
+
+  const funnel = delivery && delivery.orders > 0 ? delivery.funnel : null;
   return (
-    <BlockStack gap="400">
-      {kpis ? (
+    <PolarisVizProvider>
+      <BlockStack gap="500">
         <InkKpis kpis={kpis} />
-      ) : (
-        <Banner tone="info">Order totals are unavailable.</Banner>
-      )}
-      <InkDashboardRates kpis={kpis} delivery={delivery} />
-      {delivery ? (
-        <>
-          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
-            <Card>
-              <BlockStack gap="400">
-                <Box
-                  background="bg-surface-secondary"
-                  padding="300"
-                  borderRadius="200"
-                >
-                  <Text as="h2" variant="headingMd">
-                    Delivery and opens
-                  </Text>
-                </Box>
-                <Text as="p" tone="subdued">
-                  Each count includes only orders in the previous step.
-                </Text>
-                {delivery.funnel.map((s) => (
-                  <Bar
-                    key={s.key}
-                    label={s.label}
-                    count={s.count}
-                    total={delivery.orders}
-                    note={
-                      s.ofAbovePct == null
-                        ? undefined
-                        : `${s.ofAbovePct}% of the previous step`
-                    }
-                  />
-                ))}
-              </BlockStack>
-            </Card>
-            <Card>
-              <BlockStack gap="400">
-                <Box
-                  background="bg-surface-secondary"
-                  padding="300"
-                  borderRadius="200"
-                >
-                  <Text as="h2" variant="headingMd">
-                    Time to delivery
-                  </Text>
-                </Box>
-                {delivery.transit.measured > 0 ? (
-                  <>
-                    <Text as="p">{`Median ${formatHours(delivery.transit.medianHours)} from recording to delivery.`}</Text>
-                    {delivery.transit.buckets.map((b) => (
-                      <Bar
-                        key={b.label}
-                        label={b.label}
-                        count={b.count}
-                        total={delivery.transit.measured}
-                      />
-                    ))}
-                    <Text
-                      as="p"
-                      tone="subdued"
-                    >{`${delivery.transit.measured} of ${delivery.transit.delivered} delivered orders have both timestamps.`}</Text>
-                  </>
-                ) : (
-                  <Text as="p" tone="subdued">
-                    No delivered orders have both timestamps.
-                  </Text>
-                )}
-              </BlockStack>
-            </Card>
-          </InlineGrid>
-          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
-            <Card>
-              <BlockStack gap="400">
-                <Box
-                  background="bg-surface-secondary"
-                  padding="300"
-                  borderRadius="200"
-                >
-                  <Text as="h2" variant="headingMd">
-                    Delivery status
-                  </Text>
-                </Box>
-                {delivery.carrier.length ? (
-                  delivery.carrier.map((c) => (
-                    <Bar
-                      key={c.status}
-                      label={c.status}
-                      count={c.count}
-                      total={delivery.orders}
-                    />
-                  ))
-                ) : (
-                  <Text as="p" tone="subdued">
-                    No orders available.
-                  </Text>
-                )}
-              </BlockStack>
-            </Card>
-            <Card>
-              <BlockStack gap="200">
-                <Box
-                  background="bg-surface-secondary"
-                  padding="300"
-                  borderRadius="200"
-                >
-                  <Text as="h2" variant="headingMd">
-                    Opens without a tracking update
-                  </Text>
-                </Box>
-                {delivery.waited.withData > 0 ? (
-                  <>
-                    <Box color="text-info">
-                      <Text as="p" variant="headingXl">
-                        {String(delivery.waited.stuck)}
-                      </Text>
-                    </Box>
-                    <Text
-                      as="p"
-                      tone="subdued"
-                    >{`${delivery.waited.stuck} of ${delivery.waited.withData} measured opens occurred at least 48 hours after the last recorded parcel movement.`}</Text>
-                  </>
-                ) : (
-                  <Text as="p" tone="subdued">
-                    Movement times are unavailable for these opens.
-                  </Text>
-                )}
-              </BlockStack>
-            </Card>
-          </InlineGrid>
-          {delivery.capped && (
+        {funnel ? (
+          <Card>
+            <BlockStack gap="300">
+              <Text as="p" variant="bodySm" tone="subdued">
+                {/* PLACEHOLDER copy — the one line the funnel needs to be true */}
+                Each step counts the orders that also passed the step above.
+              </Text>
+              <Chart height={240}>
+                <FunnelChart data={[{ name: "Orders", data: funnel.map((s) => ({ key: s.label, value: s.count })) }]} theme="Light" />
+              </Chart>
+              {/* The same figures in words, for a screen reader and the server render. */}
+              <Box visuallyHidden>
+                <BlockStack gap="100">
+                  {funnel.map((s) => (
+                    <InlineStack key={s.key} align="space-between">
+                      <span>{s.label}</span>
+                      <span>{`${s.count}${s.ofAbovePct != null ? ` · ${s.ofAbovePct}% of the step above` : ""}`}</span>
+                    </InlineStack>
+                  ))}
+                </BlockStack>
+              </Box>
+            </BlockStack>
+          </Card>
+        ) : !delivery ? (
+          <Card>
             <Text as="p" tone="subdued">
-              Delivery figures cover up to 2,000 orders.
+              {/* PLACEHOLDER copy */}
+              Delivery details are unavailable. Refresh to try again.
             </Text>
-          )}
-        </>
-      ) : (
-        <Banner tone="info">
-          Delivery details are unavailable. Refresh to try again.
-        </Banner>
-      )}
-    </BlockStack>
+          </Card>
+        ) : null}
+        <InkDashboardRates kpis={kpis} delivery={delivery} />
+      </BlockStack>
+    </PolarisVizProvider>
   );
 }

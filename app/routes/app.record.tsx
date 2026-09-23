@@ -57,13 +57,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
-  if (isInk()) {
+  const intent = String(form.get("intent") || "");
+  // ink's door is services/ink-billing.server.ts — except "Did you win?", the
+  // merchant's word on a bought record, which is the same for both flavors.
+  if (isInk() && intent !== "outcome") {
     const view = await readInkMerchant(session.shop);
     const result = await inkRecordAction(admin, session.shop, view.doc?.ink_api_key, form).catch(() => ({ ok: false, note: "The record is unavailable. Try again.", confirmationUrl: null, download: null, filename: null }));
     return data(result, { headers: { "Cache-Control": "private, no-store" } });
   }
-
-  const intent = String(form.get("intent") || "");
 
   if (intent === "buy") {
     const proofId = String(form.get("proof_id") || "");

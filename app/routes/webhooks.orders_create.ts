@@ -16,6 +16,7 @@ import {
 } from "../services/activation-scope.server";
 import { spendFromCap } from "../services/activation-counter.server";
 import { isInk, appFlavor, type AppFlavor } from "../services/app-flavor.server";
+import { checkoutClientFromWebhook, checkoutDetailsEnabled } from "../services/checkout-client.server";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -210,9 +211,11 @@ export const PRODUCT_URLS_QUERY = `
 // twenty (shopify.app.ink.toml). `customer { … }` is a Customer object and a
 // Customer object needs `read_customers`; ink has none, and Shopify fails the
 // WHOLE query over one unauthorized selection (that is how #1019 died). So
-// under ink the buyer's email is read off the Order itself, with no phone.
-// `Order.email` needs order access, and the recipient's
-// name off the shipping address, which was already the first choice above.
+// under ink the buyer's email is read off the Order itself — `Order.email`
+// needs only read_orders — and the recipient's name off the shipping address,
+// which was already the first choice above. ink reads NO phone: it sends no
+// message and shows no number, so a phone would be protected data held for
+// nothing (App Store review, 2026-09-23 — the minimum-data rule).
 // Nothing else differs; the Ritualist's string above is untouched and a test
 // pins it byte-for-byte, and pins that this one selects nothing outside
 // ink's list.
@@ -301,14 +304,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   console.log(`\n📦 [orders/create] Processing order ${orderName} (${shop})`);
 
-  // Phone selection (ship → order → customer fallback chain)
-  const shippingPhone = isInk() ? null : data?.shipping_address?.phone;
-  const orderPhone = isInk() ? null : data?.phone;
-  const customerPhone = isInk() ? null : data?.customer?.phone;
+  // Phone selection (ship → order → customer fallback chain). The log says
+  // WHICH source was used, never the number: a phone is the buyer's protected
+  // data, and Cloud Run logs are not where it belongs (App Store review,
+  // 2026-09-23 — B11).
+  // ink reads none of them (see ORDER_DETAIL_QUERY_INK): no phone reaches
+  // its record or its metafields.
+  const readsPhone = appFlavor() !== "ink";
+  const shippingPhone = readsPhone ? data?.shipping_address?.phone : undefined;
+  const orderPhone = readsPhone ? data?.phone : undefined;
+  const customerPhone = readsPhone ? data?.customer?.phone : undefined;
   const finalPhone = shippingPhone || orderPhone || customerPhone || "";
-  console.log(
-    `📱 Phone selection — shipping: ${shippingPhone || "—"}, order: ${orderPhone || "—"}, customer: ${customerPhone || "—"} → using: ${finalPhone || "—"}`
-  );
+  const phoneSource = !readsPhone ? "not read (ink)" : shippingPhone ? "shipping" : orderPhone ? "order" : customerPhone ? "customer" : "none";
+  console.log(`📱 Phone source: ${phoneSource}`);
 
   const shippingLines = data?.shipping_lines || [];
   console.log(`🚢 ${shippingLines.length} shipping line(s) on order`);
@@ -529,6 +537,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }
           }
 
+          // THE CHECKOUT'S DEVICE AND NETWORK (services/checkout-client.server.ts):
+          // read off the body Shopify already sent — no query, no scope — ONLY
+          // when this service's CHECKOUT_DETAILS_ENABLED is "true" (Sam's, after
+          // Shopify approves the protected customer data request that names
+          // this use). Reduced at once: the address to its /24 or /48, the user
+          // agent to device · browser · OS. Off, nothing is read and the enrol
+          // payload is byte-identical to what it has always been.
+          const checkoutClient = checkoutDetailsEnabled() ? checkoutClientFromWebhook(data) : null;
+          if (checkoutClient) {
+            // Field NAMES only — never a value.
+            console.log(
+              `[orders/create] checkout facts ride the enrol for ${orderName} (${Object.keys(checkoutClient).join(", ")})`
+            );
+          }
+
           inkToken = genNfcToken();
           const runEnroll = (key: string) =>
             enrollOrder(
@@ -551,7 +574,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               isInk() ? null : finalPhone || order.customer?.phone || order.phone || null,
               // The buyer's own order-status page on the merchant's site.
               // Shopify has always sent it in this body; we never read it.
-              { orderStatusUrl: data?.order_status_url || null, shopDomain: shop || null }
+              {
+                orderStatusUrl: data?.order_status_url || null,
+                shopDomain: shop || null,
+                ...(checkoutClient ? { checkoutClient } : {}),
+              }
             );
 
           let inkData: any;

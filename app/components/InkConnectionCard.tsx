@@ -105,7 +105,7 @@ export default function InkConnectionCard({
                 <Text as="p" fontWeight="semibold">
                   Shopify access
                 </Text>
-                <Badge tone={shopify === "connected" ? "info" : undefined}>
+                <Badge>
                   {status(shopify)}
                 </Badge>
               </InlineStack>
@@ -113,27 +113,27 @@ export default function InkConnectionCard({
                 {shopify === "connected"
                   ? "Shopify returned this store’s details."
                   : shopify === "unavailable"
-                    ? "Shopify could not be reached. Check again, or reopen ink from Shopify Admin."
+                    ? "Shopify could not be reached. Check again, or reopen ink. from Shopify Admin."
                     : "Shopify access has not been checked."}
               </Text>
             </BlockStack>
             <BlockStack gap="200">
               <InlineStack align="space-between" gap="200">
                 <Text as="p" fontWeight="semibold">
-                  Ink data access
+                  Ink. data access
                 </Text>
-                <Badge tone={ink === "connected" ? "info" : undefined}>
+                <Badge>
                   {status(ink)}
                 </Badge>
               </InlineStack>
               <Text as="p" tone="subdued">
                 {ink === "connected"
-                  ? "Ink returned this store’s dashboard data."
+                  ? "Ink. returned this store’s dashboard data."
                   : ink === "setup"
                     ? "Store setup is incomplete. Check again shortly. Contact support if it remains incomplete."
                     : ink === "unavailable"
-                      ? "Ink data could not be reached. Check again. Contact support if the problem continues."
-                      : "Ink data access has not been checked."}
+                      ? "Ink. data could not be reached. Check again. Contact support if the problem continues."
+                      : "Ink. data access has not been checked."}
               </Text>
             </BlockStack>
           </InlineGrid>

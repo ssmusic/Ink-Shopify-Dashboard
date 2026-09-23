@@ -8,8 +8,10 @@
 // pinned by a test on a fixture.
 //
 // ink's funnel is not the console's: ink has no page, so no "Clicked" step.
-// It runs orders → delivered → opened → location shared → seen at the door
-// (the orchestrator's brief, Sam's to overturn).
+// It runs orders → delivered → opened → location shared. It stops there: the
+// console's "seen at the door" is a verdict against the 100 m range, and ink
+// does not judge a distance (Sam, 2026-09-23: "we dont judge" · "we dont have
+// a default range").
 
 export type DeliveryRow = {
   enrolled_at?: string | null;
@@ -61,13 +63,11 @@ export function funnel(rows: DeliveryRow[]): FunnelStep[] {
   const delivered = orders.filter((r) => at(r.delivered_at) != null);
   const opened = delivered.filter((r) => (r.tap_count ?? 0) > 0);
   const shared = opened.filter((r) => sharedLocation(r));
-  const door = shared.filter((r) => r.verified_at_door === true);
   const steps: [string, string, DeliveryRow[]][] = [
     ["orders", "Orders", orders],
     ["delivered", "Delivered", delivered],
     ["opened", "Open", opened],
     ["shared", "Location shared", shared],
-    ["door", "Seen at the door", door],
   ];
   return steps.map(([key, label, list], i) => ({
     key,

@@ -66,7 +66,7 @@ function RecordHistoryItem({ row }: { row: HistoryItem }) {
               {orderLabel}
             </Text>
             <InlineStack>
-              <Badge tone={available ? "info" : undefined}>{status}</Badge>
+              <Badge>{status}</Badge>
             </InlineStack>
           </BlockStack>
           <BlockStack gap="100">

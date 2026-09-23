@@ -11,30 +11,31 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe("ink data boundaries", () => {
-  it("never follows a redirect with merchant credentials and never falls back to a public door", async () => {
-    const f = vi.fn(
-      async () =>
-        new Response("", {
-          status: 302,
-          headers: { Location: "https://elsewhere.test" },
-        }),
-    );
-    expect(
-      await readRecord(
-        "own-key",
-        "proof_aaaaaaaaaaaaaaaaaaaaaaaa",
-        f as typeof fetch,
-      ),
-    ).toBeNull();
-    expect(f).toHaveBeenCalledOnce();
-    expect(f.mock.calls[0]).toEqual([
-      expect.stringContaining("/proofs/proof_aaaaaaaaaaaaaaaaaaaaaaaa/audit"),
+  it("never follows a redirect with merchant credentials, and never sends them to a public door", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const f = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      return url.includes("/audit")
+        ? new Response("", { status: 302, headers: { Location: "https://elsewhere.test" } })
+        : new Response("{}", { status: 404 });
+    });
+    // The merchant door redirected: no record from it. (A fresh install's
+    // fallback to the record's public words is the only other read, and it
+    // carries no credential — services/ink-record.server.ts.)
+    expect(await readRecord("proof_aaaaaaaaaaaaaaaaaaaaaaaa", f as typeof fetch, "own-key")).toBeNull();
+    const audit = calls.filter((c) => c.url.includes("/proofs/proof_aaaaaaaaaaaaaaaaaaaaaaaa/audit"));
+    expect(audit).toHaveLength(1);
+    expect(audit[0].init).toEqual(
       expect.objectContaining({
         headers: { Authorization: "Bearer own-key" },
         redirect: "error",
         cache: "no-store",
       }),
-    ]);
+    );
+    for (const c of calls.filter((c) => !c.url.includes("/audit"))) {
+      expect(new Headers(c.init?.headers).get("Authorization")).toBeNull();
+    }
   });
   it("refuses unencrypted backend reads and missing credentials", async () => {
     vi.stubEnv("INK_API_URL", "http://unsafe.test/api");

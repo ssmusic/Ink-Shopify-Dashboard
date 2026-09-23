@@ -45,6 +45,15 @@ const { inkRecordAction, settleInkCharge, inkDoor } = await import(
   "./ink-billing.server"
 );
 const shop = "demo.myshopify.com";
+const FOR_SALE = {
+    locked: false,
+    whole: true,
+    elements: [],
+    summary: { order_number: "#1010" },
+    forSale: { price_cents: 2900, currency: "USD" },
+  };
+// Bought, or free: the whole record, nothing for sale.
+const HANDED_OVER = { locked: false, whole: true, elements: [], summary: {}, forSale: null };
 const proof = "proof_aaaaaaaaaaaaaaaaaaaaaaaa";
 const admin = { graphql: vi.fn() };
 const form = (intent = "buy", id = proof) => {
@@ -62,11 +71,9 @@ beforeEach(() => {
   vi.stubEnv("RECORD_PURCHASES_ENABLED", "true");
   vi.stubEnv("RECORD_PURCHASE_TEST", "false");
   vi.stubEnv("SHOPIFY_API_KEY", "public-app-id");
-  readRecord.mockResolvedValue({
-    locked: true,
-    summary: { order_number: "#1010" },
-    price: { price_cents: 2900, currency: "USD" },
-  });
+  // The merchant door answers a priced, unbought record WHOLE (ink-backend
+  // #129): unlocked to read, the hand-over for sale.
+  readRecord.mockResolvedValue(FOR_SALE);
   createRecordCharge.mockResolvedValue({
     chargeId: "gid://shopify/AppPurchaseOneTime/1",
     confirmationUrl: "https://admin.shopify.com/approve",
@@ -91,6 +98,18 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("ink Shopify billing", () => {
+  it("offers the hand-over, never the files, while it is for sale — the merchant door's whole view is not a purchase", async () => {
+    const door = await inkDoor(admin, shop, "own-key", proof);
+    expect(door).toMatchObject({ downloadable: false, pending: false });
+    expect(door.offerLine).toContain("Get the record");
+    // The words of a priced record (no whole read): no files, no offer.
+    readRecord.mockResolvedValue({ locked: true, elements: [], summary: {} });
+    expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({ downloadable: false, offerLine: null });
+    // The switch off: the record is still for sale, but nothing is offered and nothing is handed over.
+    readRecord.mockResolvedValue(FOR_SALE);
+    vi.stubEnv("RECORD_PURCHASES_ENABLED", "false");
+    expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({ downloadable: false, offerLine: null });
+  });
   it("takes its price and order name from the authenticated record, never the form", async () => {
     expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(
       true,
@@ -214,31 +233,46 @@ describe("ink Shopify billing", () => {
     expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(
       false,
     );
-    readRecord.mockResolvedValue({ locked: false, summary: {} });
+    readRecord.mockResolvedValue(HANDED_OVER);
     expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(
       false,
     );
+    // The public words of a priced record: nothing to buy from here.
+    readRecord.mockResolvedValue({ locked: true, elements: [], summary: {} });
+    expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(
+      false,
+    );
+    readRecord.mockResolvedValue(FOR_SALE);
     vi.stubEnv("RECORD_PURCHASES_ENABLED", "false");
     expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(
       false,
     );
     expect(createRecordCharge).not.toHaveBeenCalled();
   });
-  it("uses only the gated merchant export for a download", async () => {
+  it("uses only the gated merchant export for a download — and never while the hand-over is for sale", async () => {
     merchantRead.mockResolvedValue(null);
     expect(
       (await inkRecordAction(admin, shop, "own-key", form("download"))).ok,
     ).toBe(false);
-    merchantRead.mockResolvedValue({
-      manifest: { signed: true },
-      files: { "packet.json": "{}" },
-    });
+    const bundle = { manifest: { signed: true }, files: { "packet.json": "{}" } };
+    const doors = (record: unknown) =>
+      merchantRead.mockImplementation(async (_key: string, path: string) =>
+        path.endsWith("/export") ? bundle : { proof_id: proof, audience: "merchant", record },
+      );
+    doors({ locked: false, purchased: true, price_cents: 2900, currency: "USD" });
     const out = await inkRecordAction(admin, shop, "own-key", form("download"));
     expect(out.download).toMatchObject({ manifest: { signed: true } });
     expect(merchantRead).toHaveBeenCalledWith(
       "own-key",
       `proofs/${proof}/export`,
     );
+    // For sale (the merchant's whole view, not bought), or locked: no export is even asked for.
+    for (const record of [{ locked: false, purchased: false, price_cents: 2900, currency: "USD" }, { locked: true, price_cents: 2900, currency: "USD" }]) {
+      merchantRead.mockClear();
+      doors(record);
+      expect((await inkRecordAction(admin, shop, "own-key", form("download"))).ok).toBe(false);
+      expect(merchantRead).not.toHaveBeenCalledWith("own-key", `proofs/${proof}/export`);
+    }
   });
   it("serves a PDF only from this merchant's unlocked audit response", async () => {
     const audit = {
@@ -256,7 +290,13 @@ describe("ink Shopify billing", () => {
     expect(out.filename).toBe(`ink-record-${proof}.pdf`);
     expect(Buffer.from(out.pdfBase64!, "base64").toString("latin1")).toContain("%PDF-1.4");
     expect(merchantRead).toHaveBeenCalledWith("own-key", `proofs/${proof}/audit`);
-    for (const patch of [{ proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" }, { audience: "public" }, { record: { locked: true } }]) {
+    for (const patch of [
+      { proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" },
+      { audience: "public" },
+      { record: { locked: true } },
+      // The merchant door's whole view of a priced record, not bought: the PDF is the hand-over.
+      { record: { locked: false, purchased: false, price_cents: 2900, currency: "USD" } },
+    ]) {
       merchantRead.mockResolvedValue({ ...audit, ...patch });
       expect((await inkRecordAction(admin, shop, "own-key", form("pdf"))).ok).toBe(false);
     }
@@ -279,24 +319,22 @@ describe("ink Shopify billing", () => {
     const csv = await inkRecordAction(admin, shop, "own-key", form("csv"));
     expect(csv.csvText).toContain("event_12345678");
     expect(csv.filename).toBe(`ink-record-${proof}.csv`);
-    merchantRead.mockResolvedValue({ ...audit, record: { locked: true } });
-    expect((await inkRecordAction(admin, shop, "own-key", form("inspect"))).ok).toBe(false);
-    expect((await inkRecordAction(admin, shop, "own-key", form("csv"))).ok).toBe(false);
+    for (const record of [{ locked: true }, { locked: false, purchased: false, price_cents: 2900, currency: "USD" }]) {
+      merchantRead.mockResolvedValue({ ...audit, record });
+      expect((await inkRecordAction(admin, shop, "own-key", form("inspect"))).ok).toBe(false);
+      expect((await inkRecordAction(admin, shop, "own-key", form("csv"))).ok).toBe(false);
+    }
   });
   it("distinguishes a free unlocked record from one saved in purchase history", async () => {
-    readRecord.mockResolvedValue({ locked: false, summary: {} });
+    readRecord.mockResolvedValue(HANDED_OVER);
     expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({
       downloadable: true,
       inHistory: false,
     });
-    readRecord.mockResolvedValue({
-      locked: true,
-      summary: { order_number: "#1010" },
-      price: { price_cents: 2900, currency: "USD" },
-    });
+    readRecord.mockResolvedValue(FOR_SALE);
     await inkRecordAction(admin, shop, "own-key", form());
     await settleInkCharge(admin, shop, "own-key", proof);
-    readRecord.mockResolvedValue({ locked: false, summary: {} });
+    readRecord.mockResolvedValue(HANDED_OVER);
     expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({
       downloadable: true,
       inHistory: true,

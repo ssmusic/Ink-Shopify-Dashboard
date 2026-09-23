@@ -109,15 +109,15 @@ describe("an order's timeline", () => {
       [3552, "flagged", true],
       [null, "not_shared", false],
     ]);
-    expect(t?.steps.map((s) => s.state)).toEqual([
-      "done",
-      "not_recorded",
-      "not_recorded",
-      "done",
-      "done",
-      "not_recorded",
-      "not_recorded",
+    // The rail is Shipped · In transit · Delivered · Opened (Sam's rulings:
+    // no Enrolled, no return or refund step).
+    expect(t?.steps.map((s) => [s.key, s.state])).toEqual([
+      ["shipped", "not_recorded"],
+      ["in_transit", "not_recorded"],
+      ["delivered", "done"],
+      ["opened", "done"],
     ]);
+    expect(t?.opensAvailable).toBe(true);
     expect(t?.window).toMatchObject({
       withinExpectedWindow: true,
       windowEnd: "2026-08-28T20:29:50.138Z",
@@ -143,6 +143,27 @@ describe("an order's timeline", () => {
       },
     ]);
     expect(t?.address).toEqual({ lat: 34.1425, lng: -118.2551 });
+    expect(t?.opensAvailable).toBe(false);
+  });
+
+  it("never reads the proof's old default stamp as a share: without the opens door, the words are the record's alone", () => {
+    // Rows stamped before ink-backend #99 carry gps_verdict 'pass' on opens that shared nothing.
+    const stamped = { ...PROOF_BODY, gps_verdict: "pass", first_tap_distance_to_shipping_m: null };
+    expect(timelineFrom(stamped, null)?.opens).toEqual([]);
+    const t = timelineFrom(stamped, null, RECORD);
+    expect(t?.opens.map((o) => o.verdict)).toEqual(["flagged"]);
+  });
+
+  it("without the opens door, takes the first open's words from the record — the words the accordion prints above it", () => {
+    // The record read the same order honestly: the stored 3,552 m was a later measurement's, the first open shared nothing.
+    const record = {
+      summary: { first_open_at: "2026-08-25T20:29:59.868Z" },
+      locked: true,
+      elements: [{ element: "the_open", label: "The open", status: "verified", value: { location: { verdict: "not_shared", distance_m: null } } }],
+    };
+    expect(timelineFrom(PROOF_BODY, null, record)?.opens[0]).toMatchObject({ verdict: "not_shared", distance_m: null, at: "2026-08-25T20:29:59.868Z" });
+    // With the opens door, the opens are the door's own.
+    expect(timelineFrom(PROOF_BODY, OPENS_BODY, record)?.opens[0]).toMatchObject({ verdict: "flagged", distance_m: 3552 });
   });
 
   it("uses the paid merchant audit to show complete opens and points when the opens door is absent", async () => {
@@ -240,7 +261,7 @@ describe("the delivery dashboard", () => {
       Authorization: "Bearer ink_live_key",
     });
     expect(d?.orders).toBe(2);
-    expect(d?.funnel.map((s) => s.count)).toEqual([2, 1, 1, 1, 1]);
+    expect(d?.funnel.map((s) => s.count)).toEqual([2, 1, 1, 1]);
     expect(d?.waited).toEqual({ stuck: 1, withData: 1, sharePct: 100 });
     expect(d?.carrier[0]).toEqual({
       status: "Delivered",

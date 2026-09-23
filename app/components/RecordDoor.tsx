@@ -1,9 +1,12 @@
 // THE RECORD'S DOOR on one order row — both flavors (Sam, 2026-09-22: "the
 // words are free, the proof is paid").
 //
-//   priced, not bought, the switch on → "Get the record — $15": the press asks
-//     /app/record for Shopify's one-time charge and opens Shopify's approval
-//     screen at the top frame. Nothing is billed until the merchant approves.
+//   priced, not bought, the switch on → "Get the record — $15", and beside it
+//     what it buys — the signed copy to hand over (Sam, 2026-09-23: "the 29
+//     gets it signed"; the merchant already sees the whole record): the press
+//     asks /app/record for Shopify's one-time charge and opens Shopify's
+//     approval screen at the top frame. Nothing is billed until the merchant
+//     approves.
 //   bought → the packet link, and "Did you win?" — the merchant's word, saved
 //     on the purchase (the outcome, recorded from day one; never scored).
 //   no price, or the switch off → nothing at all.
@@ -14,6 +17,7 @@ import { useEffect } from "react";
 import { useFetcher } from "react-router";
 import { Button, InlineStack, Link, Select, Text } from "@shopify/polaris";
 import type { action as recordAction } from "../routes/app.record";
+import { HANDOVER_SENTENCE } from "../lib/record-handover";
 
 export type RecordDoorProps = {
   proofId: string;
@@ -85,6 +89,7 @@ export default function RecordDoor({ proofId, orderName, returnTo, door, hidePac
         >
           {door.offerLine}
         </Button>
+        <Text as="span" variant="bodySm" tone="subdued">{HANDOVER_SENTENCE}</Text>
         {buy.data && !buy.data.ok && buy.data.note && (
           <Text as="span" tone="critical" variant="bodySm">{buy.data.note}</Text>
         )}

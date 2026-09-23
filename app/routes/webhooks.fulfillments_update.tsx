@@ -292,9 +292,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const customerName = order.customer?.firstName || "Customer";
       const verifyUrl = order.proofMetafield?.value ? `https://www.in.ink/r/${order.proofMetafield.value}` : undefined;
 
+      // Which channels have an address — never the buyer's name or number.
       console.log(`\n📨 Dispatching immediate [${notificationType}] notification via NotificationService...`);
-      console.log(`   - To: ${customerName}`);
-      console.log(`   - Phone: ${customerPhone}`);
+      console.log(`   - email on file: ${customerEmail ? "yes" : "no"} · phone on file: ${customerPhone ? "yes" : "no"}`);
       
       const sent = await NotificationService.dispatch({
         type: notificationType,

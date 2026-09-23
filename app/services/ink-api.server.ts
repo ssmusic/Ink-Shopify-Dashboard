@@ -3,6 +3,7 @@ import { isInk } from "./app-flavor.server";
 import { flavorLogger } from "./ink-log.server";
 const console = flavorLogger("ink-api.server");
 import { authenticate } from "../shopify.server";
+import type { CheckoutClient } from "./checkout-client.server";
 
 const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
 const INK_ADMIN_SECRET = process.env.INK_ADMIN_SECRET;
@@ -315,7 +316,12 @@ export const enrollOrder = async (
     // An options bag rather than two more positional args — this signature is
     // already fourteen deep, and the two other enroll call sites (warehouse,
     // tagged-shipments) simply don't pass it and are unaffected.
-    orderContext?: { orderStatusUrl?: string | null; shopDomain?: string | null }
+    orderContext?: {
+        orderStatusUrl?: string | null;
+        shopDomain?: string | null;
+        // Shopify's checkout facts, already reduced (services/checkout-client.server.ts).
+        checkoutClient?: CheckoutClient | null;
+    }
 ) => {
     // Alan's API was changed to require order details nested in an
     // `order_details` JSON object rather than as separate top-level fields.
@@ -369,6 +375,10 @@ export const enrollOrder = async (
     if (photoHashes && photoHashes.length > 0) payload.photo_hashes = photoHashes;
     if (carrierName) payload.carrier_name = carrierName;
     if (trackingNumber) payload.tracking_number = trackingNumber;
+    // Beside the order, never inside order_details: Shopify's statement about
+    // the checkout, stored by the backend outside everything it signs
+    // (ink-backend utils/checkoutClient.js). Absent stays absent.
+    if (orderContext?.checkoutClient) payload.checkout_client = orderContext.checkoutClient;
 
     const enrollUrl = getAlanUrl('/api/enroll');
     console.log("[ink-api] enrollOrder →", enrollUrl);

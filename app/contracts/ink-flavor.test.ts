@@ -242,6 +242,9 @@ describe("under ink, the enrol and tracking queries select nothing outside INK_S
     for (const required of ["name", "email", "shippingAddress", "totalPriceSet", "lineItems", "sku", "image", "metafield", "fulfillments"]) {
       expect(q).toContain(required);
     }
+    // …and no phone: ink sends no message and shows no number, so it reads
+    // none (App Store review 2026-09-23 — the minimum-data rule).
+    expect(q).not.toMatch(/\bphone\b/);
   });
 
   it("does not read a phone or request fulfillment-service access", () => {

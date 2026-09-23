@@ -133,7 +133,11 @@ describe("the wiring", () => {
   });
 
   it("a locked record's PDF and export answer 402, and the card draws the door instead of them", () => {
-    expect(src("../routes/app.api.orders.$orderId.audit-report.tsx")).toContain('if (packet.record?.locked === true) return new Response("The record is not bought yet", { status: 402 });');
+    // The lock is the HAND-OVER's (lib/record-handover.ts): the merchant door
+    // answers a priced record whole (ink-backend #129), so the report asks the
+    // `record` block, never whether a chain came back.
+    expect(src("../routes/app.api.orders.$orderId.audit-report.tsx")).toContain('if (handoverLocked(packet.record)) return new Response("The record is not bought yet", { status: 402 });');
+    expect(src("../routes/app.orders.$orderId.tsx")).toContain("recordLocked = !!audit && handoverLocked(audit.record);");
     expect(src("../routes/app.api.orders.$orderId.record-export.tsx")).toContain("err instanceof InkApiError && err.status === 402");
     const card = src("../components/VerifiableRecordCard.tsx");
     expect(card).toContain("{!locked && (");
@@ -145,6 +149,8 @@ describe("the wiring", () => {
     // (components/InkRecentOrders.tsx — Sam, 2026-09-23).
     expect(src("../routes/app.ink._index.tsx")).toMatch(/<InkRecentOrders\s[^]*?orders=\{data\.recentOrders\}\s+returnTo="\/app\/ink"/);
     expect(src("../components/InkRecentOrders.tsx")).toContain("<InkRecordDoor proofId={row.proofId} door={row.door} />");
+    // The Google map's browser key reaches the list (components/OpensMap.tsx).
+    expect(src("../routes/app.ink._index.tsx")).toContain("mapsKey={data.mapsKey}");
   });
 });
 

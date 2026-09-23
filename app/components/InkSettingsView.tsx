@@ -44,23 +44,23 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
           <BlockStack gap="400">
             <InkPillNav active="settings" />
             <InkConnectionCard connection={data.connection} checking={revalidator.state !== "idle"} onCheck={() => revalidator.revalidate()} />
-            {data.ritualistUrl && (
+            {/* ADD THE RITUALIST — the review fix (#132, B2), byte for byte: no
+                listing address, no card; never a disabled button. */}
+            {data.ritualistUrl ? (
               <Card>
-                <BlockStack gap="300">
-                  <Text as="h2" variant="headingMd">
-                    The Ritualist
-                  </Text>
-                  <Text as="p">
-                    Branded order pages, delivery notifications and returns.
+                <BlockStack gap="200">
+                  {/* PLACEHOLDER copy */}
+                  <Text as="h2" variant="headingMd">Add The Ritualist</Text>
+                  <Text as="p" tone="subdued">
+                    Every order gets its own branded page — live tracking, delivery notifications, returns. The Ritualist includes ink.
                   </Text>
                   <InlineStack>
-                    <Button url={data.ritualistUrl} external>
-                      View The Ritualist
-                    </Button>
+                    {/* PLACEHOLDER label; the address comes from RITUALIST_LISTING_URL. */}
+                    <Button url={data.ritualistUrl} external>Add The Ritualist</Button>
                   </InlineStack>
                 </BlockStack>
               </Card>
-            )}
+            ) : null}
             {(data.privacy == null || data.privacy.length > 0) && (
               <Card>
                 <BlockStack gap="300">

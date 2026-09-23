@@ -1,0 +1,47 @@
+{
+  "_": "THE CHECKOUT'S DEVICE AND NETWORK, READ ONE WAY IN TWO REPOS. The Shopify app (Ink-Shopify-Dashboard app/services/checkout-client.vectors.json) reduces Shopify's client_details at enrol; the backend (utils/checkoutClient.js) reads each open's user agent and keeps each open's network prefix (utils/proxyTriage.js ipPrefixOf). Both files are this file, byte for byte: a comparison is only a comparison when both sides read the same way. device = the record's device word (the-ritualist src/lib/order-record-export.ts deviceLabel).",
+  "user_agents": [
+    { "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", "device": "iPhone", "browser": "Safari", "os": "iOS" },
+    { "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.54 Mobile/15E148 Safari/604.1", "device": "iPhone", "browser": "Chrome", "os": "iOS" },
+    { "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/127.0 Mobile/15E148 Safari/605.1.15", "device": "iPhone", "browser": "Firefox", "os": "iOS" },
+    { "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 EdgiOS/126.2592.86 Mobile/15E148 Safari/605.1.15", "device": "iPhone", "browser": "Edge", "os": "iOS" },
+    { "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 339.0.3.12.108 (iPhone15,2; iOS 17_5; en_US; en; scale=3.00; 1179x2556; 614247413)", "device": "iPhone", "browser": "Instagram", "os": "iOS" },
+    { "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/470.0.0.34.108;FBBV/613383584;FBDV/iPhone15,2;FBMD/iPhone;FBSN/iOS;FBSV/17.5;FBSS/3;FBID/phone;FBLC/en_US;FBOP/5;FBRV/615197361]", "device": "iPhone", "browser": "Facebook", "os": "iOS" },
+    { "ua": "Mozilla/5.0 (iPad; CPU OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1", "device": "iPad", "browser": "Safari", "os": "iOS" },
+    { "ua": "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.71 Mobile Safari/537.36", "device": "Android", "browser": "Chrome", "os": "Android" },
+    { "ua": "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36", "device": "Android", "browser": "Samsung Internet", "os": "Android" },
+    { "ua": "Mozilla/5.0 (Android 14; Mobile; rv:127.0) Gecko/127.0 Firefox/127.0", "device": "Android", "browser": "Firefox", "os": "Android" },
+    { "ua": "Mozilla/5.0 (Linux; Android 13; SM-A536B Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/125.0.6422.165 Mobile Safari/537.36 trill_350102 JsSdk/1.0 NetType/WIFI Channel/googleplay AppName/musical_ly app_version/35.1.2 ByteLocale/en ByteFullLocale/en Region/US BytedanceWebview/d8a21c6", "device": "Android", "browser": "TikTok", "os": "Android" },
+    { "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "device": "Windows", "browser": "Chrome", "os": "Windows" },
+    { "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.2592.68", "device": "Windows", "browser": "Edge", "os": "Windows" },
+    { "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 OPR/112.0.0.0", "device": "Windows", "browser": "Opera", "os": "Windows" },
+    { "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15", "device": "Mac", "browser": "Safari", "os": "macOS" },
+    { "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "device": "Mac", "browser": "Chrome", "os": "macOS" },
+    { "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:127.0) Gecko/20100101 Firefox/127.0", "device": "Mac", "browser": "Firefox", "os": "macOS" },
+    { "ua": "Mozilla/5.0 (X11; Linux x86_64; rv:127.0) Gecko/20100101 Firefox/127.0", "device": "Linux", "browser": "Firefox", "os": "Linux" },
+    { "ua": "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "device": "Other", "browser": "Chrome", "os": "ChromeOS" },
+    { "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; Microsoft Outlook 16.0.17726; ms-office; MSOffice 16)", "device": "Windows", "browser": "Other", "os": "Windows" },
+    { "ua": "curl/8.4.0", "device": "Other", "browser": "Other", "os": "Other" }
+  ],
+  "ip_prefixes": [
+    { "ip": "203.0.113.7", "prefix": "203.0.113.0/24" },
+    { "ip": "198.51.100.254", "prefix": "198.51.100.0/24" },
+    { "ip": "::ffff:192.0.2.33", "prefix": "192.0.2.0/24" },
+    { "ip": "2600:1700:ab12:3c40:d5f1:9b3e:a2c1:7e11", "prefix": "2600:1700:ab12::/48" },
+    { "ip": "2001:DB8:ABCD:0012::", "prefix": "2001:db8:abcd::/48" },
+    { "ip": "2001:db8::1:5", "prefix": "2001:db8:1::/48", "_": "the open's reader drops empty groups before taking three: a :: inside the first three groups shifts the prefix. Kept identical on both sides so an address reads the same way at checkout and at an open." },
+    { "ip": "256.1.1.1", "prefix": null },
+    { "ip": "1.2.3", "prefix": null },
+    { "ip": "fe80::1", "prefix": null },
+    { "ip": "not an ip", "prefix": null },
+    { "ip": "", "prefix": null }
+  ],
+  "languages": [
+    { "accept_language": "en-US,en;q=0.9", "language": "en-US" },
+    { "accept_language": "fr-CA", "language": "fr-CA" },
+    { "accept_language": "  de ; q=0.8, en ", "language": "de" },
+    { "accept_language": "zh-Hant-TW,zh;q=0.9", "language": "zh-Hant-TW" },
+    { "accept_language": "*", "language": null },
+    { "accept_language": "", "language": null }
+  ]
+}

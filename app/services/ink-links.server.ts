@@ -1,5 +1,22 @@
-// Shopify order reads for the ink screen. A rejected protected-field read
-// falls back to order identifiers; a failed fallback remains an error.
+// INK'S RECENT ORDERS — each order, and its record's id.
+//
+//   the record — each recent order's public page, www.in.ink/verify/<proof_id>.
+//     The proof id is the order's own ink.proof_reference metafield, written
+//     at enrol under ink's scopes (webhooks.orders_create.ts).
+//
+// THE LIST IS THE RITUALIST'S (Sam, 2026-09-23: "recent orders should show just
+// like the ritualist orders with an accordion and the get the record at the
+// bottom"), and it can be searched, sorted and paged (Sam, 2026-09-23: "need to
+// be able to sort the orders and search the orders"). The read carries what the
+// order's panel shows — its email, its ship-to, its lines, its total — still
+// with read_orders alone: never `customer { … }` (a Customer object needs
+// read_customers, which ink does not hold, and Shopify fails the WHOLE query
+// over one such selection — #1019) and never a line's `image` (read_products).
+// It no longer reads the order's ink metafields: older enrolments copied the
+// buyer's phone there, and nothing on the screen needs them. The email, name
+// and address are protected customer data: where Shopify redacts them it
+// answers with errors, and the read falls back to order identifiers alone. A
+// failed fallback is an error the screen says as one — never "no orders".
 import { shopifyOrderSearch, shopifyOrderSort } from "../lib/ink-order-search";
 
 export const RECENT_ORDERS_QUERY = `#graphql
