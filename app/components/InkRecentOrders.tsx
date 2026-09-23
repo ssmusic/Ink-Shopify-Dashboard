@@ -12,6 +12,7 @@ import {
   TextField,
 } from "@shopify/polaris";
 import InkRecordDoor, { type InkDoor } from "./InkRecordDoor";
+import InkRecordInspection from "./InkRecordInspection";
 import type { InkOrderDetail } from "../services/ink-links.server";
 import type { DisputePacketText } from "../services/ink-packet.server";
 import OrderTimeline, { type OrderTimelineData } from "./OrderTimeline";
@@ -20,7 +21,6 @@ import {
   elementLines,
   locationWordOf,
   opensOf,
-  when,
   type RecordRead,
 } from "../lib/record-words";
 
@@ -83,29 +83,6 @@ export function RecordWords({ record }: { record: RecordRead | null }) {
           ))}
         </BlockStack>
       ))}
-      {!record.locked && typeof record.eventCount === "number" && (
-        <BlockStack gap="300">
-          <Divider />
-          <Text as="h3" variant="headingMd">Recorded events</Text>
-          <Text as="p" tone="subdued">
-            {`${record.eventCount} events reported by ink. Signatures and hashes are listed as supplied; this screen does not verify them independently.`}
-          </Text>
-          {record.events?.map((event) => (
-            <BlockStack key={event.id} gap="100">
-              <Text as="h4" variant="headingSm">
-                {event.type.toLowerCase().replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}
-              </Text>
-              <Text as="p">{when(event.at)}</Text>
-              <Text as="p" tone="subdued" breakWord>
-                {`${event.id} · ${event.legacy ? "Earlier event" : event.sequence == null ? "Sequence unavailable" : `Sequence ${event.sequence}`} · ${event.signed ? "Signature supplied" : "No signature supplied"} · ${event.hash ? "Hash supplied" : "No hash supplied"}`}
-              </Text>
-            </BlockStack>
-          ))}
-          {record.eventCount > (record.events?.length || 0) && (
-            <Text as="p" tone="subdued">Showing up to 50 events. Download the JSON file for the complete event list.</Text>
-          )}
-        </BlockStack>
-      )}
     </BlockStack>
   );
 }
@@ -225,7 +202,10 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
               Advanced
             </Button>
             <Collapsible id={`advanced-${d?.id || row.id}`} open={advanced}>
-              <RecordWords record={row.record} />
+              <BlockStack gap="400">
+                <RecordWords record={row.record} />
+                {row.door.downloadable && row.proofId && <InkRecordInspection proofId={row.proofId} />}
+              </BlockStack>
             </Collapsible>
             <InkRecordDoor proofId={row.proofId} door={row.door} />
           </>

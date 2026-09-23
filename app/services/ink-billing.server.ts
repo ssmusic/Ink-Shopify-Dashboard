@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import firestore from "../firestore.server";
 import { createRecordPurchase } from "./ink-api.server";
-import { readRecord } from "./ink-record.server";
+import { readRecord, recordFromBody } from "./ink-record.server";
+import { buildInkRecordPdf } from "./ink-record-pdf.server";
+import { buildInkRecordCsv } from "./ink-record-csv.server";
+import { inspectionFromAudit } from "../lib/ink-record-inspection";
 import { merchantRead, PROOF_ID } from "./ink-reader.server";
 import {
   createRecordCharge,
@@ -140,6 +143,9 @@ export async function inkRecordAction(
     note,
     confirmationUrl: null,
     download: null as unknown,
+    pdfBase64: null as string | null,
+    csvText: null as string | null,
+    inspection: null as ReturnType<typeof inspectionFromAudit>,
     filename: null as string | null,
   });
   if (!apiKey || !PROOF_ID.test(proofId))
@@ -153,7 +159,39 @@ export async function inkRecordAction(
       note: null,
       confirmationUrl: null,
       download: bundle as unknown,
+      pdfBase64: null,
+      csvText: null,
+      inspection: null,
       filename: `ink-record-${proofId}.json`,
+    };
+  }
+  if (intent === "pdf" || intent === "csv" || intent === "inspect") {
+    const audit = await merchantRead(apiKey, `proofs/${proofId}/audit`);
+    const record = recordFromBody(audit);
+    if (audit?.proof_id !== proofId || audit?.audience !== "merchant" || !record || record.locked)
+      return no("The record is unavailable. Check record access and try again.");
+    const opens = await merchantRead(apiKey, `proofs/${proofId}/opens`);
+    const inspection = inspectionFromAudit(audit, opens);
+    if (!inspection || inspection.proofId !== proofId) return no("The record is unavailable. Try again.");
+    if (intent === "inspect") return {
+      ok: true as const, note: null, confirmationUrl: null, download: null as unknown,
+      pdfBase64: null, csvText: null, inspection, filename: null,
+    };
+    if (intent === "csv") return {
+      ok: true as const, note: null, confirmationUrl: null, download: null as unknown,
+      pdfBase64: null, csvText: buildInkRecordCsv(record, inspection), inspection: null,
+      filename: `ink-record-${proofId}.csv`,
+    };
+    const pdf = buildInkRecordPdf(audit, record, inspection);
+    return {
+      ok: true as const,
+      note: null,
+      confirmationUrl: null,
+      download: null as unknown,
+      pdfBase64: Buffer.from(pdf).toString("base64"),
+      csvText: null,
+      inspection: null,
+      filename: `ink-record-${proofId}.pdf`,
     };
   }
   if (intent !== "buy") return no("Unknown action.");
@@ -220,6 +258,9 @@ export async function inkRecordAction(
       note: null,
       confirmationUrl: charge.confirmationUrl,
       download: null as unknown,
+      pdfBase64: null,
+      csvText: null,
+      inspection: null,
       filename: null,
     };
   } catch {

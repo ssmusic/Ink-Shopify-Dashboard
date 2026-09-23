@@ -180,7 +180,8 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(text(html)).toContain('JSON file');
     expect(text(html)).toContain('while it remains in the recent-order list');
     expect(text(html)).not.toContain('You can download it again from Records');
-    expect(text(html)).not.toMatch(/PDF|attach as a file|Did you win/);
+    expect(text(html)).toContain('Download PDF');
+    expect(text(html)).not.toMatch(/attach as a file|Did you win/);
   });
 
   it('describes an approved charge as waiting for record access, without a second approval action', () => {
@@ -199,18 +200,16 @@ describe('ink screens: facts, working controls and Polaris', () => {
 
   it('shows record evidence as reported, without claiming browser verification', () => {
     const t = text(renderToString(<AppProvider i18n={translations}><RecordWords record={RECORD} /></AppProvider>));
-    for (const part of ['Evidence levels reported by the record', 'Recorded and signed', 'Device verified', 'First open signed', 'Seen at the door', '719 m from the delivery address']) expect(t).toContain(part);
+    for (const part of ['Evidence levels reported by the record', 'Recorded and signed', 'Verified event', 'First open signed', 'Seen at the door', '719 m from the delivery address']) expect(t).toContain(part);
     expect(t).not.toMatch(/flagged|Confirmed at the door|Checked in this browser|outside|default range/);
   });
 
-  it('shows purchased event metadata without claiming independent verification', () => {
+  it('keeps the preview short while the full purchased event inspector loads on demand', () => {
     const unlocked = { ...RECORD, locked: false, eventCount: 1, events: [{ id: 'event_12345678', type: 'TAP_RECORDED', at: '2026-09-20T00:00:00Z', sequence: 1, signed: true, hash: true, legacy: false }] };
     const t = text(renderToString(<AppProvider i18n={translations}><RecordWords record={unlocked} /></AppProvider>));
-    expect(t).toContain('Recorded events');
-    expect(t).toContain('Tap recorded');
-    expect(t).toContain('Signature supplied');
-    expect(t).toContain('this screen does not verify them independently');
-    expect(t).not.toContain('Signature verified');
+    expect(t).toContain('Evidence levels reported by the record');
+    expect(t).not.toContain('event_12345678');
+    expect(t).not.toContain('Checked in this browser');
   });
 
   it('shows record history with a repeat download and an honest missing-purchase path', () => {
@@ -219,7 +218,7 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(t).toContain('Records and approvals');
     expect(t).toContain('Download record');
     expect(t).toContain('View record details');
-    expect(t).toContain('Ink does not email the file');
+    expect(t).toContain('Ink does not email the files');
     expect(t).toContain('If a past purchase is missing');
   });
 

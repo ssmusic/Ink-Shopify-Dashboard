@@ -30,7 +30,7 @@ const createRecordPurchase = vi.fn();
 const createRecordCharge = vi.fn();
 const readRecordCharge = vi.fn();
 vi.mock("../firestore.server", () => ({ default: firestore }));
-vi.mock("./ink-record.server", () => ({ readRecord }));
+vi.mock("./ink-record.server", async (importOriginal) => ({ ...(await importOriginal<any>()), readRecord }));
 vi.mock("./ink-reader.server", () => ({
   merchantRead,
   PROOF_ID: /^proof_[0-9a-f]{24}$/,
@@ -239,6 +239,49 @@ describe("ink Shopify billing", () => {
       "own-key",
       `proofs/${proof}/export`,
     );
+  });
+  it("serves a PDF only from this merchant's unlocked audit response", async () => {
+    const audit = {
+      proof_id: proof,
+      audience: "merchant",
+      summary: { order_number: "#1010", opens: 1 },
+      verdict: { elements: [{ element: "order", label: "Order", status: "attested", value: { order_number: "#1010" } }] },
+      chain: [],
+      legacy_events: [],
+      record: { locked: false },
+    };
+    merchantRead.mockResolvedValue(audit);
+    const out = await inkRecordAction(admin, shop, "own-key", form("pdf"));
+    expect(out.ok).toBe(true);
+    expect(out.filename).toBe(`ink-record-${proof}.pdf`);
+    expect(Buffer.from(out.pdfBase64!, "base64").toString("latin1")).toContain("%PDF-1.4");
+    expect(merchantRead).toHaveBeenCalledWith("own-key", `proofs/${proof}/audit`);
+    for (const patch of [{ proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" }, { audience: "public" }, { record: { locked: true } }]) {
+      merchantRead.mockResolvedValue({ ...audit, ...patch });
+      expect((await inkRecordAction(admin, shop, "own-key", form("pdf"))).ok).toBe(false);
+    }
+  });
+  it("gates the full inspector and CSV behind the same owned record", async () => {
+    const audit = {
+      proof_id: proof,
+      audience: "merchant",
+      summary: { order_number: "#1010", opens: 1 },
+      verdict: { elements: [{ element: "the_open", label: "The open", status: "verified", value: { opens: 1 } }] },
+      chain: [{ event_id: "event_12345678", event_type: "TAP_RECORDED", seq: 1, signed_bytes: "exact bytes", payload_hash: "abc", signature: "supplied" }],
+      legacy_events: [],
+      record: { locked: false },
+    };
+    merchantRead.mockImplementation(async (_key: string, path: string) =>
+      path.endsWith("/opens") ? { opens: [{ at: "2026-09-23T12:00:00Z", distance_m: 719, outcome: "success" }] } : audit);
+    const inspector = await inkRecordAction(admin, shop, "own-key", form("inspect"));
+    expect(inspector.inspection?.events).toHaveLength(1);
+    expect(inspector.inspection?.opens?.[0].distanceM).toBe(719);
+    const csv = await inkRecordAction(admin, shop, "own-key", form("csv"));
+    expect(csv.csvText).toContain("event_12345678");
+    expect(csv.filename).toBe(`ink-record-${proof}.csv`);
+    merchantRead.mockResolvedValue({ ...audit, record: { locked: true } });
+    expect((await inkRecordAction(admin, shop, "own-key", form("inspect"))).ok).toBe(false);
+    expect((await inkRecordAction(admin, shop, "own-key", form("csv"))).ok).toBe(false);
   });
   it("distinguishes a free unlocked record from one saved in purchase history", async () => {
     readRecord.mockResolvedValue({ locked: false, summary: {} });

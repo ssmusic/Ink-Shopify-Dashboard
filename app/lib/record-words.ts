@@ -36,7 +36,7 @@ export type RecordRead = {
 };
 
 export const LEVEL_WORDS: Record<string, string> = {
-  verified: "Device verified",
+  verified: "Verified event",
   attested: "Recorded and signed",
   asserted: "In the record, unsigned",
   missing: "Missing",
