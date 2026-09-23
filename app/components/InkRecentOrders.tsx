@@ -180,7 +180,7 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
                 <BlockStack gap="400">
                   <InkRecordDoor proofId={row.proofId} door={row.door} />
                   <Divider />
-                  {row.door.downloadable ? (
+                  {row.record && !row.record.locked ? (
                     <InkRecordInspection
                       proofId={row.proofId}
                       record={row.record}

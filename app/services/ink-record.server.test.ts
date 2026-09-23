@@ -5,10 +5,10 @@ import { readRecord, readRecords, recordFromBody } from "./ink-record.server";
 import { elementLines, locationWordOf, opensOf } from "../lib/record-words";
 
 const PROOF = "proof_aec827b527fb30457c1da890";
-// The backend's public read, as it answered for Corvara #1010 on 2026-09-23.
+// Merchant-audit fixture adapted from the earlier record response.
 const BODY = {
   proof_id: PROOF,
-  audience: "public",
+  audience: "merchant",
   summary: { order_number: "#1010", buyer_initials: "SM", opens: 1 },
   verdict: {
     elements: [
@@ -57,6 +57,14 @@ const ok = (body: unknown) =>
   ) as unknown as typeof fetch;
 
 describe("readRecord", () => {
+  it("keeps purchase entitlement distinct from the unlocked audit view", () => {
+    const record = recordFromBody({ ...BODY, record: { locked: false, purchased: false, price_cents: 2900, currency: "USD" } });
+    expect(record).toMatchObject({ locked: false, purchased: false, price: { price_cents: 2900, currency: "USD" } });
+  });
+  it("rejects another proof or a public response at the merchant audit door", async () => {
+    for (const patch of [{ proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" }, { audience: "public" }])
+      expect(await readRecord("merchant-test", PROOF, ok({ ...BODY, ...patch }))).toBeNull();
+  });
   it("shows unlocked event metadata without exposing signed bytes or customer location", () => {
     const body = {
       ...BODY,

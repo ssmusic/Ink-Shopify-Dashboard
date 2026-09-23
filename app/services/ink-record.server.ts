@@ -138,7 +138,13 @@ export function recordFromBody(body: unknown): RecordRead | null {
       legacy: event.legacy === true,
     }];
   });
-  return { summary, elements, locked, price, events, eventCount: rawEvents.length };
+  return {
+    summary, elements, locked,
+    ...(typeof b.record?.purchased === "boolean"
+      ? { purchased: b.record.purchased }
+      : {}),
+    price, events, eventCount: rawEvents.length,
+  };
 }
 
 export async function readRecord(
@@ -147,9 +153,9 @@ export async function readRecord(
   fetchImpl: typeof fetch = fetch,
 ): Promise<RecordRead | null> {
   if (!PROOF_ID.test(proofId)) return null;
-  return recordFromBody(
-    await merchantRead(apiKey, `proofs/${proofId}/audit`, fetchImpl),
-  );
+  const audit = await merchantRead(apiKey, `proofs/${proofId}/audit`, fetchImpl);
+  if (audit?.proof_id !== proofId || audit?.audience !== "merchant") return null;
+  return recordFromBody(audit);
 }
 
 export async function readRecords(

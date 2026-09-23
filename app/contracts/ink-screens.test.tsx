@@ -215,9 +215,20 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(t).not.toContain('Payment is pending');
   });
 
+  it('shows the full merchant inspection before purchase without offering downloads', () => {
+    const t = text(render(() => <InkRecentOrders orders={[{
+      ...ROWS[0], record: { ...RECORD, locked: false, purchased: false },
+      door: { offerLine: "Get the record ($29 USD)", downloadable: false },
+    }]} defaultExpandedId={ROWS[0].id} />, {}));
+    expect(t).toContain('Checked in this browser');
+    expect(t).toContain('Event history');
+    expect(t).toContain('Get the record');
+    expect(t).not.toMatch(/The complete record|Download PDF|Download CSV/);
+  });
+
   it('shows record evidence as reported, without claiming browser verification', () => {
     const t = text(renderToString(<AppProvider i18n={translations}><RecordWords record={RECORD} /></AppProvider>));
-    for (const part of ['Evidence levels reported by the record', 'Recorded and signed', 'Verified event', 'First open signed', 'Seen at the door', '719 m from the delivery address']) expect(t).toContain(part);
+    for (const part of ['Evidence levels reported by the record', 'Recorded and signed', 'Verified by ink', 'First open signed', 'Seen at the door', '719 m from the delivery address']) expect(t).toContain(part);
     expect(t).not.toMatch(/flagged|Confirmed at the door|Checked in this browser|outside|default range/);
   });
 
@@ -279,7 +290,7 @@ describe('ink screens: facts, working controls and Polaris', () => {
 
   it('puts record downloads before evidence and shows each open only once', () => {
     const timeline = timelineFrom({enrolled_at:'2026-09-01T00:00:00Z'}, {address:{lat:34,lng:-118}, opens:[{at:'2026-09-02T00:00:00Z',outcome:'success',gps_verdict:'flagged',distance_m:719,accuracy_m:35,lat:34.005,lng:-118.004}]}, RECORD);
-    const t = text(render(() => <InkRecentOrders orders={[{...ROWS[0],timeline,door:{offerLine:null,downloadable:true}}]} defaultExpandedId={ROWS[0].id} />, {}));
+    const t = text(render(() => <InkRecentOrders orders={[{...ROWS[0],record:{...RECORD,locked:false},timeline,door:{offerLine:null,downloadable:true}}]} defaultExpandedId={ROWS[0].id} />, {}));
     expect(t.indexOf('Download PDF')).toBeLessThan(t.indexOf('What this record contains'));
     expect(t.indexOf('What this record contains')).toBeLessThan(t.indexOf('Checked in this browser'));
     expect(t.match(/Every open/g)?.length).toBe(1);

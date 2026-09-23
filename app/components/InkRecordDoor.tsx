@@ -98,11 +98,11 @@ export default function InkRecordDoor({
         {!compact && (
           <BlockStack gap="100">
             <Text as="h3" variant="headingSm">
-              {door.downloadable ? "Export the record" : "The complete record"}
+              {door.downloadable ? "Export the record" : "Record downloads"}
             </Text>
             <Text as="p" variant="bodySm" tone="subdued">
               {door.offerLine
-                ? "Event history, hashes and signatures. PDF, CSV and signed JSON."
+                ? "PDF report, CSV data and signed JSON. Includes the events available for this order."
                 : "PDF report, CSV data and signed JSON file."}
             </Text>
           </BlockStack>

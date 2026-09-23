@@ -47,6 +47,7 @@ const { inkRecordAction, settleInkCharge, inkDoor } = await import(
 const shop = "demo.myshopify.com";
 const proof = "proof_aaaaaaaaaaaaaaaaaaaaaaaa";
 const admin = { graphql: vi.fn() };
+const bundle = { manifest: { proof_id: proof, signed: true }, files: { "packet.json": "{}" } };
 const form = (intent = "buy", id = proof) => {
   const f = new FormData();
   f.set("intent", intent);
@@ -91,6 +92,32 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("ink Shopify billing", () => {
+  it("offers Shopify purchase when the full audit is visible but downloads are unpurchased", async () => {
+    readRecord.mockResolvedValue({ locked: false, purchased: false, summary: { order_number: "#1010" }, price: { price_cents: 2900, currency: "USD" } });
+    expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({ downloadable: false, offerLine: "Get the record ($29 USD)" });
+    expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(true);
+    expect(createRecordCharge).toHaveBeenCalledOnce();
+  });
+  it("allows inspection before purchase, but all three download formats require the export entitlement", async () => {
+    const audit = { proof_id: proof, audience: "merchant", record: { locked: false, purchased: false, price_cents: 2900, currency: "USD" }, summary: { opens: 0 }, verdict: { elements: [] }, chain: [] };
+    merchantRead.mockImplementation(async (_key: string, path: string) => path.endsWith("/audit") ? audit : null);
+    expect((await inkRecordAction(admin, shop, "own-key", form("inspect"))).ok).toBe(true);
+    for (const intent of ["pdf", "csv", "download"]) {
+      const out = await inkRecordAction(admin, shop, "own-key", form(intent));
+      expect(out.ok).toBe(false);
+      expect(out.pdfBase64).toBeNull();
+      expect(out.csvText).toBeNull();
+      expect(out.download).toBeNull();
+    }
+    merchantRead.mockImplementation(async (_key: string, path: string) => path.endsWith("/export") ? bundle : audit);
+    for (const intent of ["pdf", "csv", "download"])
+      expect((await inkRecordAction(admin, shop, "own-key", form(intent))).ok).toBe(true);
+  });
+  it("rejects a download bundle for another proof", async () => {
+    merchantRead.mockResolvedValue({ ...bundle, manifest: { ...bundle.manifest, proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" } });
+    for (const intent of ["pdf", "csv", "download"])
+      expect((await inkRecordAction(admin, shop, "own-key", form(intent))).ok).toBe(false);
+  });
   it("takes its price and order name from the authenticated record, never the form", async () => {
     expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(
       true,
@@ -230,7 +257,7 @@ describe("ink Shopify billing", () => {
       (await inkRecordAction(admin, shop, "own-key", form("download"))).ok,
     ).toBe(false);
     merchantRead.mockResolvedValue({
-      manifest: { signed: true },
+      manifest: { proof_id: proof, signed: true },
       files: { "packet.json": "{}" },
     });
     const out = await inkRecordAction(admin, shop, "own-key", form("download"));
@@ -250,7 +277,7 @@ describe("ink Shopify billing", () => {
       legacy_events: [],
       record: { locked: false },
     };
-    merchantRead.mockResolvedValue(audit);
+    merchantRead.mockImplementation(async (_key: string, path: string) => path.endsWith("/export") ? bundle : audit);
     const out = await inkRecordAction(admin, shop, "own-key", form("pdf"));
     expect(out.ok).toBe(true);
     expect(out.filename).toBe(`ink-record-${proof}.pdf`);
@@ -272,7 +299,7 @@ describe("ink Shopify billing", () => {
       record: { locked: false },
     };
     merchantRead.mockImplementation(async (_key: string, path: string) =>
-      path.endsWith("/opens") ? { opens: [{ at: "2026-09-23T12:00:00Z", distance_m: 719, outcome: "success" }] } : audit);
+      path.endsWith("/export") ? bundle : path.endsWith("/opens") ? { opens: [{ at: "2026-09-23T12:00:00Z", distance_m: 719, outcome: "success" }] } : audit);
     const inspector = await inkRecordAction(admin, shop, "own-key", form("inspect"));
     expect(inspector.inspection?.events).toHaveLength(1);
     expect(inspector.inspection?.opens?.[0].distanceM).toBe(719);

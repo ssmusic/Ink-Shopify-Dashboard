@@ -280,7 +280,7 @@ export default function InkRecordInspection({
         </BlockStack>
       </Box>
       <OpensAgainstAddress
-        address={timeline?.address ?? null}
+        address={timeline?.address ?? inspection?.address ?? null}
         opens={opens}
         available={
           inspection?.opens != null ? true : (timeline?.opensAvailable ?? false)
@@ -290,13 +290,13 @@ export default function InkRecordInspection({
             ? inspection.opensCapped
             : (timeline?.opensCapped ?? false)
         }
-        addressLabel={addressLabel}
+        addressLabel={addressLabel && addressLabel !== "Address unavailable" ? addressLabel : inspection?.addressLabel ?? undefined}
       />
       <Box background="bg" padding="400" borderRadius="200">
         <BlockStack gap="300">
           <InlineStack align="space-between" blockAlign="center" gap="200">
             <Text as="h3" variant="headingMd">
-              Signed events
+              Event history
             </Text>
             {inspection && (
               <Text

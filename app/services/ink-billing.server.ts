@@ -5,6 +5,7 @@ import { readRecord, recordFromBody } from "./ink-record.server";
 import { buildInkRecordPdf } from "./ink-record-pdf.server";
 import { buildInkRecordCsv } from "./ink-record-csv.server";
 import { inspectionFromAudit } from "../lib/ink-record-inspection";
+import { recordDownloadsAvailable } from "../lib/record-words";
 import { merchantRead, PROOF_ID } from "./ink-reader.server";
 import {
   createRecordCharge,
@@ -104,14 +105,14 @@ export async function inkDoor(
   const saved = await chargeRef(shop, proofId).get();
   const savedRow = saved.exists ? saved.data() : null;
   const state = savedRow?.state;
-  const downloadable = Boolean(record && !record.locked);
+  const downloadable = recordDownloadsAvailable(record);
   const inHistory = state === "minted";
   const paidPendingRecord =
     !downloadable && (state === "paid_pending_record" || state === "minted");
   const pending =
     !downloadable &&
     (state === "creating" || state === "pending" || paidPendingRecord);
-  const offer = record?.locked ? recordOffer(record.price ?? null) : null;
+  const offer = record && !downloadable ? recordOffer(record.price ?? null) : null;
   return {
     record,
     pending,
@@ -150,10 +151,20 @@ export async function inkRecordAction(
   });
   if (!apiKey || !PROOF_ID.test(proofId))
     return no("The record is unavailable. Refresh and try again.");
+  // The merchant audit can be viewable before purchase. Only the export door
+  // authorizes handing over files; this also covers genuinely free records.
+  let bundle: any = null;
+  if (["download", "pdf", "csv"].includes(intent)) {
+    bundle = await merchantRead(apiKey, `proofs/${proofId}/export`);
+    if (
+      bundle?.manifest?.proof_id !== proofId ||
+      !bundle.files ||
+      typeof bundle.files !== "object" ||
+      Array.isArray(bundle.files)
+    )
+      return no("Downloads are unavailable. Check record access and try again.");
+  }
   if (intent === "download") {
-    const bundle = await merchantRead(apiKey, `proofs/${proofId}/export`);
-    if (!bundle?.manifest || !bundle?.files)
-      return no("The record could not be downloaded. Try again.");
     return {
       ok: true as const,
       note: null,
@@ -199,7 +210,7 @@ export async function inkRecordAction(
     console.error("[ink billing] settlement pending"),
   );
   const record = await readRecord(apiKey, proofId);
-  if (record && !record.locked)
+  if (recordDownloadsAvailable(record))
     return no("This record is already available. Refresh to download it.");
   const ref = chargeRef(shop, proofId);
   const existing = await ref.get();
@@ -215,7 +226,7 @@ export async function inkRecordAction(
     return no(
       "A Shopify approval is already in progress. Check payment status before trying again.",
     );
-  const offer = record?.locked ? recordOffer(record.price ?? null) : null;
+  const offer = record ? recordOffer(record.price ?? null) : null;
   if (!offer) return no("This record is not available to purchase.");
   const appKey = process.env.SHOPIFY_API_KEY;
   if (!appKey) return no("Billing is unavailable. Try again later.");

@@ -61,8 +61,9 @@ export default function InkHelp() {
             the data available for that order.
           </Text>
           <Text as="p" tone="subdued">
-            A record documents the available events. It does not guarantee the
-            outcome of a dispute.
+            A purchase does not add new evidence or guarantee the outcome of a
+            dispute. Signatures are supplied by ink; this app checks event
+            hashes and links, but does not independently verify signatures.
           </Text>
         </Topic>
         <Topic title="Download again">

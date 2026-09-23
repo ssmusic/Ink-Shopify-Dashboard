@@ -20,8 +20,10 @@ export type RecordSummary = {
 export type RecordRead = {
   summary: RecordSummary;
   elements: RecordElement[];
-  /** Priced and not bought: the proof is behind the purchase; the words are not. */
+  /** Whether the merchant audit view is locked (older backend contract). */
   locked: boolean;
+  /** The current backend separates viewing a record from buying its downloads. */
+  purchased?: boolean;
   price?: { price_cents: number; currency: string } | null;
   events?: Array<{
     id: string;
@@ -35,10 +37,14 @@ export type RecordRead = {
   eventCount?: number;
 };
 
+export function recordDownloadsAvailable(record: RecordRead | null): boolean {
+  return Boolean(record && !record.locked && record.purchased !== false);
+}
+
 export const LEVEL_WORDS: Record<string, string> = {
-  verified: "Verified event",
+  verified: "Verified by ink",
   attested: "Recorded and signed",
-  asserted: "In the record, unsigned",
+  asserted: "Not verified by ink",
   missing: "Missing",
 };
 
@@ -59,7 +65,7 @@ export const VALUE_WORDS: Record<string, string> = {
   first_open_signed: "First open signed",
   opens: "Opens",
   signed_opens: "Signed opens",
-  non_human_opens: "Automated opens",
+  non_human_opens: "Excluded opens",
   location: "Location",
 };
 
@@ -79,6 +85,7 @@ export function when(iso: unknown): string {
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZoneName: "short",
   });
 }
 

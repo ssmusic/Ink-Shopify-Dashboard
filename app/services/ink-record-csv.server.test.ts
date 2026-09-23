@@ -56,5 +56,9 @@ describe("ink merchant record CSV", () => {
     expect(csv).toContain('"Event","event_12345678","Payload hash","a"');
     expect(csv).not.toContain("not exported in CSV");
     expect(csv).not.toContain("flagged");
+    const limited = buildInkRecordCsv(record, { ...inspection, opensCapped: true, events: [{ ...inspection.events[0], signedBytes: null }] });
+    expect(limited).toContain("this is not the complete open history");
+    expect(limited).toContain('"Signed bytes supplied","false"');
+    expect(limited).not.toContain("Stored bytes reproducible");
   });
 });
