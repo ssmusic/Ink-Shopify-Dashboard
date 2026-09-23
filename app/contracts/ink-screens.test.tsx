@@ -27,7 +27,7 @@ vi.mock("../services/merchant.server", () => ({ updateMerchant: vi.fn() }));
 vi.mock("../services/ink-api.server", () => ({ patchMerchant: vi.fn(), mintMagicToken: vi.fn() }));
 
 const { default: InkHome, loader: loadInkHome } = await import("../routes/app.ink._index");
-const { default: InkSettings } = await import("../routes/app.ink.settings");
+const { default: InkSettings, action: saveInkSettings } = await import("../routes/app.ink.settings");
 const { default: InkKpis } = await import("../components/InkKpis");
 const { default: OrderTimeline, DeliveryWindowBar } = await import("../components/OrderTimeline");
 const { timelineFrom } = await import("../services/ink-timeline.server");
@@ -294,18 +294,35 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(t).not.toMatch(/promised|expected|within|Yes/);
   });
 
-  it('saves a destination and does not promise a prompt-free or sign-in-free journey', () => {
+  it('removes destination choices without claiming automatic forwarding is already live', () => {
     const html = render(InkSettings, {flashForward:'carrier',canSave:true,ritualistUrl:'https://apps.shopify.com/example-listing',privacy:[]});
-    expect(html).toMatch(/value="carrier"[^>]*checked|checked[^>]*value="carrier"/);
-    for (const part of ['Shopify order page','Carrier tracking page','Save destination','may first ask','may ask the customer to sign in','View The Ritualist']) expect(text(html)).toContain(part);
+    for (const part of ['Tracking link destination','Shopify order page','Carrier tracking page','Save destination','Destination saved','original destination']) expect(text(html)).not.toContain(part);
+    expect(text(html)).toContain('View The Ritualist');
+    expect(html).not.toContain('name="flash_forward"');
     expect(html).not.toContain('disabled=""');
   });
 
   it('shows no dead upgrade button and no invented default destination', () => {
     const html = render(InkSettings, {flashForward:null,canSave:true,ritualistUrl:'',privacy:[]});
-    expect(text(html)).toContain('current setting is unavailable');
     expect(text(html)).not.toContain('View The Ritualist');
     expect(html).not.toContain('checked=""');
+  });
+
+  it('authenticates and rejects retired destination forms without writing the shared dial', async () => {
+    const { authenticate } = await import('../shopify.server');
+    const { patchMerchant } = await import('../services/ink-api.server');
+    const { updateMerchant } = await import('../services/merchant.server');
+    vi.mocked(patchMerchant).mockClear();
+    vi.mocked(updateMerchant).mockClear();
+    vi.mocked(authenticate.admin).mockResolvedValueOnce({ session: { shop: 'sample.myshopify.com' } } as never);
+    const args = { request: new Request('https://app.test/app/ink/settings', {method:'POST',body:new URLSearchParams({flash_forward:'carrier'})}) } as never;
+    const response = await saveInkSettings(args);
+    expect(response.status).toBe(405);
+    expect(response.headers.get('Allow')).toBe('GET');
+    expect(patchMerchant).not.toHaveBeenCalled();
+    expect(updateMerchant).not.toHaveBeenCalled();
+    vi.mocked(authenticate.admin).mockRejectedValueOnce(new Response(null,{status:401}));
+    await expect(saveInkSettings(args)).rejects.toMatchObject({status:401});
   });
 
   it('shows outstanding privacy requests as awaiting completion', () => {

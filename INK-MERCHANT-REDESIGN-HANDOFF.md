@@ -56,7 +56,9 @@ This iteration is not Sam-approved. The local preview is still sample data. The 
 
 ## Tracking destination follow-up
 
-Sam wants to preserve merchants’ existing Shopify/Klaviyo flows. No destination behavior was changed: ink currently rewrites the Shopify tracking URL, and the backend supports only order status or carrier destinations. A future fix needs to preserve the original destination before removing the selector; backend proof updates can overwrite the stored tracking URL with the rewritten ink URL. Hiding the setting alone would not preserve the flow. Backend remains read-only for this task.
+Sam approved automatic original-destination preservation and removal of the choice from Settings. The selector and save action are removed; stale forms authenticate and return 405. Ink tracking transport now ignores its own URL echoes, protecting the stored external URL while retaining carrier/status updates. The Ritualist transport body is unchanged.
+
+**The final automatic redirect is still incomplete.** The backend/redirect sources remain read-only under the original instructions. They must resolve the saved destination per fulfillment/tracking number, handle old overwritten links and out-of-order events, and preserve Ritualist behavior. Settings does not claim automatic forwarding is active. The concrete remaining change and acceptance cases are in `docs/ink-original-destination.md`. No deployment.
 
 ## Data and honesty boundaries
 
