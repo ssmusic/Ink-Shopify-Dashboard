@@ -311,13 +311,17 @@ describe("the pill nav, the Insights KPIs, and a bought record in the app (Sam, 
       </AppProvider>,
     );
     const t = text(html);
-    for (const part of ["DISPUTE PACKET", "Access activity log", "Opened 1 time after the order.", "Shipping documentation", "No carrier scan yet.", "Additional information", "The record of #1010.", "Did you win?"]) expect(t).toContain(part);
+    for (const part of ["Access activity log", "Opened 1 time after the order.", "Shipping documentation", "No carrier scan yet.", "Additional information", "The record of #1010.", "Did you win?"]) expect(t).toContain(part);
+    // Sam, 2026-09-23: "its called the record" — never "dispute packet".
+    expect(t).not.toMatch(/dispute packet/i);
     // The static render holds the desktop table AND the phone cards; count in the table.
     const desktop = text(html.slice(0, html.indexOf("lg:hidden")));
     expect((desktop.match(/\bCopy\b/g) ?? []).length).toBe(3);
     expect(t).not.toContain("Open the record");
     expect(html).not.toMatch(/href="https?:\/\//);
-    expect(t.indexOf("DISPUTE PACKET")).toBeGreaterThan(t.indexOf("THE RECORD"));
+    // The record's words, then the bought record under the same name.
+    expect((desktop.match(/THE RECORD/g) ?? []).length).toBe(2);
+    expect(desktop.indexOf("Access activity log")).toBeGreaterThan(desktop.lastIndexOf("THE RECORD"));
   });
 });
 
