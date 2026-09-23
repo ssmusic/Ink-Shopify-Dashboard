@@ -1,0 +1,94 @@
+{
+  "_": "THE CHECKOUT BESIDE THE OPENS, IN TWO LINES — the same words in the Shopify app's order view (Ink-Shopify-Dashboard app/lib/checkout-words.ts) and on the record page (the-ritualist src/lib/checkout-words.ts). Both files are this file, byte for byte. Input: the backend's checkout_vs_opens (ink-backend utils/auditPacket.js checkoutVsOpens). Every string is PLACEHOLDER copy — Sam's words replace it. Times are written <iso> here: the screens format them in the reader's own clock.",
+  "cases": [
+    {
+      "name": "an order enrolled before the switch",
+      "cvo": { "recorded": false },
+      "lines": [{ "label": "Checkout", "words": "Device not recorded" }]
+    },
+    {
+      "name": "the checkout and five opens: some on its device type, one from its network, a first on neither",
+      "cvo": {
+        "recorded": true,
+        "checkout": { "device": "iPhone", "browser": "Safari", "os": "iOS", "language": "en-US" },
+        "opens": { "count": 5, "device": { "compared": 4, "same": 2 }, "network": { "compared": 4, "same": 1 }, "first_on_neither": { "at": "2026-09-16T22:00:00.000Z", "device": "Android", "browser": "Chrome" }, "capped": false }
+      },
+      "lines": [
+        { "label": "Checkout", "words": "iPhone · Safari · en-US" },
+        { "label": "Opens compared", "words": "2 of 4 on the checkout's device type · 1 of 4 from the checkout's network · first on neither: <2026-09-16T22:00:00.000Z> (Android · Chrome)" }
+      ]
+    },
+    {
+      "name": "every open on the checkout's device and network: no first on neither",
+      "cvo": {
+        "recorded": true,
+        "checkout": { "device": "Android", "browser": "Samsung Internet", "os": "Android", "language": "ko-KR" },
+        "opens": { "count": 3, "device": { "compared": 3, "same": 3 }, "network": { "compared": 3, "same": 3 }, "first_on_neither": null, "capped": false }
+      },
+      "lines": [
+        { "label": "Checkout", "words": "Android · Samsung Internet · ko-KR" },
+        { "label": "Opens compared", "words": "3 of 3 on the checkout's device type · 3 of 3 from the checkout's network" }
+      ]
+    },
+    {
+      "name": "no opens yet",
+      "cvo": {
+        "recorded": true,
+        "checkout": { "device": "Mac", "browser": "Chrome", "os": "macOS", "language": null },
+        "opens": { "count": 0, "device": { "compared": 0, "same": 0 }, "network": { "compared": 0, "same": 0 }, "first_on_neither": null, "capped": false }
+      },
+      "lines": [
+        { "label": "Checkout", "words": "Mac · Chrome" },
+        { "label": "Opens compared", "words": "No opens yet" }
+      ]
+    },
+    {
+      "name": "the checkout's network was not recorded: the device type alone",
+      "cvo": {
+        "recorded": true,
+        "checkout": { "device": "iPhone", "browser": "Instagram", "os": "iOS", "language": "en-GB" },
+        "opens": { "count": 2, "device": { "compared": 2, "same": 1 }, "network": null, "first_on_neither": null, "capped": false }
+      },
+      "lines": [
+        { "label": "Checkout", "words": "iPhone · Instagram · en-GB" },
+        { "label": "Opens compared", "words": "1 of 2 on the checkout's device type" }
+      ]
+    },
+    {
+      "name": "neither side comparable",
+      "cvo": {
+        "recorded": true,
+        "checkout": { "device": "Other", "browser": null, "os": null, "language": "fr" },
+        "opens": { "count": 4, "device": null, "network": null, "first_on_neither": null, "capped": false }
+      },
+      "lines": [
+        { "label": "Checkout", "words": "Other device · fr" },
+        { "label": "Opens compared", "words": "Not compared: the checkout's device type and network were not recorded" }
+      ]
+    },
+    {
+      "name": "more opens than the door read",
+      "cvo": {
+        "recorded": true,
+        "checkout": { "device": "Windows", "browser": "Edge", "os": "Windows", "language": "en-US" },
+        "opens": { "count": 500, "device": { "compared": 500, "same": 12 }, "network": { "compared": 480, "same": 0 }, "first_on_neither": { "at": "2026-09-20T08:15:00.000Z", "device": "iPhone", "browser": "Safari" }, "capped": true }
+      },
+      "lines": [
+        { "label": "Checkout", "words": "Windows · Edge · en-US" },
+        { "label": "Opens compared", "words": "12 of 500 on the checkout's device type · 0 of 480 from the checkout's network · first on neither: <2026-09-20T08:15:00.000Z> (iPhone · Safari) · newest opens only" }
+      ]
+    },
+    {
+      "name": "recorded, but nothing of the device or language survived",
+      "cvo": {
+        "recorded": true,
+        "checkout": { "device": null, "browser": null, "os": null, "language": null },
+        "opens": { "count": 1, "device": null, "network": { "compared": 1, "same": 1 }, "first_on_neither": null, "capped": false }
+      },
+      "lines": [
+        { "label": "Checkout", "words": "Device not recorded" },
+        { "label": "Opens compared", "words": "1 of 1 from the checkout's network" }
+      ]
+    }
+  ]
+}

@@ -14,6 +14,7 @@ import {
 } from "../services/activation-scope.server";
 import { spendFromCap } from "../services/activation-counter.server";
 import { appFlavor, type AppFlavor } from "../services/app-flavor.server";
+import { checkoutClientFromWebhook, checkoutDetailsEnabled } from "../services/checkout-client.server";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -528,6 +529,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }
           }
 
+          // THE CHECKOUT'S DEVICE AND NETWORK (services/checkout-client.server.ts):
+          // read off the body Shopify already sent — no query, no scope — ONLY
+          // when this service's CHECKOUT_DETAILS_ENABLED is "true" (Sam's, after
+          // Shopify approves the protected customer data request that names
+          // this use). Reduced at once: the address to its /24 or /48, the user
+          // agent to device · browser · OS. Off, nothing is read and the enrol
+          // payload is byte-identical to what it has always been.
+          const checkoutClient = checkoutDetailsEnabled() ? checkoutClientFromWebhook(data) : null;
+          if (checkoutClient) {
+            // Field NAMES only — never a value.
+            console.log(
+              `[orders/create] checkout facts ride the enrol for ${orderName} (${Object.keys(checkoutClient).join(", ")})`
+            );
+          }
+
           inkToken = genNfcToken();
           const runEnroll = (key: string) =>
             enrollOrder(
@@ -550,7 +566,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               finalPhone || order.customer?.phone || order.phone || null,
               // The buyer's own order-status page on the merchant's site.
               // Shopify has always sent it in this body; we never read it.
-              { orderStatusUrl: data?.order_status_url || null, shopDomain: shop || null }
+              {
+                orderStatusUrl: data?.order_status_url || null,
+                shopDomain: shop || null,
+                ...(checkoutClient ? { checkoutClient } : {}),
+              }
             );
 
           let inkData: any;

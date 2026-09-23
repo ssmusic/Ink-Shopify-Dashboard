@@ -19,6 +19,8 @@
 
 import { kmOrM } from "./order-timeline";
 
+import type { CheckoutVsOpens } from "./checkout-words";
+
 export type RecordElement = {
   element: string;
   label: string;
@@ -38,11 +40,33 @@ export type RecordSummary = {
   opens?: number | null;
 };
 
+/** One browser an order was opened from, in words (ink-backend
+ *  utils/auditPacket.js browsers, 2026-09-23): its short name by first
+ *  appearance, the device family its opens arrived with, its opens, and
+ *  whether it first appeared at or after the carrier's delivered scan. The
+ *  browser's id never reaches the app: the record read keeps only these. */
+export type RecordBrowser = {
+  label: string;
+  device: string | null;
+  opens: number;
+  first_open_at: string | null;
+  last_open_at: string | null;
+  first_seen_after_delivered_scan: boolean | null;
+};
+
+/** The browsers the opens came from; opens with no id are browser unknown. */
+export type RecordBrowsers = { count: number; unknown_opens: number; list: RecordBrowser[] };
+
 export type RecordRead = {
   summary: RecordSummary;
   elements: RecordElement[];
   /** Priced and not bought: the proof is behind the purchase; the words are not. */
   locked: boolean;
+  /** The checkout beside the opens (lib/checkout-words.ts) — present only when
+   *  the backend's words carry it (its CHECKOUT_DETAILS_ENABLED switch). */
+  checkout?: CheckoutVsOpens;
+  /** The browsers the opens came from (absent from a backend before 2026-09-23). */
+  browsers?: RecordBrowsers | null;
 };
 
 export const LEVEL_WORDS: Record<string, string> = {
@@ -140,6 +164,38 @@ export function locationWordOf(record: RecordRead | null | undefined): string {
   if (word) return word.charAt(0).toUpperCase() + word.slice(1);
   if (loc.distance_m != null && Number.isFinite(loc.distance_m)) return kmOrM(loc.distance_m);
   return MEASURED.has(loc.verdict) ? "Location shared" : "—";
+}
+
+// ── The browsers (2026-09-23) ────────────────────────────────────────────
+// The-ritualist's own line (src/lib/audit-packet.ts browsersLine), copied so
+// the app and the record page say one line — the same fixtures pin both.
+
+const ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+function ordinal(i: number): string {
+  return ORDINALS[i] ?? `${i + 1}th`;
+}
+function joinWords(words: string[]): string {
+  return words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
+
+/** The browsers in one line: how many, each one's device and opens, the
+ *  opens no browser id came with, and which browsers were first seen after
+ *  the carrier's delivered scan. Null when the record has counted no browser
+ *  yet (every open came before the id, or none came).
+ *  PLACEHOLDER copy — Sam's words replace it. */
+export function browsersLine(browsers: RecordBrowsers | null | undefined): string | null {
+  const list = Array.isArray(browsers?.list) ? browsers!.list : [];
+  if (!list.length) return null;
+  const unknown = Number.isInteger(browsers?.unknown_opens) ? (browsers!.unknown_opens as number) : 0;
+  const parts = list.map((b) => `${b.device ?? "a browser"} ×${b.opens}`);
+  if (unknown > 0) parts.push(`browser unknown ×${unknown}`);
+  const head = `Opened from ${list.length} browser${list.length === 1 ? "" : "s"}: ${parts.join(", ")}.`;
+  const after = list.map((b, i) => (b.first_seen_after_delivered_scan === true ? i : -1)).filter((i) => i >= 0);
+  if (!after.length) return head;
+  if (after.length === list.length) {
+    return `${head} ${list.length === 1 ? "It was" : `All ${list.length} were`} first seen after the carrier's delivered scan.`;
+  }
+  return `${head} The ${joinWords(after.map(ordinal))} ${after.length === 1 ? "was" : "were"} first seen after the carrier's delivered scan.`;
 }
 
 /** How many times the order's tracking link was opened. */

@@ -79,7 +79,7 @@ export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
   );
 }
 
-export function OpensAgainstAddress({ address, opens, mapsKey = null }: { address: MapPoint | null; opens: TimelineOpen[]; mapsKey?: string | null }) {
+export function OpensAgainstAddress({ address, opens, mapsKey = null, browsers = null }: { address: MapPoint | null; opens: TimelineOpen[]; mapsKey?: string | null; browsers?: string | null }) {
   const located = opens.filter((o) => o.lat != null && o.lng != null && o.distance_m != null);
   const first = opens.find((o) => o.distance_m != null) ?? opens[0] ?? null;
   const mapOpens: MapOpen[] = located.map((o, i) => ({
@@ -116,6 +116,12 @@ export function OpensAgainstAddress({ address, opens, mapsKey = null }: { addres
             );
           })}
         </BlockStack>
+      ) : null}
+      {browsers ? (
+        // The browsers the opens came from, in the record's words (lib/record-words.ts browsersLine).
+        <Text as="p" variant="bodySm">
+          {browsers}
+        </Text>
       ) : null}
     </BlockStack>
   );
@@ -160,8 +166,11 @@ export function DeliveryWindowBar({ w }: { w: DeliveryWindow | null }) {
   );
 }
 
-/** The whole block, as it sits in the accordion under the record's words. */
-export default function OrderTimeline({ data, mapsKey = null }: { data: OrderTimelineData; mapsKey?: string | null }) {
+/** The whole block, as it sits in the accordion under the record's words.
+ *  `mapsKey` is the referrer-restricted Google Maps browser key (no key, no map).
+ *  `browsers` is the record's line about the browsers the opens came from,
+ *  printed under the opens (2026-09-23). */
+export default function OrderTimeline({ data, mapsKey = null, browsers = null }: { data: OrderTimelineData; mapsKey?: string | null; browsers?: string | null }) {
   const section = (title: string) => (
     <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
       {title}
@@ -174,7 +183,7 @@ export default function OrderTimeline({ data, mapsKey = null }: { data: OrderTim
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="500">
           <BlockStack gap="300">
             {section("THE OPENS · THE CUSTOMER'S PHONE ↔ THE DELIVERY ADDRESS")}
-            <OpensAgainstAddress address={data.address} opens={data.opens} mapsKey={mapsKey} />
+            <OpensAgainstAddress address={data.address} opens={data.opens} mapsKey={mapsKey} browsers={browsers} />
           </BlockStack>
           <BlockStack gap="300">
             {section("THE DELIVERY WINDOW")}
