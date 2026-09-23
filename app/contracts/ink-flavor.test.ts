@@ -66,6 +66,17 @@ describe("shopify.app.ink.toml", () => {
     expect(field(toml, "api_version")).toBe(field(live, "api_version"));
   });
 
+  it("ships no extension: the Ritualist's order-status block stays on the Ritualist's record", () => {
+    // An empty list means the default ("extensions/*") to the CLI, so the
+    // ink record's list must name a directory that holds no extension.
+    const dirs = toml.match(/^extension_directories\s*=\s*\[([^\]]*)\]/m)?.[1];
+    expect(dirs, "shopify.app.ink.toml must set extension_directories").toBeDefined();
+    const list = [...dirs!.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(list.length).toBeGreaterThan(0);
+    for (const d of list) expect(d.startsWith("extensions/"), `${d} would pick up the Ritualist's extensions`).toBe(false);
+    expect(live).not.toMatch(/^extension_directories/m);
+  });
+
   it("leaves the live record alone", () => {
     expect(field(live, "client_id")).toBe("8da1addef3dcd4251db5057cda3c85fa");
     expect(field(live, "name")).toBe("The Ritualist");
