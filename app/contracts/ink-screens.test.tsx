@@ -153,10 +153,11 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(html).toContain('Polaris-Tabs');
     expect(html).toContain('aria-selected="true"');
     expect(html).toContain('href="/app/ink/settings"');
+    expect(html.indexOf('href="/app/ink?view=insights"')).toBeLessThan(html.indexOf('href="/app/ink"'));
   });
 
   it('has exactly three KPI labels, no subtitles or unsupported integrity claims', () => {
-    const html = renderToString(<AppProvider i18n={translations}><InkKpis kpis={{recorded:12, opened:7, locationShared:2, capped:false}} /></AppProvider>);
+    const html = renderToString(<AppProvider i18n={translations}><InkKpis kpis={{recorded:12, opened:7, openRate:58, locationShared:2, capped:false}} /></AppProvider>);
     const t = text(html);
     expect((html.match(/<h2/g) || []).length).toBe(3);
     for (const part of ['Orders', 'Open', 'Location shared', '12', '7', '2']) expect(t).toContain(part);
@@ -243,6 +244,14 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(text(html)).not.toContain('Get the record');
     expect(text(html)).toContain('Needs attention');
     expect(text(html)).toContain('Check record access');
+  });
+
+  it('renders real rates without requiring a browser or combining sample denominators', () => {
+    const delivery = dashboardFrom({rows:[{delivered_at:'2026-09-20T00:00:00Z'},{}],taps:[]});
+    const html = render(InkHome,{section:'insights',stage:'ready',kpis:{recorded:12,opened:7,locationShared:2,openRate:58,capped:true},delivery});
+    for (const part of ['58%', '7 of 12 orders', '50%', '1 of 2 orders', '17%', '2 of 12 orders']) expect(text(html)).toContain(part);
+    const empty = text(render(InkHome,{section:'insights',stage:'ready',kpis:{recorded:0,opened:0,locationShared:0,openRate:null,capped:false},delivery:null}));
+    expect(empty).not.toMatch(/NaN|Infinity|0%/);
   });
 
   it('uses an accessible blue distance diagram and exact measurements without a range verdict', () => {

@@ -32,6 +32,10 @@ The current iteration keeps the lifecycle and one Advanced disclosure, open when
 
 Sam then requested background shading for legibility. Grey Polaris sections now distinguish the lifecycle, Advanced header, verification and signed-event group; evidence and opens remain white, with white event details on the grey group.
 
+Sam then requested Dashboard first, clearer Orders cells, a finished Records library and more real KPIs. Navigation is reordered. Order headers are bordered and shaded, with black order-number buttons and prominent recipient names/emails. “Get the record” no longer carries a price; Shopify approval still shows the amount before purchase. Records has compact PDF/CSV/JSON rows and a separate Needs attention group, with no new purchase offer. The preview has four available and one pending record.
+
+Dashboard adds blue Polaris Viz rings for open rate, first-open location coverage and recorded delivery rate. Each uses its own source denominator; a missing rate stays unavailable. Store-wide repeat visits, total opens, post-delivery opens, buyer segments and time-series counts still need a merchant aggregate door. Do not copy Ritualist’s admin list or call a first post-delivery open a repeat visit.
+
 This iteration is not Sam-approved. The local preview is still sample data. The earlier proposal for a dedicated record view is superseded by Sam's correction above.
 
 ## Data and honesty boundaries

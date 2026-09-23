@@ -17,11 +17,21 @@ describe("the Insights KPIs", () => {
   it("are the dashboard's own numbers, read with the merchant's own key — never the admin secret", async () => {
     vi.stubEnv("INK_ADMIN_SECRET", "admin-secret-must-not-be-sent");
     const f = vi.fn(async () => new Response(JSON.stringify(BODY))) as unknown as typeof fetch;
-    expect(await readInkKpis("ink_live_merchantkey", f)).toEqual({ recorded: 12, opened: 7, locationShared: 2, capped: false });
+    expect(await readInkKpis("ink_live_merchantkey", f)).toEqual({ recorded: 12, opened: 7, openRate: 58, locationShared: 2, capped: false });
     const [url, init] = calls(f)[0] as [string, { headers: Record<string, string> }];
     expect(url).toBe("https://us-central1-inink-c76d3.cloudfunctions.net/api/merchant-insights");
     expect(init.headers).toEqual({ Authorization: "Bearer ink_live_merchantkey" });
     expect(JSON.stringify(init)).not.toContain("admin-secret-must-not-be-sent");
+  });
+
+  it("keeps missing, invalid and zero-denominator rates unavailable", () => {
+    for (const rate of [undefined, null, "58", -1, 101]) {
+      expect(kpisFromBody({ ...BODY, throughput: { ...BODY.throughput, open_rate_pct: rate } })?.openRate).toBeNull();
+    }
+    expect(kpisFromBody({ ...BODY, throughput: { enrollments: 0, opened: 0, open_rate_pct: 0 }, integrity: { geofence: { gps_count: 0 } } })?.openRate).toBeNull();
+    expect(kpisFromBody({ ...BODY, throughput: { ...BODY.throughput, opened: 13 } })).toBeNull();
+    expect(kpisFromBody({ ...BODY, integrity: { geofence: { gps_count: 13 } } })).toBeNull();
+    expect(kpisFromBody({ ...BODY, throughput: { ...BODY.throughput, opened: 0, open_rate_pct: 0 } })?.openRate).toBe(0);
   });
 
   it("are nothing — never an error page — without a key or an answer", async () => {

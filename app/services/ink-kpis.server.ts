@@ -19,6 +19,8 @@ export type InkKpis = {
   recorded: number;
   /** Orders whose tracking link was opened at least once. */
   opened: number;
+  /** Percentage supplied by merchant-insights, not inferred from rounded counts. */
+  openRate: number | null;
   /** Records whose open carries the buyer's location. */
   locationShared: number;
   /** More records exist than the 2,000 counted. */
@@ -34,6 +36,7 @@ export function kpisFromBody(body: unknown): InkKpis | null {
     throughput?: {
       enrollments?: unknown;
       opened?: unknown;
+      open_rate_pct?: unknown;
     };
     integrity?: {
       geofence?: { gps_count?: unknown };
@@ -48,10 +51,23 @@ export function kpisFromBody(body: unknown): InkKpis | null {
     ].every((v) => typeof v === "number" && Number.isInteger(v) && v >= 0)
   )
     return null;
+  const recorded = num(b.throughput.enrollments);
+  const opened = num(b.throughput.opened);
+  const locationShared = num(b.integrity?.geofence?.gps_count);
+  if (opened > recorded || locationShared > recorded) return null;
+  const rate = b.throughput.open_rate_pct;
   return {
-    recorded: num(b.throughput.enrollments),
-    opened: num(b.throughput.opened),
-    locationShared: num(b.integrity?.geofence?.gps_count),
+    recorded,
+    opened,
+    openRate:
+      recorded > 0 &&
+      typeof rate === "number" &&
+      Number.isFinite(rate) &&
+      rate >= 0 &&
+      rate <= 100
+        ? rate
+        : null,
+    locationShared,
     capped: b.capped === true,
   };
 }

@@ -10,6 +10,7 @@ import {
   Text,
 } from "@shopify/polaris";
 import InkKpis from "./InkKpis";
+import InkDashboardRates from "./InkDashboardRates";
 import { formatHours } from "../lib/delivery-insights";
 import type { InkKpis as Kpis } from "../services/ink-kpis.server";
 import type { DeliveryDashboardData } from "../services/ink-delivery.server";
@@ -76,14 +77,21 @@ export default function DeliveryDashboard({
       ) : (
         <Banner tone="info">Order totals are unavailable.</Banner>
       )}
+      <InkDashboardRates kpis={kpis} delivery={delivery} />
       {delivery ? (
         <>
           <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
             <Card>
               <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">
-                  Delivery and opens
-                </Text>
+                <Box
+                  background="bg-surface-secondary"
+                  padding="300"
+                  borderRadius="200"
+                >
+                  <Text as="h2" variant="headingMd">
+                    Delivery and opens
+                  </Text>
+                </Box>
                 <Text as="p" tone="subdued">
                   Each count includes only orders in the previous step.
                 </Text>
@@ -104,9 +112,15 @@ export default function DeliveryDashboard({
             </Card>
             <Card>
               <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">
-                  Time to delivery
-                </Text>
+                <Box
+                  background="bg-surface-secondary"
+                  padding="300"
+                  borderRadius="200"
+                >
+                  <Text as="h2" variant="headingMd">
+                    Time to delivery
+                  </Text>
+                </Box>
                 {delivery.transit.measured > 0 ? (
                   <>
                     <Text as="p">{`Median ${formatHours(delivery.transit.medianHours)} from recording to delivery.`}</Text>
@@ -134,9 +148,15 @@ export default function DeliveryDashboard({
           <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
             <Card>
               <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">
-                  Delivery status
-                </Text>
+                <Box
+                  background="bg-surface-secondary"
+                  padding="300"
+                  borderRadius="200"
+                >
+                  <Text as="h2" variant="headingMd">
+                    Delivery status
+                  </Text>
+                </Box>
                 {delivery.carrier.length ? (
                   delivery.carrier.map((c) => (
                     <Bar
@@ -155,9 +175,15 @@ export default function DeliveryDashboard({
             </Card>
             <Card>
               <BlockStack gap="200">
-                <Text as="h2" variant="headingMd">
-                  Opens without a tracking update
-                </Text>
+                <Box
+                  background="bg-surface-secondary"
+                  padding="300"
+                  borderRadius="200"
+                >
+                  <Text as="h2" variant="headingMd">
+                    Opens without a tracking update
+                  </Text>
+                </Box>
                 {delivery.waited.withData > 0 ? (
                   <>
                     <Box color="text-info">
