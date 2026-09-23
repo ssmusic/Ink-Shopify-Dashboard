@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "repository": "ssmusic/Ink-Shopify-Dashboard",
+  "tasks": [
+    {
+      "id": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
+      "title": "Audit and fix ink honesty, privacy, billing and Polaris screens",
+      "request": "Sam explicitly asked to send this unfinished Shopify merchant app work to Claude Code. Register existing PR #133 for a checkpoint and handoff to Claude; do not create a new implementation or merge/deploy.",
+      "branch": "codex/ink-audit",
+      "pr": 133,
+      "phase": "queued",
+      "assignedAgent": "codex",
+      "owner": null,
+      "handoffTo": null,
+      "checkpoint": null,
+      "updatedAt": "2026-09-23T22:18:25.662Z"
+    }
+  ],
+  "projects": [],
+  "receipts": [
+    {
+      "id": "14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
+      "fingerprint": "a323cbaddb189555f0da69d43efe86d06471db1e9490e5137d52f3cdf1e62465",
+      "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-09-23T22:18:25.662Z",
+      "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
+      "action": "adopt",
+      "detail": "Existing work registered; receiver must inspect its current checkpoint."
+    }
+  ]
+}
