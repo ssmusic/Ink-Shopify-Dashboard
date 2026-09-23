@@ -26,6 +26,7 @@ import type { InkOrderDetail } from "../services/ink-links.server";
 import type { DisputePacketText } from "../services/ink-packet.server";
 import OrderTimeline, { type OrderTimelineData } from "./OrderTimeline";
 import { LEVEL_WORDS, elementLines, locationWordOf, opensOf, type RecordRead } from "../lib/record-words";
+import { checkoutLines } from "../lib/checkout-words";
 
 export type InkRecentOrderRow = {
   id: string;
@@ -83,6 +84,25 @@ export function RecordWords({ record }: { record: RecordRead | null }) {
           </BlockStack>
         </div>
       ))}
+      {record.checkout ? (
+        // THE CHECKOUT BESIDE THE OPENS (lib/checkout-words.ts): two lines under
+        // the open — what the checkout was, and how the opens compare with it.
+        // Only when the backend's words carry it; counts and facts, no verdict.
+        <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
+          <BlockStack gap="100">
+            {checkoutLines(record.checkout).map((line) => (
+              <InlineStack key={line.label} align="space-between" gap="200" wrap={false}>
+                <Text as="span" variant="bodySm" tone="subdued">
+                  {line.label}
+                </Text>
+                <Text as="span" variant="bodySm" alignment="end">
+                  {line.words}
+                </Text>
+              </InlineStack>
+            ))}
+          </BlockStack>
+        </div>
+      ) : null}
     </BlockStack>
   );
 }

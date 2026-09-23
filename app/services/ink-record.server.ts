@@ -9,6 +9,7 @@
 // row without its record, never a slow or broken screen.
 
 import type { RecordElement, RecordRead, RecordSummary } from "../lib/record-words";
+import { checkoutFromBody } from "../lib/checkout-words";
 
 const INK_API_URL = process.env.INK_API_URL || "https://us-central1-inink-c76d3.cloudfunctions.net/api";
 const PROOF_ID = /^proof_[0-9a-f]{24}$/;
@@ -21,7 +22,7 @@ function verifyUrl(proofId: string): string {
 
 /** The words of one record, or null. */
 export function recordFromBody(body: unknown): RecordRead | null {
-  const b = body as { summary?: RecordSummary; verdict?: { elements?: unknown[] }; record?: { locked?: unknown } } | null;
+  const b = body as { summary?: RecordSummary; verdict?: { elements?: unknown[] }; record?: { locked?: unknown }; checkout_vs_opens?: unknown } | null;
   if (!b || typeof b !== "object" || !Array.isArray(b.verdict?.elements)) return null;
   const elements: RecordElement[] = [];
   for (const e of b.verdict!.elements!) {
@@ -34,7 +35,10 @@ export function recordFromBody(body: unknown): RecordRead | null {
       value: el.value && typeof el.value === "object" ? (el.value as Record<string, unknown>) : null,
     });
   }
-  return { summary: b.summary ?? {}, elements, locked: b.record?.locked === true };
+  // The checkout beside the opens rides the same read, only when the backend's
+  // switch put it there; absent, the record is exactly what it was.
+  const checkout = checkoutFromBody(b.checkout_vs_opens);
+  return { summary: b.summary ?? {}, elements, locked: b.record?.locked === true, ...(checkout ? { checkout } : {}) };
 }
 
 export async function readRecord(proofId: string, fetchImpl: typeof fetch = fetch): Promise<RecordRead | null> {

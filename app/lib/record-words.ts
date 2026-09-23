@@ -12,6 +12,8 @@
 // the page never say the same record two ways. Pure: no server import, so the
 // screen renders the same words on the server and in the browser.
 
+import type { CheckoutVsOpens } from "./checkout-words";
+
 export type RecordElement = {
   element: string;
   label: string;
@@ -36,6 +38,9 @@ export type RecordRead = {
   elements: RecordElement[];
   /** Priced and not bought: the proof is behind the purchase; the words are not. */
   locked: boolean;
+  /** The checkout beside the opens (lib/checkout-words.ts) — present only when
+   *  the backend's words carry it (its CHECKOUT_DETAILS_ENABLED switch). */
+  checkout?: CheckoutVsOpens;
 };
 
 export const LEVEL_WORDS: Record<string, string> = {
