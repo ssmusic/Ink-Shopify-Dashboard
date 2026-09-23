@@ -339,7 +339,7 @@ describe("each order's timeline, inside the accordion (Sam, 2026-09-23)", () => 
     const line = "Opened from 2 browsers: iPhone ×2, Mac ×1, browser unknown ×1. All 2 were first seen after the carrier's delivered scan.";
     expect(t).toContain(line);
     expect(t.indexOf(line)).toBeGreaterThan(t.indexOf("location not shared"));
-    expect(t.indexOf(line)).toBeLessThan(t.indexOf("100 m and 300 m rings"));
+    expect(t).not.toContain("default range"); // no rings caption: the order page never names a default range (Sam, 2026-09-23)
     expect(text(open())).not.toContain("Opened from");
   });
 
