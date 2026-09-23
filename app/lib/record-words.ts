@@ -1,10 +1,13 @@
 // THE RECORD, IN WORDS — what an order's record says, printed inside the app.
 //
 // Sam, 2026-09-23: "we need to be showing the record" · "can we have a full
-// record open?". The words are the free half of the record (the paid half is
-// the dispute packet behind "Get the record"): each element of the backend's
-// public read, GET /verify/:proofId (ink-backend, the words projection of
-// #124), with its level and its values — never a coordinate, never a hash.
+// record open?" · "merchants need to see lots of compelling data — the 29
+// gets it signed". The merchant sees the WHOLE record (ink-backend #129): the
+// words of each element with its level and values, the checks, and every
+// signed event — read through the merchant door with the shop's own key
+// (services/ink-record.server.ts), or the public words when no key reads it.
+// What the price buys is the hand-over (lib/record-handover.ts). Never a
+// coordinate, never a hash.
 //
 // The words are the public record page's own (the-ritualist
 // src/pages/VerifyRecord.tsx LEVEL_WORDS + locationWords + valueWords, and
@@ -57,16 +60,38 @@ export type RecordBrowser = {
 /** The browsers the opens came from; opens with no id are browser unknown. */
 export type RecordBrowsers = { count: number; unknown_opens: number; list: RecordBrowser[] };
 
+/** One signed event, in words: its place in the chain, what it was, when,
+ *  and what the check found. */
+export type RecordEvent = {
+  seq: number | null;
+  event_id: string | null;
+  type: string;
+  at: string | null;
+  check: string;
+  legacy: boolean;
+};
+
+/** The checks, in words. */
+export type RecordChecks = { sound: boolean; headline: string; lines: string[] };
+
 export type RecordRead = {
   summary: RecordSummary;
   elements: RecordElement[];
-  /** Priced and not bought: the proof is behind the purchase; the words are not. */
+  /** The public words of a priced record: its proof is behind the purchase key. */
   locked: boolean;
   /** The checkout beside the opens (lib/checkout-words.ts) — present only when
    *  the backend's words carry it (its CHECKOUT_DETAILS_ENABLED switch). */
   checkout?: CheckoutVsOpens;
   /** The browsers the opens came from (absent from a backend before 2026-09-23). */
   browsers?: RecordBrowsers | null;
+  /** Read whole, through the merchant door with the shop's own key. */
+  whole?: boolean;
+  /** Every signed event, in words (whole reads only). */
+  events?: RecordEvent[];
+  /** The checks against the published key (whole reads only); null when none ran. */
+  checks?: RecordChecks | null;
+  /** The hand-over's price while it is for sale; null when bought or free. */
+  forSale?: { price_cents: number; currency: string } | null;
 };
 
 export const LEVEL_WORDS: Record<string, string> = {
@@ -202,4 +227,87 @@ export function browsersLine(browsers: RecordBrowsers | null | undefined): strin
 export function opensOf(record: RecordRead | null | undefined): number | null {
   const n = record?.summary?.opens;
   return typeof n === "number" ? n : null;
+}
+
+// ── The signed events and the checks, in words ─────────────────────────────
+// The record page's words (the-ritualist src/pages/VerifyRecord.tsx EVENT_WORDS,
+// src/lib/verify-record.ts headlineFor/signaturesWords/linksWords), said of
+// the published key rather than of a browser: here the app ran the checks.
+
+export const EVENT_WORDS: Record<string, string> = {
+  ENROLLED: "Order enrolled",
+  CARRIER_DELIVERED: "Carrier delivered",
+  TAP_RECORDED: "Opened",
+  DELIVERY_VERIFIED: "Confirmed at the door",
+  MEDIA_UPLOADED: "Photos attached",
+  RETURN_INITIATED: "Return started",
+  RETURN_LABEL_GENERATED: "Return label made",
+  PASSPORT_GENERATED: "Return code issued",
+  PASSPORT_SCANNED: "Return code scanned",
+  RETURN_COMPLETED: "Return completed",
+  RETURN_CANCELLED: "Return cancelled",
+};
+
+/** What the check found of one event's signature, in words. */
+export const SIGNATURE_WORDS: Record<string, string> = {
+  verified: "verified",
+  failed: "does not verify",
+  withheld: "withheld",
+  "no-key": "no published key",
+  unverifiable: "not re-verifiable",
+};
+
+/** The one word for an event the check did not run over. */
+export const NOT_CHECKED = "not checked";
+
+/** The shape of a finished check, as the words need it. */
+export type CheckCounts = {
+  signatures: { verified: number; failed: number; withheld: number; no_key: number; checkable: number };
+  links: { verified: number; failed: number };
+  sequence_dense: boolean;
+  legacy: { verified: number; failed: number; withheld: number; unverifiable: number };
+  keys_used: string[];
+  head: "matches" | "cut" | "ahead" | "unknown";
+  sound: boolean;
+};
+
+/** The checks in words: one headline and the two lines beneath it. */
+export function checkWords(check: CheckCounts): RecordChecks {
+  const s = check.signatures;
+  const l = check.legacy;
+  const chained = s.checkable + s.withheld;
+  const legacy = l.verified + l.failed + l.withheld + l.unverifiable;
+  let headline: string;
+  if (!chained && !legacy) headline = "Nothing to check.";
+  else if (!check.sound) headline = "This record does not check out.";
+  else {
+    const parts: string[] = [];
+    if (chained) parts.push(`${s.verified} of ${s.checkable} signatures verified`);
+    if (check.links.verified) parts.push("every link intact");
+    if (s.withheld) parts.push(`${s.withheld} withheld`);
+    if (l.verified) parts.push(`${l.verified} of ${l.verified + l.failed} pre-chain signatures verified`);
+    if (l.withheld) parts.push(`${l.withheld} pre-chain withheld`);
+    if (l.unverifiable) parts.push(`${l.unverifiable} pre-chain not re-verifiable`);
+    headline = !s.checkable && !l.verified
+      ? `Nothing verifiable here: ${parts.join(" · ")}.`
+      : `Checked against the published key: ${parts.join(" · ")}.`;
+  }
+  const lines: string[] = [];
+  if (chained) {
+    const against = check.keys_used.length ? check.keys_used.join(", ") : "no published key";
+    lines.push(`Signatures: ${s.verified} of ${s.checkable} verified against ${against}${s.withheld ? ` · ${s.withheld} withheld` : ""}${s.failed ? ` · ${s.failed} failed` : ""}${s.no_key ? ` · ${s.no_key} with no published key` : ""}`);
+    lines.push(`Hash links: ${check.links.verified} of ${check.links.verified + check.links.failed} intact${check.sequence_dense ? " · sequence complete" : " · sequence has a gap"}${check.head === "matches" ? " · matches the ledger's head" : check.head === "cut" ? " · SHORTER than the ledger's head" : ""}`);
+  } else if (legacy) {
+    lines.push("Signatures: no chained signatures yet — the pre-chain events are checked one by one");
+  }
+  return { sound: check.sound, headline, lines };
+}
+
+/** The checks when the published key did not load: nothing was checked. */
+export const UNCHECKED: RecordChecks = { sound: false, headline: "Not checked: the published key did not load.", lines: [] };
+
+/** An event type in words; an unknown type is said as it is, lowercased. */
+export function eventWords(type: string | null | undefined): string {
+  if (!type) return "Event";
+  return EVENT_WORDS[type] ?? type.toLowerCase().replace(/_/g, " ");
 }

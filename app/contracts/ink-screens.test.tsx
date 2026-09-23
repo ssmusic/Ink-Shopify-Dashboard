@@ -178,6 +178,58 @@ describe("ink's home: the orders and their records, inside Shopify (Sam, 2026-09
   });
 });
 
+describe("the merchant's WHOLE record in the accordion (Sam, 2026-09-23: \"the 29 gets it signed\")", () => {
+  // As services/ink-record.server.ts reads it through the merchant door with
+  // the shop's own key: the words, the checks and every signed event, in words.
+  const WHOLE = {
+    ...RECORD,
+    locked: false,
+    whole: true,
+    forSale: { price_cents: 2900, currency: "USD" },
+    checks: { sound: true, headline: "Checked against the published key: 3 of 3 signatures verified · every link intact.", lines: ["Signatures: 3 of 3 verified against key_001", "Hash links: 3 of 3 intact · sequence complete"] },
+    events: [
+      { seq: 1, event_id: "evt_1", type: "Order enrolled", at: "2026-08-20T18:50:54.195Z", check: "verified", legacy: false },
+      { seq: 2, event_id: "evt_2", type: "Opened", at: "2026-08-20T18:52:44.174Z", check: "verified", legacy: false },
+      { seq: 3, event_id: "evt_3", type: "Carrier delivered", at: "2026-08-22T15:10:00.000Z", check: "verified", legacy: false },
+    ],
+  };
+  const open = (record: unknown, door = { offerLine: "Get the record — $29", purchase: null }) =>
+    renderToString(
+      <AppProvider i18n={translations}>
+        {(() => {
+          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <InkRecentOrders orders={[{ ...ROWS[0], record: record as typeof RECORD, door }]} defaultExpandedId={ROWS[0].id} /> }]);
+          return <Stub initialEntries={["/"]} />;
+        })()}
+      </AppProvider>,
+    );
+
+  it("opens on the words, the checks and every signed event — in words, never a hash or a coordinate", () => {
+    const html = open(WHOLE);
+    const t = text(html);
+    for (const part of ["THE RECORD", "CHECKS", "Checked against the published key: 3 of 3 signatures verified · every link intact.", "Signatures: 3 of 3 verified against key_001", "Hash links: 3 of 3 intact · sequence complete", "SIGNED EVENTS", "1 · Order enrolled", "2 · Opened", "3 · Carrier delivered"]) expect(t).toContain(part);
+    expect((t.match(/\bverified\b/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    // The checks and the events follow the words, and the door is still last.
+    expect(t.indexOf("CHECKS")).toBeGreaterThan(t.indexOf("The open"));
+    expect(t.indexOf("SIGNED EVENTS")).toBeGreaterThan(t.indexOf("CHECKS"));
+    expect(t.lastIndexOf("Get the record — $29")).toBeGreaterThan(t.indexOf("SIGNED EVENTS"));
+    expect(html).not.toMatch(/[0-9a-f]{64}|signed_bytes|payload_hash|34\.0|-118\./);
+    expect(t).not.toMatch(/\bink\b(?!\.)/i);
+  });
+
+  it("the door says what the $29 buys", () => {
+    const t = text(open(WHOLE));
+    expect(t).toContain("Get the record — $29");
+    expect(t).toContain("The signed copy to hand over.");
+  });
+
+  it("a record read as words only (no key yet) shows no checks and no events — exactly as before", () => {
+    const t = text(open(RECORD));
+    expect(t).toContain("THE RECORD");
+    expect(t).not.toContain("CHECKS");
+    expect(t).not.toContain("SIGNED EVENTS");
+  });
+});
+
 describe("the pill nav, the Insights KPIs, and a bought record in the app (Sam, 2026-09-23)", () => {
   const pill = (html: string, id: string) => html.match(new RegExp(`<a[^>]*data-pill="${id}"[^>]*>`))?.[0] ?? "";
 

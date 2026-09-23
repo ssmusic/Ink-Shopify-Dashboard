@@ -15,6 +15,11 @@
 // links out of the app. The bottom of the accordion is the record's door:
 // "Get the record — $X", or once bought "Open the record" + "Did you win?".
 //
+// THE MERCHANT SEES THE WHOLE RECORD (Sam, 2026-09-23: "the 29 gets it
+// signed"; ink-backend #129): read with the shop's own key, the record also
+// carries its checks against the published key and every signed event, each
+// said in words under the elements (services/ink-record.server.ts).
+//
 // Every visible string that is ink's own is PLACEHOLDER copy — Sam's words.
 
 import { useState } from "react";
@@ -25,7 +30,7 @@ import RecordDoor, { type RecordDoorProps } from "./RecordDoor";
 import type { InkOrderDetail } from "../services/ink-links.server";
 import type { DisputePacketText } from "../services/ink-packet.server";
 import OrderTimeline, { type OrderTimelineData } from "./OrderTimeline";
-import { LEVEL_WORDS, browsersLine, elementLines, locationWordOf, opensOf, type RecordRead } from "../lib/record-words";
+import { LEVEL_WORDS, browsersLine, elementLines, locationWordOf, opensOf, when, type RecordRead } from "../lib/record-words";
 import { checkoutLines } from "../lib/checkout-words";
 
 export type InkRecentOrderRow = {
@@ -103,6 +108,44 @@ export function RecordWords({ record }: { record: RecordRead | null }) {
           </BlockStack>
         </div>
       ) : null}
+      {record.checks && (
+        <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }} data-record-checks>
+          <BlockStack gap="100">
+            <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
+              {/* PLACEHOLDER copy — the section's name */}
+              CHECKS
+            </Text>
+            <Text as="p" variant="bodySm" fontWeight="semibold">
+              {record.checks.headline}
+            </Text>
+            {record.checks.lines.map((line) => (
+              <Text key={line} as="p" variant="bodyXs" tone="subdued">
+                {line}
+              </Text>
+            ))}
+          </BlockStack>
+        </div>
+      )}
+      {record.events && record.events.length > 0 && (
+        <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }} data-record-events>
+          <BlockStack gap="100">
+            <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
+              {/* PLACEHOLDER copy — the section's name */}
+              SIGNED EVENTS
+            </Text>
+            {record.events.map((e) => (
+              <InlineStack key={e.event_id ?? `${e.seq}-${e.at}`} align="space-between" blockAlign="baseline" gap="200" wrap={false}>
+                <Text as="span" variant="bodySm">
+                  {`${e.seq != null ? `${e.seq} · ` : ""}${e.type}${e.legacy ? " · pre-chain" : ""}`}
+                </Text>
+                <Text as="span" variant="bodyXs" tone="subdued" alignment="end">
+                  {`${when(e.at)} · ${e.check}`}
+                </Text>
+              </InlineStack>
+            ))}
+          </BlockStack>
+        </div>
+      )}
     </BlockStack>
   );
 }
