@@ -1,8 +1,10 @@
 // THE RECORD'S DOOR — the pure edges (services/record-door.server.ts).
 //
 // What these pin:
-//   1. MONEY IS SAM'S GATE: no price → nothing; a price with the kill switch
-//      off → nothing offered; both on → the price. Test charges only by env.
+//   1. MONEY IS SAM'S GATE: the price is the BACKEND's alone (its $29
+//      default included) — this app carries no price and no default; a price
+//      with the kill switch off → nothing offered; both on → the backend's
+//      price. Test charges only by env.
 //   2. The charge is Shopify's one-time purchase, priced from the record, and
 //      it comes back through the admin's own deep link — never the app's bare
 //      URL (a top-level load there loses the charge id), never a guessed handle.
@@ -21,7 +23,6 @@ import {
   recordChargeGid,
   recordDoorRow,
   recordOffer,
-  recordPriceOf,
   recordPriceWords,
   recordReturnUrl,
   safeReturnTo,
@@ -33,26 +34,28 @@ const PROOF = "proof_b3ea86a2c6aa96d2d4ee1e8b";
 const src = (rel: string) => readFileSync(resolve(__dirname, rel), "utf8");
 
 describe("the price and the switch", () => {
-  it("reads the price the way the backend does — anything else is no price", () => {
-    for (const b of [null, {}, { retrieval_price_cents: 0 }, { retrieval_price_cents: -1 }, { retrieval_price_cents: 9.5 }, { retrieval_price_cents: "1500" }, { retrieval_price_cents: 1_000_001 }]) {
-      expect(recordPriceOf(b as Record<string, unknown> | null)).toBeNull();
+  it("carries no price and no default of its own: the raw field is never read here", () => {
+    for (const rel of ["./record-door.server.ts", "./record-charges.server.ts", "../routes/app.record.tsx"]) {
+      // Code, not comments: no read of the raw field and no default number.
+      const code = src(rel).replace(/\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm, "");
+      expect(code, rel).not.toMatch(/retrieval_price_cents|retrieval_currency|2900/);
     }
-    expect(recordPriceOf({ retrieval_price_cents: 1500 })).toEqual({ price_cents: 1500, currency: "USD" });
-    expect(recordPriceOf({ retrieval_price_cents: 900, retrieval_currency: "CAD" })).toEqual({ price_cents: 900, currency: "CAD" });
   });
 
-  it("offers nothing while the kill switch is off, whatever the record says", () => {
-    expect(recordOffer({ retrieval_price_cents: 1500 })).toBeNull();
+  it("offers nothing while the kill switch is off, whatever the backend says", () => {
+    const backendDefault = { price_cents: 2900, currency: "USD" };
+    expect(recordOffer(backendDefault)).toBeNull();
     vi.stubEnv("RECORD_PURCHASES_ENABLED", "yes");
-    expect(recordOffer({ retrieval_price_cents: 1500 })).toBeNull();
+    expect(recordOffer(backendDefault)).toBeNull();
     vi.stubEnv("RECORD_PURCHASES_ENABLED", "true");
-    expect(recordOffer({ retrieval_price_cents: 1500 })).toEqual({ price_cents: 1500, currency: "USD" });
-    expect(recordOffer({})).toBeNull();
+    expect(recordOffer(backendDefault)).toEqual(backendDefault);
+    expect(recordOffer(null)).toBeNull();
   });
 
   it("says the price plainly", () => {
     expect(recordPriceWords({ price_cents: 1500, currency: "USD" })).toBe("$15");
     expect(recordPriceWords({ price_cents: 1550, currency: "USD" })).toBe("$15.50");
+    expect(recordPriceWords({ price_cents: 2900, currency: "USD" })).toBe("$29");
   });
 });
 
@@ -124,7 +127,7 @@ describe("the wiring", () => {
     expect(loader).not.toMatch(/recordOffer|RECORD_PURCHASES_ENABLED|recordPurchasesEnabled/);
     expect(loader).toContain("settleRecordCharges(admin, session.shop, view.shopId)");
     const action = route.slice(route.indexOf("export const action"));
-    expect(action).toContain("const offer = recordOffer(view.backend);");
+    expect(action).toContain("const offer = recordOffer(await readRecordPrice(view.shopId));");
     expect(action).toContain("await rememberRecordCharge(session.shop, proofId, chargeId);");
     expect(src("../components/RecordDoor.tsx")).toContain('window.open(url, "_top")');
   });

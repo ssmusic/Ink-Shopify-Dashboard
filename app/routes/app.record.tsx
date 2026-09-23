@@ -23,7 +23,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { readInkMerchant } from "../services/ink-merchant.server";
-import { setRecordPurchaseOutcome, type RecordPurchase } from "../services/ink-api.server";
+import { readRecordPrice, setRecordPurchaseOutcome, type RecordPurchase } from "../services/ink-api.server";
 import { createRecordCharge, recordChargeGid, recordOffer, recordReturnUrl, safeReturnTo } from "../services/record-door.server";
 import { rememberRecordCharge, settleRecordCharges } from "../services/record-charges.server";
 
@@ -55,7 +55,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const returnTo = safeReturnTo(form.get("return_to"));
     if (!PROOF_ID.test(proofId)) return { ok: false, intent, confirmationUrl: null, note: "No record for this order." }; // PLACEHOLDER
     const view = await readInkMerchant(session.shop);
-    const offer = recordOffer(view.backend);
+    const offer = recordOffer(await readRecordPrice(view.shopId));
     if (!offer) return { ok: false, intent, confirmationUrl: null, note: "The record isn't for sale here." }; // PLACEHOLDER
     const apiKey = process.env.SHOPIFY_API_KEY;
     if (!apiKey) return { ok: false, intent, confirmationUrl: null, note: "The app has no address to come back to." }; // PLACEHOLDER
