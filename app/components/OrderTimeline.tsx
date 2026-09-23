@@ -12,8 +12,15 @@
 // The rules are lib/order-timeline.ts's; the map is components/OpensMap.tsx.
 // No coordinate is printed as text: the words say the distance.
 //
+// ONE OPEN, PICKED OUT (Sam, 2026-09-23: "can each one of these have a map if
+// you click on it also?"). Each open in the list that carried a fix is a
+// button: pressing it picks that open out on the map (the others dim and drop
+// their labels); pressing it again gives every open back. An open with no fix
+// has nothing on the map and stays a line of words.
+//
 // Every visible string is PLACEHOLDER copy — Sam's words replace it.
 
+import { useState } from "react";
 import { BlockStack, Box, InlineGrid, InlineStack, Text } from "@shopify/polaris";
 import OpensMap, { type MapOpen, type MapPoint } from "./OpensMap";
 import { INK_DATA, INK_DATA_TINT, INK_HAIRLINE, INK_MUTED } from "../lib/ink-palette";
@@ -79,7 +86,17 @@ export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
   );
 }
 
+/** The open a press leaves picked out: the pressed one, or none when it was already. */
+export function nextFocus(current: number | null, pressed: number): number | null {
+  return current === pressed ? null : pressed;
+}
+
+// A row of the list: the same geometry pressable or not, so the words line up;
+// a pressable row's tint is the palette's, when hovered, pressed or focused.
+const ROW_CSS = `.ink-open-row{display:flex;align-items:center;justify-content:space-between;gap:8px;box-sizing:border-box;width:calc(100% + 16px);margin:0 -8px;padding:4px 8px;border:0;border-radius:8px;background:transparent;font:inherit;color:inherit;text-align:left}button.ink-open-row{cursor:pointer}button.ink-open-row:hover{background:var(--p-color-bg-surface-hover)}button.ink-open-row[aria-pressed=true]{background:${INK_DATA_TINT}}button.ink-open-row:focus-visible{outline:2px solid var(--p-color-border-focus);outline-offset:1px}.ink-open-row-lead{display:flex;align-items:center;gap:8px;min-width:0}`;
+
 export function OpensAgainstAddress({ address, opens, mapsKey = null, browsers = null }: { address: MapPoint | null; opens: TimelineOpen[]; mapsKey?: string | null; browsers?: string | null }) {
+  const [focus, setFocus] = useState<number | null>(null);
   const located = opens.filter((o) => o.lat != null && o.lng != null && o.distance_m != null);
   const first = opens.find((o) => o.distance_m != null) ?? opens[0] ?? null;
   const mapOpens: MapOpen[] = located.map((o, i) => ({
@@ -88,31 +105,45 @@ export function OpensAgainstAddress({ address, opens, mapsKey = null, browsers =
     distance_m: o.distance_m,
     label: `Open ${opens.indexOf(o) + 1}${o.at ? ` · ${when(o.at)}` : ""}`,
   }));
+  // Only a drawn map has an open to pick out.
+  const mapShown = !!(address && mapOpens.length > 0 && mapsKey);
   return (
     <BlockStack gap="300">
       <Text as="p" variant="bodySm">
         {first ? openSentence(first.distance_m, first.verdict) : "Not opened yet."}
       </Text>
-      {address && mapOpens.length > 0 ? <OpensMap apiKey={mapsKey} address={address} opens={mapOpens} /> : null}
+      {mapShown ? <OpensMap apiKey={mapsKey} address={address} opens={mapOpens} focus={focus} /> : null}
       {opens.length > 0 ? (
         <BlockStack gap="100">
+          <style>{ROW_CSS}</style>
           {opens.map((o, i) => {
             const r = openResult(o.distance_m, o.verdict);
-            return (
-              <InlineStack key={`${o.at ?? ""}-${i}`} align="space-between" blockAlign="center" gap="200" wrap={false}>
-                <InlineStack gap="200" blockAlign="center" wrap={false}>
-                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 9999, background: r === "measured" ? INK_DATA : INK_HAIRLINE, display: "inline-block" }} />
+            const onMap = mapShown ? located.indexOf(o) : -1;
+            const row = (
+              <>
+                <span className="ink-open-row-lead">
+                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 9999, background: r === "measured" ? INK_DATA : INK_HAIRLINE, display: "inline-block", flexShrink: 0 }} />
                   <Text as="span" variant="bodySm">
                     {`Open ${i + 1}`}
                   </Text>
                   <Text as="span" variant="bodySm" tone="subdued">
                     {when(o.at)}
                   </Text>
-                </InlineStack>
+                </span>
                 <Text as="span" variant="bodySm" alignment="end">
                   {r === "measured" && o.distance_m != null ? kmOrM(o.distance_m) : RESULT_WORD[r]}
                 </Text>
-              </InlineStack>
+              </>
+            );
+            const key = `${o.at ?? ""}-${i}`;
+            return onMap >= 0 ? (
+              <button key={key} type="button" className="ink-open-row" aria-pressed={focus === onMap} onClick={() => setFocus((f) => nextFocus(f, onMap))}>
+                {row}
+              </button>
+            ) : (
+              <div key={key} className="ink-open-row">
+                {row}
+              </div>
             );
           })}
         </BlockStack>

@@ -20,6 +20,12 @@
 //
 // The coordinates are for the map alone: nothing here prints one as text.
 // Colours are lib/ink-palette.ts's: one blue for every open, neutral otherwise.
+//
+// ONE OPEN, PICKED OUT (Sam, 2026-09-23, of the record's opens: "can each one
+// of these have a map if you click on it also?"). Pressing an open in the list
+// under the map sets `focus`: that open keeps its label and comes forward, the
+// others dim and drop their distance labels; no focus draws every open alike.
+// The marks are restyled in place; the map never redraws, pans or zooms for it.
 
 import { useEffect, useRef, useState } from "react";
 import { INK_DATA, INK_HAIRLINE, INK_NEUTRAL } from "../lib/ink-palette";
@@ -31,6 +37,36 @@ export type MapOpen = MapPoint & {
   /** Shown when the point is hovered, e.g. "Open 2, Aug 20, 11:52 AM". */
   label: string;
 };
+
+/** How open `i` is drawn while `focus` is picked out (null: none is). */
+export const DIM = 0.25;
+export function focusLook(i: number, focus: number | null | undefined): { opacity: number; label: boolean; z: number } {
+  if (focus == null) return { opacity: 1, label: true, z: 10 };
+  return i === focus ? { opacity: 1, label: true, z: 15 } : { opacity: DIM, label: false, z: 5 };
+}
+
+// A dashed line: Google draws dashes as a repeated symbol on an invisible line.
+function dashes(opacity: number) {
+  return [{ icon: { path: "M 0,-1 0,1", strokeOpacity: opacity, strokeColor: INK_DATA, scale: 2 }, offset: "0", repeat: "10px" }];
+}
+
+// The handles each open leaves on the map: only what picking one out restyles.
+type Drawn = {
+  line: { setOptions(o: object): void };
+  label: { setVisible(v: boolean): void; setZIndex(z: number): void };
+  point: { setOpacity(o: number): void; setZIndex(z: number): void };
+};
+
+function applyFocus(drawn: Drawn[], focus: number | null | undefined) {
+  drawn.forEach((d, i) => {
+    const look = focusLook(i, focus);
+    d.line.setOptions({ icons: dashes(look.opacity), zIndex: look.z });
+    d.label.setVisible(look.label);
+    d.label.setZIndex(look.z + 1);
+    d.point.setOpacity(look.opacity);
+    d.point.setZIndex(look.z + 2);
+  });
+}
 
 export function distanceLabel(m: number | null | undefined): string {
   if (m == null || !Number.isFinite(m)) return "";
@@ -62,9 +98,25 @@ function loadGoogleMaps(apiKey: string): Promise<any> {
 // The distance label on each line: a small white chip, Polaris-plain.
 const LABEL_CSS = `.ink-map-distance{background:#fff;border:1px solid ${INK_HAIRLINE};border-radius:6px;padding:2px 6px;transform:translateY(-2px)}`;
 
-export default function OpensMap({ apiKey, address, opens, height = 280 }: { apiKey: string | null; address: MapPoint; opens: MapOpen[]; height?: number }) {
+export default function OpensMap({
+  apiKey,
+  address,
+  opens,
+  focus = null,
+  height = 280,
+}: {
+  apiKey: string | null;
+  address: MapPoint;
+  opens: MapOpen[];
+  /** The open to pick out, by index into `opens`; null: none. */
+  focus?: number | null;
+  height?: number;
+}) {
   const el = useRef<HTMLDivElement | null>(null);
   const [failed, setFailed] = useState(false);
+  const drawnRef = useRef<Drawn[]>([]);
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
   // Redraw only when what is drawn changes — never on an unrelated re-render.
   const drawn = JSON.stringify({ address, opens });
 
@@ -72,6 +124,7 @@ export default function OpensMap({ apiKey, address, opens, height = 280 }: { api
     if (!apiKey || !el.current) return;
     let cancelled = false;
     const made: any[] = [];
+    drawnRef.current = [];
     (async () => {
       let g: any;
       try {
@@ -100,29 +153,30 @@ export default function OpensMap({ apiKey, address, opens, height = 280 }: { api
 
       for (const o of opens) {
         const at = { lat: o.lat, lng: o.lng };
-        // A dashed line: Google draws dashes as a repeated symbol on an invisible line.
-        made.push(new g.Polyline({
+        const line = new g.Polyline({
           map,
           path: [at, home],
           strokeOpacity: 0,
           clickable: false,
-          icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: INK_DATA, scale: 2 }, offset: "0", repeat: "10px" }],
-        }));
-        made.push(new g.Marker({
+          icons: dashes(1),
+        });
+        const label = new g.Marker({
           map,
           position: { lat: (o.lat + home.lat) / 2, lng: (o.lng + home.lng) / 2 },
           icon: { path: g.SymbolPath.CIRCLE, scale: 0 },
           label: { text: distanceLabel(o.distance_m), className: "ink-map-distance", color: INK_NEUTRAL, fontSize: "11px", fontWeight: "600" },
           clickable: false,
           zIndex: 5,
-        }));
-        made.push(new g.Marker({
+        });
+        const point = new g.Marker({
           map,
           position: at,
           title: o.label,
           icon: { path: g.SymbolPath.CIRCLE, scale: 7, fillColor: INK_DATA, fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 2 },
           zIndex: 10,
-        }));
+        });
+        made.push(line, label, point);
+        drawnRef.current.push({ line, label, point });
         bounds.extend(at);
       }
 
@@ -136,13 +190,21 @@ export default function OpensMap({ apiKey, address, opens, height = 280 }: { api
       }));
 
       map.fitBounds(bounds, 24);
+      // An open picked out before the map finished loading.
+      applyFocus(drawnRef.current, focusRef.current);
     })();
     return () => {
       cancelled = true;
+      drawnRef.current = [];
       for (const m of made) m.setMap?.(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawn, apiKey]);
+
+  // Picking an open out restyles what is drawn; it never redraws the map.
+  useEffect(() => {
+    applyFocus(drawnRef.current, focus);
+  }, [focus]);
 
   if (!apiKey || failed) return null;
   return (
@@ -152,6 +214,7 @@ export default function OpensMap({ apiKey, address, opens, height = 280 }: { api
         ref={el}
         data-testid="opens-map"
         data-points={opens.length}
+        data-focus={focus ?? ""}
         role="img"
         aria-label={`Map: the delivery address and ${opens.length} ${opens.length === 1 ? "open" : "opens"} with a location`}
         style={{ height, width: "100%", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--p-color-border)", background: "#f1f1f1" }}
