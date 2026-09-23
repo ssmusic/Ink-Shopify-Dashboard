@@ -66,7 +66,7 @@ export default function DeliveryDashboard({
     return (
       <Card>
         <Text as="p">
-          No orders yet. New orders will appear here after installation.
+          No orders with records are available yet.
         </Text>
       </Card>
     );
@@ -199,6 +199,12 @@ export default function DeliveryDashboard({
                 ) : (
                   <Text as="p" tone="subdued">
                     Movement times are unavailable for these opens.
+                  </Text>
+                )}
+                {delivery.tapsCapped && (
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Based on a limited sample of up to 5,000 opens, which may
+                    not be the most recent.
                   </Text>
                 )}
               </BlockStack>
