@@ -186,6 +186,9 @@ const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffN
                   </Text>
                 </InlineStack>
               ))}
+              {/* No "Shipping" line: it printed "Free" on every order, whatever the
+                  order paid (App Store review, 2026-09-23). The total is the order's
+                  own; the line items are summed as they were. */}
               <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
                 <InlineStack align="space-between">
                   <Text as="span" variant="bodySm" tone="subdued">
@@ -193,14 +196,6 @@ const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffN
                   </Text>
                   <Text as="span" variant="bodySm">
                     {fmt(order.subtotal, order.currency)}
-                  </Text>
-                </InlineStack>
-                <InlineStack align="space-between">
-                  <Text as="span" variant="bodySm" tone="subdued">
-                    Shipping
-                  </Text>
-                  <Text as="span" variant="bodySm">
-                    Free
                   </Text>
                 </InlineStack>
                 <InlineStack align="space-between">

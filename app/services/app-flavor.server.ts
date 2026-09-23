@@ -30,3 +30,8 @@ export function appFlavor(): AppFlavor {
 export function isInk(): boolean {
   return appFlavor() === "ink";
 }
+
+/** ink's own public page (the-ritualist src/pages/InkHome.tsx on www.in.ink):
+ *  where ink's App URL sends a visitor who arrives without a store — never
+ *  the Ritualist's landing, never a form asking for a shop domain. */
+export const INK_HOME_URL = "https://www.in.ink/";

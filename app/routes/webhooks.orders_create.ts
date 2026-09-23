@@ -209,9 +209,11 @@ export const PRODUCT_URLS_QUERY = `
 // twenty (shopify.app.ink.toml). `customer { … }` is a Customer object and a
 // Customer object needs `read_customers`; ink has none, and Shopify fails the
 // WHOLE query over one unauthorized selection (that is how #1019 died). So
-// under ink the buyer's email and phone are read off the Order itself —
-// `Order.email` / `Order.phone` need only read_orders — and the recipient's
-// name off the shipping address, which was already the first choice above.
+// under ink the buyer's email is read off the Order itself — `Order.email`
+// needs only read_orders — and the recipient's name off the shipping address,
+// which was already the first choice above. ink reads NO phone: it sends no
+// message and shows no number, so a phone would be protected data held for
+// nothing (App Store review, 2026-09-23 — the minimum-data rule).
 // Nothing else differs; the Ritualist's string above is untouched and a test
 // pins it byte-for-byte, and pins that this one selects nothing outside
 // ink's list.
@@ -221,7 +223,6 @@ export const ORDER_DETAIL_QUERY_INK = `
       id
       name
       email
-      phone
       shippingAddress { name address1 address2 city province zip country }
       totalPriceSet { shopMoney { amount currencyCode } }
       lineItems(first: 20) {
@@ -301,14 +302,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   console.log(`\n📦 [orders/create] Processing order ${orderName} (${shop})`);
 
-  // Phone selection (ship → order → customer fallback chain)
-  const shippingPhone = data?.shipping_address?.phone;
-  const orderPhone = data?.phone;
-  const customerPhone = data?.customer?.phone;
+  // Phone selection (ship → order → customer fallback chain). The log says
+  // WHICH source was used, never the number: a phone is the buyer's protected
+  // data, and Cloud Run logs are not where it belongs (App Store review,
+  // 2026-09-23 — B11).
+  // ink reads none of them (see ORDER_DETAIL_QUERY_INK): no phone reaches
+  // its record or its metafields.
+  const readsPhone = appFlavor() !== "ink";
+  const shippingPhone = readsPhone ? data?.shipping_address?.phone : undefined;
+  const orderPhone = readsPhone ? data?.phone : undefined;
+  const customerPhone = readsPhone ? data?.customer?.phone : undefined;
   const finalPhone = shippingPhone || orderPhone || customerPhone || "";
-  console.log(
-    `📱 Phone selection — shipping: ${shippingPhone || "—"}, order: ${orderPhone || "—"}, customer: ${customerPhone || "—"} → using: ${finalPhone || "—"}`
-  );
+  const phoneSource = !readsPhone ? "not read (ink)" : shippingPhone ? "shipping" : orderPhone ? "order" : customerPhone ? "customer" : "none";
+  console.log(`📱 Phone source: ${phoneSource}`);
 
   const shippingLines = data?.shipping_lines || [];
   console.log(`🚢 ${shippingLines.length} shipping line(s) on order`);

@@ -12,8 +12,9 @@
 //     return-window save writes (app.api.settings.notifications.tsx).
 //
 //   · ADD THE RITUALIST. The paid product that includes ink: one link to
-//     its listing, from env RITUALIST_LISTING_URL (a PLACEHOLDER until Sam
-//     has the listing's address; the line renders disabled without it).
+//     its listing, from env RITUALIST_LISTING_URL. Without the address the
+//     card is not drawn at all — a disabled button is a dead control, and
+//     App Store review fails a screen for one (review, 2026-09-23, B2).
 //
 // Every visible string is PLACEHOLDER copy — Sam writes the words.
 
@@ -149,24 +150,21 @@ export default function InkSettings() {
               </fetcher.Form>
             </Card>
 
-            <Card>
-              <BlockStack gap="200">
-                {/* PLACEHOLDER copy */}
-                <Text as="h2" variant="headingMd">Add The Ritualist</Text>
-                <Text as="p" tone="subdued">
-                  Every order gets its own branded page — live tracking, delivery notifications, returns. The Ritualist includes ink.
-                </Text>
-                <InlineStack>
-                  {data.ritualistUrl ? (
-                    // PLACEHOLDER label; the address comes from RITUALIST_LISTING_URL.
+            {data.ritualistUrl ? (
+              <Card>
+                <BlockStack gap="200">
+                  {/* PLACEHOLDER copy */}
+                  <Text as="h2" variant="headingMd">Add The Ritualist</Text>
+                  <Text as="p" tone="subdued">
+                    Every order gets its own branded page — live tracking, delivery notifications, returns. The Ritualist includes ink.
+                  </Text>
+                  <InlineStack>
+                    {/* PLACEHOLDER label; the address comes from RITUALIST_LISTING_URL. */}
                     <Button url={data.ritualistUrl} external>Add The Ritualist</Button>
-                  ) : (
-                    // PLACEHOLDER: no listing address yet (RITUALIST_LISTING_URL unset).
-                    <Button disabled>Add The Ritualist</Button>
-                  )}
-                </InlineStack>
-              </BlockStack>
-            </Card>
+                  </InlineStack>
+                </BlockStack>
+              </Card>
+            ) : null}
           </BlockStack>
         </Layout.Section>
       </Layout>
