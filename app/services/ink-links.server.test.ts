@@ -202,6 +202,25 @@ describe("readRecentOrderRecords", () => {
 });
 
 describe("order pagination and missing money", () => {
+  it("searches and sorts all Shopify results, preserving filters on pagination and protected-field fallback", async () => {
+    const graphql = vi.fn(async (query: string) => {
+      if (query === RECENT_ORDERS_DETAIL_QUERY) throw new Error("Protected fields unavailable");
+      return { json: async () => ({ data: { orders: { nodes: [] } } }) };
+    });
+    await readRecentOrderPage({ graphql }, { search: "#1026", sort: "total_asc", after: "cursor" });
+    for (const query of [RECENT_ORDERS_DETAIL_QUERY, RECENT_ORDERS_QUERY]) {
+      expect(graphql).toHaveBeenCalledWith(query, { variables: {
+        first: 5, after: "cursor", query: 'name:"1026"', sortKey: "TOTAL_PRICE", reverse: false,
+      } });
+      expect(query).toContain("query: $query");
+      expect(query).toContain("sortKey: $sortKey");
+      expect(query).toContain("reverse: $reverse");
+    }
+    await readRecentOrderPage({ graphql }, { search: "", sort: "newest", before: "start" });
+    expect(graphql).toHaveBeenLastCalledWith(RECENT_ORDERS_QUERY, { variables: {
+      last: 5, before: "start", query: null, sortKey: "CREATED_AT", reverse: true,
+    } });
+  });
   it("reads older and newer pages and preserves the cursor on a protected-field fallback", async () => {
     const body = {
       data: {

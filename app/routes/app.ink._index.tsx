@@ -33,6 +33,8 @@ import { readDeliveryDashboard } from "../services/ink-delivery.server";
 import { readInkRecordHistory } from "../services/ink-record-history.server";
 import InkRecordHistory from "../components/InkRecordHistory";
 import InkHelp from "../components/InkHelp";
+import InkOrderSearch from "../components/InkOrderSearch";
+import { orderSearch, orderSort, orderSearchParams } from "../lib/ink-order-search";
 
 // While a fresh install is still provisioning (no api key yet), the doors
 // cannot be read; the screen asks again every few seconds for a while.
@@ -113,11 +115,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   let ordersError = false;
+  const search = orderSearch(params.get("q"));
+  const sort = orderSort(params.get("sort"));
   const cursor = (key: string) => {
     const value = params.get(key);
     return value && value.length <= 1024 ? value : null;
   };
   const page = await readRecentOrderPage(admin, {
+    search,
+    sort,
     after: cursor("after"),
     before: cursor("before"),
   }).catch(() => {
@@ -156,6 +162,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       kpis: null,
       delivery: null,
       ordersError,
+      search,
+      sort,
       pageInfo: page.pageInfo,
       recentOrders: recentOrders.map((o, i) => ({
         id: o.id,
@@ -222,6 +230,9 @@ export default function InkHome() {
 
   return (
     <Page
+      backAction={data.section === "insights" ? undefined : {
+        content: "Dashboard", url: "/app/ink?view=insights",
+      }}
       title={data.section === "insights" ? "Dashboard" : data.section === "records" ? "Records" : data.section === "help" ? "Help" : "Orders"}
       secondaryActions={data.section === "help" ? [] : [
         {
@@ -267,6 +278,12 @@ export default function InkHome() {
                     <Text as="p" tone="subdued">
                       Orders from the past 60 days. Open one to review its delivery and opens.
                     </Text>
+                    <InkOrderSearch
+                      search={data.search || ""}
+                      sort={data.sort || "newest"}
+                      pending={navigation.state !== "idle"}
+                      onChange={(search, sort) => setParams(orderSearchParams(params, search, sort))}
+                    />
                   </BlockStack>
                 </Box>
                 {data.ordersError ? (
@@ -274,7 +291,12 @@ export default function InkHome() {
                     Orders could not be loaded. Refresh to try again.
                   </Banner>
                 ) : (
-                  <InkRecentOrders orders={data.recentOrders} returnTo="/app/ink" />
+                  <InkRecentOrders
+                    key={`${data.search}:${data.sort}:${params.get("after")}:${params.get("before")}`}
+                    orders={data.recentOrders}
+                    returnTo="/app/ink"
+                    searching={Boolean(data.search)}
+                  />
                 )}
                 {data.pageInfo &&
                   (data.pageInfo.hasPreviousPage ||
@@ -293,8 +315,8 @@ export default function InkHome() {
                           go("before", data.pageInfo!.startCursor)
                         }
                         onNext={() => go("after", data.pageInfo!.endCursor)}
-                        previousTooltip="Newer orders"
-                        nextTooltip="Older orders"
+                        previousTooltip="Previous page"
+                        nextTooltip="Next page"
                       />
                     </Box>
                   )}

@@ -41,6 +41,7 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
   return (
     <Page
       title="Settings"
+      backAction={{ content: "Dashboard", url: "/app/ink?view=insights" }}
       secondaryActions={[
         {
           content: "Refresh",

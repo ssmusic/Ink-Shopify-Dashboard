@@ -1,9 +1,10 @@
 // Shopify order reads for the ink screen. A rejected protected-field read
 // falls back to order identifiers; a failed fallback remains an error.
+import { shopifyOrderSearch, shopifyOrderSort } from "../lib/ink-order-search";
 
 export const RECENT_ORDERS_QUERY = `#graphql
-  query InkRecentOrders($first: Int, $last: Int, $after: String, $before: String) {
-    orders(first: $first, last: $last, after: $after, before: $before, sortKey: CREATED_AT, reverse: true) {
+  query InkRecentOrders($first: Int, $last: Int, $after: String, $before: String, $query: String, $sortKey: OrderSortKeys = CREATED_AT, $reverse: Boolean = true) {
+    orders(first: $first, last: $last, after: $after, before: $before, query: $query, sortKey: $sortKey, reverse: $reverse) {
       pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
       nodes {
         id
@@ -14,11 +15,11 @@ export const RECENT_ORDERS_QUERY = `#graphql
     }
   }`;
 
-/** Protected fields are requested only for the expanded order view. */
+/** Protected fields supply recipient labels and expanded order details. */
 export const RECENT_ORDERS_DETAIL_QUERY = `#graphql
-  query InkRecentOrdersDetail($first: Int, $last: Int, $after: String, $before: String) {
+  query InkRecentOrdersDetail($first: Int, $last: Int, $after: String, $before: String, $query: String, $sortKey: OrderSortKeys = CREATED_AT, $reverse: Boolean = true) {
     shop { ianaTimezone }
-    orders(first: $first, last: $last, after: $after, before: $before, sortKey: CREATED_AT, reverse: true) {
+    orders(first: $first, last: $last, after: $after, before: $before, query: $query, sortKey: $sortKey, reverse: $reverse) {
       pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
       nodes {
         id
@@ -246,14 +247,21 @@ export async function readRecentOrderPage(
     first?: number;
     after?: string | null;
     before?: string | null;
+    search?: string;
+    sort?: string;
   } = {},
 ): Promise<OrderPage> {
   const count = Math.min(20, Math.max(1, options.first ?? 5));
-  const variables = options.before
+  const page = options.before
     ? { last: count, before: options.before }
     : options.after
       ? { first: count, after: options.after }
       : { first: count };
+  const variables = {
+    ...page,
+    ...(options.search !== undefined ? { query: shopifyOrderSearch(options.search) } : {}),
+    ...(options.sort !== undefined ? shopifyOrderSort(options.sort) : {}),
+  };
   try {
     const res = await admin.graphql(RECENT_ORDERS_DETAIL_QUERY, { variables });
     const body = (await res.json()) as RecentOrdersBody | null;

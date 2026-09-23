@@ -222,17 +222,21 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
 export default function InkRecentOrders({
   orders,
   defaultExpandedId = null,
+  searching = false,
 }: {
   orders: InkRecentOrderRow[];
   returnTo?: string;
   defaultExpandedId?: string | null;
+  searching?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpandedId);
   if (!orders.length)
     return (
       <Box padding="400">
         <Text as="p">
-          No recent orders. New orders will appear here after installation.
+          {searching
+            ? "No orders match this search. Try another order number, name or email, or clear the search."
+            : "No orders are available from the past 60 days."}
         </Text>
       </Box>
     );
@@ -252,53 +256,63 @@ export default function InkRecentOrders({
               overflowY="hidden"
             >
               <Box
-                padding="400"
+                padding="300"
                 background={open ? "bg-surface-info" : "bg-surface-secondary"}
               >
                 <InlineGrid
                   columns={{
-                    xs: "100px minmax(0, 1fr)",
-                    md: "100px minmax(0, 1fr) 140px 120px",
+                    xs: "84px minmax(0, 1fr) 78px",
+                    sm: "110px minmax(0, 1fr) 120px",
                   }}
-                  gap="400"
+                  gap="200"
                   alignItems="center"
                 >
-                  <Box color="text">
-                    <Button
-                      variant="tertiary"
-                      size="large"
-                      textAlign="left"
-                      disclosure={open ? "up" : "down"}
-                      ariaExpanded={open}
-                      ariaControls={`order-${row.id}`}
-                      onClick={() => setExpanded(open ? null : row.id)}
-                    >
-                      {row.name}
-                    </Button>
-                  </Box>
                   <BlockStack gap="100">
+                    <Box color="text">
+                      <Button
+                        id={`order-toggle-${row.id}`}
+                        variant="tertiary"
+                        size="medium"
+                        textAlign="left"
+                        disclosure={open ? "up" : "down"}
+                        ariaExpanded={open}
+                        ariaControls={`order-${row.id}`}
+                        onClick={() => setExpanded(open ? null : row.id)}
+                      >
+                        {row.name}
+                      </Button>
+                    </Box>
                     <Text as="p" variant="bodySm" tone="subdued">
-                      Recipient
+                      {row.detail?.date || "Date unavailable"}
                     </Text>
+                  </BlockStack>
+                  <BlockStack gap="100">
                     <Text as="p" variant="headingSm" breakWord>
+                      <Text as="span" visuallyHidden>
+                        Recipient{" "}
+                      </Text>
                       {row.detail?.customerName &&
                       row.detail.customerName !== "Name unavailable"
                         ? row.detail.customerName
                         : "Recipient unavailable"}
                     </Text>
-                    <Text as="p" tone="subdued" breakWord>
+                    <Text as="p" variant="bodySm" tone="subdued" breakWord>
                       {row.detail?.customerEmail || "Email unavailable"}
                     </Text>
                   </BlockStack>
-                  <Text as="p">{row.detail?.date || "Date unavailable"}</Text>
                   <BlockStack gap="100">
-                    <Text as="p" fontWeight="semibold">
+                    <Text
+                      as="p"
+                      alignment="end"
+                      fontWeight="semibold"
+                      breakWord
+                    >
                       {row.detail
                         ? money(row.detail.total, row.detail.currency)
                         : "Total unavailable"}
                     </Text>
                     <Box color="text-info">
-                      <Text as="p">
+                      <Text as="p" variant="bodySm" alignment="end" breakWord>
                         {count == null
                           ? "Opens unavailable"
                           : `${count} ${count === 1 ? "open" : "opens"}`}

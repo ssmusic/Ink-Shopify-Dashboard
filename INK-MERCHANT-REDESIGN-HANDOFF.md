@@ -2,7 +2,15 @@
 
 **Status: the current design is not approved.** The local preview at `http://127.0.0.1:4173/app/ink` and PR [#133](https://github.com/ssmusic/Ink-Shopify-Dashboard/pull/133) are implementation work, not the design to ship. The preview uses sample data. Do not use it for Shopify listing screenshots or treat it as proof of a live install.
 
-## Latest addition: Help and Shopify connection
+## Latest addition: order search, sorting and compact phone rows
+
+Orders now has search by order number, name or email and sorting by date, order number or total in both directions. Production sends these options to Shopify over the available 60-day order window, preserving them while paging. The preview filters synthetic fixtures only. Search/sort changes reset pagination; empty matches are distinct from failed reads.
+
+Phone headers use three compact columns: black order number and date; prominent recipient and email; total and opens. Back navigation belongs beside the page title and leads to Dashboard. Sam explicitly rejected Back to orders inside the accordion; those controls were removed. The order-number disclosure opens and closes details.
+
+Typecheck, build and 446 tests across 48 files passed. Layout was checked at measured 1280 and 391 px without page overflow; phone sample headers are about 78 px tall. Search, sorting, clear, empty results, browser back and page navigation were exercised using sample data. Live Shopify search remains unverified. No deployment.
+
+## Previous addition: Help and Shopify connection
 
 Settings now shows the authenticated store name/domain, its Shopify brand logo (square logo preferred), and blue initials when the logo is missing or cannot load. The logo uses Shopify’s tokenless Storefront branding query; no additional scopes or user profile data. Shopify access and ink data access are checked separately on load/refresh. These checks do not assert successful webhook delivery or complete syncing. The local preview deliberately shows Not checked because Shopify is not connected there.
 
@@ -45,6 +53,10 @@ Sam then requested Dashboard first, clearer Orders cells, a finished Records lib
 Dashboard adds blue Polaris Viz rings for open rate, first-open location coverage and recorded delivery rate. Each uses its own source denominator; a missing rate stays unavailable. Store-wide repeat visits, total opens, post-delivery opens, buyer segments and time-series counts still need a merchant aggregate door. Do not copy Ritualist’s admin list or call a first post-delivery open a repeat visit.
 
 This iteration is not Sam-approved. The local preview is still sample data. The earlier proposal for a dedicated record view is superseded by Sam's correction above.
+
+## Tracking destination follow-up
+
+Sam wants to preserve merchants’ existing Shopify/Klaviyo flows. No destination behavior was changed: ink currently rewrites the Shopify tracking URL, and the backend supports only order status or carrier destinations. A future fix needs to preserve the original destination before removing the selector; backend proof updates can overwrite the stored tracking URL with the rewritten ink URL. Hiding the setting alone would not preserve the flow. Backend remains read-only for this task.
 
 ## Data and honesty boundaries
 

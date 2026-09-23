@@ -134,10 +134,15 @@ describe('ink screens: facts, working controls and Polaris', () => {
 
   it('keeps missing records and failed reads distinct from empty orders', () => {
     expect(text(openRow(ROWS[1].id))).toContain('No record is linked to this order.');
-    expect(text(render(InkHome, { stage: 'ready', recentOrders: [] }))).toContain('No recent orders.');
+    expect(text(render(InkHome, { stage: 'ready', recentOrders: [] }))).toContain('No orders are available from the past 60 days.');
+    const searched = text(render(InkHome, { stage: 'ready', recentOrders: [], search: 'missing', sort: 'newest' }));
+    expect(searched).toContain('No orders match this search.');
+    expect(searched).toContain('Clear search');
+    expect(searched).not.toContain('No orders are available');
     const failed = text(render(InkHome, { stage: 'ready', recentOrders: [], ordersError: true }));
     expect(failed).toContain('Orders could not be loaded');
-    expect(failed).not.toContain('No recent orders');
+    expect(failed).not.toContain('No orders are available');
+    expect(text(openRow(ROWS[0].id))).not.toContain('Back to orders');
   });
 
   it('shows a bounded setup state and a refresh action', () => {
