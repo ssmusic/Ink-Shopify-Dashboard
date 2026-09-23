@@ -12,6 +12,7 @@ import {
   Text,
 } from "@shopify/polaris";
 import type { InkConnection } from "../services/ink-connection.server";
+import { INK_DATA_TINT } from "../lib/ink-palette";
 
 export default function InkConnectionCard({
   connection,
@@ -74,15 +75,12 @@ export default function InkConnectionCard({
                 accessibilityLabel={`${name} store logo`}
               />
             ) : (
-              <Box
-                background="bg-fill-info-secondary"
-                borderRadius="200"
-                paddingBlock="300"
-              >
+              // The palette's one blue tint (lib/ink-palette.ts), never a second blue.
+              <div style={{ background: INK_DATA_TINT, borderRadius: "var(--p-border-radius-200)", padding: "var(--p-space-300) 0" }}>
                 <Text as="p" alignment="center" fontWeight="semibold">
                   {initials}
                 </Text>
-              </Box>
+              </div>
             )}
             <BlockStack gap="100">
               <Text as="h3" variant="headingMd" breakWord>

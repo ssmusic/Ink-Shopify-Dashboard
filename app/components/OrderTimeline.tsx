@@ -100,7 +100,7 @@ export function nextFocus(current: number | null, pressed: number): number | nul
 
 // A row of the list: the same geometry pressable or not, so the words line up;
 // a pressable row's tint is the palette's, when hovered, pressed or focused.
-const ROW_CSS = `.ink-open-row{display:flex;align-items:center;justify-content:space-between;gap:8px;box-sizing:border-box;width:calc(100% + 16px);margin:0 -8px;padding:6px 8px;border:0;border-radius:8px;background:transparent;font:inherit;color:inherit;text-align:left}button.ink-open-row{cursor:pointer}button.ink-open-row:hover{background:var(--p-color-bg-surface-hover)}button.ink-open-row[aria-pressed=true]{background:${INK_DATA_TINT}}button.ink-open-row:focus-visible{outline:2px solid var(--p-color-border-focus);outline-offset:1px}.ink-open-row-lead{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}`;
+const ROW_CSS = `.ink-open-row{display:flex;align-items:center;justify-content:space-between;gap:8px;box-sizing:border-box;width:calc(100% + 16px);margin:0 -8px;padding:6px 8px;border:0;border-radius:8px;background:transparent;font:inherit;color:inherit;text-align:left}button.ink-open-row{cursor:pointer}button.ink-open-row:hover{background:var(--p-color-bg-surface-hover)}button.ink-open-row[aria-pressed=true]{background:${INK_DATA_TINT}}button.ink-open-row:focus-visible{outline:2px solid var(--p-color-border-focus);outline-offset:1px}.ink-open-row-lead{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}.ink-open-row-end{white-space:nowrap;flex-shrink:0}`;
 
 export function OpensAgainstAddress({
   address,
@@ -171,9 +171,11 @@ export function OpensAgainstAddress({
                     </Text>
                   ) : null}
                 </span>
-                <Text as="span" variant="bodySm" alignment="end">
-                  {r === "measured" && o.distance_m != null ? kmOrM(o.distance_m) : RESULT_WORD[r]}
-                </Text>
+                <span className="ink-open-row-end">
+                  <Text as="span" variant="bodySm" alignment="end">
+                    {r === "measured" && o.distance_m != null ? kmOrM(o.distance_m) : RESULT_WORD[r]}
+                  </Text>
+                </span>
               </>
             );
             const key = `${o.at ?? ""}-${i}`;

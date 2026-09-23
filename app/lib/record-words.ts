@@ -104,7 +104,7 @@ export function recordDownloadsAvailable(record: RecordRead | null | undefined):
 export const LEVEL_WORDS: Record<string, string> = {
   verified: "Device-verified",
   attested: "Recorded and signed",
-  asserted: "Not verified by ink",
+  asserted: "In the record, unsigned",
   missing: "Missing",
 };
 
