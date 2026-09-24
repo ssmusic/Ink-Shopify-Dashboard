@@ -176,6 +176,14 @@ export function locationWords(loc: LocationLine): string {
 
 export function valueWords(key: string, v: unknown): string {
   if (v == null) return "—";
+  // A place (the Delivery place's ship-to and carrier's delivered scan) in
+  // words, whichever shape the backend serves it in: a line, or its parts
+  // (ink-backend #149/#150 served the parts until #153).
+  if ((key === "ship_to" || key === "carrier_delivered_place") && typeof v === "object") {
+    const p = v as { city?: unknown; state?: unknown; region?: unknown; country?: unknown };
+    const parts = [p.city, p.state ?? p.region, p.country].filter((x) => typeof x === "string" && x.trim());
+    return parts.length ? parts.join(", ") : "—";
+  }
   if (key === "location" && typeof v === "object")
     return locationWords(v as LocationLine);
   if (typeof v === "boolean") return v ? "Yes" : "No";
