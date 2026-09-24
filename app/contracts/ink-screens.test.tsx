@@ -26,7 +26,7 @@ vi.mock("../services/ink-merchant.server", () => ({
 vi.mock("../services/merchant.server", () => ({ updateMerchant: vi.fn() }));
 vi.mock("../services/ink-api.server", () => ({ patchMerchant: vi.fn(), mintMagicToken: vi.fn() }));
 
-const { default: InkHome, loader: loadInkHome } = await import("../routes/app.ink._index");
+const { default: InkHome, loader: loadInkHome } = await import("../routes/app.ink.$section");
 const { default: InkSettings, action: saveInkSettings } = await import("../routes/app.ink.settings");
 const { default: InkKpis } = await import("../components/InkKpis");
 const { default: OrderTimeline, DeliveryWindowBar } = await import("../components/OrderTimeline");
@@ -164,7 +164,7 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(html).toMatch(/aria-selected="true"[^>]*data-pill="insights"|data-pill="insights"[^>]*aria-selected="true"/);
     expect(html).toContain('href="/app/ink/settings"');
-    expect(html).toContain('href="/app/ink?view=help"');
+    expect(html).toContain('href="/app/ink/help"');
   });
 
   it('has exactly three KPI labels, no subtitles or unsupported integrity claims', () => {
@@ -381,19 +381,19 @@ describe("help and store connection", () => {
     const { readInkMerchant } = await import("../services/ink-merchant.server");
     vi.mocked(authenticate.admin).mockResolvedValueOnce({ admin: {}, session: { shop: "sample.myshopify.com" } } as never);
     vi.mocked(readInkMerchant).mockClear();
-    const result = await loadInkHome({ request: new Request("https://app.test/app/ink?view=help") } as never);
+    const result = await loadInkHome({ request: new Request("https://app.test/app/ink/help"), params: { section: "help" } } as never);
     expect(result.data).toEqual({ section: "help", stage: null });
     expect(result.init?.headers).toEqual({ "Cache-Control": "private, no-store" });
     expect(readInkMerchant).not.toHaveBeenCalled();
     vi.mocked(authenticate.admin).mockRejectedValueOnce(new Response(null, { status: 401 }));
-    await expect(loadInkHome({ request: new Request("https://app.test/app/ink?view=help") } as never)).rejects.toMatchObject({ status: 401 });
+    await expect(loadInkHome({ request: new Request("https://app.test/app/ink/help"), params: { section: "help" } } as never)).rejects.toMatchObject({ status: 401 });
   });
 
   it("explains downloads and record limits with working navigation", () => {
     const html = render(InkHome, { section: "help", stage: null });
     const t = text(html);
     for (const part of ["Review an order", "Buy a record", "Download again", "does not email", "Check payment status", "Check record access", "Contact support"]) expect(t).toContain(part);
-    expect(html).toContain('href="/app/ink?view=records"');
+    expect(html).toContain('href="/app/ink/records"');
     expect(html).toContain('href="mailto:info@in.ink"');
     expect(t).not.toContain("Recent orders");
     expect(html).not.toContain('disabled=""');

@@ -12,6 +12,7 @@ import {
   carrierNamed,
   carrierSaid,
   funnel,
+  sharedLocation,
   timeInTransit,
   whileTheyWaited,
   type CarrierLine,
@@ -29,6 +30,9 @@ export type DeliveryDashboardData = {
   carrier: CarrierLine[];
   waited: WhileTheyWaited;
   carrierNamed: number;
+  /** Orders with any open that shared a location (lib/delivery-insights.ts
+   *  sharedLocation) — what the Dashboard's "Location shared" counts. */
+  locationShared: number;
   capped: boolean;
   tapsCapped?: boolean;
 };
@@ -45,6 +49,7 @@ export function dashboardFrom(body: unknown): DeliveryDashboardData | null {
     carrier: carrierSaid(rows),
     waited: whileTheyWaited(taps),
     carrierNamed: carrierNamed(rows),
+    locationShared: rows.filter((r) => sharedLocation(r)).length,
     capped: b.capped === true,
     tapsCapped: b.taps_capped === true,
   };

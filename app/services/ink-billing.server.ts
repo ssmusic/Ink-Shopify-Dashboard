@@ -301,7 +301,7 @@ export async function inkRecordAction(
         shop,
         apiKey: appKey,
         proofId,
-        returnTo: "/app/ink?view=records",
+        returnTo: "/app/ink/records",
       }),
     });
     await ref.update({

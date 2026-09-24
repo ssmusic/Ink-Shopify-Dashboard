@@ -3,12 +3,19 @@
 // the order's activity on the honest rail, the record's words, THE LAST OPEN
 // and EVERY OPEN on their maps, the browser's check and every signed event.
 //
-// Nothing here is a second reader. Each listed order's record comes through
-// the merchant audit door (services/ink-record.server.ts readRecords — the
-// published keys read once), and its timeline through the proof and opens
-// doors (services/ink-timeline.server.ts readTimelines), with the merchant's
-// own key — the key the Ritualist's order page already reads its proof with
-// (services/merchant-doc.server.ts findMerchantDoc).
+// Nothing here is a second reader. Each order's record comes through the
+// merchant audit door (services/ink-record.server.ts readRecord — the
+// published keys read once for the screen), and its timeline through the
+// proof and opens doors (services/ink-timeline.server.ts), with the
+// merchant's own key — the key the Ritualist's order page already reads its
+// proof with (services/merchant-doc.server.ts findMerchantDoc).
+//
+// EACH ROW STREAMS, as ink's Orders does (routes/app.ink.$section.tsx): the
+// screen answers with Shopify's orders alone and each row's record side
+// follows as that row's own promise, drawn as it lands. A record's whole read
+// takes time in proportion to the record (0.5 s for a few opens, 5.4 s for 92
+// on a test store, 2026-09-24); waiting for every record, then every timeline,
+// kept a page blank for 10 to 15 s.
 //
 // WHAT MAKES THE RITUALIST'S ROW ITS OWN: the record is included. The
 // backend's price author returns null for a merchant on the Ritualist, so its
@@ -20,12 +27,12 @@
 
 import firestore from "../firestore.server";
 import type { InkDoor } from "../components/InkRecordDoor";
-import type { OrderTimelineData } from "../components/OrderTimeline";
-import type { RecordRead } from "../lib/record-words";
+import type { InkRowRecord } from "../components/InkRecentOrders";
 import { findMerchantDoc } from "./merchant-doc.server";
 import { PROOF_ID } from "./ink-reader.server";
-import { readRecords } from "./ink-record.server";
-import { readTimelines } from "./ink-timeline.server";
+import { readRecord } from "./ink-record.server";
+import { readTimelineReads, timelineOfReads } from "./ink-timeline.server";
+import type { Jwks } from "./record-check.server";
 
 /** The merchant's own key, as the Ritualist's order page resolves it; null
  *  while the install has not provisioned one. */
@@ -53,21 +60,28 @@ export function includedRecordDoor(apiKey: string | null, proofId: string | null
   };
 }
 
-export type ShipmentPanels = {
-  records: Record<string, RecordRead>;
-  timelines: Record<string, OrderTimelineData>;
-};
-
-/** Every listed order's record and timeline, read side by side. Fail-soft: a
- *  row whose reads do not answer opens onto what the panel says without them. */
-export async function readShipmentPanels(
+/** One row's record side, as ink's Orders reads its own (routes/app.ink.$section.tsx
+ *  rowRecord): the record and the timeline's two reads side by side, then the
+ *  timeline made from them with the record. `keys` is the published key set,
+ *  read once for the screen. Fail-soft: a read that does not answer draws as
+ *  a row without it, in the words each part already says for that. */
+export async function ritualistRowRecord(
   apiKey: string | null,
-  proofIds: Array<string | null>,
+  proofId: string | null,
+  keys: Promise<Jwks | null> | null = null,
   fetchImpl: typeof fetch = fetch,
-): Promise<ShipmentPanels> {
-  const ids = proofIds.filter((p): p is string => typeof p === "string" && PROOF_ID.test(p));
-  if (!ids.length) return { records: {}, timelines: {} };
-  const records = await readRecords(ids, fetchImpl, apiKey).catch(() => ({}) as Record<string, RecordRead>);
-  const timelines = await readTimelines(apiKey, ids, fetchImpl, records).catch(() => ({}) as Record<string, OrderTimelineData>);
-  return { records, timelines };
+): Promise<InkRowRecord> {
+  const door = includedRecordDoor(apiKey, proofId);
+  if (!proofId || !PROOF_ID.test(proofId)) return { record: null, door, packet: null, timeline: null };
+  try {
+    const [record, reads] = await Promise.all([
+      readRecord(proofId, fetchImpl, apiKey, keys).catch(() => null),
+      apiKey ? readTimelineReads(apiKey, proofId, fetchImpl).catch(() => null) : Promise.resolve(null),
+    ]);
+    const timeline =
+      apiKey && reads ? await timelineOfReads(apiKey, proofId, reads, record, fetchImpl).catch(() => null) : null;
+    return { record, door, packet: null, timeline };
+  } catch {
+    return { record: null, door, packet: null, timeline: null };
+  }
 }

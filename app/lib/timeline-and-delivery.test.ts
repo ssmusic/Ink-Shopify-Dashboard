@@ -6,10 +6,12 @@ import {
   carrierSaid,
   formatHours,
   funnel,
+  sharedLocation,
   timeInTransit,
   whileTheyWaited,
   type DeliveryRow,
 } from "./delivery-insights";
+import { dashboardFrom } from "../services/ink-delivery.server";
 import {
   deliveryWindow,
   kmOrM,
@@ -89,6 +91,22 @@ describe("the delivery dashboard", () => {
     ]);
     expect(funnel([]).map((s) => s.ofAbovePct)).toEqual([null, null, null, null]);
     for (const s of funnel(rows)) expect(s.label).not.toMatch(/door|confirm|verif|seen/i);
+  });
+
+  // Sam, 2026-09-24: "i think more than 3 of 488 orders have shared location" —
+  // 16 on the Steve Madden test store; the first open's source alone said 3.
+  it("counts an order whose later open shared a location, not only one whose first open did", () => {
+    const later: DeliveryRow = { enrolled_at: iso(0), delivered_at: iso(20), tap_count: 4, location_source: null, location_shared: true };
+    const never: DeliveryRow = { enrolled_at: iso(0), delivered_at: iso(20), tap_count: 4, location_source: null, location_shared: false };
+    const step = (rs: DeliveryRow[]) => funnel(rs).find((x) => x.key === "shared")!.count;
+    expect(step([later, never])).toBe(1);
+    expect(sharedLocation(later)).toBe(true);
+    expect(sharedLocation(never)).toBe(false);
+    // A backend without the field still counts a first open's own fix.
+    expect(sharedLocation({ location_source: "GPS" })).toBe(true);
+    expect(sharedLocation({ location_source: null })).toBe(false);
+    const dashboard = dashboardFrom({ rows: [later, never, rows[0], rows[3]], taps: [] })!;
+    expect(dashboard.locationShared).toBe(2);
   });
 
   it("buckets time in transit with the console's buckets, skipping a missing or negative pair", () => {

@@ -43,6 +43,7 @@ export const SHARED_MOUNTS = Object.freeze([
 /** ink's own screens — mounted under ink only. */
 export const INK_ONLY_MOUNTS = Object.freeze([
   "routes/app.ink._index",
+  "routes/app.ink.$section",
   "routes/app.ink.settings",
 ]);
 

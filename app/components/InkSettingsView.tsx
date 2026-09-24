@@ -105,7 +105,6 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
   return (
     <Page
       title="Settings"
-      backAction={{ content: "Dashboard", url: "/app/ink?view=insights" }}
       secondaryActions={[
         {
           content: "Refresh",
@@ -167,7 +166,7 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
               </Card>
             )}
             <Text as="p">
-              <Link url="/app/ink?view=help">Help and support</Link>
+              <Link url="/app/ink/help">Help and support</Link>
             </Text>
           </BlockStack>
         </Layout.Section>
