@@ -183,6 +183,8 @@ describe("switch on — CHECKOUT_DETAILS_ENABLED=true on this service", () => {
     const payload = JSON.parse(raw);
     expect(payload.checkout_client).toEqual({
       ip_prefix: "203.0.113.0/24",
+      ip: RAW_IP,
+      user_agent: RAW_UA,
       device: "iPhone",
       browser: "Safari",
       os: "iOS",
@@ -196,12 +198,11 @@ describe("switch on — CHECKOUT_DETAILS_ENABLED=true on this service", () => {
     expect(sent[0]).toBe(ORDER_DETAIL_QUERY_INK);
   });
 
-  it("the raw address, the user agent and the session hash are nowhere — payload or log", async () => {
+  it("the session hash is nowhere; the address and the agent ride the payload only — never a log line", async () => {
     const { raw } = await enrolWith(withClient);
-    const all = `${raw}\n${logged.join("\n")}`;
-    for (const secret of [RAW_IP, "Mozilla", "AppleWebKit", SESSION, "session_hash", "user_agent", "browser_ip"]) {
-      expect(all.includes(secret), secret).toBe(false);
-    }
+    for (const secret of [SESSION, "session_hash", "browser_ip"]) expect(raw.includes(secret), secret).toBe(false);
+    const logs = logged.join("\n");
+    for (const secret of [RAW_IP, "Mozilla", "AppleWebKit", SESSION]) expect(logs.includes(secret), secret).toBe(false);
   });
 
   it("an order Shopify sent without client details enrols with no checkout_client at all", async () => {

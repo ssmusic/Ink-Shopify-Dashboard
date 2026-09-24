@@ -33,6 +33,11 @@
 
 export type CheckoutClient = {
   ip_prefix?: string;
+  /** The purchase's own address and agent (2026-09-24), kept so a LATER
+   *  dispute can meet Visa's Compelling Evidence 3.0; behind the same switch,
+   *  unsigned, merchant doors only (ink-backend utils/checkoutClient.js). */
+  ip?: string;
+  user_agent?: string;
   device?: string;
   browser?: string;
   os?: string;
@@ -139,6 +144,15 @@ function sizeOf(v: unknown): number | null {
  * Shopify sent none (a draft order, a POS sale, an app-created order).
  * Pure: the caller decides whether the switch lets it be called at all.
  */
+/** A whole IPv4 or IPv6 address as sent, or null. */
+function fullIpOf(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(t);
+  if (m) return m.slice(1).every((o) => Number(o) <= 255) ? t : null;
+  return /^[0-9a-f:]{2,39}$/i.test(t) && t.includes(":") && (t.match(/::/g) || []).length <= 1 ? t.toLowerCase() : null;
+}
+
 export function checkoutClientFromWebhook(body: unknown): CheckoutClient | null {
   if (!body || typeof body !== "object") return null;
   const b = body as Record<string, unknown>;
@@ -149,6 +163,10 @@ export function checkoutClientFromWebhook(body: unknown): CheckoutClient | null 
   const out: CheckoutClient = {};
   const prefix = ipPrefixOf(cd.browser_ip) ?? ipPrefixOf(b.browser_ip);
   if (prefix) out.ip_prefix = prefix;
+  const ip = fullIpOf(cd.browser_ip) ?? fullIpOf(b.browser_ip);
+  if (ip) out.ip = ip;
+  if (typeof cd.user_agent === "string" && cd.user_agent.trim() && cd.user_agent.length <= 512 && /^[\x20-\x7e]+$/.test(cd.user_agent))
+    out.user_agent = cd.user_agent;
   const device = deviceOf(cd.user_agent);
   if (device) out.device = device;
   const browser = browserOf(cd.user_agent);

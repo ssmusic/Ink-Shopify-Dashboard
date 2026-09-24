@@ -53,10 +53,14 @@ describe("checkoutClientFromWebhook — Shopify's client_details, reduced at onc
     },
   };
 
-  it("keeps the prefix, the words, the language as sent and the window size — and nothing raw", () => {
+  it("keeps the prefix, the words, the language, the window size — and, since 2026-09-24, the purchase's own address and agent; never the session hash", () => {
     const cc = checkoutClientFromWebhook(body);
     expect(cc).toEqual({
       ip_prefix: "203.0.113.0/24",
+      // The purchase's own address and agent (the record-against-a-dispute
+      // report): kept for Compelling Evidence 3.0, behind the same switch.
+      ip: "203.0.113.7",
+      user_agent: IPHONE_SAFARI,
       device: "iPhone",
       browser: "Safari",
       os: "iOS",
@@ -65,7 +69,7 @@ describe("checkoutClientFromWebhook — Shopify's client_details, reduced at onc
       browser_height: 844,
     });
     const text = JSON.stringify(cc);
-    for (const raw of ["203.0.113.7", "Mozilla", "AppleWebKit", "d8f3a1c0ffee", "session", "user_agent"]) {
+    for (const raw of ["d8f3a1c0ffee", "session"]) {
       expect(text.includes(raw), raw).toBe(false);
     }
   });
@@ -73,6 +77,8 @@ describe("checkoutClientFromWebhook — Shopify's client_details, reduced at onc
   it("the top-level browser_ip is read when client_details carries none", () => {
     expect(checkoutClientFromWebhook({ browser_ip: "2600:1700:ab12:3c40::9", client_details: { user_agent: IPHONE_SAFARI } })).toEqual({
       ip_prefix: "2600:1700:ab12::/48",
+      ip: "2600:1700:ab12:3c40::9",
+      user_agent: IPHONE_SAFARI,
       device: "iPhone",
       browser: "Safari",
       os: "iOS",
