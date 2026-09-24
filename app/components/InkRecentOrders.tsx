@@ -149,6 +149,11 @@ const LEFT = { xs: 1, md: "minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.35fr)" } 
 const RIGHT = { xs: 1, md: "minmax(0, 1fr) minmax(0, 1fr)" } as const;
 /** The chevron's column: the order number and its heading start after it. */
 const CHEVRON = "28px minmax(0, 1fr)";
+// The headings' own narrow templates: one line, never the phone row's stack.
+// The server draws the desktop ledger; a phone drops the headings once it
+// knows its width, so for that moment they are one quiet line.
+const LEFT_HEADINGS = { xs: "auto auto auto", md: LEFT.md } as const;
+const RIGHT_HEADINGS = { xs: "auto auto", md: RIGHT.md } as const;
 
 /** Which column a sort reads, and the option a press on its heading picks. */
 const SORT_HEADINGS = {
@@ -183,7 +188,7 @@ function SortHeading({
   const { active, next, nextLabel } = headingSort(column, sort);
   if (!onSort)
     return (
-      <Text as="span" tone="subdued" fontWeight="medium">
+      <Text as="span" tone="subdued">
         {label}
       </Text>
     );
@@ -211,14 +216,14 @@ function LedgerHeadings({
   onSort?: (sort: InkOrderSort) => void;
 }) {
   const plain = (label: string) => (
-    <Text as="span" tone="subdued" fontWeight="medium">
+    <Text as="span" tone="subdued">
       {label}
     </Text>
   );
   return (
     <Box paddingInline="300" paddingBlock="200">
       <InlineGrid columns={ROW} gap="400" alignItems="center">
-        <InlineGrid columns={LEFT} gap="400" alignItems="center">
+        <InlineGrid columns={LEFT_HEADINGS} gap="400" alignItems="center">
           <InlineGrid columns={CHEVRON} gap="100" alignItems="center">
             <span />
             {/* PLACEHOLDER column headings */}
@@ -227,7 +232,7 @@ function LedgerHeadings({
           {plain("Recipient")}
           {plain("Activity")}
         </InlineGrid>
-        <InlineGrid columns={RIGHT} gap="400" alignItems="center">
+        <InlineGrid columns={RIGHT_HEADINGS} gap="400" alignItems="center">
           <InlineStack align="end">
             <SortHeading column="total" label="Total" sort={sort} onSort={onSort} />
           </InlineStack>
