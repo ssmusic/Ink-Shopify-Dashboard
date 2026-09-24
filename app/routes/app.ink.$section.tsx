@@ -440,8 +440,10 @@ export default function InkHome() {
                 {/* The list ends where Shopify's window does: an app reads the
                     last 60 days of orders (read_all_orders aside). The Steve
                     Madden test store has exactly 10 there (2026-09-24: "the
-                    orders cap out at 10 - whats that about?"). */}
-                {!data.ordersError && data.recentOrders.length > 0 && !data.pageInfo?.hasNextPage && (
+                    orders cap out at 10 - whats that about?"). Said only of
+                    the whole list: under a search or narrower dates it is not
+                    every order (contracts/ledger-dates.test.tsx). */}
+                {!data.ordersError && data.recentOrders.length > 0 && !data.pageInfo?.hasNextPage && !data.search && dates.range === ALL_ORDER_DATES.range && (
                   <>
                     <Divider />
                     <Box padding="300">

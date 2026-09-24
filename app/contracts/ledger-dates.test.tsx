@@ -144,6 +144,22 @@ describe("what the dates control draws, on both apps' Orders", () => {
   });
 });
 
+describe("ink's line at the end of the list", () => {
+  // The line (#176) says the list is every order from the past 60 days. That
+  // is true only of the whole list: a search or narrower dates show some.
+  const LINE = "That is every order from the past 60 days.";
+  const ROW = { id: "gid://shopify/Order/1042", name: "#1042", proofId: null, detail: null, more: new Promise(() => {}) };
+  const lastPage = { hasNextPage: false, hasPreviousPage: false, startCursor: "c1", endCursor: "c1" };
+
+  it("ends the whole list, and only the whole list", () => {
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: lastPage }))).toContain(LINE);
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: lastPage, dates: { range: "7d", from: null, to: null } }))).not.toContain(LINE);
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: lastPage, dates: CUSTOM }))).not.toContain(LINE);
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: lastPage, search: "#1042" }))).not.toContain(LINE);
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: { ...lastPage, hasNextPage: true } }))).not.toContain(LINE);
+  });
+});
+
 describe("Last 60 days is Shopify's whole window", () => {
   it("neither app asks for read_all_orders, so the whole window adds nothing to Shopify's read and no preset says All time", () => {
     for (const toml of ["shopify.app.toml", "shopify.app.ink.toml"]) expect(read(toml)).not.toMatch(/read_all_orders/);
