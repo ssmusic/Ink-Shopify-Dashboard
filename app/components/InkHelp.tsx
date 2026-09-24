@@ -52,7 +52,7 @@ export default function InkHelp() {
         </Topic>
         <Topic title="Buy a record">
           <Text as="p">
-            Choose Get the record on an order. Shopify shows the one-time price
+            Choose Buy the record on an order. Shopify shows the one-time price
             and currency for approval before charging your store.
           </Text>
           <Text as="p">

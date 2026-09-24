@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import InkPillNav from "./InkPillNav";
 import { useFetcher, useRevalidator } from "react-router";
 import {
   BlockStack,
@@ -115,6 +116,7 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
+            <InkPillNav active="settings" />
             <InkConnectionCard connection={data.connection} checking={revalidator.state !== "idle"} onCheck={() => revalidator.revalidate()} />
             {data.ritualistUrl && (
               <Card>

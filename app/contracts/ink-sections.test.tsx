@@ -264,3 +264,42 @@ describe("Sam's second pass, 2026-09-24: downloads, Records, the Orders rows", (
     vi.unstubAllGlobals();
   });
 });
+
+describe("Sam's third pass, 2026-09-24: the record up front, the pills back, the width between", () => {
+  const detail = { id: "27", orderNumber: "#1027", customerName: "Made Up", customerEmail: "buyer@example.com", customerAddress: { address1: "1 Test St", city: "Dallas", provinceCode: "TX", zip: "75201" }, date: "Sep 4, 2026", total: "149.95", subtotal: "149.95", currency: "USD", status: "enrolled", items: [{ title: "Kimora Combat Boot", quantity: 1, price: "149.95", sku: "K-1" }], metafields: {} };
+  const RECORD = { proof_id: "proof_aec827b527fb30457c1da027", locked: false, whole: true, summary: { order_number: "#1027", opens: 3 }, elements: [], checks: null };
+  const TIMELINE = { steps: [{ key: "enrolled", label: "Recorded", state: "done", at: "2026-09-04T18:56:00Z", note: "Recorded by ink" }], address: null, opens: [], window: null };
+  const opened = (door: Record<string, unknown>, props: Record<string, unknown>) => {
+    const row = { id: "gid://shopify/Order/27", name: "#1027", proofId: "proof_aec827b527fb30457c1da027", detail, record: RECORD, door, timeline: TIMELINE };
+    const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <InkRecentOrders orders={[row] as never} defaultExpandedId={row.id} {...props} /> }]);
+    return renderToString(<AppProvider i18n={translations}><Stub initialEntries={["/"]} /></AppProvider>);
+  };
+
+  it("puts the record's purchase up front on ink's Orders — the price on the button, above the activity, with Advanced closed", () => {
+    const html = opened({ offerLine: "Buy the record ($29 USD)", downloadable: false, purchase: null }, { advancedOpen: false, recordUpFront: true });
+    const t = text(html);
+    expect(t).toContain("Buy the record ($29 USD)");
+    expect(t.indexOf("Buy the record ($29 USD)")).toBeLessThan(t.indexOf("Order activity"));
+    expect(t).toContain("One-time Shopify charge");
+  });
+
+  it("says a record is included where it costs nothing, with its downloads up front", () => {
+    const t = text(opened({ offerLine: null, downloadable: true, purchase: null }, { advancedOpen: false, recordUpFront: true }));
+    expect(t).toContain("Included on this store.");
+    expect(t.indexOf("Download PDF")).toBeLessThan(t.indexOf("Order activity"));
+    expect(t).not.toContain("Buy the record");
+  });
+
+  it("keeps the record inside Advanced for every other ledger (the Ritualist's), as before", () => {
+    const t = text(opened({ offerLine: null, downloadable: true, purchase: null }, {}));
+    expect(t.indexOf("Download PDF")).toBeGreaterThan(t.indexOf("Order activity"));
+    expect(t).not.toContain("Included on this store.");
+  });
+
+  it("draws the pill bar again on ink's pages, and gives Orders a width between a Polaris page and the frame", () => {
+    const route = read("app/routes/app.ink.$section.tsx");
+    expect(route).toContain("<InkPillNav active={data.section} />");
+    expect(route).toContain("maxWidth: 1400");
+    expect(read("app/components/InkSettingsView.tsx")).toContain('<InkPillNav active="settings" />');
+  });
+});
