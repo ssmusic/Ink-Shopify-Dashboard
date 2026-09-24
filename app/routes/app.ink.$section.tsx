@@ -41,7 +41,15 @@ import InkRecordHistory, { type HistoryItem } from "../components/InkRecordHisto
 import { readRecordPriceOrUnknown } from "../services/ink-api.server";
 import InkHelp from "../components/InkHelp";
 import InkOrderSearch from "../components/InkOrderSearch";
-import { orderSearch, orderSort, orderSearchParams } from "../lib/ink-order-search";
+import {
+  ALL_ORDER_DATES,
+  orderDateBounds,
+  orderDates,
+  orderDatesParams,
+  orderSearch,
+  orderSearchParams,
+  orderSort,
+} from "../lib/ink-order-search";
 
 // While a fresh install is still provisioning (no api key yet), the doors
 // cannot be read; the screen asks again every few seconds for a while.
@@ -183,6 +191,9 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
   let ordersError = false;
   const search = orderSearch(params.get("q"));
   const sort = orderSort(params.get("sort"));
+  // The ledger's dates: the web app's presets up to Shopify's 60 days, or
+  // custom days in the shop's zone (lib/ink-order-search.ts).
+  const dates = orderDates(params);
   const cursor = (key: string) => {
     const value = params.get(key);
     return value && value.length <= 1024 ? value : null;
@@ -194,6 +205,7 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
     first: ORDERS_PER_PAGE,
     search,
     sort,
+    dates,
     after: cursor("after"),
     before: cursor("before"),
   }).catch(() => {
@@ -257,6 +269,8 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
       ordersError,
       search,
       sort,
+      dates,
+      dateBounds: orderDateBounds(Date.now()),
       pageInfo: page.pageInfo,
       recentOrders: recentOrders.map((o) => ({
         id: o.id,
@@ -291,6 +305,8 @@ export default function InkHome() {
   const revalidator = useRevalidator();
   const navigation = useNavigation();
   const [params, setParams] = useSearchParams();
+  // The ledger's dates; a section without them reads as the whole window.
+  const dates = ("dates" in data && data.dates) || ALL_ORDER_DATES;
   const go = (key: "after" | "before", cursor: string | null) => {
     if (!cursor) return;
     const next = new URLSearchParams(params);
@@ -388,6 +404,9 @@ export default function InkHome() {
                       sort={data.sort || "newest"}
                       pending={navigation.state !== "idle"}
                       onChange={(search, sort) => setParams(orderSearchParams(params, search, sort))}
+                      dates={dates}
+                      dateBounds={("dateBounds" in data && data.dateBounds) || null}
+                      onDates={(next) => setParams(orderDatesParams(params, next))}
                     />
                   </BlockStack>
                 </Box>
@@ -399,13 +418,14 @@ export default function InkHome() {
                   </Box>
                 ) : (
                   <InkRecentOrders
-                    key={`${data.search}:${data.sort}:${params.get("after")}:${params.get("before")}`}
+                    key={`${data.search}:${data.sort}:${dates.range}:${dates.from}:${dates.to}:${params.get("after")}:${params.get("before")}`}
                     orders={data.recentOrders}
                     returnTo="/app/ink/orders"
                     detailed
                     advancedOpen={false}
                     recordUpFront
                     searching={Boolean(data.search)}
+                    dated={dates.range !== ALL_ORDER_DATES.range}
                     mapsKey={data.mapsKey}
                     sort={data.sort || "newest"}
                     onSort={(sort) => setParams(orderSearchParams(params, data.search || "", sort))}

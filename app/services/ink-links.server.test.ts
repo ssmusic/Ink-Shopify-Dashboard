@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const {
   RECENT_ORDERS_QUERY,
   RECENT_ORDERS_DETAIL_QUERY,
+  SHOP_ZONE_QUERY,
   readRecentOrderRecords,
   readRecentOrderPage,
   recordUrlFor,
@@ -269,5 +270,52 @@ describe("order pagination and missing money", () => {
     expect(
       (await readRecentOrderRecords({ graphql }))[0].detail?.currency,
     ).toBe("");
+  });
+});
+
+describe("the ledger's dates, asked of Shopify", () => {
+  const NOW = Date.parse("2026-09-24T15:30:45Z");
+  const answering = (zone: unknown) =>
+    vi.fn(async (query: string) => {
+      if (query === SHOP_ZONE_QUERY) {
+        if (zone instanceof Error) throw zone;
+        return { json: async () => ({ data: { shop: { ianaTimezone: zone } } }) };
+      }
+      return { json: async () => ({ data: { orders: { nodes: [] } } }) };
+    });
+
+  it("adds a preset to the search, counted back from now, and reads no zone for it", async () => {
+    const graphql = answering("America/New_York");
+    await readRecentOrderPage({ graphql }, { first: 20, search: "#1026", sort: "newest", dates: { range: "7d", from: null, to: null }, now: NOW });
+    expect(graphql).not.toHaveBeenCalledWith(SHOP_ZONE_QUERY);
+    expect(graphql).toHaveBeenCalledWith(RECENT_ORDERS_DETAIL_QUERY, { variables: {
+      first: 20, query: `name:"1026" AND created_at:>='2026-09-17T15:30:45Z'`, sortKey: "CREATED_AT", reverse: true,
+    } });
+  });
+
+  it("reads custom dates as the shop's own days", async () => {
+    const graphql = answering("America/New_York");
+    await readRecentOrderPage({ graphql }, { search: "", dates: { range: "custom", from: "2026-09-01", to: "2026-09-15" }, now: NOW });
+    expect(graphql).toHaveBeenNthCalledWith(1, SHOP_ZONE_QUERY);
+    expect(graphql).toHaveBeenLastCalledWith(RECENT_ORDERS_DETAIL_QUERY, { variables: {
+      first: 5, query: "created_at:>='2026-09-01T04:00:00Z' AND created_at:<'2026-09-16T04:00:00Z'",
+    } });
+  });
+
+  it("keeps the list when the zone cannot be read: the days fall on UTC's midnight", async () => {
+    for (const zone of [new Error("Throttled"), null, ""]) {
+      const graphql = answering(zone);
+      await readRecentOrderPage({ graphql }, { dates: { range: "custom", from: "2026-09-01", to: "2026-09-01" }, now: NOW });
+      expect(graphql).toHaveBeenLastCalledWith(RECENT_ORDERS_DETAIL_QUERY, { variables: {
+        first: 5, query: "created_at:>='2026-09-01T00:00:00Z' AND created_at:<'2026-09-02T00:00:00Z'",
+      } });
+    }
+  });
+
+  it("asks nothing more of Shopify for the whole window", async () => {
+    const graphql = answering("UTC");
+    await readRecentOrderPage({ graphql }, { search: "", dates: { range: "60d", from: null, to: null }, now: NOW });
+    expect(graphql).toHaveBeenCalledTimes(1);
+    expect(graphql).toHaveBeenCalledWith(RECENT_ORDERS_DETAIL_QUERY, { variables: { first: 5, query: null } });
   });
 });

@@ -35,7 +35,15 @@ import OrderDetailView from "../components/OrderDetailView";
 import OrderExpandedRow from "../components/OrderExpandedRow";
 import { readRecentOrderPage } from "../services/ink-links.server";
 import { readJwks } from "../services/ink-record.server";
-import { orderSearch, orderSearchParams, orderSort } from "../lib/ink-order-search";
+import {
+  ALL_ORDER_DATES,
+  orderDateBounds,
+  orderDates,
+  orderDatesParams,
+  orderSearch,
+  orderSearchParams,
+  orderSort,
+} from "../lib/ink-order-search";
 import { ritualistApiKey, ritualistRowRecord } from "../services/ritualist-rows.server";
 
 // SHIPMENTS IS INK'S ORDERS LEDGER (Sam, 2026-09-24: "we are making the
@@ -45,7 +53,8 @@ import { ritualistApiKey, ritualistRowRecord } from "../services/ritualist-rows.
 // "View full order"; ink's Orders is that page in Polaris
 // (components/InkRecentOrders.tsx, #152). This screen is ink's, whole:
 //   · one table on thin lines — Order · Recipient · Activity · Total · Date —
-//     twenty to a page, searched and sorted by Shopify, the whole row opening;
+//     twenty to a page, searched, sorted and narrowed to dates by Shopify, the
+//     whole row opening;
 //   · a one-line state for no orders, no match and a failed read;
 //   · on a phone, the stacked row, never the desktop squeezed;
 //   · the opened row is ink's panel: the glance, the order's activity on the
@@ -65,6 +74,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const params = new URL(request.url).searchParams;
   const search = orderSearch(params.get("q"));
   const sort = orderSort(params.get("sort"));
+  // The ledger's dates, as ink's Orders reads them (lib/ink-order-search.ts).
+  const dates = orderDates(params);
   const cursor = (key: string) => {
     const value = params.get(key);
     return value && value.length <= 1024 ? value : null;
@@ -84,6 +95,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     first: ORDERS_PER_PAGE,
     search,
     sort,
+    dates,
     after: cursor("after"),
     before: cursor("before"),
   }).catch(() => {
@@ -107,7 +119,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     more: ritualistRowRecord(apiKey, o.proofId, keys),
   }));
 
-  return { orders, pageInfo: page.pageInfo, ordersError, search, sort };
+  return {
+    orders,
+    pageInfo: page.pageInfo,
+    ordersError,
+    search,
+    sort,
+    dates,
+    dateBounds: orderDateBounds(Date.now()),
+  };
 };
 
 // ─────────────────────────────────────────────
@@ -120,6 +140,8 @@ export default function ShipmentsIndex() {
   const [params, setParams] = useSearchParams();
   const [fullRecord, setFullRecord] = useState<InkOrderRow | null>(null);
   const idle = navigation.state === "idle";
+  const dates = data.dates ?? ALL_ORDER_DATES;
+  const dated = dates.range !== ALL_ORDER_DATES.range;
   const go = (key: "after" | "before", cursor: string | null) => {
     if (!cursor) return;
     const next = new URLSearchParams(params);
@@ -132,7 +154,7 @@ export default function ShipmentsIndex() {
   // Auto-retry if the page loaded blank (App Bridge hydration race on first
   // open) — once a session; revalidate keeps the App Bridge session context.
   useEffect(() => {
-    if (!data.orders.length && !data.ordersError && !data.search) {
+    if (!data.orders.length && !data.ordersError && !data.search && !dated) {
       const timer = setTimeout(() => {
         const key = "ink_shipments_retried";
         if (!sessionStorage.getItem(key)) {
@@ -143,7 +165,7 @@ export default function ShipmentsIndex() {
       return () => clearTimeout(timer);
     }
     sessionStorage.removeItem("ink_shipments_retried");
-  }, [data.orders, data.ordersError, data.search, revalidator]);
+  }, [data.orders, data.ordersError, data.search, dated, revalidator]);
 
   // "View full record" — the Ritualist's full-page view of the order, which
   // leads to the studio (components/OrderDetailView.tsx). It waits on the
@@ -201,6 +223,9 @@ export default function ShipmentsIndex() {
                 sort={data.sort || "newest"}
                 pending={!idle}
                 onChange={(search, sort) => setParams(orderSearchParams(params, search, sort))}
+                dates={dates}
+                dateBounds={data.dateBounds ?? null}
+                onDates={(next) => setParams(orderDatesParams(params, next))}
               />
             </BlockStack>
           </Box>
@@ -210,9 +235,10 @@ export default function ShipmentsIndex() {
             </Box>
           ) : (
             <InkRecentOrders
-              key={`${data.search}:${data.sort}:${params.get("after")}:${params.get("before")}`}
+              key={`${data.search}:${data.sort}:${dates.range}:${dates.from}:${dates.to}:${params.get("after")}:${params.get("before")}`}
               orders={data.orders}
               searching={Boolean(data.search)}
+              dated={dated}
               sort={data.sort || "newest"}
               onSort={(sort) => setParams(orderSearchParams(params, data.search || "", sort))}
               pending={!idle}
