@@ -919,7 +919,7 @@ export default function OrderDetails() {
                     <Badge tone={statusBadgeTone(verificationStatusRaw)}>{statusLabel}</Badge>
                 }
                 subtitle={formatDate(order.createdAt)}
-                backAction={{ content: "Shipments", onAction: () => navigate(-1) }}
+                backAction={{ content: "Orders", onAction: () => navigate(-1) }}
                 // The buyer's page, offered where a merchant is already looking
                 // at the order. It was resolved in the loader and then rendered
                 // nowhere — a typed field nobody shows is invisible to tsc, to
