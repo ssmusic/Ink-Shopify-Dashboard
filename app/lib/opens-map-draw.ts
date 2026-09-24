@@ -69,10 +69,31 @@ export function viewRingOf(address: OpensMapPoint, opens: OpensMapPoint[]): numb
   return GUIDE_RINGS_M.find((r) => reach <= r) ?? GUIDE_RINGS_M[GUIDE_RINGS_M.length - 1];
 }
 
+/** A point as the map draws it beside the address: more than half the world
+ *  east or west of it, one world over, so the line between them crosses the
+ *  nearer ocean (2026-09-24: an open in Shenzhen against a delivery
+ *  address in Austin reads across the Pacific, never the long way across
+ *  Europe). The tiles repeat; the point stays where it is on the globe. */
+export function nearSide(p: OpensMapPoint, home: OpensMapPoint | null): OpensMapPoint {
+  if (!home) return p;
+  let lng = p.lng;
+  while (lng - home.lng > 180) lng -= 360;
+  while (lng - home.lng < -180) lng += 360;
+  return lng === p.lng ? p : { lat: p.lat, lng };
+}
+
 export function drawOpensMap(L: typeof Leaflet, el: HTMLElement, scene: OpensMapScene, palette: OpensMapPalette): OpensMapHandle {
-  const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: false, dragging: !L.Browser.mobile });
+  // The delivery address alone (the last open's small address map,
+  // 2026-09-24): no zoom buttons, and OpenStreetMap's credit without
+  // Leaflet's own prefix, so a small map stays a map.
+  const addressOnly = scene.opens.length === 0;
+  const map = L.map(el, { zoomControl: !addressOnly, attributionControl: true, scrollWheelZoom: false, dragging: !L.Browser.mobile });
+  if (addressOnly) map.attributionControl?.setPrefix(false);
   L.tileLayer(TILE_URL, { maxZoom: 19, attribution: TILE_ATTRIBUTION }).addTo(map);
-  const name: Leaflet.TooltipOptions = { permanent: true, direction: "right", offset: [10, 0], className: palette.nameClass };
+  // Names stand beside their points, on the side away from the line: one open
+  // due west of the address has its name on its left.
+  const nameOn = (direction: "left" | "right"): Leaflet.TooltipOptions => ({ permanent: true, direction, offset: [direction === "left" ? -10 : 10, 0], className: palette.nameClass });
+  const westward = !!scene.address && scene.opens.length === 1 && nearSide(scene.opens[0], scene.address).lng < scene.address.lng;
 
   const bounds = L.latLngBounds([]);
   const address = scene.address;
@@ -87,7 +108,8 @@ export function drawOpensMap(L: typeof Leaflet, el: HTMLElement, scene: OpensMap
   }
 
   for (const o of scene.opens) {
-    const at = L.latLng(o.lat, o.lng);
+    const drawn = nearSide(o, address);
+    const at = L.latLng(drawn.lat, drawn.lng);
     bounds.extend(at);
     if (home) {
       const line = L.polyline([at, home], { color: palette.open, weight: 2, dashArray: palette.dash, opacity: 0.9 });
@@ -95,19 +117,20 @@ export function drawOpensMap(L: typeof Leaflet, el: HTMLElement, scene: OpensMap
       line.addTo(map);
     }
     L.circleMarker(at, { radius: 7, color: palette.open, weight: 3, fillColor: "#ffffff", fillOpacity: 1, opacity: 1 })
-      .bindTooltip(o.label, name)
+      .bindTooltip(o.label, nameOn(westward ? "left" : "right"))
       .addTo(map);
   }
 
   // The address last, so its pin sits on top of every line.
   if (home) {
     L.circleMarker(home, { radius: 8, color: "#ffffff", weight: 3, fillColor: palette.address, fillOpacity: 1 })
-      .bindTooltip(scene.addressLabel, name)
+      .bindTooltip(scene.addressLabel, nameOn("right"))
       .addTo(map);
   }
 
-  // The names stand to the right of their points: the view leaves them room.
+  // The view leaves the names room on the side they stand.
   const longest = Math.max(scene.addressLabel.length, ...scene.opens.map((o) => o.label.length));
-  if (bounds.isValid()) map.fitBounds(bounds, { paddingTopLeft: [24, 24], paddingBottomRight: [34 + Math.ceil(longest * 6.5), 24], maxZoom: 17 });
+  const room = 34 + Math.ceil(longest * 6.5);
+  if (bounds.isValid()) map.fitBounds(bounds, { paddingTopLeft: [westward ? room : 24, 24], paddingBottomRight: [room, 24], maxZoom: 17 });
   return { remove: () => map.remove() };
 }

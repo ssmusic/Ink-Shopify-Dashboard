@@ -1,3 +1,5 @@
+import { lastOpenFrom, type LastOpen } from "./last-open";
+
 /** Merchant-gated audit fields used by the on-demand Advanced inspector. */
 export type InspectEvent = {
   id: string;
@@ -25,6 +27,9 @@ export type InspectOpen = {
 
 export type InkInspection = {
   proofId: string;
+  /** The order's last open (ink-backend #142): the opens door's, else the
+   *  audit door's; absent when neither carried the field. */
+  lastOpen?: LastOpen | null;
   chainHead: {
     sequence: number;
     eventId: string | null;
@@ -229,8 +234,10 @@ export function inspectionFromAudit(
       },
     ),
   );
+  const lastOpen = lastOpenFrom(o, a);
   return {
     proofId: str(a.proof_id)!,
+    ...(lastOpen !== undefined ? { lastOpen } : {}),
     address: point(o?.address),
     addressLabel: (() => {
       const ship = obj(obj(a.summary)?.ship_to);

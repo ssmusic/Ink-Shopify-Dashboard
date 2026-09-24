@@ -53,7 +53,9 @@ export default function OpenMap({
   height = 260,
 }: {
   address: OpensMapPoint | null;
-  open: OpensMapOpen;
+  /** The open to draw against the address; null draws the address alone
+   *  (the last open's small delivery-address map, 2026-09-24). */
+  open: OpensMapOpen | null;
   /** The address pin's name on the map. */
   addressLabel?: string;
   height?: number;
@@ -72,7 +74,7 @@ export default function OpenMap({
         if (cancelled || !el.current) return;
         // Leaflet ships as a CommonJS bundle: the bundler hands it over as the default.
         const L = (leaflet as unknown as { default?: typeof leaflet }).default ?? leaflet;
-        handle = drawOpensMap(L, el.current, { address, addressLabel, opens: [open] }, PALETTE);
+        handle = drawOpensMap(L, el.current, { address, addressLabel, opens: open ? [open] : [] }, PALETTE);
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -92,10 +94,10 @@ export default function OpenMap({
       <div
         ref={el}
         data-testid="open-map"
-        data-points={1}
+        data-points={open ? 1 : 0}
         data-address={address ? "pinned" : "absent"}
         role="group"
-        aria-label={address ? `Map: ${open.label} and the delivery address` : `Map: ${open.label}`}
+        aria-label={open ? (address ? `Map: ${open.label} and the delivery address` : `Map: ${open.label}`) : "Map: the delivery address"}
         style={{ height, width: "100%", borderRadius: "var(--p-border-radius-200)", overflow: "hidden", border: "1px solid var(--p-color-border)", background: "#f1f1f1" }}
       />
       {failed ? <p style={{ margin: "8px 0 0", font: "inherit", color: "var(--p-color-text-secondary)" }}>The map did not load.</p> : null}

@@ -302,6 +302,7 @@ export default function InkRecordInspection({
         capped={timeline?.rows ? (timeline.opensCapped ?? false) : (inspection?.opensCapped ?? false)}
         address={timeline?.address ?? inspection?.address ?? null}
         addressLabel={addressLabel && addressLabel !== "Address unavailable" ? addressLabel : inspection?.addressLabel ?? null}
+        lastOpen={timeline?.lastOpen !== undefined ? timeline.lastOpen : inspection?.lastOpen}
         mapsKey={mapsKey}
       />
       <Box background="bg" padding="400" borderRadius="200">

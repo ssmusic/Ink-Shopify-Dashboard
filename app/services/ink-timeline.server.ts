@@ -36,6 +36,7 @@ import { merchantRead, PROOF_ID } from "./ink-reader.server";
 import { inspectionFromAudit } from "../lib/ink-record-inspection";
 import { openLocationOf } from "../lib/open-location";
 import { everyOpenRows, type DoorOpen, type OpenKind } from "../lib/every-open";
+import { lastOpenFrom } from "../lib/last-open";
 
 // The opens door's device words (ink-backend utils/checkoutClient.js deviceOf)
 // and the record's words for an open's kind (ink-backend #135).
@@ -182,6 +183,11 @@ export function timelineFrom(
         : null,
   });
 
+  // THE LAST OPEN (ink-backend #142, Sam 2026-09-24: "i need a tap address"):
+  // the opens door's, else the proof door's; neither carrying the field keeps
+  // the first open's block. Its point is for the map; its words are the door's.
+  const lastOpen = lastOpenFrom(opensBody, proofBody?.proof ?? proofBody);
+
   return {
     steps,
     address,
@@ -190,6 +196,7 @@ export function timelineFrom(
     opensAvailable: Array.isArray(opensBody?.opens),
     opensCapped: opensBody?.capped === true,
     rows,
+    ...(lastOpen !== undefined ? { lastOpen } : {}),
   };
 }
 

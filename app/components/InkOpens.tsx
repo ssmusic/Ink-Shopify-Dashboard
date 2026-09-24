@@ -35,7 +35,6 @@ import MiniMap from "./MiniMap";
 import type { OrderTimelineData } from "./OrderTimeline";
 import { INK_DATA, INK_DATA_TINT, INK_HAIRLINE, INK_MUTED, INK_NEUTRAL } from "../lib/ink-palette";
 import { browsersLine, opensOf, when, type RecordRead } from "../lib/record-words";
-import { kmOrM } from "../lib/order-timeline";
 import {
   CORROBORATING,
   KIND_WORDS,
@@ -45,7 +44,9 @@ import {
   deviceCell,
   deviceFact,
   distanceFact,
+  distanceWords,
   everyOpenRows,
+  firstOpenLine,
   locationCell,
   ringsGeometry,
   rowCaption,
@@ -57,6 +58,7 @@ import {
   type ServedLocation,
   type TheOpenReading,
 } from "../lib/every-open";
+import { lastOpenMoment, lastOpenSentence, type LastOpen } from "../lib/last-open";
 
 /** The first open's served line, as the record's open element carries it. */
 function servedOf(record: RecordRead | null | undefined): ServedLocation | null {
@@ -195,6 +197,109 @@ export function TheOpen({
   );
 }
 
+/** THE LAST OPEN leads the open section (Sam, 2026-09-24, on the console's
+ *  Interaction Timeline: "i really dont need a delivery address as much as i
+ *  need a tap address … a smaller delivery add and last tap address … make
+ *  sure it persists to the thin clients in the ritualist and ink shopify
+ *  app"). The order's most recent person's open as the opens door serves it
+ *  (ink-backend #142 — the backend decides which open, its distance, a coarse
+ *  fix's too, its device word and the place in words): the sentence, the
+ *  place, the moment, and its map against the delivery address. The delivery
+ *  address is the small block beside it: its own small map and its words. The
+ *  first open's own word follows in one line. No coordinate is printed as
+ *  text. PLACEHOLDER copy: "The last open", "The first open:", the map's
+ *  "last open". */
+export function TheLastOpen({
+  record,
+  rows,
+  address,
+  addressLabel = null,
+  lastOpen,
+}: {
+  record: RecordRead | null | undefined;
+  rows: EveryOpenRow[];
+  address: MapPoint | null;
+  addressLabel?: string | null;
+  lastOpen: LastOpen | null;
+}) {
+  const point = lastOpen?.point ?? null;
+  const where = addressLabel && addressLabel !== "Address unavailable" ? addressLabel : null;
+  const first = firstOpenLine({ served: servedOf(record), rows, address, opens: opensOf(record) ?? 0 });
+  return (
+    <div data-testid="the-last-open">
+      <BlockStack gap="400">
+        <BlockStack gap="100">
+          <Text as="h3" variant="headingMd">
+            The last open
+          </Text>
+          {lastOpen ? (
+            <>
+              <div data-testid="last-open-words">
+                <Text as="p">{lastOpenSentence(lastOpen)}</Text>
+              </div>
+              {lastOpen.address_words ? (
+                <div data-testid="last-open-place">
+                  <Text as="p" breakWord>
+                    {lastOpen.address_words}
+                  </Text>
+                </div>
+              ) : null}
+              <div data-testid="last-open-moment">
+                <Text as="p" variant="bodySm" tone="subdued">
+                  {lastOpenMoment(lastOpen)}
+                </Text>
+              </div>
+            </>
+          ) : (
+            <div data-testid="last-open-words">
+              <Text as="p">No open on the record yet.</Text>
+            </div>
+          )}
+        </BlockStack>
+        <InlineGrid columns={point ? { xs: 1, md: ["twoThirds", "oneThird"] } : { xs: 1, md: 3 }} gap="400" alignItems="start">
+          {point && lastOpen ? (
+            <OpenMap
+              address={address}
+              open={{ ...point, line_label: lastOpen.distance_m != null ? distanceWords(lastOpen.distance_m) : null, label: "last open" }}
+              height={300}
+            />
+          ) : null}
+          <div data-testid="delivery-address-block">
+            <BlockStack gap="200">
+              <Text as="h4" variant="headingSm">
+                Delivery address
+              </Text>
+              {address ? (
+                <OpenMap address={address} open={null} height={150} />
+              ) : (
+                <Text as="p" tone="subdued">
+                  not recorded — the address was never geocoded
+                </Text>
+              )}
+              {where ? (
+                <Text as="p" variant="bodySm" breakWord>
+                  {where}
+                </Text>
+              ) : null}
+            </BlockStack>
+          </div>
+        </InlineGrid>
+        <div data-testid="first-open-words">
+          <Text as="p" variant="bodySm">
+            <Text as="span" tone="subdued">
+              The first open:{" "}
+            </Text>
+            {first}
+          </Text>
+        </div>
+        <Text as="p" variant="bodySm" tone="subdued">
+          {CORROBORATING}
+        </Text>
+      </BlockStack>
+    </div>
+  );
+}
+
 /** A row, opened: its own map when the open carried a fix, then its words. */
 export function OpenRowDetail({ row, address }: { row: EveryOpenRow; address: MapPoint | null }) {
   const fix = row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null;
@@ -203,7 +308,7 @@ export function OpenRowDetail({ row, address }: { row: EveryOpenRow; address: Ma
       {fix ? (
         <OpenMap
           address={address}
-          open={{ ...fix, line_label: row.distance_m != null ? kmOrM(row.distance_m) : null, label: `open ${row.n}` }}
+          open={{ ...fix, line_label: row.distance_m != null ? distanceWords(row.distance_m) : null, label: `open ${row.n}` }}
         />
       ) : null}
       <Text as="p" variant="bodySm">
@@ -428,6 +533,7 @@ export default function InkOpens({
   capped,
   address,
   addressLabel = null,
+  lastOpen: givenLast,
 }: {
   record: RecordRead | null | undefined;
   timeline: OrderTimelineData | null | undefined;
@@ -436,15 +542,23 @@ export default function InkOpens({
   capped?: boolean;
   address?: MapPoint | null;
   addressLabel?: string | null;
+  /** The last open (ink-backend #142); undefined: the timeline's, else none served. */
+  lastOpen?: LastOpen | null;
   /** Google's browser key, still threaded for Google's map (components/OpensMap.tsx),
    *  which stays in the code unmounted. The maps here are OpenStreetMap's and need none. */
   mapsKey?: string | null;
 }) {
   const rows = given ?? timeline?.rows ?? everyOpenRows(null, record?.opens ?? null);
   const home = address !== undefined ? address : timeline?.address ?? null;
+  // The last open leads when a door served it; a door before #142 keeps THE OPEN.
+  const last = givenLast !== undefined ? givenLast : timeline?.lastOpen;
   return (
     <BlockStack gap="500">
-      <TheOpen record={record} rows={rows} address={home} addressLabel={addressLabel} />
+      {last !== undefined ? (
+        <TheLastOpen record={record} rows={rows} address={home} addressLabel={addressLabel} lastOpen={last} />
+      ) : (
+        <TheOpen record={record} rows={rows} address={home} addressLabel={addressLabel} />
+      )}
       <Divider />
       <EveryOpen
         rows={rows}
