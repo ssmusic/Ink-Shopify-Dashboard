@@ -35,7 +35,12 @@ import type {
 import { merchantRead, PROOF_ID } from "./ink-reader.server";
 import { inspectionFromAudit } from "../lib/ink-record-inspection";
 import { openLocationOf } from "../lib/open-location";
-import { everyOpenRows, type DoorOpen } from "../lib/every-open";
+import { everyOpenRows, type DoorOpen, type OpenKind } from "../lib/every-open";
+
+// The opens door's device words (ink-backend utils/checkoutClient.js deviceOf)
+// and the record's words for an open's kind (ink-backend #135).
+const DEVICE_WORDS = new Set(["iPhone", "iPad", "Android", "Windows", "Mac", "Linux", "Other"]);
+const OPEN_KINDS = new Set(["first", "again", "reload", "scanner"]);
 
 const num = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
@@ -153,6 +158,11 @@ export function timelineFrom(
             accuracy_m: nonnegative(o?.accuracy_m),
             lat: fix?.lat ?? null,
             lng: fix?.lng ?? null,
+            // ink-backend #135's three words, each only from its known set —
+            // never a user agent, never an id. Absent on an older door.
+            device: DEVICE_WORDS.has(o?.device) ? (o.device as string) : null,
+            browser: typeof o?.browser === "string" && /^[A-Z]{1,3}$/.test(o.browser) ? o.browser : null,
+            kind: OPEN_KINDS.has(o?.kind) ? (o.kind as OpenKind) : null,
           };
         })
       : null;

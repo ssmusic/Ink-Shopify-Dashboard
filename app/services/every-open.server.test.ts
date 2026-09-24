@@ -125,6 +125,25 @@ describe("the timeline's rows: every open the door answered, joined to its signe
     expect(t.opens).toHaveLength(2);
   });
 
+  it("reads the door's device, browser and kind (ink-backend #135) only from their known words", () => {
+    const withWords = {
+      ...opensBody,
+      opens: [
+        { ...opensBody.opens[0], device: "iPhone", browser: "A", kind: "first" },
+        { ...opensBody.opens[1], device: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X)", browser: "0123456789abcdef0123456789abcdef", kind: "sometimes" },
+        { ...opensBody.opens[2], device: null, browser: null, kind: "scanner" },
+      ],
+    };
+    const t = timelineFrom({ proof: { enrolled_at: "2026-08-30T00:00:00Z" } }, withWords, record)!;
+    expect(t.rows?.slice(0, 3).map((r) => [r.device, r.browser, r.kind])).toEqual([
+      ["iPhone", "browser A", "first"],
+      // A user agent or an id where a word belongs is never passed on: the signed side stands.
+      [null, "not counted", "again"],
+      [null, "browser unknown", "scanner"],
+    ]);
+    expect(JSON.stringify(t.rows)).not.toMatch(/Mozilla|[0-9a-f]{32}/);
+  });
+
   it("lists the record's signed opens in words when the door did not answer", () => {
     const t = timelineFrom({ proof: { enrolled_at: "2026-08-30T00:00:00Z", first_tap_at: "2026-09-01T10:00:00Z" } }, null, record)!;
     expect(t.rows).toHaveLength(4);
