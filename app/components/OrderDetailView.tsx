@@ -11,6 +11,8 @@ import {
 } from "@shopify/polaris";
 import type { BadgeProps } from "@shopify/polaris";
 import { distanceBadgeWords, isDistanceRecorded, OPEN_DISTANCE_KEY } from "../lib/order-marks";
+import { LifecycleRail } from "./OrderTimeline";
+import type { InkRecentOrderRow } from "./InkRecentOrders";
 
 interface OrderItem {
   title: string;
@@ -46,6 +48,9 @@ interface Order {
     device_info?: string;
     [key: string]: any;
   };
+  /** The row ink's panel reads (routes/app.tagged-shipments._index.tsx): its
+   *  timeline carries the order's steps, each with where its time came from. */
+  row?: InkRecentOrderRow;
 }
 
 interface OrderDetailViewProps {
@@ -92,7 +97,6 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
   const statusLabel = isDistanceRecorded(statusRaw)
     ? distanceBadgeWords(order.metafields?.[OPEN_DISTANCE_KEY])
     : statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1);
-  const deliveredAt = order.metafields.delivery_verified_at || "";
 
   return (
     <Page
@@ -167,14 +171,10 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
                     {fmt(order.subtotal, order.currency)}
                   </Text>
                 </InlineStack>
-                <InlineStack align="space-between">
-                  <Text as="span" tone="subdued" variant="bodySm">
-                    Shipping
-                  </Text>
-                  <Text as="span" variant="bodySm">
-                    Free
-                  </Text>
-                </InlineStack>
+                {/* No "Shipping — Free": it printed on every order, whatever the
+                    order paid — the line App Store review flagged on ink
+                    (2026-09-23), gone from the row since; the total is the
+                    order's own. */}
                 <Divider />
                 <InlineStack align="space-between">
                   <Text as="span" variant="bodySm" fontWeight="semibold">
@@ -189,25 +189,25 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
           </BlockStack>
         </Layout.Section>
 
-        {/* Right column: delivery status + handoff (no forensics in the embed) */}
+        {/* Right column: the order's activity + the handoff to the studio.
+            The activity is ink's honest rail (components/OrderTimeline.tsx):
+            each step says where its time came from, and only ink's own record
+            and a carrier's scan get a tick. It replaces a bare "Delivered"
+            time read off the order's metafield, which never said who reported
+            it. The words are ink's (components/InkRecentOrders.tsx). */}
         <Layout.Section>
           <Card>
             <BlockStack gap="300">
               <Text as="h3" variant="headingSm">
-                Delivery
+                Order activity
               </Text>
-              {deliveredAt ? (
-                <InlineStack align="space-between">
-                  <Text as="span" tone="subdued" variant="bodySm">
-                    Delivered
-                  </Text>
-                  <Text as="span" variant="bodySm">
-                    {deliveredAt}
-                  </Text>
-                </InlineStack>
+              {order.row?.timeline ? (
+                <LifecycleRail steps={order.row.timeline.steps} />
               ) : (
                 <Text as="p" variant="bodySm" tone="subdued">
-                  No delivery recorded yet.
+                  {order.row?.proofId
+                    ? "Order activity is unavailable. Refresh to try again."
+                    : "No record is linked to this order."}
                 </Text>
               )}
               <Divider />

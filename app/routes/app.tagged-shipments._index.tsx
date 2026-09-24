@@ -31,6 +31,16 @@ import {
   isDistanceRecorded,
   OPEN_DISTANCE_KEY,
 } from "../lib/order-marks";
+import type { InkRecentOrderRow } from "../components/InkRecentOrders";
+import type { OrderTimelineData } from "../components/OrderTimeline";
+import type { InkOrderDetail } from "../services/ink-links.server";
+import type { RecordRead } from "../lib/record-words";
+import { PROOF_ID } from "../services/ink-reader.server";
+import {
+  includedRecordDoor,
+  readShipmentPanels,
+  ritualistApiKey,
+} from "../services/ritualist-rows.server";
 
 const json = (data: any, init?: ResponseInit) =>
   new Response(JSON.stringify(data), {
@@ -42,8 +52,12 @@ const json = (data: any, init?: ResponseInit) =>
 // Loader
 // ─────────────────────────────────────────────
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
+  // The row's panel is ink's (components/OrderExpandedRow.tsx): it says the
+  // order's recipient — the ship-to's own name — and the order's email, and it
+  // reads the record by the order's proof id, asked by key (`first: 10` on the
+  // ink metafields below can stop short of it, as it can of the distance).
   const query = `#graphql
     query GetOrders {
       shop { ianaTimezone }
@@ -51,18 +65,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         edges {
           node {
             id name createdAt displayFinancialStatus displayFulfillmentStatus
+            email
             totalPriceSet { shopMoney { amount currencyCode } }
             customer {
               firstName lastName email
             }
-            shippingAddress { address1 city provinceCode zip }
-            billingAddress { address1 city provinceCode zip }
+            shippingAddress { name address1 address2 city provinceCode zip country }
+            billingAddress { address1 address2 city provinceCode zip country }
             tags
             metafields(namespace: "ink", first: 10) {
               edges { node { key value } }
             }
             openDistance: metafield(namespace: "ink", key: "open_distance_m") { value }
+            proof: metafield(namespace: "ink", key: "proof_reference") { value }
             lineItems(first: 20) {
+              pageInfo { hasNextPage }
               edges {
                 node {
                   title quantity sku
@@ -211,11 +228,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       rawStatus: verificationStatus,
       isEligible: isInkOrder,
       items,
+      itemsTruncated: order.lineItems?.pageInfo?.hasNextPage === true,
       metafields,
+      // What the row's panel reads (panelRow below): the record's id, the
+      // ship-to's own name and address, the order's own email.
+      proofId: proofIdOf(order.proof?.value) ?? proofIdOf(metafields.proof_reference),
+      shipTo: order.shippingAddress ?? null,
+      orderEmail: order.email || "",
     };
   });
 
   const eligibleOrders = allOrders.filter((o: any) => o.isEligible);
+
+  // EACH ROW'S RECORD AND TIMELINE, the way ink's Orders reads them
+  // (services/ritualist-rows.server.ts), with the merchant's own key. The row
+  // opens onto ink's panel; its door is the Ritualist's: the record included.
+  const apiKey = await ritualistApiKey(session.shop);
+  const { records, timelines } = await readShipmentPanels(
+    apiKey,
+    eligibleOrders.map((o: any) => o.proofId),
+  );
+  const rows = eligibleOrders.map((o: any) => ({
+    ...o,
+    row: panelRow(o, apiKey, records, timelines),
+  }));
 
   const counts = {
     all: eligibleOrders.length,
@@ -229,8 +265,57 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     expired: eligibleOrders.filter((o: any) => o.status === "expired").length,
   };
 
-  return { orders: eligibleOrders, counts };
+  return { orders: rows, counts };
 };
+
+/** A proof id, when the value is one; else null. */
+function proofIdOf(value: unknown): string | null {
+  return typeof value === "string" && PROOF_ID.test(value) ? value : null;
+}
+
+/** One order as ink's panel reads it (components/InkRecentOrders.tsx). The
+ *  panel says "Recipient": the ship-to's own name — never the buyer's, who can
+ *  be someone else — and the order's own email, as ink's list does. */
+function panelRow(
+  o: any,
+  apiKey: string | null,
+  records: Record<string, RecordRead>,
+  timelines: Record<string, OrderTimelineData>,
+): InkRecentOrderRow {
+  const detail: InkOrderDetail = {
+    id: o.id,
+    orderNumber: o.orderNumber,
+    customerName: o.shipTo?.name || "Name unavailable",
+    customerEmail: o.orderEmail,
+    customerAddress: o.shipTo
+      ? {
+          address1: o.shipTo.address1 || "",
+          address2: o.shipTo.address2 || "",
+          country: o.shipTo.country || "",
+          city: o.shipTo.city || "",
+          provinceCode: o.shipTo.provinceCode || "",
+          zip: o.shipTo.zip || "",
+        }
+      : undefined,
+    date: o.date,
+    total: o.total,
+    subtotal: o.subtotal,
+    currency: o.currency,
+    status: o.status,
+    itemsTruncated: o.itemsTruncated,
+    items: o.items,
+    metafields: o.metafields,
+  };
+  return {
+    id: `gid://shopify/Order/${o.id}`,
+    name: o.orderNumber,
+    proofId: o.proofId,
+    detail,
+    record: o.proofId ? records[o.proofId] ?? null : null,
+    door: includedRecordDoor(apiKey, o.proofId),
+    timeline: o.proofId ? timelines[o.proofId] ?? null : null,
+  };
+}
 
 // ─────────────────────────────────────────────
 // Status badge config
@@ -278,13 +363,10 @@ export default function ShipmentsIndex() {
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
-  // Auto-refresh every 30s — revalidate re-runs the loader without losing App Bridge session
-  useEffect(() => {
-    const interval = setInterval(() => {
-      revalidate();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [revalidate]);
+  // No timer re-reads the list: every load now reads each row's record and
+  // timeline (ink's panel), so a 30-second revalidate would re-read them all,
+  // twice a minute, for as long as the tab stays open. Refresh does it when
+  // asked — ink's Orders has no timer either.
 
   const tabs = [
     { id: "all", content: `All (${counts?.all || 0})`, panelID: "all" },
@@ -422,7 +504,7 @@ export default function ShipmentsIndex() {
         <tr key={`${order.id}-expanded`}>
           <td colSpan={5} style={{ padding: 0 }}>
             <OrderExpandedRow
-              order={order}
+              row={order.row}
               onCollapse={() => setExpandedOrder(null)}
               onViewFull={() => setSelectedOrder(order)}
             />
@@ -578,7 +660,7 @@ export default function ShipmentsIndex() {
                     </div>
                     {isExpanded && (
                       <OrderExpandedRow
-                        order={order}
+                        row={order.row}
                         onCollapse={() => setExpandedOrder(null)}
                         onViewFull={() => setSelectedOrder(order)}
                       />

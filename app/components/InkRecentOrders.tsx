@@ -368,7 +368,12 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Panel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | null }) {
+/** An order, opened: the quick glance, the order's activity, then Advanced.
+ *  Both apps draw this one panel — ink's Orders here, the Ritualist's
+ *  Shipments row (components/OrderExpandedRow.tsx). What differs is the row's
+ *  door, which each loader builds: the Ritualist's record is included, so its
+ *  door never offers it and never names a price. */
+export function OrderPanel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | null }) {
   const [advanced, setAdvanced] = useState(true);
   const d = row.detail;
   const openCount = opensOf(row.record);
@@ -602,7 +607,7 @@ export default function InkRecentOrders({
               {open && (
                 <>
                   <Divider />
-                  <Panel row={row} mapsKey={mapsKey} />
+                  <OrderPanel row={row} mapsKey={mapsKey} />
                 </>
               )}
             </Collapsible>

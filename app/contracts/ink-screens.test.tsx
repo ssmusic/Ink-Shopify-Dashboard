@@ -422,24 +422,32 @@ describe("help and store connection", () => {
   });
 });
 
-describe("the Ritualist's order panel is unchanged by ink's footer", () => {
-  it("renders its three props exactly as before: the full-record button, the studio sentence, no footer", () => {
-    const order = {
-      id: "7", orderNumber: "#1007", customerName: "Made Up", customerEmail: "buyer@example.com",
-      customerAddress: { address1: "1 Test St", city: "Brooklyn", provinceCode: "NY", zip: "11201" },
-      date: "Sep 21, 2026", total: "58.00", subtotal: "58.00", currency: "USD", status: "enrolled",
-      items: [{ title: "Bar Tape", quantity: 2, price: "29.00", sku: "BT-1" }], metafields: {},
+// THE RITUALIST'S ROW OPENS ONTO INK'S PANEL (2026-09-24 — Sam: "we are making
+// the ritualist as good as ink"). Until then this pinned the row's old body:
+// the "View Full Record" button, the studio sentence ("Open history, location,
+// and the signed delivery record live in your Ritualist studio.") and no
+// footer. The history, the location and the record now sit in the row itself,
+// so the sentence is gone; the button stays, sentence case, still a button;
+// and the Ritualist's record is included, so the row never offers it.
+describe("the Ritualist's Shipments row opens onto ink's panel, the record included", () => {
+  it("keeps its full-record button, draws ink's panel, and never offers the record or names a price", () => {
+    const row = {
+      ...ROWS[0],
+      door: { offerLine: null, pending: false, paidPendingRecord: false, resumeUrl: null, downloadable: true, inHistory: false, purchase: null },
     };
     const html = renderToString(
       <AppProvider i18n={translations}>
-        <OrderExpandedRow order={order} onCollapse={() => {}} onViewFull={() => {}} />
+        {(() => {
+          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <OrderExpandedRow row={row as never} onCollapse={() => {}} onViewFull={() => {}} /> }]);
+          return <Stub initialEntries={["/"]} />;
+        })()}
       </AppProvider>,
     );
     const t = text(html);
-    expect(t).toContain("View Full Record");
+    expect(t).toContain("View full record");
     expect(html).not.toContain("href=");
-    expect(t).toContain("Open history, location, and the signed delivery record live in your Ritualist studio.");
-    expect(t).not.toContain("Get the record");
+    for (const part of ["Products", "Recipient", "Advanced", "Export the record", "Download PDF", "Download CSV"]) expect(t).toContain(part);
+    for (const gone of ["Get the record", "$29", "Ritualist studio", "View Full Record", "CUSTOMER", "DELIVERY"]) expect(t).not.toContain(gone);
   });
 });
 
