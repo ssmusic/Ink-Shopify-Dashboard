@@ -30,6 +30,7 @@ import { readRecentOrderPage } from "../services/ink-links.server";
 import { readJwks } from "../services/ink-record.server";
 import { ritualistApiKey, ritualistRowRecord } from "../services/ritualist-rows.server";
 import PolarisAppLayout from "../components/PolarisAppLayout";
+import RitualistPillNav from "../components/RitualistPillNav";
 import DeliveryDashboard from "../components/DeliveryDashboard";
 import InkRecentOrders, { type InkStreamedOrderRow } from "../components/InkRecentOrders";
 import OrderExpandedRow from "../components/OrderExpandedRow";
@@ -173,6 +174,7 @@ const Dashboard = () => {
   return (
     <PolarisAppLayout>
       <Page
+        fullWidth
         title="Dashboard"
         secondaryActions={[
           {
@@ -183,6 +185,8 @@ const Dashboard = () => {
         ]}
       >
         <BlockStack gap="400">
+          {/* The pills on top and the admin's left nav, as ink's pages have them. */}
+          <RitualistPillNav />
           {fetcher.data?.error && (
             <Banner tone="critical">{fetcher.data.error}</Banner>
           )}

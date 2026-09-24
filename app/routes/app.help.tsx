@@ -5,12 +5,14 @@ import {
   Page,
   Card,
   BlockStack,
+  Box,
   Text,
   Collapsible,
   Layout,
   Button,
 } from "@shopify/polaris";
 import PolarisAppLayout from "../components/PolarisAppLayout";
+import RitualistPillNav from "../components/RitualistPillNav";
 
 // Comms-first FAQ (2026-07-05 pivot). The NFC-era FAQ (stickers, tag
 // inventory, "ink. Drop", per-tap pricing) is gone — none of it described
@@ -155,7 +157,11 @@ const FAQItem = ({
 const Help = () => {
   return (
     <PolarisAppLayout>
-      <Page title="Help & Support">
+      <Page fullWidth title="Help & Support">
+        {/* Above both columns, so the pills centre on the page, not on the questions. */}
+        <Box paddingBlockEnd="400">
+          <RitualistPillNav />
+        </Box>
         <Layout>
           <Layout.Section>
             <BlockStack gap="400">

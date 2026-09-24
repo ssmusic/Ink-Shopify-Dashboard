@@ -1,28 +1,20 @@
 import { redirect, type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../../shopify.server";
-import { LandingPageContent } from "../../components/LandingPageContent";
 import { isInk } from "../../services/app-flavor.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
-  // Under ink this landing (the Ritualist's dashboard door) does not exist:
-  // `/app` is ink's onboarding, one hop away, with the embedded params kept.
-  if (isInk()) {
-    const url = new URL(request.url);
-    throw redirect(`/app/ink/orders${url.search}`);
-  }
-  return null;
+  // Under ink, `/app` is ink's Orders, one hop away, with the embedded params kept.
+  const url = new URL(request.url);
+  if (isInk()) throw redirect(`/app/ink/orders${url.search}`);
+  // The Ritualist opens on its Dashboard, the first page of its nav, as ink
+  // opens on its own (Sam, 2026-09-24: "make the site identical to this ...
+  // nav"). The door page that stood here ("Your dashboard is ready." → "Open
+  // dashboard") was one click in front of it.
+  throw redirect(`/app/dashboard${url.search}`);
 };
 
-export default function LandingPage() {
-  return (
-    <LandingPageContent
-      ctaLink="/app/dashboard"
-      ctaLabel="Open dashboard"
-      showSignIn={false}
-      headline="Your dashboard is ready."
-      sub="Every order gets its own branded page — live tracking, delivery notifications, and returns, opened the moment it ships."
-      footnote="New here? Open the dashboard to set up your brand and turn on delivery notifications."
-    />
-  );
+// Never drawn: the loader always sends the request on.
+export default function AppIndex() {
+  return null;
 }
