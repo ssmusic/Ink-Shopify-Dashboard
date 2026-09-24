@@ -36,34 +36,28 @@
       "request": "Track PR #160: Shopify paused The Ritualist's review on 5.6.1 because its order-status customer-account block shows nothing. The PR deletes extensions/order-page-block, the Settings › Communication 'The order status page' section, its API route and the ink:order_door metafield writer. HELD FOR SAM: merge, then his `shopify app deploy --config shopify.app.toml` from clean main, then Submit fixes in the Partner Dashboard.",
       "branch": "review/the-order-status-block-comes-out",
       "pr": 160,
-      "phase": "working",
+      "phase": "ready",
       "assignedAgent": "claude",
-      "owner": {
-        "agent": "claude",
-        "sessionId": "3b5f52c4-b451-4ee7-bfac-405da269c474",
-        "acknowledgedSha": "6ba1ee20223394397c0ec479ae329447de381909"
-      },
+      "owner": null,
       "handoffTo": null,
       "checkpoint": {
         "codeSha": "6ba1ee20223394397c0ec479ae329447de381909",
-        "summary": "Shopify paused The Ritualist (ref 104187) on 5.6.1: its order-status customer-account block shows nothing. Measured: it never rendered (08-23); Help Center says blocks must be placed in the checkout & accounts editor; its ink:order_door metafield needs a brand_slug that neither the review store nor Corvara has; the ink namespace is hidden from customer-account extensions. PR #160 deletes extensions/order-page-block, the Settings › Communication 'The order status page' section, app.api.settings.order-door, order-door-metafield.server(+test) and both webhook calls. Live config == main toml (config pull diff), so the deploy only removes the extension, with no re-consent.",
+        "summary": "DONE. Sam released the-ritualist-17 (active 16:49Z; CLI: Configuration No changes, order-page-block removed). #160 squash-merged on Sam's 'Merge now' as 71d6f28 (16:52:48Z). The deploy workflow succeeded: shopify-app-00379-mhs and ink-app-00043-xwt at 100%. Live check: /app/api/settings/order-door went 401 → 404 while /app/api/settings/notifications stays 401. Docs: the-ritualist #1407 (ENGINEERING §17.15), open.",
         "decisions": [
-          "Remove the block rather than fix it: it never rendered, cannot self-place, and has nothing to show on a store without a brand page",
-          "Deleted the metafield writer too (restore path = revert #160); the metafields already written are inert"
+          "Sam chose 'Merge now' for #160"
         ],
         "checks": [
-          "npm run typecheck: 0 errors",
-          "npx vitest run: 659 passed, 1 todo",
-          "npm run build: green",
-          "CI check / container-node / merge-gate: pass",
-          "Settings › Communication rendered before/after in the local harness"
+          "the-ritualist-17 active (shopify app versions list)",
+          "Deploy shopify-app · Cloud Run run 36030416933: success (deploy + deploy-ink)",
+          "shopify-app-00379-mhs 100%, ink-app-00043-xwt 100%",
+          "app.in.ink/app/api/settings/order-door 404; notifications 401"
         ],
-        "next": "HELD FOR SAM: merge #160 → `shopify app deploy --config shopify.app.toml` from clean main (CLI must list only 'ink order page' removed) → Partner Dashboard Submit fixes (Run automated checks first if expired). #106 is moot while the block is out.",
-        "savedAt": "2026-09-24T16:46:56.054Z",
+        "next": "Sam: Partner Dashboard → Submit fixes (5.6.1 note). Optional: merge the-ritualist #1407 when CI is green; close embed #106 (moot).",
+        "savedAt": "2026-09-24T16:58:03.035Z",
         "writer": "claude",
         "sessionId": "3b5f52c4-b451-4ee7-bfac-405da269c474"
       },
-      "updatedAt": "2026-09-24T16:57:53.965Z"
+      "updatedAt": "2026-09-24T16:58:03.035Z"
     }
   ],
   "projects": [],
@@ -126,6 +120,11 @@
     {
       "id": "b1e2c3d4-5f60-4718-8293-a4b5c6d7e8f9",
       "fingerprint": "b0d7ea6e2483095d960f1091887daf41c7d2d138c8260f887483ce0349520785",
+      "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1"
+    },
+    {
+      "id": "a9d3f5e2-7c41-4b8a-9e6f-1d2c3b4a5f60",
+      "fingerprint": "6cb8155efe37a35db9b6c62bdf26eae5244025db8de40a187615e77ccd4f5eb5",
       "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1"
     }
   ],
@@ -201,6 +200,12 @@
       "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1",
       "action": "claim",
       "detail": "claude acknowledged 6ba1ee20223394397c0ec479ae329447de381909."
+    },
+    {
+      "at": "2026-09-24T16:58:03.035Z",
+      "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1",
+      "action": "checkpoint",
+      "detail": "Verified published code at 6ba1ee20223394397c0ec479ae329447de381909; saved context for claude. Ownership released for the next turn or session."
     }
   ]
 }
