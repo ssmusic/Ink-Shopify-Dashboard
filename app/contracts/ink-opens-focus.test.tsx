@@ -7,11 +7,14 @@
 //
 // PARKED, 2026-09-23, then FOLDED IN: Sam chose Codex's screens as they were
 // at 4022900, and the THE OPEN port (components/InkOpens.tsx) rebuilt the
-// opens on Google's map as the record page's Every open table — each row opens
-// onto ITS OWN map (the address, that one open, the dashed line and its
-// distance, the guide rings), so a press picks one open out by giving it a map
-// of its own. The three list cases below say that; the map's own two cases
-// still run (the focus rule stays in components/OpensMap.tsx).
+// opens as the record page's Every open table — each row opens onto ITS OWN
+// map (the address, that one open, the dashed line and its distance, the
+// guide rings), so a press picks one open out by giving it a map of its own.
+// Since 2026-09-24 that map is the record page's own, on OpenStreetMap
+// (components/OpenMap.tsx; Sam: "the shopify app was supposed to have the good
+// maps i showed you"). The three list cases below say that; Google's map
+// (components/OpensMap.tsx) stays in the code unmounted, and its own two focus
+// cases still run.
 import { renderToString } from "react-dom/server";
 import { AppProvider } from "@shopify/polaris";
 import translations from "@shopify/polaris/locales/en.json";
@@ -29,34 +32,34 @@ const rows = everyOpenRows(
   ],
   null,
 );
-const render = (mapsKey: string | null, defaultOpen: number[] = []) =>
+const render = (defaultOpen: number[] = [], home: typeof address | null = address) =>
   renderToString(
     <AppProvider i18n={translations}>
-      <EveryOpen rows={rows} address={address} mapsKey={mapsKey} defaultOpen={defaultOpen} />
+      <EveryOpen rows={rows} address={home} defaultOpen={defaultOpen} />
     </AppProvider>,
   );
 const words = (html: string) => html.replace(/<style[\s\S]*?<\/style>/g, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
 describe("each open with a fix picks itself out on the map", () => {
   it("is a row with a closed control for every open; the one with a fix opens onto its own map, the fix-less one onto words", () => {
-    const html = render("test-browser-key");
+    const html = render();
     expect(html.match(/aria-expanded="false"/g)).toHaveLength(3);
     expect(html).toContain('aria-label="Map of open 1"');
     expect(html).toContain('aria-label="Location of open 2"');
-    expect(html).not.toContain('data-testid="opens-map"');
-    const first = render("test-browser-key", [1]);
-    expect(first).toMatch(/data-testid="opens-map"[^>]*data-points="1"/);
+    expect(html).not.toContain('data-testid="open-map"');
+    const first = render([1]);
+    expect(first).toMatch(/data-testid="open-map"[^>]*data-points="1"[^>]*data-address="pinned"/);
     expect(words(first)).toContain("Opened 56 m from the delivery address.");
-    const second = render("test-browser-key", [2]);
-    expect(second).not.toContain('data-testid="opens-map"');
+    const second = render([2]);
+    expect(second).not.toContain('data-testid="open-map"');
     expect(words(second)).toContain("Location not shared.");
     // The opened row's tint survives the server render (no quoted value inside <style>).
     expect(html).toContain("tr[data-open=true]");
   });
 
-  it("offers no map when none can be drawn (no browser key) — the words remain", () => {
-    const html = render(null, [3]);
-    expect(html).not.toContain('data-testid="opens-map"');
+  it("needs no key: an open with a fix always has its map; with no address on record, the open is drawn alone", () => {
+    const html = render([3], null);
+    expect(html).toMatch(/data-testid="open-map"[^>]*data-address="absent"/);
     expect(words(html)).toContain("Opened 719 m from the delivery address.");
   });
 
