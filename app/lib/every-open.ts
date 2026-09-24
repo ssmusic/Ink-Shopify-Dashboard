@@ -74,11 +74,15 @@ export type DoorOpen = {
   device?: string | null;
   /** The record's letter for the open's browser ("A"). */
   browser?: string | null;
-  /** The record's word for the open: the first person's open, again, a reload, a scanner's visit. */
+  /** The record's word for the open: the first person's open, again, a reload, a scanner's visit.
+   *  null: the door read a capped history and declines to say whether this row is the first
+   *  open — never guessed "first" here. Absent (undefined): a door before #135. */
   kind?: OpenKind | null;
 };
 
-export type OpenKind = "first" | "again" | "reload" | "scanner";
+/** "unknown": the door declined to say (a capped history), and nothing earlier on
+ *  the record settles it. */
+export type OpenKind = "first" | "again" | "reload" | "scanner" | "unknown";
 
 /** One row of Every open. */
 export type EveryOpenRow = {
@@ -143,7 +147,7 @@ function distanceOf(verdict: string | null, d: number | null): number | null {
 export function everyOpenRows(door: DoorOpen[] | null | undefined, signed: RecordOpen[] | null | undefined): EveryOpenRow[] {
   const opens = (signed ?? []).filter((e) => time(e.at) != null).slice().sort((a, b) => (time(a.at) as number) - (time(b.at) as number));
   const used = new Set<string>();
-  type Draft = Omit<EveryOpenRow, "n" | "kind"> & { outcome: string | null; doorKind: OpenKind | null };
+  type Draft = Omit<EveryOpenRow, "n" | "kind"> & { outcome: string | null; doorKind: OpenKind | null | undefined };
   const rows: Draft[] = [];
   const signedSide = (m: RecordOpen) => ({
     event_id: m.event_id,
@@ -181,7 +185,7 @@ export function everyOpenRows(door: DoorOpen[] | null | undefined, signed: Recor
       distance_m: distanceOf(verdict ?? null, own ? own.distance_m : t.distance_m),
       accuracy_m: own ? own.accuracy_m ?? t.accuracy_m : t.accuracy_m,
       outcome: match ? nonHuman(match.outcome) : nonHuman(t.outcome),
-      doorKind: t.kind ?? null,
+      doorKind: t.kind,
     });
   }
   // A signed open no row describes: its words, and no point for the map.
@@ -196,7 +200,7 @@ export function everyOpenRows(door: DoorOpen[] | null | undefined, signed: Recor
       distance_m: distanceOf(e.verdict, e.distance_m),
       accuracy_m: e.accuracy_m,
       outcome: nonHuman(e.outcome),
-      doorKind: null,
+      doorKind: undefined,
     });
   }
   rows.sort((a, b) => (time(a.at) ?? 0) - (time(b.at) ?? 0));
@@ -210,6 +214,9 @@ export function everyOpenRows(door: DoorOpen[] | null | undefined, signed: Recor
     if (doorKind) kind = doorKind;
     else if (outcome === "proxy") kind = "scanner";
     else if (outcome === "stale") kind = "reload";
+    // The door declined to say (a capped history): "again" only when an
+    // earlier open on the record is already the first; never a guessed first.
+    else if (doorKind === null) kind = firstSeen ? "again" : "unknown";
     else if (!firstSeen && !doorSaysFirst) kind = "first";
     else kind = "again";
     if (kind === "first") firstSeen = true;
@@ -256,6 +263,7 @@ export const KIND_WORDS: Record<OpenKind, string> = {
   again: "opened again",
   reload: "a reload's fire, not the open",
   scanner: "not a person's — a link scanner's visit",
+  unknown: NOT_RECORDED,
 };
 
 /** The Signed event column's second line: what the check found of its signature. */
@@ -314,7 +322,7 @@ export function metresBetween(a: MapPoint, b: MapPoint): number {
 
 /** The first open a person made that shared a point — for the diagram's bearing. */
 export function firstOpenRow(rows: EveryOpenRow[] | null | undefined): EveryOpenRow | null {
-  const people = (rows ?? []).filter((r) => r.kind === "first" || r.kind === "again");
+  const people = (rows ?? []).filter((r) => r.kind === "first" || r.kind === "again" || r.kind === "unknown");
   return people.find((r) => r.lat != null && r.lng != null) ?? null;
 }
 
