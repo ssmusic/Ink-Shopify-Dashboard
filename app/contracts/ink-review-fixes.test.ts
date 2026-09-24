@@ -47,7 +47,7 @@ describe("ink's App URL with no store (App Store review, 2026-09-23)", () => {
     vi.stubEnv("APP_FLAVOR", "ink");
     expect(await outcome(() => rootLoader(args("https://install.in.ink/?shop=a.myshopify.com&host=x")))).toEqual({
       status: 302,
-      location: "/app/ink?shop=a.myshopify.com&host=x",
+      location: "/app/ink/orders?shop=a.myshopify.com&host=x",
     });
   });
 

@@ -11,7 +11,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // ink's home is its onboarding screen; Shopify opens the app at `/`, so
     // this is the one redirect an ink install takes. The Ritualist's line is
     // unchanged.
-    if (isInk()) throw redirect(`/app/ink?${url.searchParams.toString()}`);
+    if (isInk()) throw redirect(`/app/ink/orders?${url.searchParams.toString()}`);
     throw redirect(`/app?${url.searchParams.toString()}`);
   }
 

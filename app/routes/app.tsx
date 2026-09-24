@@ -184,7 +184,10 @@ export default function App() {
   const { apiKey, flavor } = useLoaderData<typeof loader>();
   if (flavor === "ink") return <ShopifyAppProvider embedded apiKey={apiKey}>
     <PolarisAppProvider i18n={translations} linkComponent={PolarisLink}>
-      <NavMenu><a href="/app/ink" rel="home">Orders</a><a href="/app/ink?view=insights">Dashboard</a><a href="/app/ink?view=records">Records</a><a href="/app/ink/settings">Settings</a></NavMenu>
+      {/* The home link is hidden by App Bridge (rel="home"): the app name leads
+          there, and /app/ink redirects to Orders. Every item has its own
+          path, so the admin marks the right one (routes/app.ink.$section.tsx). */}
+      <NavMenu><a href="/app/ink" rel="home">Orders</a><a href="/app/ink/dashboard">Dashboard</a><a href="/app/ink/orders">Orders</a><a href="/app/ink/records">Records</a><a href="/app/ink/settings">Settings</a></NavMenu>
       <Outlet />
     </PolarisAppProvider>
   </ShopifyAppProvider>;
