@@ -66,3 +66,35 @@ jobs:
       # that runs what actually ships.
       - name: Production build
         run: npm run build
+
+  # THE CONTAINER'S NODE CAN INSTALL THIS TREE. The job above runs Node 22, but
+  # the Dockerfile builds on node:20-alpine, and .npmrc sets engine-strict=true,
+  # so a package whose `engines` needs Node 22 passes every step above and then
+  # stops the deploy at the image's `npm ci` / `npm prune --production`
+  # (EBADENGINE). That is exactly how c756751 (#154) went green here and failed
+  # both Cloud Run builds on 2026-09-24 (@shopify/api-codegen-preset 3.0.0
+  # declares node >=22). This job installs and prunes the committed lockfile on
+  # the image's own Node, the way the Dockerfile does — nothing is built, so it
+  # stays cheap.
+  container-node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The Dockerfile's Node
+        id: image
+        run: |
+          major=$(sed -n 's/^FROM node:\([0-9]*\).*/\1/p' Dockerfile | head -1)
+          test -n "$major" || { echo "::error::no 'FROM node:<major>' line in the Dockerfile"; exit 1; }
+          echo "major=$major" >> "$GITHUB_OUTPUT"
+          echo "The image builds on Node $major."
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.image.outputs.major }}
+          cache: npm
+
+      # The image's own two install steps, in its order, with its .npmrc.
+      - run: npm ci
+      - run: npm prune --omit=dev
