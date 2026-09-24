@@ -29,6 +29,19 @@
         "sessionId": "01a0cff6-d447-74a3-ad07-19fb5ba51851"
       },
       "updatedAt": "2026-09-23T22:22:43.406Z"
+    },
+    {
+      "id": "task-852a6af2-6c3c-476e-b897-89b67a9755f1",
+      "title": "HELD FOR SAM — The Ritualist ships no order-status block: it never rendered, and App Store review paused on it (5.6.1)",
+      "request": "Track PR #160: Shopify paused The Ritualist's review on 5.6.1 because its order-status customer-account block shows nothing. The PR deletes extensions/order-page-block, the Settings › Communication 'The order status page' section, its API route and the ink:order_door metafield writer. HELD FOR SAM: merge, then his `shopify app deploy --config shopify.app.toml` from clean main, then Submit fixes in the Partner Dashboard.",
+      "branch": "review/the-order-status-block-comes-out",
+      "pr": 160,
+      "phase": "queued",
+      "assignedAgent": "claude",
+      "owner": null,
+      "handoffTo": null,
+      "checkpoint": null,
+      "updatedAt": "2026-09-24T16:45:52.903Z"
     }
   ],
   "projects": [],
@@ -72,6 +85,11 @@
       "id": "0cbdd4bb-d359-40b7-b56f-8566b089606c",
       "fingerprint": "bf75281ef20322824bb2e6faf2ae85845e50464d0c81fd88a77543012e8a0346",
       "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180"
+    },
+    {
+      "id": "852a6af2-6c3c-476e-b897-89b67a9755f1",
+      "fingerprint": "dee2868021bfb1867c0776d4c874890a7558014b0eb4651359788e340a98292a",
+      "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1"
     }
   ],
   "events": [
@@ -122,6 +140,12 @@
       "taskId": "task-14ba5d8b-2ce7-4ca3-bf1f-77cf21f03180",
       "action": "complete",
       "detail": "Work marked complete; PR remains unmerged."
+    },
+    {
+      "at": "2026-09-24T16:45:52.903Z",
+      "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1",
+      "action": "adopt",
+      "detail": "Existing work registered; receiver must inspect its current checkpoint."
     }
   ]
 }
