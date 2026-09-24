@@ -32,6 +32,7 @@ import { readInkMerchant, stageOf } from "../services/ink-merchant.server";
 import { readRecentOrderPage } from "../services/ink-links.server";
 import { readInkKpis } from "../services/ink-kpis.server";
 import InkRecentOrders, { type InkRowRecord } from "../components/InkRecentOrders";
+import InkPillNav from "../components/InkPillNav";
 import DeliveryDashboard from "../components/DeliveryDashboard";
 import { readTimelineReads, timelineOfReads } from "../services/ink-timeline.server";
 import { readDeliveryDashboard } from "../services/ink-delivery.server";
@@ -343,8 +344,10 @@ export default function InkHome() {
   }, [settingUp, revalidator]);
 
   return (
+    // Orders is wider than a Polaris page and narrower than the frame (Sam,
+    // 2026-09-24: "can this be wider" · "now too wide - split the difference").
+    <div style={data.section === "orders" ? { maxWidth: 1400, margin: "0 auto" } : undefined}>
     <Page
-      // Orders takes the frame's whole width (Sam, 2026-09-24: "can this be wider").
       fullWidth={data.section === "orders"}
       title={data.section === "insights" ? "Dashboard" : data.section === "records" ? "Records" : data.section === "help" ? "Help" : "Orders"}
       secondaryActions={data.section === "help" ? [] : [
@@ -358,9 +361,9 @@ export default function InkHome() {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
-            {/* One navigation: the admin's left nav names every section
-                (routes/app.tsx). The pill bar repeated it (Sam, 2026-09-24:
-                "one or the other"). */}
+            {/* The pills on top AND the admin's left nav (Sam, 2026-09-24:
+                "we lost the nav on top - i want it back"). */}
+            <InkPillNav active={data.section} />
             {settingUp && (
               <Banner tone="info">
                 {pollingEnded
@@ -420,6 +423,7 @@ export default function InkHome() {
                     returnTo="/app/ink/orders"
                     detailed
                     advancedOpen={false}
+                    recordUpFront
                     searching={Boolean(data.search)}
                     dated={dates.range !== ALL_ORDER_DATES.range}
                     mapsKey={data.mapsKey}
@@ -461,6 +465,7 @@ export default function InkHome() {
         </Layout.Section>
       </Layout>
     </Page>
+    </div>
   );
 }
 

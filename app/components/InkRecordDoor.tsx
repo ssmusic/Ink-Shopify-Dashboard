@@ -59,11 +59,15 @@ export default function InkRecordDoor({
   door,
   compact = false,
   orderLabel,
+  included = false,
 }: {
   proofId: string;
   door: InkDoor;
   compact?: boolean;
   orderLabel?: string;
+  /** The record costs nothing on this store (the backend names no price —
+   *  The Ritualist includes it): say so, so no one looks for a purchase. */
+  included?: boolean;
 }) {
   const fetcher = useFetcher<typeof action>();
   const revalidator = useRevalidator();
@@ -140,7 +144,9 @@ export default function InkRecordDoor({
             <Text as="p" variant="bodySm" tone="subdued">
               {door.offerLine
                 ? "PDF report, CSV data and signed JSON. Includes the events available for this order."
-                : "PDF report, CSV data and signed JSON file."}
+                : included && door.downloadable && !door.purchase
+                  ? "Included on this store. PDF report, CSV data and signed JSON file."
+                  : "PDF report, CSV data and signed JSON file."}
             </Text>
           </BlockStack>
         )}
@@ -182,7 +188,8 @@ export default function InkRecordDoor({
               {...pressed("buy")}
               onClick={() => submit("buy")}
             >
-              Get the record
+              {/* The price is on the button (Sam, 2026-09-24: "no clear Buy the record button"). */}
+              {door.offerLine || "Buy the record"}
             </Button>
           )}
           {door.pending && door.resumeUrl && (

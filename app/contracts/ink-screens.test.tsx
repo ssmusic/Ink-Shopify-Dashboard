@@ -91,7 +91,7 @@ const detail = (over: Record<string, unknown> = {}) => ({
   items: [{ title: "Bar Tape", quantity: 2, price: "29.00", sku: "BT-1" }], metafields: {}, ...over,
 });
 const ROWS = [
-  { id: "gid://shopify/Order/2", name: "#1010", proofId: PROOF, detail: detail(), record: RECORD, door: { offerLine: "Get the record ($29 USD)", purchase: null } },
+  { id: "gid://shopify/Order/2", name: "#1010", proofId: PROOF, detail: detail(), record: RECORD, door: { offerLine: "Buy the record ($29 USD)", purchase: null } },
   { id: "gid://shopify/Order/1", name: "#1011", proofId: null, detail: detail({ id: "1", orderNumber: "#1011", customerName: "Name unavailable", customerEmail: "", items: [] }), record: null, door: { offerLine: null, purchase: null } },
 ];
 const openRow = (id: string) =>
@@ -116,10 +116,12 @@ describe('ink screens: facts, working controls and Polaris', () => {
   it('opens an order with its address, products and Advanced disclosure', () => {
     const html = openRow(ROWS[0].id);
     const t = text(html);
-    for (const part of ['Recipient', 'Order email: buyer@example.com', '1 Test St', 'Products', 'Bar Tape', 'Order total $58.00', 'Advanced', 'Get the record']) expect(t).toContain(part);
+    for (const part of ['Recipient', 'Order email: buyer@example.com', '1 Test St', 'Products', 'Bar Tape', 'Order total $58.00', 'Advanced', 'Buy the record']) expect(t).toContain(part);
     expect(html).toContain('aria-expanded="true"');
     expect(html).not.toMatch(/href="https?:\/\//);
-    expect(t).not.toContain('$29');
+    // The price is on the button (Sam, 2026-09-24: "no clear Buy the record
+    // button"); ink's page puts it up front (contracts/ink-sections.test.tsx).
+    expect(t).toContain('Buy the record ($29 USD)');
     expect(html).toContain('Polaris-Button--variantTertiary');
     for (const gone of ['THE RECORD', 'CUSTOMER', 'attach as a file', 'Checked in this browser', 'Shipping Free']) expect(t).not.toContain(gone);
   });
@@ -151,17 +153,21 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(t).toContain('Refresh');
   });
 
-  it('names the tab Dashboard, and draws no second navigation: the admin\'s left nav names every section', () => {
-    // Sam, 2026-09-24: "i want the pages represented in the left side nav - or
-    // get rid of the tree - one or the other". The left nav names them
-    // (routes/app.tsx, pinned in contracts/ink-sections.test.tsx), so the pill
-    // bar that repeated it is gone.
+  it('names the tab Dashboard and draws the pill nav with links, Dashboard first', () => {
+    // Sam, 2026-09-24: "i remember enjoying your nav over the codex one" — the
+    // black pill bar again, with Codex's five destinations in Codex's order —
+    // and, after it was removed for a day, "we lost the nav on top - i want it back".
     const html = render(InkHome, { section: 'insights', stage: 'ready', kpis: null, delivery: null });
     expect(text(html)).toContain('Dashboard');
     expect(text(html)).not.toContain('Insights');
     expect(html).not.toContain('Polaris-Tabs');
-    expect(html).not.toContain('role="tablist"');
-    expect(html).not.toContain('data-pill=');
+    expect(html).toContain('role="tablist"');
+    const order = ['insights', 'orders', 'records', 'settings', 'help'].map((id) => html.indexOf(`data-pill="${id}"`));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html).toMatch(/aria-selected="true"[^>]*data-pill="insights"|data-pill="insights"[^>]*aria-selected="true"/);
+    expect(html).toContain('href="/app/ink/settings"');
+    expect(html).toContain('href="/app/ink/help"');
   });
 
   it('has exactly three KPI labels, no subtitles or unsupported integrity claims', () => {
@@ -201,7 +207,7 @@ describe('ink screens: facts, working controls and Polaris', () => {
   it('does not offer file formats when access is unavailable', () => {
     const t = text(render(() => <InkRecentOrders orders={[{...ROWS[0],door:{offerLine:null,downloadable:false,pending:false}}]} defaultExpandedId={ROWS[0].id} />, {}));
     expect(t).toContain('Record access is unavailable');
-    expect(t).not.toMatch(/Export the record|PDF report|Download PDF|Get the record/);
+    expect(t).not.toMatch(/Export the record|PDF report|Download PDF|Buy the record/);
   });
 
   it('describes an approved charge as waiting for record access, without a second approval action', () => {
@@ -214,7 +220,7 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(t).toContain('Check record access');
     expect(t).not.toContain('Check payment status');
     expect(t).not.toContain('Continue Shopify approval');
-    expect(t).not.toContain('Get the record ($29 USD)');
+    expect(t).not.toContain('Buy the record ($29 USD)');
     expect(t).not.toContain('Payment is pending');
   });
 
@@ -222,11 +228,11 @@ describe('ink screens: facts, working controls and Polaris', () => {
     const t = text(render(() => <InkRecentOrders orders={[{
       // A whole read of a record still for sale (main's record shape, #137).
       ...ROWS[0], record: { ...RECORD, locked: false, whole: true, forSale: { price_cents: 2900, currency: 'USD' } },
-      door: { offerLine: "Get the record ($29 USD)", downloadable: false },
+      door: { offerLine: "Buy the record ($29 USD)", downloadable: false },
     }]} defaultExpandedId={ROWS[0].id} />, {}));
     expect(t).toContain('Checked in this browser');
     expect(t).toContain('Event history');
-    expect(t).toContain('Get the record');
+    expect(t).toContain('Buy the record');
     expect(t).not.toMatch(/The complete record|Download PDF|Download CSV/);
   });
 
@@ -260,11 +266,11 @@ describe('ink screens: facts, working controls and Polaris', () => {
   });
 
   it('keeps multiple purchased records downloadable and pending purchases out of the library', () => {
-    const history = [1,2,3].map((n) => ({ proofId: `proof_${String(n).repeat(24)}`, orderName: `#100${n}`, createdAt: '2026-09-20T00:00:00Z', state: 'minted', door: { offerLine: 'Get the record ($29 USD)', downloadable: true }, record: { ...RECORD, locked: false } }));
+    const history = [1,2,3].map((n) => ({ proofId: `proof_${String(n).repeat(24)}`, orderName: `#100${n}`, createdAt: '2026-09-20T00:00:00Z', state: 'minted', door: { offerLine: 'Buy the record ($29 USD)', downloadable: true }, record: { ...RECORD, locked: false } }));
     const html = render(InkHome, { section:'records', stage:'ready', recordHistory:[...history, {proofId:PROOF,orderName:'#1004',createdAt:null,state:'paid_pending_record',door:{offerLine:null,downloadable:false,pending:true,paidPendingRecord:true},record:null}], historyError:false, historyHasNext:true, historyHasPrevious:false });
     for (const n of [1,2,3]) expect(html).toContain(`Download PDF for #100${n}`);
     expect(html).not.toContain('Download PDF for #1004');
-    expect(text(html)).not.toContain('Get the record');
+    expect(text(html)).not.toContain('Buy the record');
     expect(text(html)).toContain('Needs attention');
     expect(text(html)).toContain('Check record access');
   });
@@ -448,7 +454,7 @@ describe("the Ritualist's Shipments row opens onto ink's panel, the record inclu
     expect(t).toContain("View full record");
     expect(html).not.toContain("href=");
     for (const part of ["Products", "Recipient", "Advanced", "Export the record", "Download PDF", "Download CSV"]) expect(t).toContain(part);
-    for (const gone of ["Get the record", "$29", "Ritualist studio", "View Full Record", "CUSTOMER", "DELIVERY"]) expect(t).not.toContain(gone);
+    for (const gone of ["Get the record", "Buy the record", "$29", "Ritualist studio", "View Full Record", "CUSTOMER", "DELIVERY"]) expect(t).not.toContain(gone);
   });
 });
 
@@ -511,6 +517,6 @@ describe("under Codex's screens: the server's signature check, and a bought reco
     for (const w of ["Did you win?", "The record", "Access activity log", "Shipping documentation", "Additional information", "Copy", "Opened 3 times."]) expect(after).toContain(w);
     const before = text(renderRows(ROWS));
     for (const w of ["Did you win?", "Access activity log", "Copy"]) expect(before).not.toContain(w);
-    expect(before).toContain("Get the record");
+    expect(before).toContain("Buy the record");
   });
 });

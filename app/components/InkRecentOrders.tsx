@@ -492,9 +492,12 @@ export function OrderPanel({
   row,
   mapsKey,
   advancedOpen = true,
+  recordUpFront = false,
 }: {
   row: InkOrderRow;
   mapsKey: string | null;
+  /** The record's band above the activity instead of inside Advanced (ink's Orders). */
+  recordUpFront?: boolean;
   /** Advanced's first state: open for the Ritualist's rows; ink's Orders opens
    *  it closed (Sam, 2026-09-24: "open the acordian with the advanced section
    *  collapsed"). */
@@ -575,6 +578,7 @@ export function OrderPanel({
               mapsKey={mapsKey}
               advanced={advanced}
               onAdvanced={() => setAdvanced((v) => !v)}
+              recordUpFront={recordUpFront}
             />
           )}
         </WithRecord>
@@ -591,17 +595,28 @@ function PanelRecord({
   mapsKey,
   advanced,
   onAdvanced,
+  recordUpFront = false,
 }: {
   row: InkRecentOrderRow;
   addressLabel: string;
   mapsKey: string | null;
   advanced: boolean;
   onAdvanced: () => void;
+  recordUpFront?: boolean;
 }) {
   const d = row.detail;
   const openCount = opensOf(row.record);
+  const included = row.door.downloadable === true && !row.door.offerLine && !row.door.purchase;
   return (
     <>
+        {/* ink's Orders: the record's own band, above the activity — its
+            price and its purchase, or its downloads — never inside Advanced
+            (Sam, 2026-09-24: "we still dont have a good way to buy the record"). */}
+        {recordUpFront && row.proofId && (
+          <Box padding="400" borderWidth="025" borderColor="border" borderRadius="200">
+            <InkRecordDoor proofId={row.proofId} door={row.door} included={included} orderLabel={row.name} />
+          </Box>
+        )}
         {row.timeline ? (
           <Box padding="400" borderWidth="025" borderColor="border" borderRadius="200">
             <BlockStack gap="300">
@@ -643,14 +658,14 @@ function PanelRecord({
               {advanced && (
                 <Box padding="400">
                   <BlockStack gap="400">
-                    <InkRecordDoor proofId={row.proofId} door={row.door} />
+                    {!recordUpFront && <InkRecordDoor proofId={row.proofId} door={row.door} />}
                     {row.door.purchase && row.packet ? (
                       <>
-                        <Divider />
+                        {!recordUpFront && <Divider />}
                         <DisputePacketView packet={row.packet} />
                       </>
                     ) : null}
-                    <Divider />
+                    {(!recordUpFront || (row.door.purchase && row.packet)) && <Divider />}
                     {row.record && !row.record.locked ? (
                       <InkRecordInspection
                         proofId={row.proofId}
@@ -705,8 +720,11 @@ export default function InkRecentOrders({
   renderPanel,
   detailed = false,
   advancedOpen = true,
+  recordUpFront = false,
 }: {
   orders: InkOrderRow[];
+  /** An opened order shows the record's band up front (OrderPanel). */
+  recordUpFront?: boolean;
   /** ink's Orders: each cell carries a line more — the other items, where the
    *  order ships, the last open and its device, how many items (Sam,
    *  2026-09-24: "have some more info in the cell"). Never a distance, a
@@ -796,7 +814,7 @@ export default function InkRecentOrders({
               {open && (
                 <>
                   <Divider />
-                  {renderPanel ? renderPanel(row) : <OrderPanel row={row} mapsKey={mapsKey} advancedOpen={advancedOpen} />}
+                  {renderPanel ? renderPanel(row) : <OrderPanel row={row} mapsKey={mapsKey} advancedOpen={advancedOpen} recordUpFront={recordUpFront} />}
                 </>
               )}
             </Collapsible>
