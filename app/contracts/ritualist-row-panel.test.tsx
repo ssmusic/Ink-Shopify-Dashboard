@@ -217,7 +217,8 @@ describe("the row, opened", () => {
   });
 
   it("the record's files stand, free: never Get the record, never a price", () => {
-    for (const part of ["Export the record", "Download PDF", "Download CSV", "Download record (JSON)"]) expect(t).toContain(part);
+    for (const part of ["Export the record", "Download PDF", "Download record (JSON)"]) expect(t).toContain(part);
+    expect(t).not.toContain("Download CSV");
     for (const gone of ["Get the record", "$29", "One-time Shopify charge", "again in Records"]) expect(t).not.toContain(gone);
   });
 

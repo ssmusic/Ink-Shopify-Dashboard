@@ -11,7 +11,6 @@ export type VerifiableRecordCardProps = {
   proofId: string;
   verifyUrl: string;
   qrSrc: string;
-  auditReportHref: string;
   recordExportHref: string;
   /** Whether ink has published a chained record for this order yet. */
   published: boolean;
@@ -25,7 +24,7 @@ export type VerifiableRecordCardProps = {
   children?: ReactNode;
 };
 
-export default function VerifiableRecordCard({ verifyUrl, qrSrc, auditReportHref, recordExportHref, published, locked = false, children }: VerifiableRecordCardProps) {
+export default function VerifiableRecordCard({ verifyUrl, qrSrc, recordExportHref, published, locked = false, children }: VerifiableRecordCardProps) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     navigator.clipboard?.writeText(verifyUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {});
@@ -53,8 +52,7 @@ export default function VerifiableRecordCard({ verifyUrl, qrSrc, auditReportHref
             </InlineStack>
             {!locked && (
               <InlineStack gap="200">
-                <Button url={auditReportHref} download>Audit report (PDF)</Button>
-                <Button url={recordExportHref} download variant="tertiary">Export the record</Button>
+                <Button url={recordExportHref} download>Export the record (JSON)</Button>
               </InlineStack>
             )}
             {children}

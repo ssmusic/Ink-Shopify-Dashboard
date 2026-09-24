@@ -60,7 +60,6 @@ const RITUALIST_ONLY = [
   "routes/app.api.dashboard.tap-stats",
   "routes/app.api.onboarding.status",
   "routes/app.api.orders",
-  "routes/app.api.orders.$orderId.audit-report",
   "routes/app.api.orders.$orderId.record-export",
   "routes/app.api.settings.branded-tracking-link",
   "routes/app.api.settings.delivery-mode",

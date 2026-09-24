@@ -151,7 +151,7 @@ describe("/app/record: the included record's inspection and files", () => {
 
   it("on the Ritualist, the inspection and the three files come through ink's reader with the Ritualist's key", async () => {
     vi.stubEnv("APP_FLAVOR", "");
-    for (const intent of ["inspect", "pdf", "csv", "download"]) {
+    for (const intent of ["inspect", "pdf", "download"]) {
       vi.mocked(inkRecordAction).mockClear();
       await post({ intent, proof_id: PROOF });
       expect(inkRecordAction, intent).toHaveBeenCalledTimes(1);

@@ -258,7 +258,8 @@ describe('ink screens: facts, working controls and Polaris', () => {
     const t = text(html);
     expect(t).toContain('Your record library');
     expect(html).toContain('Download PDF for #1010');
-    expect(html).toContain('Download CSV for #1010');
+    // Sam, 2026-09-24: "just use json" — no CSV.
+    expect(html).not.toContain('Download CSV');
     expect(html).toContain('Download JSON for #1010');
     expect(t).toContain('View record details');
     expect(t).toContain('Files are not emailed');
@@ -453,7 +454,8 @@ describe("the Ritualist's Shipments row opens onto ink's panel, the record inclu
     const t = text(html);
     expect(t).toContain("View full record");
     expect(html).not.toContain("href=");
-    for (const part of ["Products", "Recipient", "Advanced", "Export the record", "Download PDF", "Download CSV"]) expect(t).toContain(part);
+    for (const part of ["Products", "Recipient", "Advanced", "Export the record", "Download PDF"]) expect(t).toContain(part);
+    expect(t).not.toContain("Download CSV");
     for (const gone of ["Get the record", "Buy the record", "$29", "Ritualist studio", "Ritualist Studio", "View Full Record", "CUSTOMER", "DELIVERY"]) expect(t).not.toContain(gone);
   });
 });

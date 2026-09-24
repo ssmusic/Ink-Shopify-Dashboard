@@ -188,7 +188,7 @@ describe("Sam's second pass, 2026-09-24: downloads, Records, the Orders rows", (
       formData.set("intent", intent);
       return shouldRevalidate({ formAction, formData, defaultShouldRevalidate: true } as never);
     };
-    for (const read of ["inspect", "pdf", "csv", "download"]) expect(after(read), read).toBe(false);
+    for (const read of ["inspect", "pdf", "download"]) expect(after(read), read).toBe(false);
     expect(after("buy")).toBe(true);
     expect(after("pdf", "/app/ink/settings")).toBe(true);
   });

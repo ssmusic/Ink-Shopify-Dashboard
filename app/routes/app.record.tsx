@@ -35,7 +35,7 @@ const PROOF_ID = /^proof_[0-9a-f]{24}$/;
 const OUTCOMES: RecordPurchase["outcome"][] = ["open", "won", "lost", "unknown"];
 /** What the Ritualist's included record answers here: the inspection and the
  *  three files. Nothing that buys. */
-const INCLUDED_RECORD_INTENTS = new Set(["inspect", "pdf", "csv", "download"]);
+const INCLUDED_RECORD_INTENTS = new Set(["inspect", "pdf", "download"]);
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session, redirect } = await authenticate.admin(request);

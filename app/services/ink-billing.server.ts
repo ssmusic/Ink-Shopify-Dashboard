@@ -17,7 +17,6 @@ import { handoverLocked, type HandoverPrice } from "../lib/record-handover";
 import type { RecordRead } from "../lib/record-words";
 import { buildInkRecordPdf } from "./ink-record-pdf.server";
 import { pushOrderPaymentFacts, readOrderPaymentFacts } from "./order-payment-facts.server";
-import { buildInkRecordCsv } from "./ink-record-csv.server";
 import { inspectionFromAudit } from "../lib/ink-record-inspection";
 import { recordDownloadsAvailable } from "../lib/record-words";
 import { EXPORT_READ_TIMEOUT_MS, merchantRead, PROOF_ID, RECORD_READ_TIMEOUT_MS } from "./ink-reader.server";
@@ -189,11 +188,11 @@ export async function inkRecordAction(
   // What the intent needs is read side by side, each with its own time: the
   // export alone took 14 s for a busy record, and the three reads used to
   // follow one another (2026-09-24).
-  const files = ["download", "pdf", "csv"].includes(intent);
+  const files = ["download", "pdf"].includes(intent);
   const [bundle, audit, opens, proof]: any[] = await Promise.all([
     files ? merchantRead(apiKey, `proofs/${proofId}/export`, fetch, EXPORT_READ_TIMEOUT_MS) : null,
     files || intent === "inspect" ? merchantRead(apiKey, `proofs/${proofId}/audit`, fetch, RECORD_READ_TIMEOUT_MS) : null,
-    intent === "pdf" || intent === "csv" || intent === "inspect" ? merchantRead(apiKey, `proofs/${proofId}/opens`) : null,
+    intent === "pdf" || intent === "inspect" ? merchantRead(apiKey, `proofs/${proofId}/opens`) : null,
     // The carrier's scans for the PDF (the merchant's proof door serves the
     // journey; the audit does not). A failed read leaves the scans out.
     intent === "pdf" || intent === "inspect" ? merchantRead(apiKey, `proofs/${proofId}`, fetch, RECORD_READ_TIMEOUT_MS).catch(() => null) : null,
@@ -231,7 +230,7 @@ export async function inkRecordAction(
       filename: `ink-record-${proofId}.json`,
     };
   }
-  if (intent === "pdf" || intent === "csv" || intent === "inspect") {
+  if (intent === "pdf" || intent === "inspect") {
     const record = recordFromBody(audit);
     if (audit?.proof_id !== proofId || audit?.audience !== "merchant" || !record || record.locked)
       return no("The record is unavailable. Check record access and try again.");
@@ -246,11 +245,6 @@ export async function inkRecordAction(
     if (intent === "inspect") return {
       ok: true as const, note: null, confirmationUrl: null, download: null as unknown,
       pdfBase64: null, csvText: null, inspection, filename: null,
-    };
-    if (intent === "csv") return {
-      ok: true as const, note: null, confirmationUrl: null, download: null as unknown,
-      pdfBase64: null, csvText: buildInkRecordCsv(record, inspection), inspection: null,
-      filename: `ink-record-${proofId}.csv`,
     };
     const journey = proof?.proof_id === proofId ? proof.carrier_journey ?? null : null;
     const pdf = buildInkRecordPdf(audit, record, inspection, { journey });
