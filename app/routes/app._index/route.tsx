@@ -9,7 +9,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // `/app` is ink's onboarding, one hop away, with the embedded params kept.
   if (isInk()) {
     const url = new URL(request.url);
-    throw redirect(`/app/ink${url.search}`);
+    throw redirect(`/app/ink/orders${url.search}`);
   }
   return null;
 };

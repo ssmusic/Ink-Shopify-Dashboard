@@ -178,7 +178,7 @@ export default function InkRecordHistory({
               downloads.
             </Text>
             <InlineStack>
-              <Button url="/app/ink">View orders</Button>
+              <Button url="/app/ink/orders">View orders</Button>
             </InlineStack>
           </BlockStack>
         </Card>

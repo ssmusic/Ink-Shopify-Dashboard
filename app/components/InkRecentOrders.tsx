@@ -15,7 +15,8 @@
 //
 // Column headings are PLACEHOLDER words (Order · Recipient · Activity · Total ·
 // Date) until Sam words them.
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { Suspense, useState, type MouseEvent, type ReactNode } from "react";
+import { Await } from "react-router";
 import {
   BlockStack,
   Box,
@@ -24,6 +25,7 @@ import {
   Divider,
   InlineGrid,
   InlineStack,
+  SkeletonBodyText,
   Text,
   useBreakpoints,
 } from "@shopify/polaris";
@@ -45,16 +47,56 @@ import { checkoutLines } from "../lib/checkout-words";
 import { deliveryLine, opensLine } from "../lib/order-activity";
 import { ORDER_SORT_OPTIONS, type InkOrderSort } from "../lib/ink-order-search";
 
-export type InkRecentOrderRow = {
-  id: string;
-  name: string;
-  proofId: string | null;
-  detail: InkOrderDetail | null;
+/** A row's record side: the record, what the record door offers, a bought
+ *  record's packet and the order's activity. */
+export type InkRowRecord = {
   record: RecordRead | null;
   door: InkDoor;
   packet?: DisputePacketText | null;
   timeline?: OrderTimelineData | null;
 };
+type InkOrderBase = {
+  id: string;
+  name: string;
+  proofId: string | null;
+  detail: InkOrderDetail | null;
+};
+export type InkRecentOrderRow = InkOrderBase & InkRowRecord;
+/** A row whose record side is on its way: the order screen streams each
+ *  row's (routes/app.ink.$section.tsx), so the list shows while the slower
+ *  records are still being read. */
+export type InkStreamedOrderRow = InkOrderBase & { more: Promise<InkRowRecord> };
+export type InkOrderRow = InkRecentOrderRow | InkStreamedOrderRow;
+
+const UNREAD: InkRowRecord = {
+  record: null,
+  door: { offerLine: null, pending: false, paidPendingRecord: false, resumeUrl: null, downloadable: false, inHistory: false, purchase: null },
+  packet: null,
+  timeline: null,
+};
+
+/** Draws with the row's record side: at once when it is here, else when its
+ *  promise lands, with `fallback` until then. A read that failed draws as a
+ *  row with no record — the words each part already says for that. */
+function WithRecord({
+  row,
+  fallback,
+  children,
+}: {
+  row: InkOrderRow;
+  fallback: ReactNode;
+  children: (row: InkRecentOrderRow) => ReactNode;
+}) {
+  if (!("more" in row)) return <>{children(row)}</>;
+  const { more, ...base } = row;
+  return (
+    <Suspense fallback={fallback}>
+      <Await resolve={more} errorElement={<>{children({ ...base, ...UNREAD })}</>}>
+        {(side: InkRowRecord) => children({ ...base, ...side })}
+      </Await>
+    </Suspense>
+  );
+}
 const money = (amount: string, currency: string) => {
   const value = Number.parseFloat(amount);
   if (!Number.isFinite(value)) return "Unavailable";
@@ -259,13 +301,11 @@ function OrderRow({
   open,
   onToggle,
 }: {
-  row: InkRecentOrderRow;
+  row: InkOrderRow;
   open: boolean;
   onToggle: () => void;
 }) {
   const d = row.detail;
-  const count = opensOf(row.record);
-  const delivery = deliveryLine(row.timeline?.steps);
   const product = d?.items[0]?.title ?? null;
   const recipient =
     d?.customerName && d.customerName !== "Name unavailable"
@@ -310,16 +350,9 @@ function OrderRow({
           </BlockStack>
         </Box>
         <Box paddingInlineStart={{ xs: "800", md: "0" }}>
-          <BlockStack gap="050">
-            <Text as="p" tone={count ? undefined : "subdued"}>
-              {opensLine(count)}
-            </Text>
-            {delivery ? (
-              <Text as="p" variant="bodySm" tone="subdued" truncate>
-                {delivery}
-              </Text>
-            ) : null}
-          </BlockStack>
+          <WithRecord row={row} fallback={<SkeletonBodyText lines={2} />}>
+            {(full) => <Activity row={full} />}
+          </WithRecord>
         </Box>
       </InlineGrid>
       <InlineGrid columns={RIGHT} gap={{ xs: "050", md: "400" }} alignItems="start">
@@ -331,6 +364,25 @@ function OrderRow({
         </Text>
       </InlineGrid>
     </InlineGrid>
+  );
+}
+
+/** The Activity column: how many times the page was opened, and the parcel's
+ *  latest word from the order's activity (lib/order-activity.ts). */
+function Activity({ row }: { row: InkRecentOrderRow }) {
+  const count = opensOf(row.record);
+  const delivery = deliveryLine(row.timeline?.steps);
+  return (
+    <BlockStack gap="050">
+      <Text as="p" tone={count ? undefined : "subdued"}>
+        {opensLine(count)}
+      </Text>
+      {delivery ? (
+        <Text as="p" variant="bodySm" tone="subdued" truncate>
+          {delivery}
+        </Text>
+      ) : null}
+    </BlockStack>
   );
 }
 
@@ -368,10 +420,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Panel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | null }) {
+function Panel({ row, mapsKey }: { row: InkOrderRow; mapsKey: string | null }) {
   const [advanced, setAdvanced] = useState(true);
   const d = row.detail;
-  const openCount = opensOf(row.record);
   const address = d?.customerAddress;
   const addressLabel = address
     ? [
@@ -437,6 +488,41 @@ function Panel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | nul
             Recipient and product details are unavailable.
           </Text>
         )}
+        <WithRecord row={row} fallback={<SkeletonBodyText lines={4} />}>
+          {(full) => (
+            <PanelRecord
+              row={full}
+              addressLabel={addressLabel}
+              mapsKey={mapsKey}
+              advanced={advanced}
+              onAdvanced={() => setAdvanced((v) => !v)}
+            />
+          )}
+        </WithRecord>
+      </BlockStack>
+    </Box>
+  );
+}
+
+/** The open row's record part: the order's activity, then the record
+ *  (Codex's Advanced, whole). Drawn once the row's record side is here. */
+function PanelRecord({
+  row,
+  addressLabel,
+  mapsKey,
+  advanced,
+  onAdvanced,
+}: {
+  row: InkRecentOrderRow;
+  addressLabel: string;
+  mapsKey: string | null;
+  advanced: boolean;
+  onAdvanced: () => void;
+}) {
+  const d = row.detail;
+  const openCount = opensOf(row.record);
+  return (
+    <>
         {row.timeline ? (
           <Box padding="400" borderWidth="025" borderColor="border" borderRadius="200">
             <BlockStack gap="300">
@@ -465,7 +551,7 @@ function Panel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | nul
                   disclosure={advanced ? "up" : "down"}
                   ariaExpanded={advanced}
                   ariaControls={`advanced-${d?.id || row.id}`}
-                  onClick={() => setAdvanced((v) => !v)}
+                  onClick={onAdvanced}
                 >
                   Advanced
                 </Button>
@@ -524,8 +610,7 @@ function Panel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | nul
             </Collapsible>
           </Box>
         )}
-      </BlockStack>
-    </Box>
+    </>
   );
 }
 
@@ -538,7 +623,7 @@ export default function InkRecentOrders({
   onSort,
   pending = false,
 }: {
-  orders: InkRecentOrderRow[];
+  orders: InkOrderRow[];
   returnTo?: string;
   defaultExpandedId?: string | null;
   searching?: boolean;
