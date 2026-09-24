@@ -27,14 +27,11 @@ import { mintMagicToken } from "../services/ink-api.server";
 import { readInkKpis } from "../services/ink-kpis.server";
 import { readDeliveryDashboard } from "../services/ink-delivery.server";
 import { readRecentOrderPage } from "../services/ink-links.server";
-import {
-  includedRecordDoor,
-  readShipmentPanels,
-  ritualistApiKey,
-} from "../services/ritualist-rows.server";
+import { readJwks } from "../services/ink-record.server";
+import { ritualistApiKey, ritualistRowRecord } from "../services/ritualist-rows.server";
 import PolarisAppLayout from "../components/PolarisAppLayout";
 import DeliveryDashboard from "../components/DeliveryDashboard";
-import InkRecentOrders, { type InkRecentOrderRow } from "../components/InkRecentOrders";
+import InkRecentOrders, { type InkStreamedOrderRow } from "../components/InkRecentOrders";
 import OrderExpandedRow from "../components/OrderExpandedRow";
 // NFC hardware lane — tabled behind FEATURE_NFC (see app/flags.ts), never deleted.
 import NFCTagInventory from "../components/NFCTagInventory";
@@ -72,24 +69,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // scopes a merchant read. A read that fails is said as unavailable, never as
   // zero — and never re-thrown (app.tagged-shipments._index.tsx tells why).
   const apiKey = await ritualistApiKey(session.shop);
-  const recentOrders = async (): Promise<InkRecentOrderRow[]> => {
+  // The six rows stream as the Shipments ledger's do (services/ritualist-rows.server.ts):
+  // the orders at once, each row's record as it lands — a big record never
+  // holds the Dashboard.
+  const recentOrders = async (): Promise<InkStreamedOrderRow[]> => {
     const page = await readRecentOrderPage(admin, {
       first: RECENT_ORDERS,
       search: "",
       sort: "newest",
     });
-    const { records, timelines } = await readShipmentPanels(
-      apiKey,
-      page.rows.map((o) => o.proofId),
-    );
+    const keys = apiKey && page.rows.some((o) => o.proofId) ? readJwks() : null;
     return page.rows.map((o) => ({
       id: o.id,
       name: o.name,
       proofId: o.proofId,
       detail: o.detail,
-      record: o.proofId ? records[o.proofId] ?? null : null,
-      door: includedRecordDoor(apiKey, o.proofId),
-      timeline: o.proofId ? timelines[o.proofId] ?? null : null,
+      more: ritualistRowRecord(apiKey, o.proofId, keys),
     }));
   };
   const [kpis, delivery, recent] = await Promise.all([

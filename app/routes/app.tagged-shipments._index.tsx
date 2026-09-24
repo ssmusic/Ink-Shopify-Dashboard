@@ -16,23 +16,27 @@ import {
   Card,
   Divider,
   InlineStack,
+  Layout,
   Page,
   Pagination,
+  SkeletonBodyText,
+  SkeletonPage,
   Text,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import PolarisAppLayout from "../components/PolarisAppLayout";
-import InkRecentOrders, { type InkRecentOrderRow } from "../components/InkRecentOrders";
+import InkRecentOrders, {
+  WithRecord,
+  type InkOrderRow,
+  type InkStreamedOrderRow,
+} from "../components/InkRecentOrders";
 import InkOrderSearch from "../components/InkOrderSearch";
 import OrderDetailView from "../components/OrderDetailView";
 import OrderExpandedRow from "../components/OrderExpandedRow";
 import { readRecentOrderPage } from "../services/ink-links.server";
+import { readJwks } from "../services/ink-record.server";
 import { orderSearch, orderSearchParams, orderSort } from "../lib/ink-order-search";
-import {
-  includedRecordDoor,
-  readShipmentPanels,
-  ritualistApiKey,
-} from "../services/ritualist-rows.server";
+import { ritualistApiKey, ritualistRowRecord } from "../services/ritualist-rows.server";
 
 // SHIPMENTS IS INK'S ORDERS LEDGER (Sam, 2026-09-24: "we are making the
 // ritualist as good as ink" · "it has to mirror the ritualist webapp"). The
@@ -88,21 +92,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return { rows: [], pageInfo: null };
   });
 
-  // Each row's record and timeline, the way ink's Orders reads them, with the
-  // merchant's own key; the door is the Ritualist's: the record included.
+  // EACH ROW STREAMS, as ink's Orders does (routes/app.ink.$section.tsx): the
+  // list answers with Shopify's orders alone, and each row's record, its
+  // activity and its door follow as that row's own promise, drawn as it lands
+  // (services/ritualist-rows.server.ts) — read with the merchant's own key,
+  // the published keys once for the page; the door is the Ritualist's, the
+  // record included.
   const apiKey = await ritualistApiKey(session.shop);
-  const { records, timelines } = await readShipmentPanels(
-    apiKey,
-    page.rows.map((o) => o.proofId),
-  );
-  const orders: InkRecentOrderRow[] = page.rows.map((o) => ({
+  const keys = apiKey && page.rows.some((o) => o.proofId) ? readJwks() : null;
+  const orders: InkStreamedOrderRow[] = page.rows.map((o) => ({
     id: o.id,
     name: o.name,
     proofId: o.proofId,
     detail: o.detail,
-    record: o.proofId ? records[o.proofId] ?? null : null,
-    door: includedRecordDoor(apiKey, o.proofId),
-    timeline: o.proofId ? timelines[o.proofId] ?? null : null,
+    more: ritualistRowRecord(apiKey, o.proofId, keys),
   }));
 
   return { orders, pageInfo: page.pageInfo, ordersError, search, sort };
@@ -116,7 +119,7 @@ export default function ShipmentsIndex() {
   const revalidator = useRevalidator();
   const navigation = useNavigation();
   const [params, setParams] = useSearchParams();
-  const [fullRecord, setFullRecord] = useState<InkRecentOrderRow | null>(null);
+  const [fullRecord, setFullRecord] = useState<InkOrderRow | null>(null);
   const idle = navigation.state === "idle";
   const go = (key: "after" | "before", cursor: string | null) => {
     if (!cursor) return;
@@ -144,11 +147,28 @@ export default function ShipmentsIndex() {
   }, [data.orders, data.ordersError, data.search, revalidator]);
 
   // "View full record" — the Ritualist's full-page view of the order, which
-  // leads to the studio (components/OrderDetailView.tsx).
+  // leads to the studio (components/OrderDetailView.tsx). It waits on the
+  // row's record side as the row does, Polaris's skeleton page until it lands.
   if (fullRecord?.detail) {
+    const detail = fullRecord.detail;
     return (
       <PolarisAppLayout>
-        <OrderDetailView order={{ ...fullRecord.detail, row: fullRecord }} onBack={() => setFullRecord(null)} />
+        <WithRecord
+          row={fullRecord}
+          fallback={
+            <SkeletonPage title={detail.orderNumber} backAction>
+              <Layout>
+                <Layout.Section>
+                  <Card>
+                    <SkeletonBodyText lines={6} />
+                  </Card>
+                </Layout.Section>
+              </Layout>
+            </SkeletonPage>
+          }
+        >
+          {(row) => <OrderDetailView order={{ ...detail, row }} onBack={() => setFullRecord(null)} />}
+        </WithRecord>
       </PolarisAppLayout>
     );
   }

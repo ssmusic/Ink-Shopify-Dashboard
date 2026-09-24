@@ -34,17 +34,27 @@ vi.mock("../services/ink-api.server", () => ({ mintMagicToken: vi.fn() }));
 // The NFC lane is tabled behind FEATURE_NFC (off) and imports through the app's
 // "~" alias, which this plain node runner does not resolve (vitest.config.ts).
 vi.mock("../components/NFCTagInventory", () => ({ default: () => null }));
+// The published keys, read once for the six rows: never the network here.
+vi.mock("../services/ink-record.server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../services/ink-record.server")>()),
+  readJwks: vi.fn(async () => ({ keys: [] })),
+}));
 vi.mock("../services/ritualist-rows.server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/ritualist-rows.server")>();
   return {
     ...actual,
     ritualistApiKey: vi.fn(async () => "ink_key_example"),
-    readShipmentPanels: vi.fn(async () => ({ records: { [PROOF]: RECORD }, timelines: {} })),
+    ritualistRowRecord: vi.fn(async (apiKey: string | null, proofId: string | null) => ({
+      record: proofId === PROOF ? RECORD : null,
+      door: actual.includedRecordDoor(apiKey, proofId),
+      packet: null,
+      timeline: null,
+    })),
   };
 });
 
 const { authenticate } = await import("../shopify.server");
-const { readShipmentPanels } = await import("../services/ritualist-rows.server");
+const { ritualistRowRecord } = await import("../services/ritualist-rows.server");
 const { RECENT_ORDERS_DETAIL_QUERY } = await import("../services/ink-links.server");
 const { kpisFromBody } = await import("../services/ink-kpis.server");
 const { dashboardFrom } = await import("../services/ink-delivery.server");
@@ -110,7 +120,7 @@ describe("what the Dashboard reads", () => {
     calls = [];
     graphql = vi.fn(async () => ({ json: async () => PAGE }));
     vi.mocked(authenticate.admin).mockResolvedValue({ admin: { graphql }, session: { shop: SHOP } } as never);
-    vi.mocked(readShipmentPanels).mockClear();
+    vi.mocked(ritualistRowRecord).mockClear();
     vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
       calls.push({ url: String(url), headers: { ...(init?.headers as Record<string, string>) } });
       const body = String(url).endsWith("/merchant-insights") ? INSIGHTS : String(url).endsWith("/merchant-delivery") ? DELIVERY_ROWS : null;
@@ -136,9 +146,12 @@ describe("what the Dashboard reads", () => {
     expect(graphql).toHaveBeenCalledWith(RECENT_ORDERS_DETAIL_QUERY, {
       variables: expect.objectContaining({ first: 6, sortKey: "CREATED_AT", reverse: true }),
     });
-    expect(readShipmentPanels).toHaveBeenCalledWith("ink_key_example", [PROOF, null]);
+    // The orders at once; each row's record follows as its own promise, as on the ledger.
+    expect(ritualistRowRecord).toHaveBeenCalledWith("ink_key_example", PROOF, expect.any(Promise));
+    expect(ritualistRowRecord).toHaveBeenCalledWith("ink_key_example", null, expect.any(Promise));
     expect(data.recentOrders.map((o: { name: string }) => o.name)).toEqual(["#1042", "#1041"]);
-    const [recorded, unrecorded] = data.recentOrders;
+    for (const row of data.recentOrders) expect(row.more).toBeInstanceOf(Promise);
+    const [recorded, unrecorded] = await Promise.all(data.recentOrders.map((o: { more: Promise<any> }) => o.more));
     expect(recorded.record).toEqual(RECORD);
     expect(recorded.door).toMatchObject({ offerLine: null, downloadable: true, purchase: null });
     expect(unrecorded.record).toBeNull();

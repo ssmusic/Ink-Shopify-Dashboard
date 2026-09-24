@@ -2,9 +2,9 @@
 //
 //   · The Shipments loader reads its page the way ink's Orders reads it —
 //     twenty orders, searched and sorted by Shopify (services/ink-links.server.ts)
-//     — and hands each row its panel: the record, the timeline and the
-//     Ritualist's door (services/ritualist-rows.server.ts), read with the
-//     merchant's own key.
+//     — and answers at once; each row's panel follows as its own promise: the
+//     record, the timeline and the Ritualist's door (services/ritualist-rows.server.ts),
+//     read with the merchant's own key.
 //   · The row says "Recipient": the ship-to's own name, and the order's own email.
 //   · A failed read is an error the screen says as one, never "no orders".
 //   · No timer re-reads every row's record twice a minute.
@@ -39,13 +39,23 @@ vi.mock("../services/ritualist-rows.server", async (importOriginal) => {
   return {
     ...actual,
     ritualistApiKey: vi.fn(async () => "ink_key_example"),
-    readShipmentPanels: vi.fn(async () => ({ records: { [PROOF]: RECORD }, timelines: { [PROOF]: TIMELINE } })),
+    ritualistRowRecord: vi.fn(async (apiKey: string | null, proofId: string | null) => ({
+      record: proofId === PROOF ? RECORD : null,
+      door: actual.includedRecordDoor(apiKey, proofId),
+      packet: null,
+      timeline: proofId === PROOF ? TIMELINE : null,
+    })),
   };
 });
+// The published keys, read once for the page: never the network here.
+vi.mock("../services/ink-record.server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../services/ink-record.server")>()),
+  readJwks: vi.fn(async () => ({ keys: [] })),
+}));
 
 const { authenticate } = await import("../shopify.server");
 const { inkRecordAction } = await import("../services/ink-billing.server");
-const { readShipmentPanels } = await import("../services/ritualist-rows.server");
+const { ritualistRowRecord } = await import("../services/ritualist-rows.server");
 const { RECENT_ORDERS_DETAIL_QUERY } = await import("../services/ink-links.server");
 const { loader: shipmentsLoader } = await import("../routes/app.tagged-shipments._index");
 const { action: recordAction } = await import("../routes/app.record");
@@ -80,7 +90,7 @@ describe("the Shipments ledger reads its page the way ink's Orders does", () => 
   beforeEach(() => {
     graphql = vi.fn(async () => ({ json: async () => PAGE }));
     vi.mocked(authenticate.admin).mockResolvedValue({ admin: { graphql }, session: { shop: SHOP } } as never);
-    vi.mocked(readShipmentPanels).mockClear();
+    vi.mocked(ritualistRowRecord).mockClear();
   });
 
   it("asks Shopify for twenty orders, searched and sorted there", async () => {
@@ -91,16 +101,25 @@ describe("the Shipments ledger reads its page the way ink's Orders does", () => 
     expect(out).toMatchObject({ search: "#1042", sort: "total_desc", ordersError: false, pageInfo: { hasNextPage: true, endCursor: "c2" } });
   });
 
-  it("hands each row its record and rail, read with the merchant's key, and the Ritualist's door", async () => {
+  it("answers with Shopify's orders at once; each row's record, rail and the Ritualist's door follow as its own promise", async () => {
     const out = await load("https://app.test/app/tagged-shipments");
-    expect(readShipmentPanels).toHaveBeenCalledWith("ink_key_example", [PROOF, null]);
     const [recorded, bare] = out.orders;
-    expect(recorded).toMatchObject({ id: "gid://shopify/Order/1042", name: "#1042", proofId: PROOF, record: RECORD, timeline: TIMELINE });
-    expect(recorded.door).toEqual({ offerLine: null, pending: false, paidPendingRecord: false, resumeUrl: null, downloadable: true, inHistory: false, purchase: null });
+    // The list does not wait for a record: each row streams its own (as ink's Orders does).
+    expect(recorded).toMatchObject({ id: "gid://shopify/Order/1042", name: "#1042", proofId: PROOF });
+    expect(recorded).not.toHaveProperty("record");
+    expect(recorded.more).toBeInstanceOf(Promise);
     expect(recorded.detail).toMatchObject({ customerName: "Gift Recipient", customerEmail: "order@example.com", orderNumber: "#1042", total: "58.00" });
+    // Read with the merchant's own key, the published keys once for the page.
+    expect(ritualistRowRecord).toHaveBeenCalledWith("ink_key_example", PROOF, expect.any(Promise));
+    expect(ritualistRowRecord).toHaveBeenCalledWith("ink_key_example", null, expect.any(Promise));
+    const side = await recorded.more;
+    expect(side).toMatchObject({ record: RECORD, timeline: TIMELINE, packet: null });
+    expect(side.door).toEqual({ offerLine: null, pending: false, paidPendingRecord: false, resumeUrl: null, downloadable: true, inHistory: false, purchase: null });
     // An order ink did not record says so in its row; it offers nothing.
-    expect(bare).toMatchObject({ proofId: null, record: null, timeline: null });
-    expect(bare.door.downloadable).toBe(false);
+    const bareSide = await bare.more;
+    expect(bare.proofId).toBeNull();
+    expect(bareSide).toMatchObject({ record: null, timeline: null });
+    expect(bareSide.door.downloadable).toBe(false);
   });
 
   it("a failed read is an error the screen says as one", async () => {

@@ -31,7 +31,7 @@
 
 import { addressStateWord } from "../lib/delivery-point";
 import { checkRecord, type Jwks, type WholePacket } from "./record-check.server";
-import { merchantRead } from "./ink-reader.server";
+import { merchantRead, RECORD_READ_TIMEOUT_MS } from "./ink-reader.server";
 import { handoverPrice } from "../lib/record-handover";
 import { checkoutFromBody } from "../lib/checkout-words";
 import { signedOpensFromBody } from "./every-open.server";
@@ -246,7 +246,7 @@ export async function readRecord(
   if (!PROOF_ID.test(proofId)) return null;
   if (apiKey) {
     const [body, jwks] = await Promise.all([
-      merchantRead(apiKey, `proofs/${encodeURIComponent(proofId)}/audit`, fetchImpl),
+      merchantRead(apiKey, `proofs/${encodeURIComponent(proofId)}/audit`, fetchImpl, RECORD_READ_TIMEOUT_MS),
       keys ?? readJwks(fetchImpl),
     ]);
     // Only this proof's merchant audit is this order's record.
