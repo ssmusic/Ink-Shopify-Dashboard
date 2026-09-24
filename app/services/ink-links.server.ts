@@ -272,7 +272,7 @@ function pageFrom(body: RecentOrdersBody | null, detail: boolean): OrderPage {
 
 /** The shop's zone, or UTC when Shopify does not say: a day's edges then fall
  *  on UTC's midnight, never an error in place of the list. */
-async function readShopZone(admin: AdminGraphql): Promise<string> {
+export async function readShopZone(admin: AdminGraphql): Promise<string> {
   try {
     const res = await admin.graphql(SHOP_ZONE_QUERY);
     const body = (await res.json()) as { data?: { shop?: { ianaTimezone?: unknown } | null } } | null;

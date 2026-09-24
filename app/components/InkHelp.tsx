@@ -29,13 +29,14 @@ function Topic({
 
 export default function InkHelp() {
   return (
-    <Box maxWidth="800px" width="100%">
+    <Box width="100%">
       <BlockStack gap="400">
         <Topic title="Review an order">
           <Text as="p">
             Open an order to see its recipient, delivery updates and tracking
-            link opens. Advanced shows the available record details and export
-            options.
+            link opens. The record sits at the top of the order: Buy the record,
+            or its downloads where the record is included. Advanced shows the
+            record&apos;s details.
           </Text>
           <Text as="p">
             An open records a visit to the tracking page. A shared location
@@ -92,9 +93,9 @@ export default function InkHelp() {
             ink data access.
           </Text>
           <Text as="p">
-            Orders shows Shopify orders from the past 60 days. Older purchases
-            made in this app remain in Records. A missing location means no
-            usable shared location is available for that open.
+            Orders shows Shopify orders from the past 60 days, and Load more
+            adds older ones from ink&apos;s own records. A missing location
+            means no usable shared location is available for that open.
           </Text>
           <Text as="p" tone="subdued">
             If a page cannot load, try Refresh. If the problem continues,
