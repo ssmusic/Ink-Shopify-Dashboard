@@ -1,5 +1,6 @@
 import { type LoaderFunctionArgs } from "react-router";
 import { allowRequest, clientIp, rateLimitResponse } from "../services/rate-limit.server";
+import { carriesInkTag, isDistanceRecorded } from "../lib/order-marks";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -207,7 +208,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       });
 
       // Check if order has INK Premium Delivery
-      const hasInkTag = order.tags?.includes("INK-Premium-Delivery") || order.tags?.includes("INK-Verified-Delivery");
+      // ink's tag, old or new (lib/order-marks.ts — the Ritualist wrote
+      // "INK-Verified-Delivery" until 2026-09-24; old orders keep it).
+      const hasInkTag = carriesInkTag(order.tags);
       const hasDeliveryTypeMetafield = metafields.delivery_type === "premium";
       const hasInkMetafield = metafields.ink_premium_order === "true";
 
@@ -250,14 +253,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const verificationStatus = (metafields.verification_status || "pending").toLowerCase();
 
       // Eligibility logic depends on mode:
-      // - "shipments" mode: show orders that ARE enrolled/verified/delivered (for shipment tracking)
-      // - "enroll" mode: show orders that are NOT yet enrolled/verified (for the scan queue)
+      // - "shipments" mode: show orders that ARE enrolled/recorded at the door/delivered (for shipment tracking)
+      // - "enroll" mode: show orders that are NOT yet enrolled/recorded (for the scan queue)
+      // The door's word is "recorded" since 2026-09-24 and "verified" on older
+      // orders; isDistanceRecorded reads both (lib/order-marks.ts).
+      const doorRecorded = isDistanceRecorded(verificationStatus);
       let isEligible: boolean;
       if (mode === "shipments") {
-        isEligible = isInkOrder && (verificationStatus === "enrolled" || verificationStatus === "verified" || verificationStatus === "delivered");
+        isEligible = isInkOrder && (verificationStatus === "enrolled" || doorRecorded || verificationStatus === "delivered");
       } else {
         // enroll mode: show everything that isn't done yet
-        isEligible = isInkOrder && verificationStatus !== "enrolled" && verificationStatus !== "verified" && verificationStatus !== "delivered";
+        isEligible = isInkOrder && verificationStatus !== "enrolled" && !doorRecorded && verificationStatus !== "delivered";
       }
 
       // Get line item details (now includes sku and price from variant)

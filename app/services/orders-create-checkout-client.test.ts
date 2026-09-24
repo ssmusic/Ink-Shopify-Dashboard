@@ -152,6 +152,26 @@ for (const flavor of ["ink", ""] as const) {
   });
 }
 
+// NOTHING SAYS VERIFIED DELIVERY (Sam, 2026-09-24: the Ritualist's order tag
+// "INK-Verified-Delivery" — "wrong"). Both apps write the one neutral tag at
+// enrolment (lib/order-marks.ts, PLACEHOLDER); the Ritualist's old tag is
+// read on old orders and never written again.
+for (const flavor of ["ink", ""] as const) {
+  const name = flavor === "ink" ? "ink" : "the Ritualist";
+  it(`${name} tags the order with the neutral tag, never "INK-Verified-Delivery"`, async () => {
+    vi.stubEnv("APP_FLAVOR", flavor);
+    const { ORDER_TAG } = await import("../lib/order-marks");
+    const admin = fakeAdmin();
+    webhook.mockResolvedValue({ payload: baseBody, shop: SHOP, admin: { graphql: admin.graphql } });
+    const { action } = await import("../routes/webhooks.orders_create");
+    const res = await action({ request: new Request("https://app.test/webhooks/orders_create", { method: "POST", body: "{}" }), params: {}, context: {} } as any);
+    expect(res.status).toBe(200);
+    const tagCall = admin.graphql.mock.calls.find(([q]) => /mutation AddOrderTag\b/.test(String(q))) as unknown as [string, { variables: { tags: string[] } }] | undefined;
+    expect(tagCall?.[1]?.variables?.tags).toEqual([ORDER_TAG]);
+    expect(JSON.stringify(admin.graphql.mock.calls)).not.toContain("INK-Verified-Delivery");
+  });
+}
+
 describe("switch on — CHECKOUT_DETAILS_ENABLED=true on this service", () => {
   beforeEach(() => {
     vi.stubEnv("APP_FLAVOR", "ink");

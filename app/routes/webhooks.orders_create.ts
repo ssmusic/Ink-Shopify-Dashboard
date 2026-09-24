@@ -16,6 +16,7 @@ import {
 } from "../services/activation-scope.server";
 import { spendFromCap } from "../services/activation-counter.server";
 import { isInk, appFlavor, type AppFlavor } from "../services/app-flavor.server";
+import { ORDER_TAG } from "../lib/order-marks";
 import { checkoutClientFromWebhook, checkoutDetailsEnabled } from "../services/checkout-client.server";
 
 /**
@@ -675,9 +676,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // that promised a page we then withheld would be a lie in their admin.
     // Still tagged when the enroll itself failed (that order is in scope and
     // recoverable) — the behaviour the comment above depends on.
+    //
+    // ONE TAG FOR BOTH APPS (2026-09-24). The Ritualist wrote
+    // "INK-Verified-Delivery" here — at enrolment, before any delivery, a
+    // verdict on every order it ran on. Sam: "wrong". Both apps now write the
+    // neutral tag (lib/order-marks.ts, ⚠️ PLACEHOLDER); orders tagged before
+    // keep the old one, and every reader still counts it.
     if (activates) {
       const tagRes = await admin.graphql(TAG_MUTATION, {
-        variables: { id: orderGid, tags: isInk() ? ["Recorded by ink."] : ["INK-Verified-Delivery"] },
+        variables: { id: orderGid, tags: [ORDER_TAG] },
       });
       const tagJson = await tagRes.json();
       const tagErrors = tagJson?.data?.tagsAdd?.userErrors;
@@ -686,7 +693,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.error(`[orders/create] tagsAdd userErrors:`, tagErrors);
       } else {
         console.log(
-          `✅ [orders/create] Tagged order ${orderName} with "INK-Verified-Delivery"`
+          `✅ [orders/create] Tagged order ${orderName} with "${ORDER_TAG}"`
         );
       }
     }

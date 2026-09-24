@@ -38,6 +38,18 @@ const OUTCOME_TONE: Record<string, "success" | "info" | "warning" | undefined> =
   DISPUTED: undefined,
 };
 
+/** The outcome's word. UNCONFIRMED (no open on the record yet) read
+ *  "Unconfirmed" — as if ink confirmed the others (Sam, 2026-09-24: ink never
+ *  says a delivery was confirmed). It says the Ritualist's own word for the
+ *  same outcome (the-ritualist src/pages/Shipments.tsx). ⚠️ PLACEHOLDER. */
+const OUTCOME_WORDS: Record<string, string> = {
+  ACCEPTED: "Accepted",
+  UNCONFIRMED: "Pending",
+  RETURNED: "Returned",
+  EXPIRED: "Expired",
+  DISPUTED: "Disputed",
+};
+
 // Native Advanced KPIs — operational + integrity, from the server-side aggregate
 // (/app/api/dashboard/insights → ink-backend /api/merchant-insights). Replaces the
 // Metabase iframe. No dispute/recovery cards; engagement metrics live on the lead view.
@@ -119,7 +131,7 @@ export default function AdvancedAnalytics() {
           <InlineStack gap="200" wrap>
             {(["ACCEPTED", "UNCONFIRMED", "RETURNED", "EXPIRED", "DISPUTED"] as const).map((k) => (
               <Badge key={k} tone={OUTCOME_TONE[k]}>
-                {`${k.charAt(0)}${k.slice(1).toLowerCase()}: ${o[k]}`}
+                {`${OUTCOME_WORDS[k]}: ${o[k]}`}
               </Badge>
             ))}
           </InlineStack>

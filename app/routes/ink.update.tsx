@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs } from "react-router";
 import crypto from "crypto";
 import { INK_NAMESPACE } from "../utils/metafields.server";
+import { OPEN_DISTANCE_KEY, openDistanceOf, storedStatusFor } from "../lib/order-marks";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -87,6 +88,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       timestamp,
       verify_url,
       device_info,
+      distance_m,
     } = payload;
 
     console.log("📦 Webhook data:", {
@@ -285,13 +287,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       }
 
+      // THE ORDER SAYS THE FACT, NEVER "VERIFIED" (Sam, 2026-09-24: "wrong").
+      // The wire's door word is "verified" (ink-backend routes/verify.js); the
+      // order stores the neutral one (lib/order-marks.ts, ⚠️ PLACEHOLDER), and
+      // the open's distance beside it when the notification carries one. Every
+      // other wire word ("delivered") is stored as it came.
       const metafields = [
         {
           ownerId: orderGid,
           namespace: INK_NAMESPACE,
           key: "verification_status",
           type: "single_line_text_field",
-          value: status,
+          value: storedStatusFor(status),
         },
         {
           ownerId: orderGid,
@@ -346,6 +353,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         });
       }
 
+      // The door's own measurement, whole metres (the backend's `distance_m`,
+      // what DELIVERY_VERIFIED signs). The Shipments list says it in place of a
+      // verdict; absent on a notification that carries none.
+      const openDistance = openDistanceOf(distance_m);
+      if (openDistance != null) {
+        metafields.push({
+          ownerId: orderGid,
+          namespace: INK_NAMESPACE,
+          key: OPEN_DISTANCE_KEY,
+          type: "number_integer",
+          value: String(openDistance),
+        });
+      }
+
       const mutation = `
         mutation SetVerificationMetafields($metafields: [MetafieldsSetInput!]!) {
           metafieldsSet(metafields: $metafields) {
@@ -371,7 +392,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.log("✅ Shopify metafields updated successfully");
       }
 
-      // --- SEND NOTIFICATIONS (Delivered / Verified) ---
+      // --- SEND NOTIFICATIONS (delivered / the door) ---
+      // "verified" below is the WIRE's word for the door notification, read,
+      // never shown; the messages themselves say no such thing.
       if ((status === "verified" && verify_url) || status === "delivered") {
         console.log("\n📨 ================================================");
         console.log(`📨 STARTING IMMEDIATE NOTIFICATION PROCESS [${status.toUpperCase()}]`);

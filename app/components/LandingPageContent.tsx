@@ -26,7 +26,11 @@ export const LandingPageContent = ({
   signInLink = "/app",
   showSignIn = true,
   headline = "A surface that opens when the order arrives.",
-  sub = "Every order opens a page you own — the loud half is your brand, the quiet half is the delivery, confirmed underneath. Your space. Your URL.",
+  // ⚠️ PLACEHOLDER — Sam's line. Was: "Every order opens a page you own — the
+  // loud half is your brand, the quiet half is the delivery, confirmed
+  // underneath. Your space. Your URL." Only ", confirmed underneath" is gone
+  // (Sam, 2026-09-24: ink never says a delivery was confirmed).
+  sub = "Every order opens a page you own — the loud half is your brand, the quiet half is the delivery. Your space. Your URL.",
   footnote,
 }: LandingPageContentProps) => {
   return (

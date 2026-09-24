@@ -70,6 +70,7 @@ async function secureFetch(path: string, options: RequestInit = {}) {
 // behind the shipping email by construction. This fallback is what renders
 // before the fetch lands; it is the neutral www host, never a guessed one.
 import { notificationSnippet } from "../../services/notification-snippet";
+import { DISTANCE_RECORDED_LABEL } from "../../lib/order-marks";
 
 const FALLBACK_SNIPPET = notificationSnippet(null);
 
@@ -399,10 +400,13 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
               description="Sent when the carrier confirms delivery. Carries the link to their page."
             />
             <Divider />
+            {/* Was "Delivery confirmed" (Sam, 2026-09-24: "wrong" — ink never
+                says a delivery was confirmed). Named for the event it follows,
+                the signed open's neutral title. ⚠️ PLACEHOLDER COPY. */}
             <ToggleRow
               checked={settings.delivery.deliveryConfirmed}
-              onToggle={() => toggle("delivery", "deliveryConfirmed", "Delivery confirmed")}
-              title="Delivery confirmed"
+              onToggle={() => toggle("delivery", "deliveryConfirmed", DISTANCE_RECORDED_LABEL)}
+              title={DISTANCE_RECORDED_LABEL}
               description="Sent after the customer opens their page."
             />
           </BlockStack>

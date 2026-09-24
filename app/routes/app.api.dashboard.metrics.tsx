@@ -1,6 +1,7 @@
 import { type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getOfflineSession } from "../session-utils.server";
+import { carriesInkTag } from "../lib/order-marks";
 
 const CORS_HEADERS = {
   "Content-Type": "application/json",
@@ -21,9 +22,9 @@ export const action = async ({ request }: any) => {
 
 // Helper to determine if an order matches INK tracking logic
 function isInkProtected(order: any) {
-  const hasInkTag =
-    order.tags?.includes("INK-Premium-Delivery") ||
-    order.tags?.includes("INK-Verified-Delivery");
+  // ink's tag, old or new (lib/order-marks.ts): the Ritualist wrote
+  // "INK-Verified-Delivery" until 2026-09-24, and old orders keep it.
+  const hasInkTag = carriesInkTag(order.tags);
 
   // Correctly flatten the Shopify GraphQL metafields edges array into a simple JS Object
   const metafields: Record<string, string> = {};

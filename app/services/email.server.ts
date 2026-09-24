@@ -206,7 +206,11 @@ export const EmailService = {
     // headline register as StatusHero ("On its way."), CTA = track. No
     // arrival claim, no return button (eligibility is NOT_YET_DELIVERED
     // until the carrier says otherwise), no return-window arithmetic.
-    const eyebrowText = shipped ? "On its way" : "Delivery confirmed";
+    // NOTHING HERE SAYS A DELIVERY WAS CONFIRMED (Sam, 2026-09-24, shown
+    // "Delivery confirmed" / "Confirmed on arrival": "wrong"). The arrived
+    // state reuses this email's own words ("has arrived"). ⚠️ PLACEHOLDER
+    // COPY — Sam's words replace it. Was: "Delivery confirmed".
+    const eyebrowText = shipped ? "On its way" : "Arrived";
     const brandedH1 = shipped
       ? `${escapeHtml(customerName)}, your ${escapeHtml(productName || "order")} is on its way.`
       : `${escapeHtml(customerName)}, your ${escapeHtml(productName || "order")} is here.`;
@@ -421,7 +425,7 @@ export const EmailService = {
             <p class="sub-heading">
               ${shipped
                 ? `Hi ${customerName}, your order from <strong>${merchantName}</strong> is with the carrier. This page tracks it as it moves.`
-                : `Hi ${customerName}, your order from <strong>${merchantName}</strong> has arrived. Delivery confirmed.`}
+                : `Hi ${customerName}, your order from <strong>${merchantName}</strong> has arrived.`}
             </p>
             ${heroHtml}
 
@@ -477,7 +481,7 @@ export const EmailService = {
                  <tr>
                     <td valign="top" width="50%">
                         <div class="info-label">Status</div>
-                        <div class="info-value">${shipped ? "With the carrier" : "Confirmed on arrival"}</div>
+                        <div class="info-value">${shipped ? "With the carrier" : "Arrived"}</div>
                     </td>
                     <td valign="top" width="50%">
                         <div class="info-label">Date</div>
@@ -535,7 +539,7 @@ export const EmailService = {
       ? filledBody + `\n\nOpen your order: ${returnButtonUrl}`
       : shipped
         ? `Your ${merchantName} order ${orderName} is on its way. Track it live: ${proofUrl}`
-        : `Your ${merchantName} order ${orderName} has arrived. Delivery confirmed. Your receipt + returns: ${returnButtonUrl}`;
+        : `Your ${merchantName} order ${orderName} has arrived. Your receipt + returns: ${returnButtonUrl}`;
 
     // One retry on transient transport failures (undici "fetch failed",
     // ECONNRESET, SendGrid 5xx). The first live send for order #1012

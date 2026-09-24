@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs } from "react-router";
 import { NFSService } from "../services/nfs.server";
 import { INK_NAMESPACE } from "../utils/metafields.server";
+import { storedStatusFor } from "../lib/order-marks";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   // 1. Get raw body for HMAC verification
@@ -87,7 +88,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         namespace: INK_NAMESPACE,
         key: "verification_status",
         type: "single_line_text_field",
-        value: status, // "verified"
+        // The wire says "verified"; the order stores the neutral word
+        // (lib/order-marks.ts, ⚠️ PLACEHOLDER — Sam, 2026-09-24: "wrong").
+        value: storedStatusFor(status),
       },
       {
         ownerId: orderGid,

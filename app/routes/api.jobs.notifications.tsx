@@ -3,6 +3,7 @@ import firestore from "../firestore.server";
 import { NotificationService, type NotificationType } from "../services/notifications.server";
 import { findMerchantDoc } from "../services/merchant-doc.server";
 import { INK_NAMESPACE } from "../utils/metafields.server";
+import { isDistanceRecorded } from "../lib/order-marks";
 
 /**
  * Background Polling Job: Notifications Worker
@@ -126,8 +127,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const ledgerValue = order.ledgerMetafield?.value;
         const ledger = ledgerValue ? JSON.parse(ledgerValue) : {};
 
-        // If verified, we stop all tap reminders (but check return warnings if applicable)
-        const isVerified = status === "verified" || status === "valid";
+        // The door notification's word, old ("verified") or new — the order
+        // stores a neutral one since 2026-09-24 (lib/order-marks.ts).
+        const distanceRecorded = isDistanceRecorded(status) || status === "valid";
 
         if (!proofRef) continue;
 
@@ -216,8 +218,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         // sent. Removed with their toggles and their NotificationTypes;
         // `git log -S "hours4"` has the original if it is ever wanted back.
 
-        // If VERIFIED, check RETURN WARNING Reminders
-        if (isVerified && alanReturnExpiresAt) {
+        // After the door notification, check RETURN WARNING Reminders
+        if (distanceRecorded && alanReturnExpiresAt) {
           const days7Time = new Date(alanReturnExpiresAt.getTime() - 7 * 24 * 60 * 60 * 1000);
           const hours48PriorTime = new Date(alanReturnExpiresAt.getTime() - 48 * 60 * 60 * 1000);
 
