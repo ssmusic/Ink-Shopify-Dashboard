@@ -6,7 +6,7 @@ const SettingsAdvanced = () => {
   return (
     <PolarisAppLayout>
       <Page
-        title="Advanced Settings"
+        title="Advanced settings"
         backAction={{ content: "Settings", url: "/app/settings" }}
       >
         <AdvancedSettings />

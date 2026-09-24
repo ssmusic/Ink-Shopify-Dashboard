@@ -318,8 +318,10 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
               checked={settings.delivery.delivered}
               onToggle={() => toggle("delivery", "delivered", "Delivered notification")}
               title="Delivered"
-              description="Sent when the carrier confirms delivery. Carries the link to their page."
+              description="Sent when a carrier scan shows the package is delivered. Carries the link to their page."
             />
+            {/* Was "Sent when the carrier confirms delivery." — ink says a carrier
+                scan, never a confirmation; worded as the toggle above it. */}
             <Divider />
             {/* Was "Delivery confirmed" (Sam, 2026-09-24: "wrong" — ink never
                 says a delivery was confirmed). Named for the event it follows,

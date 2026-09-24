@@ -1,7 +1,8 @@
 // SHIPMENTS IS INK'S ORDERS LEDGER (Sam, 2026-09-24: "we are making the
 // ritualist as good as ink" · "it has to mirror the ritualist webapp").
 // Rendered with the loader data it gets, inside the Polaris provider. Pinned:
-//   · the title stays "Shipments" (until Sam names the screen for both apps);
+//   · the screen is "Orders", in its title and its nav, as ink's is (Sam,
+//     2026-09-24: one name for both apps); "Shipments" is said nowhere;
 //   · one table on thin lines under ink's column words — Order · Recipient ·
 //     Activity · Total · Date — each row the order and what was bought, who it
 //     went to, the opens and the rail's furthest step with its source, the
@@ -82,10 +83,13 @@ function render(loaderData: Record<string, unknown>) {
 }
 
 describe("Shipments, as ink's Orders ledger", () => {
-  it("keeps its title and draws ink's ledger: its words, its search, its columns", () => {
+  it("is named Orders, as ink's is, and draws ink's ledger: its words, its search, its columns", () => {
     const html = render({ orders: ORDERS });
     const t = text(html);
-    for (const part of ["Shipments", "Recent orders", "Orders from the past 60 days.", "Refresh", "Order", "Recipient", "Activity", "Total", "Date"]) expect(t).toContain(part);
+    // Changed on purpose (Sam, 2026-09-24: "Orders" for both apps): this pin said "Shipments".
+    expect(html).toMatch(/<h1[^>]*>(?:<[^>]+>)*Orders(?:<\/[^>]+>)*<\/h1>/);
+    expect(t).not.toContain("Shipments");
+    for (const part of ["Recent orders", "Orders from the past 60 days.", "Refresh", "Order", "Recipient", "Activity", "Total", "Date"]) expect(t).toContain(part);
     expect(html).toContain('placeholder="Order number, name or email"');
   });
 

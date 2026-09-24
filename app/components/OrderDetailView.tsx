@@ -92,7 +92,7 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
     <Page
       title={order.orderNumber}
       subtitle={order.date}
-      backAction={{ content: "Shipments", onAction: onBack }}
+      backAction={{ content: "Orders", onAction: onBack }}
       secondaryActions={[
         {
           content: "View in Shopify",

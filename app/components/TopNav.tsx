@@ -2,7 +2,9 @@ import { useLocation, Link } from "react-router";
 
 const navItems = [
   { label: "Dashboard", path: "/app/dashboard" },
-  { label: "Shipments", path: "/app/tagged-shipments" },
+  // One name for both apps (Sam, 2026-09-24): "Orders", as ink says it. The
+  // path stays, so no link or bookmark breaks.
+  { label: "Orders", path: "/app/tagged-shipments" },
   { label: "Settings", path: "/app/settings" },
   { label: "Billing", path: "/app/billing" },
   { label: "Help", path: "/app/help" },

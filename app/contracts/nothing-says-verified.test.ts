@@ -12,6 +12,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const read = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8");
+/** The source without its comments: a comment may quote an old word for Sam. */
+const code = (p: string) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
 
 describe("the Ritualist's Shopify order marks", () => {
   it("enrolment writes no verdict tag", () => {
@@ -56,5 +58,38 @@ describe("what the merchant and a visitor read", () => {
 
   it("the delivery-outcome badges never say 'Unconfirmed'", () => {
     expect(read("app/components/AdvancedAnalytics.tsx")).toMatch(/UNCONFIRMED: "Pending"/);
+  });
+});
+
+// THE WORDS SWEEP (2026-09-24): verified · confirmed · pass · near · outside,
+// through every Ritualist screen a merchant can open. The words that stay are
+// not about a delivery: a signature that verifies against ink's published key
+// (VerifiableRecordCard.tsx, as ink's own record words say it), Shopify's own
+// "Order confirmation" and "Shipping confirmation" emails, and the old tags and
+// shipping titles the readers still recognise on old orders.
+describe("what the Ritualist's own screens say", () => {
+  it("Advanced settings no longer draws distance thresholds that auto-verify a delivery, and keeps the file", () => {
+    const advanced = code("app/components/settings/AdvancedSettings.tsx");
+    expect(advanced).not.toMatch(/VerificationSettings|verif/i);
+    expect(read("app/components/settings/VerificationSettings.tsx")).toMatch(/const VerificationSettings/);
+    expect(code("app/components/settings/SettingsAdvanced.tsx")).toMatch(/title="Advanced settings"/);
+  });
+
+  it("the Delivered notification follows a carrier scan, never a carrier's confirmation", () => {
+    const settings = code("app/components/settings/CommunicationSettings.tsx");
+    expect(settings).not.toMatch(/carrier confirms delivery/);
+    expect(settings).toMatch(/description="Sent when a carrier scan shows the package is delivered\./);
+  });
+
+  it("Help says the record holds the carrier scan, not a delivery confirmation", () => {
+    const help = code("app/routes/app.help.tsx");
+    expect(help).not.toMatch(/delivery confirmation/i);
+    expect(help).toMatch(/"The carrier scan, timestamps, and/);
+  });
+
+  it("the order page draws no status green and claims no email it cannot see", () => {
+    const page = code("app/routes/app.orders.$orderId.tsx");
+    expect(page).not.toMatch(/"verified"\) return "success"/);
+    expect(page).not.toMatch(/Confirmation sent/);
   });
 });

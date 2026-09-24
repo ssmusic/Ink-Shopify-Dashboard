@@ -65,7 +65,10 @@ const faqSections = [
       {
         question: "What does the Ritualist record about a delivery?",
         answer:
-          "The carrier's delivery confirmation, timestamps, and — when your customer opens their page and allows location — where the order was opened. The record is cryptographically signed when it's created.",
+          // Was "The carrier's delivery confirmation, …" — the record holds the
+          // carrier scan (its element's own name); ink never says a delivery
+          // was confirmed (lib/order-marks.ts).
+          "The carrier scan, timestamps, and — when your customer opens their page and allows location — where the order was opened. The record is cryptographically signed when it's created.",
       },
       {
         question: "How does this help with disputes?",

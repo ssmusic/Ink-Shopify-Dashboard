@@ -52,8 +52,7 @@ import { ritualistApiKey, ritualistRowRecord } from "../services/ritualist-rows.
 //     honest rail, then Advanced — the record's files, its words, the last
 //     open and every open on their maps, every signed event.
 // What stays the Ritualist's: the record is included (its door never offers
-// it, never names a price — services/ritualist-rows.server.ts); the title is
-// "Shipments" until Sam names the screen for both apps; the nav is its own
+// it, never names a price — services/ritualist-rows.server.ts); the nav is its own
 // (components/PolarisAppLayout.tsx); and an opened row ends on "View full
 // record", the Ritualist's full-page view, which leads to the studio.
 const ORDERS_PER_PAGE = 20;
@@ -176,7 +175,8 @@ export default function ShipmentsIndex() {
   return (
     <PolarisAppLayout>
       <Page
-        title="Shipments"
+        // One name for both apps (Sam, 2026-09-24): "Orders", as ink says it.
+        title="Orders"
         secondaryActions={[
           {
             content: "Refresh",

@@ -857,8 +857,9 @@ export default function OrderDetails() {
     ];
 
     const verificationStatusRaw = order.metafields.verification_status?.toLowerCase() || "pending";
+    // No status is ever drawn green: the loader never passes "verified" through
+    // (it becomes "Active" above), and no word here may read as a pass.
     const statusBadgeTone = (s: string) => {
-        if (s === "verified") return "success" as const;
         if (s === "enrolled") return "warning" as const;
         if (s === "active") return "info" as const;
         return undefined;
@@ -918,7 +919,7 @@ export default function OrderDetails() {
                     <Badge tone={statusBadgeTone(verificationStatusRaw)}>{statusLabel}</Badge>
                 }
                 subtitle={formatDate(order.createdAt)}
-                backAction={{ content: "Shipments", onAction: () => navigate(-1) }}
+                backAction={{ content: "Orders", onAction: () => navigate(-1) }}
                 // The buyer's page, offered where a merchant is already looking
                 // at the order. It was resolved in the loader and then rendered
                 // nowhere — a typed field nobody shows is invisible to tsc, to
@@ -1161,15 +1162,9 @@ export default function OrderDetails() {
                                                                     </BlockStack>
                                                                 </InlineStack>
                                                             )}
-                                                            <InlineStack gap="300" blockAlign="start">
-                                                                <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--p-color-border)", marginTop: "4px", flexShrink: 0 }} />
-                                                                <BlockStack gap="100">
-                                                                    <Text as="p" variant="bodySm" fontWeight="medium">Confirmation sent</Text>
-                                                                    <Text as="p" tone="subdued" variant="bodySm">
-                                                                        Delivery record sent to {order.customerEmail}
-                                                                    </Text>
-                                                                </BlockStack>
-                                                            </InlineStack>
+                                                            {/* A fixed "Confirmation sent — Delivery record sent to
+                                                                {email}" step stood here on every opened order, whether
+                                                                or not any email went out: this page reads no send. */}
                                                         </BlockStack>
                                                     </BlockStack>
                                                 </div>
