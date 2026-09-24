@@ -157,7 +157,7 @@ export async function inkDoor(
     inHistory,
     offerLine:
       offer && !pending
-        ? `Get the record (${recordPriceWords(offer)} ${offer.currency})`
+        ? `Buy the record (${recordPriceWords(offer)} ${offer.currency})`
         : null,
   };
 }
