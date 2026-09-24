@@ -14,13 +14,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("../shopify.server", () => ({
   login: vi.fn(async (request: Request) => {
     const shop = new URL(request.url).searchParams.get("shop");
+    // The library's own answer to a `?shop=` it cannot sanitize: an error, no redirect.
+    if (shop && !/^[a-z0-9][a-z0-9-]*(\.myshopify\.com)?$/.test(shop)) return { shop: "INVALID_SHOP" };
     if (shop) throw new Response(null, { status: 302, headers: { Location: `https://admin.shopify.com/store/${shop.replace(".myshopify.com", "")}/oauth/install` } });
     return { shop: "MISSING_SHOP" };
   }),
 }));
 
 const { loader: rootLoader } = await import("../routes/_index/route");
-const { loader: loginLoader } = await import("../routes/auth.login/route");
+const { loader: loginLoader, action: loginAction } = await import("../routes/auth.login/route");
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -68,6 +70,27 @@ describe("ink's App URL with no store (App Store review, 2026-09-23)", () => {
   it("sends the Ritualist's visitor with no store to its own landing (2.3.1, since 2026-09-24)", async () => {
     vi.stubEnv("APP_FLAVOR", "");
     expect(await outcome(() => loginLoader(args("https://app.in.ink/auth/login")))).toEqual({ status: 302, location: "/" });
+  });
+
+  it("never shows the form under ink for a store the library cannot name (2.3.1, the self-review of 2026-09-24)", async () => {
+    vi.stubEnv("APP_FLAVOR", "ink");
+    const home = { status: 302, location: "https://www.in.ink/" };
+    expect(await outcome(() => loginLoader(args("https://install.in.ink/auth/login?shop=not*a*shop")))).toEqual(home);
+    const posted = new Request("https://install.in.ink/auth/login?shop=not*a*shop", { method: "POST", body: new URLSearchParams({ shop: "not*a*shop" }) });
+    expect(await outcome(() => loginAction({ request: posted, params: {}, context: {} } as unknown as Parameters<typeof loginAction>[0]))).toEqual(home);
+  });
+
+  it("sends the Ritualist's malformed store to its own landing too — the form is gone from both apps", async () => {
+    vi.stubEnv("APP_FLAVOR", "");
+    const landing = { status: 302, location: "/" };
+    expect(await outcome(() => loginLoader(args("https://app.in.ink/auth/login?shop=not*a*shop")))).toEqual(landing);
+    const posted = new Request("https://app.in.ink/auth/login?shop=not*a*shop", { method: "POST", body: new URLSearchParams({ shop: "not*a*shop" }) });
+    expect(await outcome(() => loginAction({ request: posted, params: {}, context: {} } as unknown as Parameters<typeof loginAction>[0]))).toEqual(landing);
+  });
+
+  it("renders no page at all: the route is a door, with no shop-domain form left to show", async () => {
+    const route = await import("../routes/auth.login/route");
+    expect("default" in route).toBe(false);
   });
 });
 
