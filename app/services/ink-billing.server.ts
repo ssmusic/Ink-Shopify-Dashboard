@@ -16,6 +16,7 @@ import type { Jwks } from "./record-check.server";
 import { handoverLocked, type HandoverPrice } from "../lib/record-handover";
 import type { RecordRead } from "../lib/record-words";
 import { buildInkRecordPdf } from "./ink-record-pdf.server";
+import { pushOrderPaymentFacts, readOrderPaymentFacts } from "./order-payment-facts.server";
 import { buildInkRecordCsv } from "./ink-record-csv.server";
 import { inspectionFromAudit } from "../lib/ink-record-inspection";
 import { recordDownloadsAvailable } from "../lib/record-words";
@@ -195,8 +196,15 @@ export async function inkRecordAction(
     intent === "pdf" || intent === "csv" || intent === "inspect" ? merchantRead(apiKey, `proofs/${proofId}/opens`) : null,
     // The carrier's scans for the PDF (the merchant's proof door serves the
     // journey; the audit does not). A failed read leaves the scans out.
-    intent === "pdf" ? merchantRead(apiKey, `proofs/${proofId}`, fetch, RECORD_READ_TIMEOUT_MS).catch(() => null) : null,
+    intent === "pdf" || intent === "inspect" ? merchantRead(apiKey, `proofs/${proofId}`, fetch, RECORD_READ_TIMEOUT_MS).catch(() => null) : null,
   ]);
+  // Shopify's payment facts beside the record (order-payment-facts.server.ts):
+  // read with the order scope the app holds and pushed before the record is
+  // read again, so the texts and the next PDF carry them. Fail-open.
+  if ((intent === "pdf" || intent === "inspect") && proof?.proof_id === proofId && proof.order_id) {
+    const facts = await readOrderPaymentFacts(admin as never, proof.order_id).catch(() => null);
+    if (facts && (await pushOrderPaymentFacts(apiKey, proofId, facts)) && audit?.summary) audit.summary.payment_facts = facts;
+  }
   if (files) {
     if (
       bundle?.manifest?.proof_id !== proofId ||

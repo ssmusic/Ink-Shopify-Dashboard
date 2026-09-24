@@ -20,6 +20,7 @@
 import { buildTextPdf, COLUMN_W, wrapToWidth, type PdfFont, type PdfLine } from "./pdf-lite.server";
 import { elementLines, LEVEL_WORDS, type RecordRead } from "../lib/record-words";
 import { checkoutLines } from "../lib/checkout-words";
+import { paymentFactsWords } from "../lib/payment-facts-words";
 import type { InkInspection } from "../lib/ink-record-inspection";
 
 type Event = {
@@ -41,6 +42,7 @@ type MerchantAudit = {
     tracking_number?: unknown;
     ship_to?: Place;
     carrier_delivered_place?: Place | null;
+    payment_facts?: Record<string, unknown> | null;
   };
   chain_head?: { seq?: unknown; event_id?: unknown } | null;
   verdict?: { elements?: Array<{ element?: unknown; evidence_event_ids?: unknown }> };
@@ -173,6 +175,8 @@ export function buildInkRecordPdf(
       prose(`Opened without a location: ${plain.map((o) => utc(o.at).replace(" UTC", "")).join(", ")}.`, { size: 7.5, gap: 1 });
   }
   if (record.checkout) for (const l of checkoutLines(record.checkout, { when: utc })) prose(`${l.label}: ${l.words}.`, { size: 8 });
+  const payment = paymentFactsWords(audit.summary?.payment_facts);
+  if (payment) prose(payment, { size: 8, gap: 2 });
 
   // ── The signed events ──
   heading("The signed events");
