@@ -30,7 +30,7 @@ const faqSections = [
       {
         question: "What do I have to set up?",
         answer:
-          "Almost nothing. Orders enroll automatically as they're placed. Your page is built from your existing brand and can be tuned any time from the Ritualist studio. Email and text notifications are controlled in Settings.",
+          "Almost nothing. Orders enroll automatically as they're placed. Your page is built from your existing brand and can be tuned any time from The Ritualist Studio. Email and text notifications are controlled in Settings.",
       },
       {
         question: "Do I need to change my shipping or carrier?",
