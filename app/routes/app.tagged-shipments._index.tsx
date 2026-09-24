@@ -1,5 +1,5 @@
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   useLoaderData,
   useNavigation,
@@ -16,23 +16,17 @@ import {
   Card,
   Divider,
   InlineStack,
-  Layout,
   Page,
   Pagination,
-  SkeletonBodyText,
-  SkeletonPage,
   Text,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import PolarisAppLayout from "../components/PolarisAppLayout";
 import RitualistPillNav from "../components/RitualistPillNav";
 import InkRecentOrders, {
-  WithRecord,
-  type InkOrderRow,
   type InkStreamedOrderRow,
 } from "../components/InkRecentOrders";
 import InkOrderSearch from "../components/InkOrderSearch";
-import OrderDetailView from "../components/OrderDetailView";
 import OrderExpandedRow from "../components/OrderExpandedRow";
 import { readRecentOrderPage } from "../services/ink-links.server";
 import { readJwks } from "../services/ink-record.server";
@@ -59,12 +53,12 @@ import { ritualistApiKey, ritualistRowRecord } from "../services/ritualist-rows.
 //   · a one-line state for no orders, no match and a failed read;
 //   · on a phone, the stacked row, never the desktop squeezed;
 //   · the opened row is ink's panel: the glance, the order's activity on the
-//     honest rail, then Advanced — the record's files, its words, the last
+//     honest rail, then Advanced, closed until pressed — the record's files, its words, the last
 //     open and every open on their maps, every signed event.
 // What stays the Ritualist's: the record is included (its door never offers
 // it, never names a price — services/ritualist-rows.server.ts); the nav is its own
-// (components/PolarisAppLayout.tsx); and an opened row ends on "View full
-// record", the Ritualist's full-page view, which leads to the studio.
+// (components/PolarisAppLayout.tsx). The "View full record" page is gone
+// (Sam, 2026-09-24).
 const ORDERS_PER_PAGE = 20;
 
 // ─────────────────────────────────────────────
@@ -139,7 +133,6 @@ export default function ShipmentsIndex() {
   const revalidator = useRevalidator();
   const navigation = useNavigation();
   const [params, setParams] = useSearchParams();
-  const [fullRecord, setFullRecord] = useState<InkOrderRow | null>(null);
   const idle = navigation.state === "idle";
   const dates = data.dates ?? ALL_ORDER_DATES;
   const dated = dates.range !== ALL_ORDER_DATES.range;
@@ -167,33 +160,6 @@ export default function ShipmentsIndex() {
     }
     sessionStorage.removeItem("ink_shipments_retried");
   }, [data.orders, data.ordersError, data.search, dated, revalidator]);
-
-  // "View full record" — the Ritualist's full-page view of the order, which
-  // leads to the studio (components/OrderDetailView.tsx). It waits on the
-  // row's record side as the row does, Polaris's skeleton page until it lands.
-  if (fullRecord?.detail) {
-    const detail = fullRecord.detail;
-    return (
-      <PolarisAppLayout>
-        <WithRecord
-          row={fullRecord}
-          fallback={
-            <SkeletonPage title={detail.orderNumber} backAction>
-              <Layout>
-                <Layout.Section>
-                  <Card>
-                    <SkeletonBodyText lines={6} />
-                  </Card>
-                </Layout.Section>
-              </Layout>
-            </SkeletonPage>
-          }
-        >
-          {(row) => <OrderDetailView order={{ ...detail, row }} onBack={() => setFullRecord(null)} />}
-        </WithRecord>
-      </PolarisAppLayout>
-    );
-  }
 
   return (
     <PolarisAppLayout>
@@ -247,7 +213,7 @@ export default function ShipmentsIndex() {
               sort={data.sort || "newest"}
               onSort={(sort) => setParams(orderSearchParams(params, data.search || "", sort))}
               pending={!idle}
-              renderPanel={(row) => <OrderExpandedRow row={row} onViewFull={() => setFullRecord(row)} />}
+              renderPanel={(row) => <OrderExpandedRow row={row} />}
             />
           )}
           {data.pageInfo && (data.pageInfo.hasPreviousPage || data.pageInfo.hasNextPage) && (

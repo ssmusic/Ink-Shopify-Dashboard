@@ -115,7 +115,7 @@ function open(row: ReturnType<typeof rowWith>) {
       id: "screen",
       path: "/",
       Component: () => (
-        <InkRecentOrders orders={[row] as never} defaultExpandedId={row.id} renderPanel={(r) => <OrderExpandedRow row={r} onViewFull={() => {}} />} />
+        <InkRecentOrders orders={[row] as never} defaultExpandedId={row.id} renderPanel={(r) => <OrderExpandedRow row={r} advancedOpen />} />
       ),
     },
   ]);
@@ -192,8 +192,9 @@ describe("the row, opened", () => {
     t = text(html);
   });
 
-  it("keeps the Ritualist's full-record button and draws ink's panel: the glance, the order's activity, Advanced", () => {
-    for (const part of ["View full record", "Products", "Bar Tape", "Recipient", "Gift Recipient", "Order email: order@example.com", "Order activity", "Advanced"]) expect(t).toContain(part);
+  it("draws ink's panel, with no full-record button (Sam, 2026-09-24): the glance, the order's activity, Advanced", () => {
+    expect(t).not.toContain("View full record");
+    for (const part of ["Products", "Bar Tape", "Recipient", "Gift Recipient", "Order email: order@example.com", "Order activity", "Advanced"]) expect(t).toContain(part);
   });
 
   it("the rail says where each time came from, and ticks only ink's own record", () => {
@@ -228,31 +229,6 @@ describe("the row, opened", () => {
   });
 });
 
-describe("the row's full-record view says the same activity, and no invented shipping", () => {
-  let t = "";
-  beforeAll(async () => {
-    const { default: OrderDetailView } = await import("../components/OrderDetailView");
-    const order = { ...DETAIL, customerName: "Made Up", customerEmail: "buyer@example.com", row: rowWith(RECORD, PROOF_BODY, OPENS_BODY) };
-    const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <OrderDetailView order={order as never} onBack={() => {}} /> }]);
-    t = text(renderToString(<AppProvider i18n={translations}><Stub initialEntries={["/"]} /></AppProvider>));
-  });
-
-  it("the order's activity is ink's rail, each step with its source — never a bare delivered time", () => {
-    for (const part of ["Order activity", "Recorded by ink", "From Shopify's fulfillment"]) expect(t).toContain(part);
-    expect(t).not.toContain("No delivery recorded yet.");
-  });
-
-  it("no 'Shipping — Free' on an order that paid for shipping or not", () => {
-    expect(t).not.toMatch(/Shipping\s*Free/);
-    expect(t).toContain("Subtotal");
-  });
-
-  it("keeps the way to Shopify and the handoff to the studio", () => {
-    expect(t).toContain("View in Shopify");
-    expect(t).toContain("lives in The Ritualist Studio. Open it from the Dashboard.");
-  });
-});
-
 describe("a record without a delivery point says which fact it is", () => {
   const noPoint = { ...PROOF_BODY, shipping_geocode_lat: null, shipping_geocode_lng: null };
   const opensNoPoint = { ...OPENS_BODY, address: null, last_open: { ...OPENS_BODY.last_open, distance_m: null } };
@@ -266,5 +242,22 @@ describe("a record without a delivery point says which fact it is", () => {
 
   it("an address on file with no map point yet", () => {
     expect(text(open(rowWith(saying("ungeocoded"), noPoint, opensNoPoint)))).toContain("The address is on file but has no map point yet.");
+  });
+});
+
+// Sam, 2026-09-24, bringing ink's polish to The Ritualist: an opened order
+// shows Advanced closed, as ink's Orders does; the press opens it.
+describe("an opened order starts with Advanced closed", () => {
+  it("draws the glance and the activity, and keeps Advanced's contents for the press", async () => {
+    const { default: InkRecentOrders } = await import("../components/InkRecentOrders");
+    const { default: OrderExpandedRow } = await import("../components/OrderExpandedRow");
+    const row = rowWith(RECORD, PROOF_BODY, OPENS_BODY) as never as { id: string };
+    const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => (
+      <InkRecentOrders orders={[row] as never} defaultExpandedId={row.id} renderPanel={(r) => <OrderExpandedRow row={r} />} />
+    ) }]);
+    const t = text(renderToString(<AppProvider i18n={translations}><Stub initialEntries={["/"]} /></AppProvider>));
+    for (const part of ["Products", "Recipient", "Order activity", "Advanced"]) expect(t).toContain(part);
+    for (const inside of ["The last open", "Every open", "Export the record"]) expect(t).not.toContain(inside);
+    expect(t).not.toContain("View full record");
   });
 });

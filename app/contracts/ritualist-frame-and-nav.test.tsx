@@ -104,7 +104,6 @@ describe("every Ritualist page wears ink's width, with the pills under its title
     "app/components/settings/Settings.tsx",
     "app/routes/app.billing.tsx",
     "app/routes/app.help.tsx",
-    "app/components/OrderDetailView.tsx",
   ]) {
     it(`${page} is fullWidth and draws the pills`, () => {
       const t = src(page);
