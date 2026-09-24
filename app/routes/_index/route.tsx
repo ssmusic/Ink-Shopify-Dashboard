@@ -24,7 +24,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return { showForm: Boolean(login) };
 };
 
+// The Ritualist's workspace is signed into at in.ink. Outside Shopify's admin
+// there is nothing at /app to open: until 2026-09-24 both buttons here led to
+// it and met the library's App Bridge bounce, a page reading "200".
+const RITUALIST_SIGN_IN_URL = "https://www.in.ink/login";
+
 export default function Landing() {
-  return <LandingPageContent ctaLink="/app" signInLink="/app" showSignIn={true} />;
+  return (
+    <LandingPageContent
+      ctaLink={RITUALIST_SIGN_IN_URL}
+      signInLink={RITUALIST_SIGN_IN_URL}
+      showSignIn={true}
+    />
+  );
 }
 
