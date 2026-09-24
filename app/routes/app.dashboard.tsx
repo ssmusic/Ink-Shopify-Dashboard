@@ -1,32 +1,112 @@
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useEffect, useRef, useState } from "react";
-import { useFetcher, type ActionFunctionArgs, useRouteError, type HeadersFunction } from "react-router";
+import {
+  useFetcher,
+  useLoaderData,
+  useRevalidator,
+  useRouteError,
+  type ActionFunctionArgs,
+  type HeadersFunction,
+  type LoaderFunctionArgs,
+  type ShouldRevalidateFunction,
+} from "react-router";
 import {
   Page,
   Card,
   BlockStack,
+  Box,
   Text,
   Button,
+  InlineGrid,
   InlineStack,
   Banner,
   Collapsible,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { mintMagicToken } from "../services/ink-api.server";
-import PolarisAppLayout from "~/components/PolarisAppLayout";
-import RecentActivity from "~/components/RecentActivity";
-import EngagementFunnel from "~/components/EngagementFunnel";
+import { readInkKpis } from "../services/ink-kpis.server";
+import { readDeliveryDashboard } from "../services/ink-delivery.server";
+import { readRecentOrderPage } from "../services/ink-links.server";
+import {
+  includedRecordDoor,
+  readShipmentPanels,
+  ritualistApiKey,
+} from "../services/ritualist-rows.server";
+import PolarisAppLayout from "../components/PolarisAppLayout";
+import DeliveryDashboard from "../components/DeliveryDashboard";
+import InkRecentOrders, { type InkRecentOrderRow } from "../components/InkRecentOrders";
+import OrderExpandedRow from "../components/OrderExpandedRow";
 // NFC hardware lane — tabled behind FEATURE_NFC (see app/flags.ts), never deleted.
-import NFCTagInventory from "~/components/NFCTagInventory";
-import RevenueThisPeriod from "~/components/RevenueThisPeriod";
-import PlanCard from "~/components/billing/PlanCard";
-import CommsCard from "~/components/CommsCard";
-import OnboardingChecklist from "~/components/OnboardingChecklist";
-import AdvancedAnalytics from "~/components/AdvancedAnalytics";
-import { FEATURE_NFC } from "~/flags";
+import NFCTagInventory from "../components/NFCTagInventory";
+import RevenueThisPeriod from "../components/RevenueThisPeriod";
+import PlanCard from "../components/billing/PlanCard";
+import CommsCard from "../components/CommsCard";
+import OnboardingChecklist from "../components/OnboardingChecklist";
+import AdvancedAnalytics from "../components/AdvancedAnalytics";
+import { FEATURE_NFC } from "../flags";
 // Removed from render (kept in tree, unreferenced): TimeToEngagement +
 // CommunicationsUsage rendered hardcoded fictional numbers. Nothing on this
 // dashboard may show a number that isn't the merchant's own.
+//
+// THE DASHBOARD IS INK'S (Sam, 2026-09-24: "we are making the ritualist as good
+// as ink" · "it has to mirror the ritualist webapp"). It leads with ink's
+// Dashboard (components/DeliveryDashboard.tsx) — the merchant's own numbers
+// from merchant-insights and merchant-delivery, read with the merchant's own
+// key — then the last six orders on ink's ledger, as the web app's Dashboard
+// ends on "The last six orders". Also removed from render, kept in tree:
+//   · EngagementFunnel — four colours, and a failed read drawn as zeros; its
+//     Enrolled → Delivered → Opened steps are ink's "Delivery and opens" above.
+//     Its "Clicked" step (the page's click-through) is not on ink's Dashboard;
+//     the studio keeps it — Orders › Insights draws Enrolled → Delivered →
+//     Opened → Clicked (the-ritualist src/components/insights/
+//     OrdersInsightsPanel.tsx) — one press away through the studio door.
+//   · RecentActivity — Shopify's tags and a status badge; the rows are now the
+//     ledger's own (routes/app.tagged-shipments._index.tsx), opening in place.
+// What stays the Ritualist's: set-up, the door to the studio, the order value
+// of the last 30 days, Communications, the plan, and Advanced.
+const RECENT_ORDERS = 6;
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { admin, session } = await authenticate.admin(request);
+  // Every read below goes with the merchant's own key; the admin secret never
+  // scopes a merchant read. A read that fails is said as unavailable, never as
+  // zero — and never re-thrown (app.tagged-shipments._index.tsx tells why).
+  const apiKey = await ritualistApiKey(session.shop);
+  const recentOrders = async (): Promise<InkRecentOrderRow[]> => {
+    const page = await readRecentOrderPage(admin, {
+      first: RECENT_ORDERS,
+      search: "",
+      sort: "newest",
+    });
+    const { records, timelines } = await readShipmentPanels(
+      apiKey,
+      page.rows.map((o) => o.proofId),
+    );
+    return page.rows.map((o) => ({
+      id: o.id,
+      name: o.name,
+      proofId: o.proofId,
+      detail: o.detail,
+      record: o.proofId ? records[o.proofId] ?? null : null,
+      door: includedRecordDoor(apiKey, o.proofId),
+      timeline: o.proofId ? timelines[o.proofId] ?? null : null,
+    }));
+  };
+  const [kpis, delivery, recent] = await Promise.all([
+    readInkKpis(apiKey).catch(() => null),
+    readDeliveryDashboard(apiKey).catch(() => null),
+    recentOrders().catch(() => null),
+  ]);
+  return { kpis, delivery, recentOrders: recent };
+};
+
+// A press of the studio door (this route's action) or of a record's file
+// (/app/record) changes nothing this page reads, so neither re-reads it.
+// Refresh still does.
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  formMethod,
+  defaultShouldRevalidate,
+}) => (formMethod ? false : defaultShouldRevalidate);
 
 // Mint a single-use magic-login token for this shop and hand back a
 // www.in.ink/welcome URL the merchant can open already signed in.
@@ -51,10 +131,11 @@ export const action = async ({
 };
 
 const Dashboard = () => {
-  // The full operational-analytics BI lives in the standalone ink. dashboard;
-  // here it's tucked behind an Advanced disclosure (collapsed by default) so the
-  // embed leads with the lightweight engagement cards + handoff, not a second
-  // comprehensive dashboard to keep in sync.
+  const data = useLoaderData<typeof loader>();
+  const revalidator = useRevalidator();
+  // The operational analytics ink's Dashboard does not show — the signed
+  // records' integrity and the delivery outcomes — stay behind an Advanced
+  // disclosure, collapsed by default.
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const fetcher = useFetcher<typeof action>();
@@ -87,7 +168,16 @@ const Dashboard = () => {
 
   return (
     <PolarisAppLayout>
-      <Page title="Dashboard">
+      <Page
+        title="Dashboard"
+        secondaryActions={[
+          {
+            content: "Refresh",
+            loading: revalidator.state !== "idle",
+            onAction: () => revalidator.revalidate(),
+          },
+        ]}
+      >
         <BlockStack gap="400">
           {fetcher.data?.error && (
             <Banner tone="critical">{fetcher.data.error}</Banner>
@@ -115,30 +205,53 @@ const Dashboard = () => {
             </InlineStack>
           </Card>
 
-          {/* Row 1: Open funnel + Enrolled Order Value — real numbers only.
-              The funnel ends with the pull to the in.ink studio (full insights). */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <EngagementFunnel onOpenStudio={openParallel} studioOpening={opening} />
-            <RevenueThisPeriod />
-          </div>
+          {/* ink's Dashboard, whole: the merchant's own numbers. */}
+          <DeliveryDashboard kpis={data.kpis} delivery={data.delivery} />
+
+          {/* The last six orders — the ledger, unchanged; a row opens in place. */}
+          <Card padding="0">
+            <Box padding="400">
+              <InlineStack align="space-between" blockAlign="center" gap="400">
+                <Text as="h2" variant="headingMd">
+                  Recent activity
+                </Text>
+                <Button variant="plain" url="/app/tagged-shipments">
+                  View all
+                </Button>
+              </InlineStack>
+            </Box>
+            {data.recentOrders ? (
+              <InkRecentOrders
+                orders={data.recentOrders}
+                renderPanel={(row) => <OrderExpandedRow row={row} />}
+              />
+            ) : (
+              <Box paddingInline="400" paddingBlockEnd="400">
+                <Banner tone="info">
+                  Orders could not be loaded. Refresh to try again.
+                </Banner>
+              </Box>
+            )}
+          </Card>
 
           {/* NFC hardware lane — tabled behind the flag, not deleted */}
           {FEATURE_NFC && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
               <NFCTagInventory />
-            </div>
+            </InlineGrid>
           )}
 
-          {/* Row 2: Recent Activity + comms state + the honest plan card */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <RecentActivity />
-            <div className="flex flex-col gap-4">
+          {/* The order value of the last 30 days, the comms state, the honest plan card.
+              Each card its own height: stretched, the value card is half empty. */}
+          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400" alignItems="start">
+            <RevenueThisPeriod />
+            <BlockStack gap="400">
               <CommsCard />
               <PlanCard />
-            </div>
-          </div>
+            </BlockStack>
+          </InlineGrid>
 
-          {/* Advanced — the full operational-analytics BI, collapsed by default.
+          {/* Advanced — what ink's Dashboard does not show, collapsed by default.
               Relocated here (not deleted) so the embed stays lean; the rich
               dashboard is the standalone ink. app. */}
           <Card>
@@ -188,9 +301,14 @@ export default Dashboard;
 // "going to the billing section and navigating back ... shows an 200 error
 // page". Billing had this block; /app/settings, its own backAction target, did
 // not. `headers` matters too: boundary.headers forwards the reauthorize
-// headers App Bridge is waiting for.
+// headers App Bridge is waiting for. The page carries the merchant's own
+// numbers, so no cache keeps it (as ink's Dashboard, app.ink._index.tsx).
 export function ErrorBoundary() {
   return boundary.error(useRouteError());
 }
 
-export const headers: HeadersFunction = (args) => boundary.headers(args);
+export const headers: HeadersFunction = (args) => {
+  const headers = new Headers(boundary.headers(args));
+  headers.set("Cache-Control", "private, no-store");
+  return headers;
+};

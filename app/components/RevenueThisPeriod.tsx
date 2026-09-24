@@ -1,9 +1,34 @@
-import { TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import { useFetcher } from "react-router";
 import { useEffect } from "react";
+import {
+  BlockStack,
+  Card,
+  Divider,
+  InlineStack,
+  Spinner,
+  Text,
+} from "@shopify/polaris";
 
+type Period = { totalValue: number; count: number; aov: number };
+type Metrics = {
+  currentPeriod?: Period;
+  previousPeriod?: Period;
+  trends?: { valueProtected?: number };
+  error?: string;
+};
+
+const dollars = (value: number, digits: number) =>
+  `$${value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+
+// The order value of the last 30 days — the Ritualist's own number (ink's
+// Dashboard has none), summed from Shopify's orders by /app/api/dashboard/metrics.
+// Drawn as ink's Dashboard draws a card: Polaris, sentence case, no colour for
+// up or down. A failed read says so and never becomes $0 (ink's law,
+// services/ink-kpis.server.ts: "Failed reads remain unavailable, and never
+// turn into zero counts"); the change shows only against a previous 30 days
+// that had a value — "+100%" over nothing compares nothing.
 const RevenueThisPeriod = () => {
-  const fetcher = useFetcher<any>();
+  const fetcher = useFetcher<Metrics>();
 
   useEffect(() => {
     if (fetcher.state === "idle" && !fetcher.data) {
@@ -11,65 +36,73 @@ const RevenueThisPeriod = () => {
     }
   }, [fetcher]);
 
-  const isLoading = fetcher.state === "loading" || !fetcher.data;
-  const metrics = fetcher.data?.currentPeriod || { totalValue: 0, count: 0, aov: 0 };
-  const prevMetrics = fetcher.data?.previousPeriod || { totalValue: 0, count: 0, aov: 0 };
-  const trends = fetcher.data?.trends || { valueProtected: 0, enrolledCount: 0, aov: 0 };
-
-  const isUp = trends.valueProtected >= 0;
-  const changePct = Math.abs(trends.valueProtected).toFixed(1);
+  const data = fetcher.data;
+  const metrics = data?.currentPeriod;
+  const previous = data?.previousPeriod;
+  const change = data?.trends?.valueProtected;
+  const compared =
+    previous && previous.totalValue > 0 && typeof change === "number" && Number.isFinite(change);
 
   return (
-    <div
-      className="bg-card border border-border rounded-md p-4 sm:p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] relative"
-      role="region"
-      aria-label="Enrolled order value"
-    >
-      {isLoading && (
-        <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] flex items-center justify-center z-10 rounded-md transition-all duration-300">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      )}
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-foreground">Enrolled Order Value</h3>
-        </div>
-        <span className="text-xs text-muted-foreground">Last 30 Days</span>
-      </div>
+    <Card>
+      <BlockStack gap="400">
+        <InlineStack align="space-between" blockAlign="center" gap="200">
+          <Text as="h2" variant="headingMd">
+            Enrolled order value
+          </Text>
+          <Text as="span" tone="subdued">
+            Last 30 days
+          </Text>
+        </InlineStack>
 
-      {/* Total */}
-      <div className="mb-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-3xl font-light text-foreground tabular-nums">
-            ${metrics.totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-          </span>
-          <span className={`text-xs font-medium flex items-center gap-0.5 ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-            {isUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {isUp ? "+" : "-"}{changePct}% vs last period
-          </span>
-        </div>
-      </div>
-
-      <p className="text-xs text-muted-foreground mb-4">
-        Retail value of all enrolled shipments
-      </p>
-
-
-      {/* Breakdown */}
-      <div className="space-y-2.5 pt-4 border-t border-border">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Enrolled Shipments</span>
-          <span className="font-medium text-foreground tabular-nums">{metrics.count.toLocaleString()}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Avg. Order Value</span>
-          <span className="font-medium text-foreground tabular-nums">
-            ${metrics.aov.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
-      </div>
-    </div>
+        {!data ? (
+          <InlineStack align="center">
+            <Spinner size="small" accessibilityLabel="Loading" />
+          </InlineStack>
+        ) : !metrics ? (
+          <Text as="p" tone="subdued">
+            Order totals are unavailable.
+          </Text>
+        ) : (
+          <>
+            <BlockStack gap="100">
+              <InlineStack gap="200" blockAlign="baseline">
+                <Text as="p" variant="headingXl">
+                  {dollars(metrics.totalValue, 0)}
+                </Text>
+                {compared ? (
+                  <Text as="span" tone="subdued">
+                    {`${change >= 0 ? "+" : "-"}${Math.abs(change).toFixed(1)}% vs last period`}
+                  </Text>
+                ) : null}
+              </InlineStack>
+              <Text as="p" tone="subdued">
+                Retail value of all enrolled shipments
+              </Text>
+            </BlockStack>
+            <Divider />
+            <BlockStack gap="200">
+              <InlineStack align="space-between" gap="200">
+                <Text as="span" tone="subdued">
+                  Enrolled shipments
+                </Text>
+                <Text as="span" fontWeight="medium">
+                  {metrics.count.toLocaleString()}
+                </Text>
+              </InlineStack>
+              <InlineStack align="space-between" gap="200">
+                <Text as="span" tone="subdued">
+                  Avg. order value
+                </Text>
+                <Text as="span" fontWeight="medium">
+                  {dollars(metrics.aov, 2)}
+                </Text>
+              </InlineStack>
+            </BlockStack>
+          </>
+        )}
+      </BlockStack>
+    </Card>
   );
 };
 
