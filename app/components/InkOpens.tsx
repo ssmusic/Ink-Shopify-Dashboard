@@ -372,9 +372,13 @@ export function toggleRow(open: ReadonlySet<number>, n: number): Set<number> {
 // The table in Polaris's own tokens. A press anywhere on a row opens it; its
 // chevron is the control a keyboard reaches. The opened row carries the one
 // blue's tint. (No quotes inside the <style>: React's server render escapes
-// them and the rule dies.)
+// them and the rule dies.) The scroll box is positioned so it clips what is
+// positioned inside it: the Map column's visually hidden heading is
+// absolutely placed at the table's far edge, and with no positioned box
+// between it and the page it pushed the whole page 370 px wide on a phone
+// (measured at 391 px, 2026-09-24).
 const TABLE_CSS =
-  ".ink-every-open-scroll{overflow-x:auto;border:1px solid var(--p-color-border);border-radius:var(--p-border-radius-200);container-type:inline-size}" +
+  ".ink-every-open-scroll{position:relative;overflow-x:auto;border:1px solid var(--p-color-border);border-radius:var(--p-border-radius-200);container-type:inline-size}" +
   ".ink-every-open{width:100%;min-width:760px;border-collapse:collapse}" +
   ".ink-every-open th,.ink-every-open td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--p-color-border-secondary)}" +
   ".ink-every-open thead th{background:var(--p-color-bg-surface-secondary);white-space:nowrap}" +

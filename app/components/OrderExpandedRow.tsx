@@ -1,262 +1,56 @@
-import type { ReactNode } from "react";
 import { BlockStack, Box, Button, InlineStack, Text } from "@shopify/polaris";
-import { ExternalIcon } from "@shopify/polaris-icons";
+import { ChevronUpIcon } from "@shopify/polaris-icons";
+import { OrderPanel, type InkRecentOrderRow } from "./InkRecentOrders";
 
-interface OrderItem {
-  title: string;
-  quantity: number;
-  price: string;
-  sku: string;
-}
-
-interface Order {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  customerEmail: string;
-  customerAddress?: {
-    address1: string;
-    city: string;
-    provinceCode: string;
-    zip: string;
-  };
-  date: string;
-  total: string;
-  subtotal: string;
-  currency: string;
-  status: string;
-  items: OrderItem[];
-  metafields: {
-    nfc_uid?: string;
-    proof_reference?: string;
-    warehouse_gps?: string;
-    verification_status?: string;
-    delivery_verified_at?: string;
-    delivery_gps?: string;
-    device_info?: string;
-    gps_verdict?: string;
-    verify_url?: string;
-    [key: string]: any;
-  };
-}
+// THE RITUALIST'S SHIPMENTS ROW, OPENED — ink's own panel
+// (components/InkRecentOrders.tsx OrderPanel), the same one ink's Orders
+// opens onto: what was bought and who it went to; the order's activity on the
+// honest rail, each step with where its time came from; then Advanced — the
+// record's files, its words, the browser's check, THE LAST OPEN and EVERY
+// OPEN on their grey maps, every signed event, the delivery window.
+//
+// What stays the Ritualist's: the record is included, so the row's door never
+// offers it and never names a price (services/ritualist-rows.server.ts builds
+// it so); and "View full record" still opens the Ritualist's full-page view,
+// which leads to the studio — the brand book, the pages and the campaigns
+// live there, never in the embed.
 
 interface OrderExpandedRowProps {
-  order: Order;
+  /** The order as ink's panel reads it: the glance, the record, the door, the timeline. */
+  row: InkRecentOrderRow;
   onCollapse: () => void;
-  /** The Ritualist's full-page detail. */
+  /** The Ritualist's full-page view of the order. */
   onViewFull?: () => void;
-  /** ink's: the header button opens this address (the public record) in a new tab instead. */
-  viewFullUrl?: string | null;
-  /** Replaces the Ritualist-studio sentence under DELIVERY; null drops it. */
-  handoffNote?: ReactNode;
-  /** Drawn full width at the bottom of the panel (ink: the record's door). */
-  footer?: ReactNode;
-  /** Replaces the right-hand DELIVERY column (ink: the order's record, in words). */
-  aside?: ReactNode;
-  /** ink: the whole panel shows at once — the record and the door below it are
-   *  never behind the Ritualist's 520px inner scroll. */
-  uncapped?: boolean;
-  /** Drawn full width under the two columns, above the footer (ink: the
-   *  order's timeline — the rail, the opens on a map, the delivery window). */
-  below?: ReactNode;
+  /** Threaded to the panel as ink's list threads it; the maps here are OpenStreetMap's and need none. */
+  mapsKey?: string | null;
 }
 
-// THE SAME PANEL FOR BOTH APPS. The Ritualist's Shipments list passes exactly
-// the three props it always has and renders what it always did; ink's Recent
-// orders (components/InkRecentOrders.tsx) passes a record link, its own
-// sentence, and "Get the record" as the footer (Sam, 2026-09-23).
-
-const fmt = (amount: string | number, currency: string) => {
-  const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  return num.toLocaleString("en-US", { style: "currency", currency });
-};
-
-const formatTimestamp = (raw: string): string => {
-  if (!raw) return raw;
-  try {
-    return new Date(raw).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return raw;
-  }
-};
-
-// The orders-table row expansion stays lean: customer + products + delivery, and a
-// handoff. The full delivery proof — tap history, location, signed cryptographic
-// record — lives in the standalone ink. dashboard, never in the embed. Keeping the
-// crypto/forensics out of the embed is deliberate.
-const RITUALIST_HANDOFF = (
-  <Text as="p" variant="bodySm" tone="subdued">
-    Open history, location, and the signed delivery record live in your
-    Ritualist studio.
-  </Text>
-);
-
-const OrderExpandedRow = ({ order, onCollapse, onViewFull, viewFullUrl, handoffNote, footer, aside, uncapped, below }: OrderExpandedRowProps) => {
-  const note = handoffNote === undefined ? RITUALIST_HANDOFF : handoffNote;
-  const deliveredAt =
-    order.metafields?.delivery_verified_at || order.metafields?.delivery_timestamp || "";
-
-  return (
-    <div style={uncapped ? { borderTop: "1px solid var(--p-color-border)" } : { borderTop: "1px solid var(--p-color-border)", maxHeight: "520px", overflowY: "auto" }}>
-      {/* Header — actions only (no forensic tabs) */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "8px 16px",
-          background: "var(--p-color-bg-surface-secondary)",
-          position: "sticky",
-          top: 0,
-          zIndex: 1,
-        }}
-      >
-        <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
-          Order details
-        </Text>
-        <InlineStack gap="200">
-          {viewFullUrl ? (
-            <Button icon={ExternalIcon} size="slim" url={viewFullUrl} target="_blank">
-              View Full Record
-            </Button>
-          ) : onViewFull ? (
-            <Button icon={ExternalIcon} size="slim" onClick={onViewFull}>
-              View Full Record
-            </Button>
-          ) : null}
-          <Button size="slim" onClick={onCollapse} accessibilityLabel="Collapse order details">
-            ▲
-          </Button>
-        </InlineStack>
-      </div>
-      <div style={{ borderTop: "1px solid var(--p-color-border)" }} />
-
-      {/* Content grid: customer + products | delivery + handoff */}
-      <div
-        className="grid grid-cols-1 md:grid-cols-[1fr_1fr]"
-        style={{ background: "var(--p-color-bg-surface)" }}
-      >
-        {/* ── Left: Customer + Products ── */}
-        <Box padding="400" borderInlineEndWidth="025" borderColor="border">
-          <BlockStack gap="400">
-            <BlockStack gap="100">
-              <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
-                CUSTOMER
-              </Text>
-              <Text as="p" variant="bodySm" fontWeight="medium">
-                {order.customerName}
-              </Text>
-              <Text as="p" variant="bodySm" tone="subdued">
-                {order.customerEmail}
-              </Text>
-              {order.customerAddress && (
-                <Text as="p" variant="bodySm" tone="subdued">
-                  {order.customerAddress.address1}
-                  <br />
-                  {order.customerAddress.city}, {order.customerAddress.provinceCode}{" "}
-                  {order.customerAddress.zip}
-                </Text>
-              )}
-            </BlockStack>
-
-            <BlockStack gap="100">
-              <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
-                PRODUCTS
-              </Text>
-              {order.items.map((item, idx) => (
-                <InlineStack key={idx} align="space-between">
-                  <BlockStack gap="0">
-                    <Text as="p" variant="bodySm">
-                      {item.title}
-                    </Text>
-                    <Text as="p" variant="bodySm" tone="subdued">
-                      {item.sku ? `${item.sku} × ` : ""}
-                      {item.quantity}
-                    </Text>
-                  </BlockStack>
-                  <Text as="p" variant="bodySm" fontWeight="medium">
-                    {fmt(parseFloat(item.price) * item.quantity, order.currency)}
-                  </Text>
-                </InlineStack>
-              ))}
-              {/* No "Shipping" line: it printed "Free" on every order, whatever the
-                  order paid (App Store review, 2026-09-23). The total is the order's
-                  own; the line items are summed as they were. */}
-              <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
-                <InlineStack align="space-between">
-                  <Text as="span" variant="bodySm" tone="subdued">
-                    Subtotal
-                  </Text>
-                  <Text as="span" variant="bodySm">
-                    {fmt(order.subtotal, order.currency)}
-                  </Text>
-                </InlineStack>
-                <InlineStack align="space-between">
-                  <Text as="span" variant="bodySm" fontWeight="semibold">
-                    Total
-                  </Text>
-                  <Text as="span" variant="bodySm" fontWeight="semibold">
-                    {fmt(order.total, order.currency)}
-                  </Text>
-                </InlineStack>
-              </div>
-            </BlockStack>
-          </BlockStack>
-        </Box>
-
-        {/* ── Right: Delivery + handoff (no forensics in the embed) ── */}
-        {aside ? (
-          <Box padding="400">{aside}</Box>
-        ) : (
-        <Box padding="400">
-          <BlockStack gap="300">
-            <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
-              DELIVERY
-            </Text>
-            {deliveredAt ? (
-              <InlineStack align="space-between">
-                <Text as="span" variant="bodySm" tone="subdued">
-                  Delivered
-                </Text>
-                <Text as="span" variant="bodySm">
-                  {formatTimestamp(deliveredAt)}
-                </Text>
-              </InlineStack>
-            ) : (
-              <Text as="p" variant="bodySm" tone="subdued">
-                No delivery recorded yet.
-              </Text>
-            )}
-            {note ? (
-              <div style={{ borderTop: "1px solid var(--p-color-border)", paddingTop: "8px" }}>
-                {note}
-              </div>
+const OrderExpandedRow = ({ row, onCollapse, onViewFull, mapsKey = null }: OrderExpandedRowProps) => (
+  <Box borderBlockStartWidth="025" borderColor="border" background="bg-surface">
+    <BlockStack gap="0">
+      <Box background="bg-surface-secondary" paddingInline="400" paddingBlock="200">
+        <InlineStack align="space-between" blockAlign="center" gap="200">
+          <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">
+            Order details
+          </Text>
+          <InlineStack gap="200" blockAlign="center">
+            {onViewFull ? (
+              <Button size="slim" onClick={onViewFull}>
+                View full record
+              </Button>
             ) : null}
-          </BlockStack>
-        </Box>
-        )}
-      </div>
-      {below ? <div style={{ borderTop: "1px solid var(--p-color-border)", background: "var(--p-color-bg-surface)" }}>{below}</div> : null}
-      {footer ? (
-        <div
-          style={{
-            borderTop: "1px solid var(--p-color-border)",
-            padding: "12px 16px",
-            background: "var(--p-color-bg-surface-secondary)",
-          }}
-        >
-          {footer}
-        </div>
-      ) : null}
-    </div>
-  );
-};
+            <Button
+              size="slim"
+              icon={ChevronUpIcon}
+              onClick={onCollapse}
+              accessibilityLabel="Collapse order details"
+            />
+          </InlineStack>
+        </InlineStack>
+      </Box>
+      <OrderPanel row={row} mapsKey={mapsKey} />
+    </BlockStack>
+  </Box>
+);
 
 export default OrderExpandedRow;

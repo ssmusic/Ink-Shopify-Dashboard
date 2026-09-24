@@ -29,9 +29,13 @@ import { readInkMerchant } from "../services/ink-merchant.server";
 import { readRecordPrice, setRecordPurchaseOutcome, type RecordPurchase } from "../services/ink-api.server";
 import { createRecordCharge, recordChargeGid, recordOffer, recordReturnUrl, safeReturnTo } from "../services/record-door.server";
 import { rememberRecordCharge, settleRecordCharges } from "../services/record-charges.server";
+import { ritualistApiKey } from "../services/ritualist-rows.server";
 
 const PROOF_ID = /^proof_[0-9a-f]{24}$/;
 const OUTCOMES: RecordPurchase["outcome"][] = ["open", "won", "lost", "unknown"];
+/** What the Ritualist's included record answers here: the inspection and the
+ *  three files. Nothing that buys. */
+const INCLUDED_RECORD_INTENTS = new Set(["inspect", "pdf", "csv", "download"]);
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session, redirect } = await authenticate.admin(request);
@@ -63,6 +67,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (isInk() && intent !== "outcome") {
     const view = await readInkMerchant(session.shop);
     const result = await inkRecordAction(admin, session.shop, view.doc?.ink_api_key, form).catch(() => ({ ok: false, note: "The record is unavailable. Try again.", confirmationUrl: null, download: null, filename: null }));
+    return data(result, { headers: { "Cache-Control": "private, no-store" } });
+  }
+
+  // THE RITUALIST'S RECORD IS INCLUDED: its Shipments row draws ink's panel
+  // (components/OrderExpandedRow.tsx), whose inspection and downloads ask this
+  // door. They are answered by the doors ink's Records library asks — the
+  // merchant audit door for the inspection, the export door for the PDF, the
+  // CSV and the signed JSON (services/ink-billing.server.ts inkRecordAction) —
+  // with the merchant's own key. The backend answers a Ritualist merchant's
+  // record whole and its export without a purchase, so nothing here is sold
+  // and no purchase is asked for. Only these four words take this path; a
+  // purchase and "Did you win?" keep theirs below.
+  if (INCLUDED_RECORD_INTENTS.has(intent)) {
+    const apiKey = await ritualistApiKey(session.shop);
+    const result = await inkRecordAction(admin, session.shop, apiKey, form).catch(() => ({ ok: false, note: "The record is unavailable. Try again.", confirmationUrl: null, download: null, filename: null }));
     return data(result, { headers: { "Cache-Control": "private, no-store" } });
   }
 
