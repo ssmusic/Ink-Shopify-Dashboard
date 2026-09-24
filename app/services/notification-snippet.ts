@@ -58,3 +58,53 @@ export const SNIPPET_TEMPLATES = [
   "Out for delivery",
   "Delivered",
 ] as const;
+
+/** THE LINE'S OWN EVIDENCE (2026-09-24). The order door (/o/) is advertised by
+ *  this line and nowhere else, so the Worker reports every real hit on it to
+ *  the backend, which keeps `email_door` on the merchant doc
+ *  (ink-backend utils/emailDoor.js). This reads it; null means nothing has
+ *  arrived through the line yet. An email scanner that pre-opens links counts
+ *  too, so the words say "opened", never "read". */
+export interface EmailDoor {
+  first_at: string;
+  last_at: string;
+  count: number;
+  last_order_number: string | null;
+}
+
+export function emailDoorOf(merchant: unknown): EmailDoor | null {
+  const raw = (merchant as Record<string, any> | null | undefined)?.email_door;
+  if (!raw || typeof raw !== "object" || typeof raw.last_at !== "string") return null;
+  const count = Number(raw.count);
+  return {
+    first_at: typeof raw.first_at === "string" ? raw.first_at : raw.last_at,
+    last_at: raw.last_at,
+    count: Number.isFinite(count) && count > 0 ? Math.floor(count) : 1,
+    last_order_number: typeof raw.last_order_number === "string" ? raw.last_order_number : null,
+  };
+}
+
+/** The status sentence both apps show under the line. PLACEHOLDER words. */
+export function emailDoorSentence(door: EmailDoor | null): { working: boolean; text: string } {
+  if (!door) {
+    return {
+      working: false,
+      text: "Not yet: nobody has opened your page from this line.",
+    };
+  }
+  const day = new Date(door.last_at).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  const times = door.count === 1 ? "once" : `${door.count} times`;
+  return {
+    working: true,
+    text: `Working: your page was opened from your emails ${times}, last on ${day}.`,
+  };
+}
+
+/** The test a merchant runs once, in words. PLACEHOLDER. */
+export const EMAIL_LINE_TEST =
+  "To check it: place a test order to your own email, fulfil it with Send shipment details on, and tap View your order in the email. It should open your page.";

@@ -12,6 +12,7 @@ import InkSettingsView from "../components/InkSettingsView";
 import { readInkMerchant } from "../services/ink-merchant.server";
 import { exportPrivacyRequest, readPrivacyRequests } from "../services/ink-privacy.server";
 import { readInkConnection } from "../services/ink-connection.server";
+import { readEmailLine } from "../services/email-line.server";
 
 function listingUrl(raw: string | undefined) {
   try {
@@ -29,15 +30,17 @@ function listingUrl(raw: string | undefined) {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const view = await readInkMerchant(session.shop);
-  const [privacy, connection] = await Promise.all([
+  const [privacy, connection, emailLine] = await Promise.all([
     readPrivacyRequests(session.shop).catch(() => null),
     readInkConnection({ admin, shop: session.shop, apiKey: view.doc?.ink_api_key, shopId: view.shopId }),
+    readEmailLine(session.shop, view.shopId).catch(() => null),
   ]);
   return routeData(
     {
       ritualistUrl: listingUrl(process.env.RITUALIST_LISTING_URL),
       privacy,
       connection,
+      emailLine,
     },
     { headers: { "Cache-Control": "private, no-store" } },
   );

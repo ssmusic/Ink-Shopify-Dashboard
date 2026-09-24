@@ -12,9 +12,12 @@ import {
   Text,
 } from "@shopify/polaris";
 import InkConnectionCard from "./InkConnectionCard";
+import EmailLineCard from "./EmailLineCard";
+import type { EmailLineView } from "../services/email-line.server";
 import type { InkConnection } from "../services/ink-connection.server";
 export type SettingsData = {
   connection?: InkConnection;
+  emailLine?: EmailLineView | null;
   ritualistUrl: string;
   privacy:
     | {
@@ -121,6 +124,7 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
           <BlockStack gap="400">
             <InkPillNav active="settings" />
             <InkConnectionCard connection={data.connection} checking={revalidator.state !== "idle"} onCheck={() => revalidator.revalidate()} />
+            <EmailLineCard line={data.emailLine} />
             {data.ritualistUrl && (
               <Card>
                 <BlockStack gap="300">

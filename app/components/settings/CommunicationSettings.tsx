@@ -70,7 +70,12 @@ async function secureFetch(path: string, options: RequestInit = {}) {
 // `fulfillment.tracking_url` — blank on order confirmation forever, and ~600ms
 // behind the shipping email by construction. This fallback is what renders
 // before the fetch lands; it is the neutral www host, never a guessed one.
-import { notificationSnippet } from "../../services/notification-snippet";
+import {
+  EMAIL_LINE_TEST,
+  emailDoorSentence,
+  notificationSnippet,
+  type EmailDoor,
+} from "../../services/notification-snippet";
 import { DISTANCE_RECORDED_LABEL } from "../../lib/order-marks";
 
 const FALLBACK_SNIPPET = notificationSnippet(null);
@@ -90,6 +95,8 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
   // The brand-specific line, built server-side. Starts on the neutral www
   // fallback so the card is never blank and never shows a guessed host.
   const [snippet, setSnippet] = useState<string>(FALLBACK_SNIPPET);
+  const [emailDoor, setEmailDoor] = useState<EmailDoor | null>(null);
+  const [doorRead, setDoorRead] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -102,6 +109,10 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
         setSettings(data.settings);
       }
       if (data?.snippet) setSnippet(data.snippet);
+      if (data) {
+        setEmailDoor(data.emailDoor ?? null);
+        setDoorRead(true);
+      }
       setLoaded(true);
     });
     return () => {
@@ -205,7 +216,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
       {/* ── The one merchant action that isn't automatic ───────────────── */}
       <Layout.AnnotatedSection
         title="Your page in Shopify's emails"
-        description="Shopify already links to your page from the tracking number on every shipment. This makes it the main button too."
+        description="Shopify sends its shipping email before ink can change the link in it, and apps cannot edit Shopify's emails. This line puts your page on the email's main button."
       >
         <Card>
           <BlockStack gap="400">
@@ -259,6 +270,15 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
               </List.Item>
               <List.Item>Paste the line, then Save.</List.Item>
             </List>
+
+            <Text as="p" tone="subdued" variant="bodySm">
+              {EMAIL_LINE_TEST}
+            </Text>
+            {doorRead && (
+              <Text as="p" variant="bodySm" tone={emailDoorSentence(emailDoor).working ? "success" : "subdued"}>
+                <span data-testid="email-line-status">{emailDoorSentence(emailDoor).text}</span>
+              </Text>
+            )}
 
             <Divider />
 
