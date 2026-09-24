@@ -36,12 +36,16 @@
       "request": "Track PR #160: Shopify paused The Ritualist's review on 5.6.1 because its order-status customer-account block shows nothing. The PR deletes extensions/order-page-block, the Settings › Communication 'The order status page' section, its API route and the ink:order_door metafield writer. HELD FOR SAM: merge, then his `shopify app deploy --config shopify.app.toml` from clean main, then Submit fixes in the Partner Dashboard.",
       "branch": "review/the-order-status-block-comes-out",
       "pr": 160,
-      "phase": "queued",
+      "phase": "working",
       "assignedAgent": "claude",
-      "owner": null,
+      "owner": {
+        "agent": "claude",
+        "sessionId": "3b5f52c4-b451-4ee7-bfac-405da269c474",
+        "acknowledgedSha": "6ba1ee20223394397c0ec479ae329447de381909"
+      },
       "handoffTo": null,
       "checkpoint": null,
-      "updatedAt": "2026-09-24T16:45:52.903Z"
+      "updatedAt": "2026-09-24T16:45:59.437Z"
     }
   ],
   "projects": [],
@@ -89,6 +93,11 @@
     {
       "id": "852a6af2-6c3c-476e-b897-89b67a9755f1",
       "fingerprint": "dee2868021bfb1867c0776d4c874890a7558014b0eb4651359788e340a98292a",
+      "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1"
+    },
+    {
+      "id": "3d0c1a52-5e0b-4b8e-9d0e-7a61c2b4f9a1",
+      "fingerprint": "b1d38841bb8e9291e59b8626ac16d4e80cc79fae3e0a70bc5cbffd0e31e53397",
       "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1"
     }
   ],
@@ -146,6 +155,12 @@
       "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1",
       "action": "adopt",
       "detail": "Existing work registered; receiver must inspect its current checkpoint."
+    },
+    {
+      "at": "2026-09-24T16:45:59.437Z",
+      "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1",
+      "action": "claim",
+      "detail": "claude acknowledged 6ba1ee20223394397c0ec479ae329447de381909."
     }
   ]
 }
