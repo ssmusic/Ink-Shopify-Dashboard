@@ -18,6 +18,11 @@ const frontDoor = () => (isInk() ? INK_HOME_URL : "/");
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!new URL(request.url).searchParams.get("shop")) throw redirect(frontDoor());
   const errors = loginErrorMessage(await login(request));
+  // `login` throws Shopify's install redirect for any store it can name, and
+  // returns only for a `?shop=` it cannot (install.in.ink/auth/login?shop=x*y
+  // rendered the form below, 2026-09-24). Under ink that visitor goes to ink's
+  // page too, so no address of ink's ever asks for a shop domain.
+  if (isInk()) throw redirect(INK_HOME_URL);
 
   return { errors };
 };
@@ -26,6 +31,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // The same door for a posted form: no shop domain is ever typed in.
   if (!new URL(request.url).searchParams.get("shop")) throw redirect(frontDoor());
   const errors = loginErrorMessage(await login(request));
+  if (isInk()) throw redirect(INK_HOME_URL);
 
   return {
     errors,
