@@ -6,10 +6,13 @@
 // The record page's open section, in Polaris (components/InkOpens.tsx):
 //   · THE OPEN — the first open's distance as data, the 100 m and 300 m rings
 //     as scale guides named only by their radius, the delivery address on
-//     Google's map, the facts, the corroborating sentence;
+//     OpenStreetMap's own map, the facts, the corroborating sentence;
 //   · EVERY OPEN — # · time · location · device · browser · open · signed
 //     event, each row opening onto its own map (the address, that open, the
 //     dashed line and its distance, the rings).
+// The maps are the record page's (Sam, 2026-09-24: "the shopify app was
+// supposed to have the good maps i showed you"): OpenStreetMap, no key.
+// Google's map stays in the code, unmounted.
 // No badge, no range line, no colour for within; no coordinate printed as text.
 import { renderToString } from "react-dom/server";
 import { createRoutesStub } from "react-router";
@@ -102,7 +105,7 @@ afterAll(() => {
 });
 
 describe("THE OPEN — the buyer's device against the delivery address", () => {
-  const html = wrap(<TheOpen record={RECORD} rows={ROWS} address={address} addressLabel={ADDRESS} mapsKey={KEY} />);
+  const html = wrap(<TheOpen record={RECORD} rows={ROWS} address={address} addressLabel={ADDRESS} />);
   const t = text(html);
 
   it("says the first open's distance as data, with the facts and what a location is and is not", () => {
@@ -121,11 +124,14 @@ describe("THE OPEN — the buyer's device against the delivery address", () => {
       expect(t).toContain(part);
   });
 
-  it("draws the rings as scale guides named only by their radius, the open at its bearing, and the address on Google's map with its rings", () => {
+  it("draws the rings as scale guides named only by their radius, the open at its bearing, and the address on OpenStreetMap's map with its marker", () => {
     const svg = html.match(/<svg[\s\S]*?<\/svg>/)?.[0] ?? "";
     expect(svg).toContain('data-testid="the-open-rings"');
     expect(text(svg).trim().split(" ").join(" ")).toBe("300 m 100 m 2.6 km address open");
-    expect(html).toMatch(/data-testid="opens-map"[^>]*data-points="0"[^>]*data-rings="100,300"/);
+    expect(html).toContain('data-testid="address-map"');
+    expect(html).toMatch(/<iframe[^>]*title="Delivery address"[^>]*src="https:\/\/www\.openstreetmap\.org\/export\/embed\.html\?bbox=[^"]*marker=34\.0837%2C-118\.3006"/);
+    // Google's map is not mounted.
+    expect(html).not.toContain('data-testid="opens-map"');
   });
 
   it("never judges: no badge, no range, no default, no colour for within, and no coordinate printed", () => {
@@ -138,7 +144,7 @@ describe("THE OPEN — the buyer's device against the delivery address", () => {
   it("says a location that was never shared, and an address never geocoded, in the record page's words", () => {
     const none = everyOpenRows([door({ verdict: "not_shared", distance_m: null, accuracy_m: null, lat: null, lng: null })], [signed({ verdict: "not_shared", distance_m: null, accuracy_m: null })]);
     const r = { ...RECORD, elements: [{ element: "the_open", label: "The open", status: "verified", value: { location: { verdict: "not_shared" } } }] };
-    const words = text(wrap(<TheOpen record={r} rows={none} address={null} addressLabel={null} mapsKey={KEY} />));
+    const words = text(wrap(<TheOpen record={r} rows={none} address={null} addressLabel={null} />));
     expect(words).toContain("No open shared a location, and the delivery address is not geocoded on this row.");
     expect(words).toContain("not recorded — the address was never geocoded");
     expect(words).toContain("location not shared");
@@ -148,7 +154,7 @@ describe("THE OPEN — the buyer's device against the delivery address", () => {
 });
 
 describe("EVERY OPEN — each open, each onto its own map", () => {
-  const html = wrap(<EveryOpen rows={ROWS} address={address} mapsKey={KEY} available browsers="Opened from 1 browser: iPhone ×1, browser unknown ×3." recorded={4} />);
+  const html = wrap(<EveryOpen rows={ROWS} address={address} available browsers="Opened from 1 browser: iPhone ×1, browser unknown ×3." recorded={4} />);
   const t = text(html);
 
   it("is the record page's table: # · time · location · device · browser · open · signed event", () => {
@@ -184,28 +190,32 @@ describe("EVERY OPEN — each open, each onto its own map", () => {
     }
     expect(html).toMatch(/aria-label="Map of open 1"/);
     expect(html).toMatch(/aria-label="Location of open 3"/);
-    expect(html).not.toContain('data-testid="opens-map"');
+    expect(html).not.toContain('data-testid="open-map"');
     // The opened row's tint survives the server render: a quoted value inside <style> dies as &quot;.
     expect(html).toContain("tr[data-open=true]");
   });
 
   it("opens a row onto its own map — the address, that open, the rings — with the distance as data", () => {
-    const opened = wrap(<EveryOpen rows={ROWS} address={address} mapsKey={KEY} defaultOpen={[1]} />);
-    expect(opened).toMatch(/data-testid="opens-map"[^>]*data-points="1"[^>]*data-rings="100,300"/);
+    const opened = wrap(<EveryOpen rows={ROWS} address={address} defaultOpen={[1]} />);
+    expect(opened).toMatch(/data-testid="open-map"[^>]*data-points="1"[^>]*data-address="pinned"/);
+    expect(opened).toContain('aria-label="Map: open 1 and the delivery address"');
     expect(text(opened)).toContain("Opened 2.6 km from the delivery address. Accuracy ±7 m.");
     expect(opened).toMatch(/aria-expanded="true"/);
+    // The map's stylesheet survives the server render: no quote inside <style>.
+    expect(opened).toContain(".ink-open-map .leaflet-tile-pane{filter:grayscale(1)}");
+    expect(opened).not.toMatch(/<style>[^<]*&quot;/);
   });
 
   it("opens a row that shared no location onto its words alone", () => {
-    const opened = wrap(<EveryOpen rows={ROWS} address={address} mapsKey={KEY} defaultOpen={[3]} />);
-    expect(opened).not.toContain('data-testid="opens-map"');
+    const opened = wrap(<EveryOpen rows={ROWS} address={address} defaultOpen={[3]} />);
+    expect(opened).not.toContain('data-testid="open-map"');
     expect(text(opened)).toContain("Location not shared.");
   });
 
-  it("draws no map without the browser key — the words remain", () => {
-    const opened = wrap(<EveryOpen rows={ROWS} address={address} mapsKey={null} defaultOpen={[1]} />);
-    expect(opened).not.toContain('data-testid="opens-map"');
-    expect(text(opened)).toContain("Opened 2.6 km from the delivery address. Accuracy ±7 m.");
+  it("draws the open alone when the delivery address was never geocoded", () => {
+    const opened = wrap(<EveryOpen rows={ROWS} address={null} defaultOpen={[1]} />);
+    expect(opened).toMatch(/data-testid="open-map"[^>]*data-address="absent"/);
+    expect(text(opened)).toContain("Opened 2.6 km from the delivery address.");
   });
 
   it("a press opens a row; the same press closes it; the others keep their own state", () => {
@@ -232,13 +242,15 @@ describe("mounted in the order's Advanced, both ways", () => {
     return wrap(<Stub initialEntries={["/"]} />);
   };
 
-  it("shows THE OPEN and EVERY OPEN on a whole record, beside the inspection, with the address on Google's map", () => {
+  it("shows THE OPEN and EVERY OPEN on a whole record, beside the inspection, with the address on OpenStreetMap's map", () => {
     const html = render(RECORD, KEY);
     const t = text(html);
     expect(t).toContain("Checked in this browser");
     expect(t).toContain("The open · buyer's device ↔ delivery address");
     expect(t.match(/Every open/g)).toHaveLength(1);
-    expect(html).toMatch(/data-testid="opens-map"[^>]*data-rings="100,300"/);
+    expect(html).toContain('data-testid="address-map"');
+    // Google's map stays unmounted, even with its key threaded.
+    expect(html).not.toContain('data-testid="opens-map"');
     expect(t).not.toMatch(COORDINATE);
   });
 

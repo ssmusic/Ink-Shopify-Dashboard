@@ -11,11 +11,15 @@
 //   · THE OPEN — the buyer's device against the delivery address: the first
 //     open's distance as data, the 100 m and 300 m rings as scale guides with
 //     the address at the centre and the open at its bearing, the delivery
-//     address on Google's map, the facts, and the sentence that says what a
-//     location is and is not;
+//     address on OpenStreetMap's own map with its marker, the facts, and the
+//     sentence that says what a location is and is not;
 //   · EVERY OPEN — # · time · location · device · browser · open · signed
 //     event, each row opening onto its own map: the address, that one open,
 //     the dashed line and its distance, the guide rings.
+// The maps are the record page's own (Sam, 2026-09-24: "the shopify app was
+// supposed to have the good maps i showed you"): OpenStreetMap, grey, no key
+// (components/OpenMap.tsx, components/MiniMap.tsx). Google's map
+// (components/OpensMap.tsx) stays in the code, unmounted.
 // No badge, no range line, no colour for within: the palette's one blue marks
 // the data, grey the guides (lib/ink-palette.ts). No coordinate is printed as
 // text: the maps draw the points.
@@ -26,10 +30,12 @@
 import { Fragment, useId, useState, type MouseEvent } from "react";
 import { BlockStack, Button, Divider, InlineGrid, Text } from "@shopify/polaris";
 import { ChevronDownIcon, ChevronUpIcon } from "@shopify/polaris-icons";
-import OpensMap from "./OpensMap";
+import OpenMap from "./OpenMap";
+import MiniMap from "./MiniMap";
 import type { OrderTimelineData } from "./OrderTimeline";
 import { INK_DATA, INK_DATA_TINT, INK_HAIRLINE, INK_MUTED, INK_NEUTRAL } from "../lib/ink-palette";
 import { browsersLine, opensOf, when, type RecordRead } from "../lib/record-words";
+import { kmOrM } from "../lib/order-timeline";
 import {
   CORROBORATING,
   KIND_WORDS,
@@ -138,13 +144,11 @@ export function TheOpen({
   rows,
   address,
   addressLabel = null,
-  mapsKey = null,
 }: {
   record: RecordRead | null | undefined;
   rows: EveryOpenRow[];
   address: MapPoint | null;
   addressLabel?: string | null;
-  mapsKey?: string | null;
 }) {
   const v = theOpenReading({ served: servedOf(record), rows, address, opens: opensOf(record) ?? 0 });
   const line = v.shared ? theOpenEventLine(rows) : null;
@@ -169,15 +173,11 @@ export function TheOpen({
           <Text as="h4" variant="headingSm">
             Delivery address
           </Text>
-          {!address ? (
+          {address ? (
+            <MiniMap lat={address.lat} lng={address.lng} label="Delivery address" height={200} />
+          ) : (
             <Text as="p" tone="subdued">
               not recorded — the address was never geocoded
-            </Text>
-          ) : mapsKey ? (
-            <OpensMap apiKey={mapsKey} address={address} opens={[]} rings height={200} />
-          ) : (
-            <Text as="p" breakWord>
-              {where ?? NOT_RECORDED}
             </Text>
           )}
         </BlockStack>
@@ -196,17 +196,14 @@ export function TheOpen({
 }
 
 /** A row, opened: its own map when the open carried a fix, then its words. */
-export function OpenRowDetail({ row, address, mapsKey = null }: { row: EveryOpenRow; address: MapPoint | null; mapsKey?: string | null }) {
+export function OpenRowDetail({ row, address }: { row: EveryOpenRow; address: MapPoint | null }) {
   const fix = row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null;
   return (
     <BlockStack gap="200">
-      {fix && mapsKey ? (
-        <OpensMap
-          apiKey={mapsKey}
+      {fix ? (
+        <OpenMap
           address={address}
-          opens={[{ ...fix, distance_m: row.distance_m, label: `Open ${row.n}${row.at ? ` · ${when(row.at)}` : ""}` }]}
-          rings={!!address}
-          height={240}
+          open={{ ...fix, line_label: row.distance_m != null ? kmOrM(row.distance_m) : null, label: `open ${row.n}` }}
         />
       ) : null}
       <Text as="p" variant="bodySm">
@@ -250,7 +247,6 @@ const HEADINGS = ["#", "Time", "Location", "Device", "Browser", "Open", "Signed 
 export function EveryOpen({
   rows,
   address,
-  mapsKey = null,
   available = true,
   capped = false,
   browsers = null,
@@ -259,7 +255,6 @@ export function EveryOpen({
 }: {
   rows: EveryOpenRow[];
   address: MapPoint | null;
-  mapsKey?: string | null;
   /** The opens door answered: every open is here. */
   available?: boolean;
   /** The opens door limited the history it returned. */
@@ -385,7 +380,7 @@ export function EveryOpen({
                         {/* Every column: the seven named ones and the chevron's. */}
                         <td colSpan={HEADINGS.length + 1}>
                           <div className="ink-every-open-map">
-                            <OpenRowDetail row={r} address={address} mapsKey={mapsKey} />
+                            <OpenRowDetail row={r} address={address} />
                           </div>
                         </td>
                       </tr>
@@ -433,7 +428,6 @@ export default function InkOpens({
   capped,
   address,
   addressLabel = null,
-  mapsKey = null,
 }: {
   record: RecordRead | null | undefined;
   timeline: OrderTimelineData | null | undefined;
@@ -442,18 +436,19 @@ export default function InkOpens({
   capped?: boolean;
   address?: MapPoint | null;
   addressLabel?: string | null;
+  /** Google's browser key, still threaded for Google's map (components/OpensMap.tsx),
+   *  which stays in the code unmounted. The maps here are OpenStreetMap's and need none. */
   mapsKey?: string | null;
 }) {
   const rows = given ?? timeline?.rows ?? everyOpenRows(null, record?.opens ?? null);
   const home = address !== undefined ? address : timeline?.address ?? null;
   return (
     <BlockStack gap="500">
-      <TheOpen record={record} rows={rows} address={home} addressLabel={addressLabel} mapsKey={mapsKey} />
+      <TheOpen record={record} rows={rows} address={home} addressLabel={addressLabel} />
       <Divider />
       <EveryOpen
         rows={rows}
         address={home}
-        mapsKey={mapsKey}
         available={available ?? timeline?.opensAvailable ?? false}
         capped={capped ?? timeline?.opensCapped ?? false}
         browsers={browsersLine(record?.browsers)}
