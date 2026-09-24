@@ -7,5 +7,13 @@
 // flag just keeps them off merchant surfaces. Flip to true to bring the
 // hardware lane back.
 export const FEATURE_NFC = false;
+//
+// FEATURE_NOTIFICATIONS: the Ritualist's own buyer notifications — the email
+// channel and the delivery messages ("Out for delivery", "Delivered", the
+// open's). NOT SENDING: Sam, 2026-09-24, "we dont have notifacations yet";
+// nothing schedules api.jobs.notifications. Off, so no merchant surface
+// promises a send that does not happen. The toggles, their stored choices and
+// the senders stay in the tree; flip to true when the sends are real.
+export const FEATURE_NOTIFICATIONS = false;
 // Dev/ops-route gate lives in flags.server.ts (reads process.env — must never
 // be bundled client-side, unlike this compile-time flag).
