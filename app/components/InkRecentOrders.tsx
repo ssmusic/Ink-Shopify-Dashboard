@@ -721,8 +721,12 @@ export default function InkRecentOrders({
   detailed = false,
   advancedOpen = true,
   recordUpFront = false,
+  headings = true,
 }: {
   orders: InkOrderRow[];
+  /** The ledger's column headings over the rows; ink's older orders continue
+   *  the list above them, so they draw none of their own. */
+  headings?: boolean;
   /** An opened order shows the record's band up front (OrderPanel). */
   recordUpFront?: boolean;
   /** ink's Orders: each cell carries a line more — the other items, where the
@@ -772,7 +776,7 @@ export default function InkRecentOrders({
     );
   return (
     <Box opacity={pending ? "0.5" : undefined}>
-      {mdUp && (
+      {mdUp && headings && (
         <>
           <Divider />
           <LedgerHeadings sort={sort} onSort={onSort} />

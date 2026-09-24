@@ -2,9 +2,10 @@ import { inkDoor } from "../services/ink-billing.server";
 import { readRecordDoors, recordDoorFor } from "../services/record-charges.server";
 import { readJwks } from "../services/ink-record.server";
 import { readDisputePacket } from "../services/ink-packet.server";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   data as routeData,
+  useFetcher,
   useLoaderData,
   type ShouldRevalidateFunction,
   useSearchParams,
@@ -19,6 +20,7 @@ import {
   Banner,
   BlockStack,
   Box,
+  Button,
   Card,
   Divider,
   InlineStack,
@@ -29,9 +31,10 @@ import {
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { readInkMerchant, stageOf } from "../services/ink-merchant.server";
-import { readRecentOrderPage } from "../services/ink-links.server";
+import { readRecentOrderPage, readShopZone } from "../services/ink-links.server";
+import { readOlderOrders } from "../services/ink-older-orders.server";
 import { readInkKpis } from "../services/ink-kpis.server";
-import InkRecentOrders, { type InkRowRecord } from "../components/InkRecentOrders";
+import InkRecentOrders, { type InkRowRecord, type InkStreamedOrderRow } from "../components/InkRecentOrders";
 import InkPillNav from "../components/InkPillNav";
 import DeliveryDashboard from "../components/DeliveryDashboard";
 import { readTimelineReads, timelineOfReads } from "../services/ink-timeline.server";
@@ -66,6 +69,14 @@ const NO_DOOR = {
   downloadable: false,
   inHistory: false,
 };
+
+/** A page of older orders, as the loader's `?older=` answers it: null when
+ *  ink's records could not be read. Named, not inferred — the loader's
+ *  inferred answers fold this one into the orders screen's. */
+type OlderRows = {
+  rows: (InkStreamedOrderRow & { createdAt: string | null })[];
+  next: string | null;
+} | null;
 
 // EACH SECTION ITS OWN ADDRESS — /app/ink/orders · /dashboard · /records ·
 // /help (Settings is its own route). The admin's left nav marks an item by its
@@ -188,6 +199,89 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
     );
   }
 
+  // EACH ROW STREAMS. The page answers with the orders alone; each row's
+  // record, its activity and a bought record's packet follow as that row's own
+  // promise, drawn as it lands (components/InkRecentOrders.tsx). A record's
+  // whole read takes time in proportion to the record (0.5 s for a few opens,
+  // 5.4 s for 92 — Steve Madden's test store, 2026-09-24): the list used to
+  // wait for its slowest record and then read every timeline after it, 10 to
+  // 15 s before any order showed. Now a row's reads run side by side and the
+  // timeline is made from them exactly as before. Shopify's orders and the
+  // older ones from ink's records stream alike.
+  const streamed = <Row extends { proofId: string | null }>(rows: Row[]) => {
+    const proofIds = rows.map((o) => o.proofId);
+    // The published keys, read once for the list: every record's signatures
+    // are checked against them on the server (#137).
+    const keys = apiKey && proofIds.some(Boolean) ? readJwks() : null;
+    // A bought record's "Did you win?" and its texts for Shopify's dispute
+    // form (services/record-charges.server.ts) — only once it is bought. One
+    // read for the list, shared by every row.
+    const purchasesRead = readRecordDoors(admin, view, proofIds).catch(() => ({}));
+    const rowRecord = async (proofId: string | null): Promise<InkRowRecord> => {
+      try {
+        const [door, reads, purchases] = await Promise.all([
+          inkDoor(admin, session.shop, apiKey, proofId, keys).catch(() => NO_DOOR),
+          apiKey && proofId ? readTimelineReads(apiKey, proofId, fetch) : Promise.resolve(null),
+          purchasesRead,
+        ]);
+        const purchase = proofId ? recordDoorFor(purchases, proofId).purchase : null;
+        const [timeline, packet] = await Promise.all([
+          apiKey && proofId && reads ? timelineOfReads(apiKey, proofId, reads, door.record, fetch) : Promise.resolve(null),
+          // A bought record's packet, read with the purchase's own key.
+          proofId && purchase?.packet_url ? readDisputePacket(proofId, purchase.packet_url) : Promise.resolve(null),
+        ]);
+        return {
+          record: door.record,
+          door: {
+            offerLine: door.offerLine,
+            pending: door.pending,
+            paidPendingRecord: door.paidPendingRecord,
+            resumeUrl: door.resumeUrl,
+            downloadable: door.downloadable,
+            inHistory: door.inHistory,
+            purchase,
+          },
+          packet,
+          timeline,
+        };
+      } catch {
+        return { record: null, door: { ...NO_DOOR, purchase: null }, packet: null, timeline: null };
+      }
+    };
+    return rows.map((o) => ({ ...o, more: rowRecord(o.proofId) }));
+  };
+
+  // OLDER ORDERS — past Shopify's 60 days, from ink's own records
+  // (services/ink-older-orders.server.ts): the page's "Load more"
+  // reads a page at a time here, from its own cursor. It answers the orders
+  // screen's shape with no Shopify orders, and never throws for a failed
+  // read: a fetcher's error would take the whole page down with it.
+  const olderParam = params.get("older");
+  if (olderParam !== null) {
+    const older: OlderRows = await (async () => {
+      const found = await readOlderOrders(apiKey, olderParam, readShopZone(admin));
+      return found ? { rows: streamed(found.rows), next: found.next } : null;
+    })().catch(() => null);
+    return routeData(
+      {
+        section,
+        stage,
+        kpis: null,
+        delivery: null,
+        ordersError: false,
+        search: "",
+        sort: "newest" as const,
+        dates: ALL_ORDER_DATES,
+        dateBounds: orderDateBounds(Date.now()),
+        pageInfo: null,
+        recentOrders: [],
+        mapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY || null,
+        older,
+      },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+
   let ordersError = false;
   const search = orderSearch(params.get("q"));
   const sort = orderSort(params.get("sort"));
@@ -213,53 +307,6 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
     return { rows: [], pageInfo: null };
   });
   const recentOrders = page.rows;
-  const proofIds = recentOrders.map((o) => o.proofId);
-  // The published keys, read once for the screen: every record's signatures
-  // are checked against them on the server (#137).
-  const keys = apiKey && proofIds.some(Boolean) ? readJwks() : null;
-  // A bought record's "Did you win?" and its texts for Shopify's dispute
-  // form (services/record-charges.server.ts) — only once it is bought. One
-  // read for the page, shared by every row.
-  const purchasesRead = readRecordDoors(admin, view, proofIds).catch(() => ({}));
-  // EACH ROW STREAMS. The page answers with Shopify's orders alone; each row's
-  // record, its activity and a bought record's packet follow as that row's own
-  // promise, drawn as it lands (components/InkRecentOrders.tsx). A record's
-  // whole read takes time in proportion to the record (0.5 s for a few opens,
-  // 5.4 s for 92 — Steve Madden's test store, 2026-09-24): the list used to
-  // wait for its slowest record and then read every timeline after it, 10 to
-  // 15 s before any order showed. Now a row's reads run side by side and the
-  // timeline is made from them exactly as before.
-  const rowRecord = async (proofId: string | null): Promise<InkRowRecord> => {
-    try {
-      const [door, reads, purchases] = await Promise.all([
-        inkDoor(admin, session.shop, apiKey, proofId, keys).catch(() => NO_DOOR),
-        apiKey && proofId ? readTimelineReads(apiKey, proofId, fetch) : Promise.resolve(null),
-        purchasesRead,
-      ]);
-      const purchase = proofId ? recordDoorFor(purchases, proofId).purchase : null;
-      const [timeline, packet] = await Promise.all([
-        apiKey && proofId && reads ? timelineOfReads(apiKey, proofId, reads, door.record, fetch) : Promise.resolve(null),
-        // A bought record's packet, read with the purchase's own key.
-        proofId && purchase?.packet_url ? readDisputePacket(proofId, purchase.packet_url) : Promise.resolve(null),
-      ]);
-      return {
-        record: door.record,
-        door: {
-          offerLine: door.offerLine,
-          pending: door.pending,
-          paidPendingRecord: door.paidPendingRecord,
-          resumeUrl: door.resumeUrl,
-          downloadable: door.downloadable,
-          inHistory: door.inHistory,
-          purchase,
-        },
-        packet,
-        timeline,
-      };
-    } catch {
-      return { record: null, door: { ...NO_DOOR, purchase: null }, packet: null, timeline: null };
-    }
-  };
   return routeData(
     {
       section,
@@ -272,13 +319,16 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
       dates,
       dateBounds: orderDateBounds(Date.now()),
       pageInfo: page.pageInfo,
-      recentOrders: recentOrders.map((o) => ({
-        id: o.id,
-        name: o.name,
-        proofId: o.proofId,
-        detail: o.detail,
-        more: rowRecord(o.proofId),
-      })),
+      recentOrders: streamed(
+        recentOrders.map((o) => ({
+          id: o.id,
+          name: o.name,
+          proofId: o.proofId,
+          // Where "Load more" picks up (OlderOrders).
+          createdAt: o.createdAt,
+          detail: o.detail,
+        })),
+      ),
       // A BROWSER key, referrer-restricted to this app's hosts and to the Maps
       // JavaScript API alone — never the backend's server key (components/OpensMap.tsx).
       // The open section's maps draw with it; without it, the words remain.
@@ -305,6 +355,154 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({ formAction, formDat
  *  the same width as the orders page (duh)"). Settings reads it too. */
 export const INK_PAGE_WIDTH = { maxWidth: 1400, margin: "0 auto" } as const;
 
+/** Shopify's window: with no order in it, older orders start from its edge. */
+const SHOPIFY_WINDOW_MS = 60 * 24 * 60 * 60 * 1000;
+/** Empty stretches of ink's records (its own tools' records, never orders)
+ *  read past before the screen asks again. */
+const OLDER_EMPTY_HOPS = 3;
+type ShownOrder = { proofId: string | null; createdAt?: string | null };
+
+/** OLDER ORDERS (Sam, 2026-09-24: "the orders cap out at 10 - whats that
+ *  about? need a scroll on the left or a link at the bottom to load more" ·
+ *  "yes build it" · "should be called Load More"). Shopify shares an app
+ *  only the last 60 days of orders; "Load more" continues from ink's own
+ *  records, twenty at a time (the loader's `?older=`). Each page is its own
+ *  read, so a refresh brings every page's records up to date. Offered at the
+ *  foot of the whole list, newest first, alone: under a search, narrower
+ *  dates or another order, the list is Shopify's. */
+function OlderOrders({ shown, mapsKey }: { shown: ShownOrder[]; mapsKey: string | null }) {
+  const [pages, setPages] = useState<{ cursor: string; hop: number }[]>([]);
+  const skip = shown.map((o) => o.proofId).filter((id): id is string => Boolean(id));
+  const start = () => {
+    const times = shown.map((o) => Date.parse(o.createdAt ?? "")).filter(Number.isFinite);
+    const from = times.length ? Math.min(...times) : Date.now() - SHOPIFY_WINDOW_MS;
+    setPages([{ cursor: new Date(from).toISOString(), hop: 0 }]);
+  };
+  const more = useCallback(
+    (cursor: string, hop: number) =>
+      setPages((was) => (was.some((p) => p.cursor === cursor) ? was : [...was, { cursor, hop }])),
+    [],
+  );
+  // The older orders continue the list itself — no line between them (Sam,
+  // 2026-09-24, of one: "get rid of this slop").
+  if (!pages.length) return <LoadMoreFoot onPress={start} />;
+  return (
+    <>
+      {pages.map((page, i) => (
+        <OlderPage
+          key={page.cursor}
+          cursor={page.cursor}
+          hop={page.hop}
+          last={i === pages.length - 1}
+          skip={skip}
+          mapsKey={mapsKey}
+          onMore={more}
+        />
+      ))}
+    </>
+  );
+}
+
+/** The list's foot: Load more, or what stands in its place. */
+function LoadMoreFoot({ onPress, reading = false, children }: { onPress?: () => void; reading?: boolean; children?: ReactNode }) {
+  return (
+    <>
+      <Divider />
+      <Box padding="300">
+        <BlockStack gap="200" inlineAlign="center">
+          {children ?? (
+            <Button variant="plain" onClick={onPress} loading={reading} disabled={reading}>
+              Load more
+            </Button>
+          )}
+        </BlockStack>
+      </Box>
+    </>
+  );
+}
+
+function OlderPage({
+  cursor,
+  hop,
+  last,
+  skip,
+  mapsKey,
+  onMore,
+}: {
+  cursor: string;
+  hop: number;
+  last: boolean;
+  skip: string[];
+  mapsKey: string | null;
+  onMore: (cursor: string, hop: number) => void;
+}) {
+  const fetcher = useFetcher<{ older?: OlderRows }>();
+  const { load } = fetcher;
+  const href = `/app/ink/orders?older=${encodeURIComponent(cursor)}`;
+  const asked = useRef<string | null>(null);
+  useEffect(() => {
+    if (asked.current === href) return;
+    asked.current = href;
+    load(href);
+  }, [href, load]);
+  const got = fetcher.data;
+  // undefined: not read yet · null: the read failed.
+  const page = got ? got.older : undefined;
+  // A refresh reads every page again (a fetcher revalidates with the page);
+  // one that fails keeps the rows it had, never blanks them.
+  const [good, setGood] = useState<NonNullable<OlderRows> | null>(null);
+  useEffect(() => {
+    if (page) setGood(page);
+  }, [page]);
+  const shown = page || good;
+  const failed = page === null && !good;
+  // Shopify's rows already show their own orders.
+  const rows = shown ? shown.rows.filter((r) => !(r.proofId && skip.includes(r.proofId))) : [];
+  // A stretch with no orders in it and more after it: read on, a few times.
+  const next = shown?.next ?? null;
+  const readOn = last && Boolean(shown) && rows.length === 0 && next !== null && hop < OLDER_EMPTY_HOPS;
+  useEffect(() => {
+    if (readOn && next) onMore(next, hop + 1);
+  }, [readOn, next, hop, onMore]);
+  const reading = (!shown && !failed) || readOn;
+  return (
+    <>
+      {rows.length > 0 && (
+        <InkRecentOrders
+          orders={rows}
+          headings={false}
+          returnTo="/app/ink/orders"
+          detailed
+          advancedOpen={false}
+          recordUpFront
+          mapsKey={mapsKey}
+        />
+      )}
+      {last &&
+        (reading ? (
+          <LoadMoreFoot reading />
+        ) : failed ? (
+          <LoadMoreFoot>
+            <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+              Older orders could not be loaded.
+            </Text>
+            <Button variant="plain" onClick={() => load(href)}>
+              Try again
+            </Button>
+          </LoadMoreFoot>
+        ) : next ? (
+          <LoadMoreFoot onPress={() => onMore(next, 0)} />
+        ) : (
+          <LoadMoreFoot>
+            <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+              No more orders.
+            </Text>
+          </LoadMoreFoot>
+        ))}
+    </>
+  );
+}
+
 export default function InkHome() {
   const data = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
@@ -312,6 +510,11 @@ export default function InkHome() {
   const [params, setParams] = useSearchParams();
   // The ledger's dates; a section without them reads as the whole window.
   const dates = ("dates" in data && data.dates) || ALL_ORDER_DATES;
+  // One list: a new search, sort, dates or page starts it (and its older orders) afresh.
+  const listKey =
+    data.section === "orders"
+      ? `${data.search}:${data.sort}:${dates.range}:${dates.from}:${dates.to}:${params.get("after")}:${params.get("before")}`
+      : "";
   const go = (key: "after" | "before", cursor: string | null) => {
     if (!cursor) return;
     const next = new URLSearchParams(params);
@@ -325,6 +528,13 @@ export default function InkHome() {
     next.set("page", String(page));
     setParams(next);
   };
+  // The whole of Shopify's list, on its last page: no search, no narrower dates.
+  const wholeList =
+    data.section === "orders" &&
+    !data.ordersError &&
+    !data.search &&
+    dates.range === ALL_ORDER_DATES.range &&
+    !data.pageInfo?.hasNextPage;
   const pollDeadline = useRef<number | null>(null);
   const [pollingEnded, setPollingEnded] = useState(false);
   const settingUp = data.stage === "provisioning";
@@ -401,7 +611,7 @@ export default function InkHome() {
                         Recent orders
                       </Text>
                       <Text as="p" tone="subdued">
-                        Orders from the past 60 days. Open one to review its delivery and opens.
+                        Open an order to review its delivery and opens.
                       </Text>
                     </BlockStack>
                     <InkOrderSearch
@@ -423,7 +633,7 @@ export default function InkHome() {
                   </Box>
                 ) : (
                   <InkRecentOrders
-                    key={`${data.search}:${data.sort}:${dates.range}:${dates.from}:${dates.to}:${params.get("after")}:${params.get("before")}`}
+                    key={listKey}
                     orders={data.recentOrders}
                     returnTo="/app/ink/orders"
                     detailed
@@ -436,20 +646,6 @@ export default function InkHome() {
                     onSort={(sort) => setParams(orderSearchParams(params, data.search || "", sort))}
                     pending={navigation.state !== "idle"}
                   />
-                )}
-                {/* The list ends where Shopify's window does: an app reads the
-                    last 60 days of orders (read_all_orders aside). The Steve
-                    Madden test store has exactly 10 there (2026-09-24: "the
-                    orders cap out at 10 - whats that about?"). */}
-                {!data.ordersError && data.recentOrders.length > 0 && !data.pageInfo?.hasNextPage && (
-                  <>
-                    <Divider />
-                    <Box padding="300">
-                      <Text as="p" variant="bodySm" tone="subdued" alignment="center">
-                        That is every order from the past 60 days. Shopify shares only the last 60 days of orders with apps.
-                      </Text>
-                    </Box>
-                  </>
                 )}
                 {data.pageInfo &&
                   (data.pageInfo.hasPreviousPage ||
@@ -478,6 +674,27 @@ export default function InkHome() {
                       </Box>
                     </>
                   )}
+                {/* The list ends where Shopify's window does: an app reads the
+                    last 60 days of orders (read_all_orders aside). The Steve
+                    Madden test store has exactly 10 there (2026-09-24: "the
+                    orders cap out at 10 - whats that about?"). Said only of
+                    the whole list — under a search or narrower dates it is not
+                    every order (the cloud session's #177, carried here) — and
+                    there, newest first, the older orders follow from ink's
+                    records (OlderOrders). */}
+                {wholeList &&
+                  ((data.sort || "newest") === "newest" && !settingUp ? (
+                    <OlderOrders key={listKey} shown={data.recentOrders} mapsKey={data.mapsKey} />
+                  ) : data.recentOrders.length > 0 ? (
+                    <>
+                      <Divider />
+                      <Box padding="300">
+                        <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+                          That is every order from the past 60 days. Shopify shares only the last 60 days of orders with apps.
+                        </Text>
+                      </Box>
+                    </>
+                  ) : null)}
               </Card>
             )}
           </BlockStack>

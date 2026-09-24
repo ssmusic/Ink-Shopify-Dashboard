@@ -144,6 +144,27 @@ describe("what the dates control draws, on both apps' Orders", () => {
   });
 });
 
+describe("ink's line at the end of the list", () => {
+  // The line (#176) says the list is every order from the past 60 days. That
+  // is true only of the whole list: a search or narrower dates show some
+  // (the cloud session's #177, carried with ink's older orders). Newest
+  // first, the whole list ends on Load more instead, with no line
+  // (contracts/ink-older-orders.test.tsx).
+  const LINE = "That is every order from the past 60 days.";
+  const ROW = { id: "gid://shopify/Order/1042", name: "#1042", proofId: null, createdAt: "2026-09-10T12:00:00Z", detail: null, more: new Promise(() => {}) };
+  const lastPage = { hasNextPage: false, hasPreviousPage: false, startCursor: "c1", endCursor: "c1" };
+
+  it("ends the whole list, and only the whole list", () => {
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: lastPage, sort: "oldest" }))).toContain(LINE);
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: lastPage, sort: "total_desc" }))).toContain(LINE);
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: lastPage }))).not.toContain(LINE);
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: lastPage, dates: { range: "7d", from: null, to: null } }))).not.toContain(LINE);
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: lastPage, dates: CUSTOM }))).not.toContain(LINE);
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: lastPage, search: "#1042" }))).not.toContain(LINE);
+    expect(text(inkScreen({ recentOrders: [ROW], pageInfo: { ...lastPage, hasNextPage: true } }))).not.toContain(LINE);
+  });
+});
+
 describe("Last 60 days is Shopify's whole window", () => {
   it("neither app asks for read_all_orders, so the whole window adds nothing to Shopify's read and no preset says All time", () => {
     for (const toml of ["shopify.app.toml", "shopify.app.ink.toml"]) expect(read(toml)).not.toMatch(/read_all_orders/);
