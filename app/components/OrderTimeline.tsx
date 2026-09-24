@@ -51,24 +51,27 @@ export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
             <Text as="p" variant="bodySm" tone={s.at ? undefined : "subdued"}>
               {s.at ? when(s.at) : "Not recorded"}
             </Text>
-            {s.state === "carrier" && s.at && (
+            {s.at && s.note ? (
               <Text as="p" tone="subdued" variant="bodySm">
-                Carrier scan
+                {s.note}
               </Text>
-            )}
+            ) : null}
           </BlockStack>
         ))}
     </InlineGrid>
   );
 }
 
-// A step's mark: the one blue when it is recorded, the carrier's grey when only
-// the carrier said so, an empty ring when nothing was recorded — every label
-// starts on the same line (lib/ink-palette.ts).
+// A step's mark: the one blue when ink recorded it, the carrier's grey tick for
+// a carrier's scan, a grey ring with a dot when only Shopify or a demo clock
+// reported it (never a tick), an empty ring when nothing was recorded — every
+// label starts on the same line (lib/ink-palette.ts).
 function StepMark({ state }: { state: LifecycleStep["state"] }) {
   const base = { width: 18, height: 18, borderRadius: 9999, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 } as const;
   if (state === "done") return <span aria-label="Recorded" style={{ ...base, background: INK_DATA, color: "#fff" }}>✓</span>;
   if (state === "carrier") return <span aria-label="Carrier scan" style={{ ...base, background: INK_MUTED, color: "#fff" }}>✓</span>;
+  // Reported by someone ink cannot check (Shopify's fulfillment, the demo clock): a mark, never a tick.
+  if (state === "reported") return <span aria-label="Reported" style={{ ...base, border: `1.5px solid ${INK_MUTED}` }}><span style={{ width: 6, height: 6, borderRadius: 9999, background: INK_MUTED }} /></span>;
   return <span aria-label="Not recorded" style={{ ...base, border: `1.5px solid ${INK_HAIRLINE}` }} />;
 }
 export function OpensAgainstAddress({
@@ -226,6 +229,9 @@ export function DeliveryWindowBar({ w }: { w: DeliveryWindow | null }) {
             Delivered
           </Text>
           <Text as="p">{when(w.deliveredAt)}</Text>
+          <Text as="p" variant="bodySm" tone="subdued">
+            {w.deliveredNote}
+          </Text>
         </BlockStack>
         <BlockStack gap="100">
           <Text as="p" tone="subdued">

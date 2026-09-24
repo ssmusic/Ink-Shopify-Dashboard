@@ -300,8 +300,9 @@ describe('ink screens: facts, working controls and Polaris', () => {
   });
 
   it('never guesses arrival against a promised window', () => {
-    const t = text(renderToString(<AppProvider i18n={translations}><DeliveryWindowBar w={{deliveredAt:'2026-09-01T00:00:00Z',windowEnd:'2026-09-03T00:00:00Z',firstOpenAt:'2026-09-01T05:00:00Z',hoursToOpen:5,openPositionPct:10,withinExpectedWindow:true}} /></AppProvider>));
+    const t = text(renderToString(<AppProvider i18n={translations}><DeliveryWindowBar w={{deliveredAt:'2026-09-01T00:00:00Z',deliveredNote:"From Shopify's fulfillment",windowEnd:'2026-09-03T00:00:00Z',firstOpenAt:'2026-09-01T05:00:00Z',hoursToOpen:5,openPositionPct:10,withinExpectedWindow:true}} /></AppProvider>));
     expect(t).toContain('Recording window ends');
+    expect(t).toContain("From Shopify's fulfillment");
     expect(t).toContain('5 hours after delivery');
     expect(t).not.toMatch(/promised|expected|within|Yes/);
   });
