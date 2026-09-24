@@ -28,7 +28,9 @@ import InkRecentOrders, {
 } from "../components/InkRecentOrders";
 import InkOrderSearch from "../components/InkOrderSearch";
 import OrderExpandedRow from "../components/OrderExpandedRow";
-import { readRecentOrderPage } from "../services/ink-links.server";
+import { readRecentOrderPage, readShopZone } from "../services/ink-links.server";
+import { readOlderOrders } from "../services/ink-older-orders.server";
+import RitualistOlderOrders, { type OlderRows } from "../components/RitualistOlderOrders";
 import { readJwks } from "../services/ink-record.server";
 import {
   ALL_ORDER_DATES,
@@ -85,6 +87,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // screen whose entire body is the text "200" — the App Store reviewer's
   // report on Settings (app.settings.tsx tells it whole). A failed read costs
   // the order list, said as one line, never the page.
+  // OLDER ORDERS — past Shopify's 60 days, from ink's own records
+  // (components/RitualistOlderOrders.tsx): "Load more" reads a page at a time
+  // here. It answers the screen's shape with no Shopify orders, and never
+  // throws: a fetcher's error would take the whole page down with it.
+  const olderParam = params.get("older");
+  if (olderParam !== null) {
+    const olderKey = await ritualistApiKey(session.shop).catch(() => null);
+    const older: OlderRows = await (async () => {
+      const found = await readOlderOrders(olderKey, olderParam, readShopZone(admin));
+      if (!found) return null;
+      const keys = olderKey && found.rows.some((o) => o.proofId) ? readJwks() : null;
+      return {
+        rows: found.rows.map((o) => ({ id: o.id, name: o.name, proofId: o.proofId, detail: o.detail, createdAt: o.createdAt, more: ritualistRowRecord(olderKey, o.proofId, keys) })),
+        next: found.next,
+      };
+    })().catch(() => null);
+    return {
+      orders: [] as (InkStreamedOrderRow & { createdAt?: string | null })[],
+      pageInfo: null,
+      ordersError: false,
+      search: "",
+      sort: "newest" as const,
+      dates: ALL_ORDER_DATES,
+      dateBounds: orderDateBounds(Date.now()),
+      older,
+    };
+  }
+
   let ordersError = false;
   const page = await readRecentOrderPage(admin, {
     first: ORDERS_PER_PAGE,
@@ -106,11 +136,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // record included.
   const apiKey = await ritualistApiKey(session.shop);
   const keys = apiKey && page.rows.some((o) => o.proofId) ? readJwks() : null;
-  const orders: InkStreamedOrderRow[] = page.rows.map((o) => ({
+  const orders: (InkStreamedOrderRow & { createdAt?: string | null })[] = page.rows.map((o) => ({
     id: o.id,
     name: o.name,
     proofId: o.proofId,
     detail: o.detail,
+    createdAt: o.createdAt,
     more: ritualistRowRecord(apiKey, o.proofId, keys),
   }));
 
@@ -122,6 +153,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     sort,
     dates,
     dateBounds: orderDateBounds(Date.now()),
+    older: undefined as OlderRows | undefined,
   };
 };
 
@@ -214,6 +246,14 @@ export default function ShipmentsIndex() {
               onSort={(sort) => setParams(orderSearchParams(params, data.search || "", sort))}
               pending={!idle}
               renderPanel={(row) => <OrderExpandedRow row={row} />}
+            />
+          )}
+          {/* Load more: past Shopify's 60 days, from ink's records — on the
+              whole list only, newest first, on its last page. */}
+          {!data.ordersError && !data.search && !dated && (data.sort || "newest") === "newest" && !data.pageInfo?.hasNextPage && (
+            <RitualistOlderOrders
+              key={`${params.get("after")}:${params.get("before")}`}
+              shown={data.orders.map((o) => ({ proofId: o.proofId, createdAt: o.createdAt ?? null }))}
             />
           )}
           {data.pageInfo && (data.pageInfo.hasPreviousPage || data.pageInfo.hasNextPage) && (
