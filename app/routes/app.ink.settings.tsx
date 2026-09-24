@@ -10,7 +10,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import InkSettingsView from "../components/InkSettingsView";
 import { readInkMerchant } from "../services/ink-merchant.server";
-import { readPrivacyRequests } from "../services/ink-privacy.server";
+import { exportPrivacyRequest, readPrivacyRequests } from "../services/ink-privacy.server";
 import { readInkConnection } from "../services/ink-connection.server";
 
 function listingUrl(raw: string | undefined) {
@@ -43,8 +43,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   );
 };
 export const action = async ({ request }: ActionFunctionArgs) => {
-  await authenticate.admin(request);
-  // Retired forms must not keep changing a shared backend destination dial.
+  const { session } = await authenticate.admin(request);
+  const form = await request.formData();
+  // The one thing Settings does: hand the merchant a customer's data for a
+  // customers/data_request (services/ink-privacy.server.ts). Nothing here
+  // changes a setting — retired forms must not keep changing a shared
+  // backend destination dial.
+  if (form.get("intent") === "privacy_export") {
+    const result = await exportPrivacyRequest(session.shop, String(form.get("id") || "")).catch(() => ({
+      ok: false as const,
+      note: "The data could not be prepared. Try again.", // PLACEHOLDER
+    }));
+    return routeData(result, { headers: { "Cache-Control": "private, no-store" } });
+  }
   return new Response("Settings are read-only.", {
     status: 405,
     headers: { Allow: "GET", "Cache-Control": "private, no-store" },

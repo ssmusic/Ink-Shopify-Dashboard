@@ -249,7 +249,35 @@ describe("under ink, the enrol and tracking queries select nothing outside INK_S
 
   it("does not read a phone or request fulfillment-service access", () => {
     expect(templateLiteral(read("app/routes/webhooks.orders_create.ts"), "ORDER_DETAIL_QUERY_INK")).not.toMatch(/\bphone\b/);
-    expect(INK_SCOPES).toEqual(["write_orders", "write_merchant_managed_fulfillment_orders", "write_third_party_fulfillment_orders"]);
+    expect(INK_SCOPES).toEqual(["write_orders", "read_fulfillments", "write_merchant_managed_fulfillment_orders", "write_third_party_fulfillment_orders"]);
+  });
+
+  // THE TOPICS NEED THEIR SCOPES. Shopify refuses a webhook subscription whose
+  // topic the app's scopes do not cover, and the refusal is silent here:
+  // app.tsx registers its topics fire-and-forget at load. On 2026-09-24 the
+  // list above had been cut to three scopes on main; a delegate token holding
+  // exactly those three, on corvara-cicli, was refused FULFILLMENTS_CREATE and
+  // FULFILLMENTS_UPDATE ("You cannot create a webhook subscription with the
+  // specified topic") — the two topics that carry the tracking rewrite
+  // (webhooks.fulfillments_create.tsx). Adding read_fulfillments made both
+  // succeed. Scopes per topic: Shopify's WebhookSubscriptionTopic enum, 2025-10.
+  it("every topic ink subscribes to, in the toml or at load, is one its scopes allow", () => {
+    const TOPIC_NEEDS: Record<string, string[]> = {
+      ORDERS_CREATE: ["read_orders", "write_orders"],
+      ORDERS_FULFILLED: ["read_orders", "write_orders"],
+      FULFILLMENTS_CREATE: ["read_fulfillments", "write_fulfillments"],
+      FULFILLMENTS_UPDATE: ["read_fulfillments", "write_fulfillments"],
+    };
+    const atLoad = [...read("app/shopify.server.ts").matchAll(/^\s{4}([A-Z_]+): \{\s*\n\s*deliveryMethod/gm)].map((m) => m[1]);
+    expect(atLoad.sort()).toEqual(["FULFILLMENTS_CREATE", "FULFILLMENTS_UPDATE", "ORDERS_CREATE", "ORDERS_FULFILLED"]);
+    const inToml = [...read("shopify.app.ink.toml").matchAll(/^\s*topics = \[ "([^"]+)" \]/gm)]
+      .map((m) => m[1].toUpperCase().replace("/", "_"))
+      .filter((t) => !t.startsWith("APP_"));
+    for (const topic of [...atLoad, ...inToml]) {
+      const needs = TOPIC_NEEDS[topic];
+      expect(needs, `no scope rule written down for ${topic}`).toBeDefined();
+      expect(needs.some((s) => INK_SCOPES.includes(s)), `${topic} needs one of ${needs.join(", ")}`).toBe(true);
+    }
   });
 
   it("ink's fulfillment reads still carry the proof link", () => {

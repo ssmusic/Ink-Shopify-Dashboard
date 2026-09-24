@@ -732,6 +732,42 @@ export const redactCustomerInInk = async (params: {
   }
 };
 
+// GDPR: a Shopify customers/data_request, answered — the backend returns
+// everything ink holds about that buyer on that shop (POST
+// /admin/export-customer, admin-secret guarded; the same finder as the
+// redaction). Called when the merchant downloads the request from Settings,
+// never at webhook time, so no copy of the buyer's data is stored anywhere
+// new. Never throws — callers get {ok,status,body}.
+export const exportCustomerFromInk = async (params: {
+  shopDomain: string;
+  customerId?: string | number | null;
+  customerEmail?: string | null;
+  orderIds?: Array<string | number> | null;
+}): Promise<{ ok: boolean; status: number; body: any }> => {
+  const url = getAlanUrl("/admin/export-customer");
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      signal: AbortSignal.timeout(20000),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Secret": INK_ADMIN_SECRET as string,
+      },
+      body: JSON.stringify({
+        shop_domain: params.shopDomain,
+        customer_id: params.customerId ?? null,
+        customer_email: params.customerEmail ?? null,
+        order_ids: Array.isArray(params.orderIds) ? params.orderIds : [],
+        source: "shopify_customers_data_request",
+      }),
+    });
+    const body = await response.json().catch(() => null);
+    return { ok: response.ok, status: response.status, body };
+  } catch (e) {
+    return { ok: false, status: 0, body: { error: String(e) } };
+  }
+};
+
 // GDPR: forward a Shopify shop/redact to the ink-backend whole-shop purge
 // (POST /admin/purge-shop) — deletes the shop's proofs, per-proof event/
 // return rows, enroll locks, and backend merchant docs. `confirm` echoes the

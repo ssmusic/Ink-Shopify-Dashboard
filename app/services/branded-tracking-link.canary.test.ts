@@ -25,6 +25,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { assertBrandedTrackingUrl, isBrandedTrackingUrl } from "./branded-tracking-link.server";
 
+const otherAppHoldsSession = vi.fn(async (_shop: string) => false);
+vi.mock("../firestore-session-storage.server", () => ({ otherAppHoldsSession }));
+
 vi.mock("./brand-page-url.server", () => ({
   resolveBrandPageUrl: vi.fn(async () => ({
     pageUrl: "https://clarev.in.ink/r/nfc_test_token",
@@ -219,5 +222,59 @@ describe("isBrandedTrackingUrl — the loop guard's own edges", () => {
     expect(isBrandedTrackingUrl("https://www.in.ink.attacker.example/r/tok")).toBe(false);
     expect(isBrandedTrackingUrl("http://clarev.in.ink/r/tok")).toBe(false);
     expect(isBrandedTrackingUrl("https://ink:secret@clarev.in.ink/r/tok")).toBe(false);
+  });
+});
+
+// UNDER INK, THE FEED GATE HOLDS ONLY WHERE THE RITUALIST'S PAGE MAY BE THE
+// BUYER'S (2026-09-24, the App Store review). ink's own page shows no
+// tracking status, so on a store without the Ritualist a dead or absent feed
+// cannot make it lie — and a reviewer's made-up number, or a carrier the feed
+// cannot follow, must still get ink's link: the listing says every one.
+describe("under ink, the link does not wait for the carrier feed on a store ink alone serves", () => {
+  beforeEach(() => {
+    vi.stubEnv("APP_FLAVOR", "ink");
+    otherAppHoldsSession.mockReset();
+  });
+
+  it("rewrites the link with the feed unregistered when the Ritualist is not installed", async () => {
+    otherAppHoldsSession.mockResolvedValue(false);
+    const admin = fakeAdmin();
+    const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: false });
+    expect(result.outcome).toBe("updated");
+    expect(admin.graphql).toHaveBeenCalledOnce();
+    expect(otherAppHoldsSession).toHaveBeenCalledWith("clarev-test.myshopify.com");
+  });
+
+  it("keeps the carrier's link when the Ritualist is installed on the same store", async () => {
+    otherAppHoldsSession.mockResolvedValue(true);
+    const admin = fakeAdmin();
+    const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: false });
+    expect(result.outcome).toBe("skipped_feed_unregistered");
+    expect(admin.graphql).not.toHaveBeenCalled();
+  });
+
+  it("keeps the carrier's link when the session store cannot answer", async () => {
+    otherAppHoldsSession.mockRejectedValue(new Error("firestore unavailable"));
+    const admin = fakeAdmin();
+    const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: false });
+    expect(result.outcome).toBe("skipped_feed_unregistered");
+    expect(admin.graphql).not.toHaveBeenCalled();
+  });
+
+  it("asks nothing extra when the feed is registered", async () => {
+    const admin = fakeAdmin();
+    const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: true });
+    expect(result.outcome).toBe("updated");
+    expect(otherAppHoldsSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("the Ritualist's gate is unchanged", () => {
+  it("never consults the other app's sessions, and skips a dead feed", async () => {
+    otherAppHoldsSession.mockReset();
+    const admin = fakeAdmin();
+    const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: false });
+    expect(result.outcome).toBe("skipped_feed_unregistered");
+    expect(otherAppHoldsSession).not.toHaveBeenCalled();
   });
 });

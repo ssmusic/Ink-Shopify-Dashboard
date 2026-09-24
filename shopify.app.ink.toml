@@ -81,10 +81,22 @@ api_version = "2025-10"
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 #
-# Write scopes include read. Ink updates order tags/metafields and existing
-# tracking at merchant-managed and third-party locations. It creates no
-# fulfillment service and needs no fulfillment-service or assigned scope.
-scopes = "write_orders,write_merchant_managed_fulfillment_orders,write_third_party_fulfillment_orders"
+# Write scopes include read. Each one is here for one job:
+#   write_orders — the order's tag and ink metafields (tagsAdd, metafieldsSet);
+#     read_orders with it: the orders list and orders/create, orders/fulfilled.
+#   read_fulfillments — the fulfillments/create and fulfillments/update
+#     webhooks (app.tsx registers them at load), which carry the tracking
+#     number to the record and rewrite the tracking link. Shopify refuses those
+#     two topics without it: measured 2026-09-24 on corvara-cicli with a
+#     delegate token holding only the other three ("You cannot create a
+#     webhook subscription with the specified topic").
+#   write_merchant_managed_fulfillment_orders, write_third_party_fulfillment_orders
+#     — fulfillmentTrackingInfoUpdate on a fulfillment the merchant or a 3PL
+#     made. ink creates no fulfillment service, so it needs no assigned scope
+#     and no write_fulfillments.
+# app/services/ink-scopes.server.ts holds the same list; a test pins the two
+# equal and pins every subscribed topic to a scope in it.
+scopes = "write_orders,read_fulfillments,write_merchant_managed_fulfillment_orders,write_third_party_fulfillment_orders"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
