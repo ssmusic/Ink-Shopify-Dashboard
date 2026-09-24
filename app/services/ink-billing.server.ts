@@ -189,10 +189,13 @@ export async function inkRecordAction(
   // export alone took 14 s for a busy record, and the three reads used to
   // follow one another (2026-09-24).
   const files = ["download", "pdf", "csv"].includes(intent);
-  const [bundle, audit, opens]: any[] = await Promise.all([
+  const [bundle, audit, opens, proof]: any[] = await Promise.all([
     files ? merchantRead(apiKey, `proofs/${proofId}/export`, fetch, EXPORT_READ_TIMEOUT_MS) : null,
     files || intent === "inspect" ? merchantRead(apiKey, `proofs/${proofId}/audit`, fetch, RECORD_READ_TIMEOUT_MS) : null,
     intent === "pdf" || intent === "csv" || intent === "inspect" ? merchantRead(apiKey, `proofs/${proofId}/opens`) : null,
+    // The carrier's scans for the PDF (the merchant's proof door serves the
+    // journey; the audit does not). A failed read leaves the scans out.
+    intent === "pdf" ? merchantRead(apiKey, `proofs/${proofId}`, fetch, RECORD_READ_TIMEOUT_MS).catch(() => null) : null,
   ]);
   if (files) {
     if (
@@ -241,7 +244,8 @@ export async function inkRecordAction(
       pdfBase64: null, csvText: buildInkRecordCsv(record, inspection), inspection: null,
       filename: `ink-record-${proofId}.csv`,
     };
-    const pdf = buildInkRecordPdf(audit, record, inspection);
+    const journey = proof?.proof_id === proofId ? proof.carrier_journey ?? null : null;
+    const pdf = buildInkRecordPdf(audit, record, inspection, { journey });
     return {
       ok: true as const,
       note: null,
