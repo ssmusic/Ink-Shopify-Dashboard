@@ -186,8 +186,8 @@ describe("the Orders route", () => {
     const { authenticate } = await import("../shopify.server");
     const { readRecentOrderPage } = await import("../services/ink-links.server");
     vi.mocked(authenticate.admin).mockResolvedValueOnce({ admin: {}, session: { shop: "sample.myshopify.com" } } as never);
-    const { loader } = await import("../routes/app.ink._index");
-    await loader({ request: new Request("https://app.test/app/ink?q=%231010&sort=total_desc"), params: {}, context: {} } as never);
+    const { loader } = await import("../routes/app.ink.$section");
+    await loader({ request: new Request("https://app.test/app/ink/orders?q=%231010&sort=total_desc"), params: { section: "orders" }, context: {} } as never);
     expect(readRecentOrderPage).toHaveBeenCalledWith({}, expect.objectContaining({ first: 20, search: "#1010", sort: "total_desc" }));
   });
 });

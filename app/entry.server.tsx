@@ -11,7 +11,11 @@ import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 
-export const streamTimeout = 5000;
+// ink streams each order's record (routes/app.ink.$section.tsx), and a
+// record's whole read may take up to RECORD_READ_TIMEOUT_MS (15 s), so ink's
+// stream waits 20 s before it gives up on a row. The Ritualist streams nothing
+// and keeps its 5 s.
+export const streamTimeout = isInk() ? 20_000 : 5000;
 
 export default async function handleRequest(
   request: Request,

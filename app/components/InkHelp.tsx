@@ -47,7 +47,7 @@ export default function InkHelp() {
             are distance guides.
           </Text>
           <InlineStack>
-            <Button url="/app/ink">View orders</Button>
+            <Button url="/app/ink/orders">View orders</Button>
           </InlineStack>
         </Topic>
         <Topic title="Buy a record">
@@ -82,7 +82,7 @@ export default function InkHelp() {
             available. A missing past purchase can be checked by support.
           </Text>
           <InlineStack>
-            <Button url="/app/ink?view=records">View records</Button>
+            <Button url="/app/ink/records">View records</Button>
           </InlineStack>
         </Topic>
         <Topic title="Connection and missing data">
