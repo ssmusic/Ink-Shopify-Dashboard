@@ -140,10 +140,12 @@ describe("ink Shopify billing", () => {
     // Bought, but the export door does not answer: no file.
     const bought = audit({ locked: false, purchased: true, price_cents: 2900, currency: "USD" });
     merchantRead.mockImplementation(async (_key: string, path: string) => (path.endsWith("/audit") ? bought : null));
-    for (const intent of ["pdf", "csv", "download"]) expect((await inkRecordAction(admin, shop, "own-key", form(intent))).ok, intent).toBe(false);
+    for (const intent of ["pdf", "download"]) expect((await inkRecordAction(admin, shop, "own-key", form(intent))).ok, intent).toBe(false);
     // Bought, and the export door answers for this record: all of it.
     merchantRead.mockImplementation(async (_key: string, path: string) => (path.endsWith("/export") ? bundle : bought));
-    for (const intent of ["inspect", "pdf", "csv", "download"]) expect((await inkRecordAction(admin, shop, "own-key", form(intent))).ok, intent).toBe(true);
+    for (const intent of ["inspect", "pdf", "download"]) expect((await inkRecordAction(admin, shop, "own-key", form(intent))).ok, intent).toBe(true);
+    // Sam, 2026-09-24: "just use json" — the CSV is no longer a file.
+    expect((await inkRecordAction(admin, shop, "own-key", form("csv"))).ok).toBe(false);
   });
   it("rejects a download bundle for another proof", async () => {
     const bundle = { manifest: { proof_id: proof, signed: true }, files: { "packet.json": "{}" } };
@@ -346,7 +348,7 @@ describe("ink Shopify billing", () => {
       expect((await inkRecordAction(admin, shop, "own-key", form("pdf"))).ok).toBe(false);
     }
   });
-  it("opens the inspector on the merchant's own record, and gates the CSV behind the hand-over", async () => {
+  it("opens the inspector on the merchant's own record, and gates the PDF behind the hand-over", async () => {
     const audit = {
       proof_id: proof,
       audience: "merchant",
@@ -361,16 +363,16 @@ describe("ink Shopify billing", () => {
     const inspector = await inkRecordAction(admin, shop, "own-key", form("inspect"));
     expect(inspector.inspection?.events).toHaveLength(1);
     expect(inspector.inspection?.opens?.[0].distanceM).toBe(719);
-    const csv = await inkRecordAction(admin, shop, "own-key", form("csv"));
-    expect(csv.csvText).toContain("event_12345678");
-    expect(csv.filename).toBe(`ink-record-${proof}.csv`);
+    const pdf = await inkRecordAction(admin, shop, "own-key", form("pdf"));
+    expect(pdf.pdfBase64).toBeTruthy();
+    expect(pdf.filename).toBe(`ink-record-${proof}.pdf`);
     // The hand-over's lock, in either backend contract, is not the screen's:
-    // the merchant's own record is inspected; its CSV waits for the hand-over.
+    // the merchant's own record is inspected; its PDF waits for the hand-over.
     for (const record of [{ locked: true }, { locked: false, purchased: false, price_cents: 2900, currency: "USD" }]) {
       merchantRead.mockImplementation(async (_key: string, path: string) =>
         path.endsWith("/export") ? bundle : path.endsWith("/opens") ? { opens: [] } : { ...audit, record });
       expect((await inkRecordAction(admin, shop, "own-key", form("inspect"))).ok, JSON.stringify(record)).toBe(true);
-      expect((await inkRecordAction(admin, shop, "own-key", form("csv"))).ok, JSON.stringify(record)).toBe(false);
+      expect((await inkRecordAction(admin, shop, "own-key", form("pdf"))).ok, JSON.stringify(record)).toBe(false);
     }
     // Another shop's audit, or another proof's, is never inspected.
     for (const other of [{ ...audit, audience: "public" }, { ...audit, proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" }]) {

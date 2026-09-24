@@ -136,7 +136,6 @@ describe("the wiring", () => {
     // The lock is the HAND-OVER's (lib/record-handover.ts): the merchant door
     // answers a priced record whole (ink-backend #129), so the report asks the
     // `record` block, never whether a chain came back.
-    expect(src("../routes/app.api.orders.$orderId.audit-report.tsx")).toContain('if (handoverLocked(packet.record)) return new Response("The record is not bought yet", { status: 402 });');
     expect(src("../routes/app.orders.$orderId.tsx")).toContain("recordLocked = !!audit && handoverLocked(audit.record);");
     expect(src("../routes/app.api.orders.$orderId.record-export.tsx")).toContain("err instanceof InkApiError && err.status === 402");
     const card = src("../components/VerifiableRecordCard.tsx");

@@ -1200,7 +1200,6 @@ export default function OrderDetails() {
                                     proofId={order.localProof.proof_id}
                                     verifyUrl={order.localProof.verify_record_url}
                                     qrSrc={order.localProof.verify_record_qr}
-                                    auditReportHref={`/app/api/orders/${encodeURIComponent(order.id)}/audit-report?proof=${encodeURIComponent(order.localProof.proof_id)}`}
                                     recordExportHref={`/app/api/orders/${encodeURIComponent(order.id)}/record-export?proof=${encodeURIComponent(order.localProof.proof_id)}`}
                                     published={order.localProof.record_published}
                                     locked={order.localProof.record_locked}

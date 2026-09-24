@@ -343,7 +343,7 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
 // whole Orders list reloading (6–7 s on the Steve Madden test store), its rows
 // back to their placeholders under the button (2026-09-24). A purchase, and
 // everything else, still reloads.
-const RECORD_READS = new Set(["inspect", "pdf", "csv", "download"]);
+const RECORD_READS = new Set(["inspect", "pdf", "download"]);
 export const shouldRevalidate: ShouldRevalidateFunction = ({ formAction, formData, defaultShouldRevalidate }) => {
   if (formAction && new URL(formAction, "https://ink.invalid").pathname === "/app/record" && RECORD_READS.has(String(formData?.get("intent") ?? "")))
     return false;

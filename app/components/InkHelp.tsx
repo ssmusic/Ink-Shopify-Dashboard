@@ -57,9 +57,9 @@ export default function InkHelp() {
             and currency for approval before charging your store.
           </Text>
           <Text as="p">
-            Once the record is available, you can download a PDF report, CSV
-            data and a JSON file with the signed event data. The files contain
-            the data available for that order.
+            Once the record is available, you can download a one-page PDF and
+            a JSON file with the signed event data. The files contain the data
+            available for that order.
           </Text>
           <Text as="p" tone="subdued">
             A purchase does not add new evidence or guarantee the outcome of a
@@ -70,7 +70,7 @@ export default function InkHelp() {
         <Topic title="Download again">
           <Text as="p">
             Records lists purchases and approvals started in this app. Available
-            records have PDF, CSV and JSON download buttons. Ink does not email
+            records have PDF and JSON download buttons. Ink does not email
             these files.
           </Text>
           <Text as="p">

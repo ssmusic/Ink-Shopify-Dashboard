@@ -163,8 +163,8 @@ export default function InkRecordHistory({
               : "Buy a record from its order. Records purchased in this app stay here for repeat downloads, including older orders."}
           </Text>
           <Text as="p" tone="subdued">
-            Choose PDF for a report, CSV for a spreadsheet, or JSON for the
-            signed data. Files are not emailed.
+            Choose PDF for the one-page record, or JSON for the signed data.
+            Files are not emailed.
           </Text>
         </BlockStack>
       </Card>

@@ -95,16 +95,6 @@ export default function InkRecordDoor({
         setDownloadError(true);
       }
     }
-    if ("csvText" in result && result.csvText && result.filename) {
-      try {
-        saveBlob(
-          new Blob([result.csvText], { type: "text/csv;charset=utf-8" }),
-          result.filename,
-        );
-      } catch {
-        setDownloadError(true);
-      }
-    }
     if ("pdfBase64" in result && result.pdfBase64 && result.filename) {
       try {
         const bytes = Uint8Array.from(atob(result.pdfBase64), (char) =>
@@ -155,10 +145,10 @@ export default function InkRecordDoor({
             </Text>
             <Text as="p" variant="bodySm" tone="subdued">
               {door.offerLine
-                ? "PDF report, CSV data and signed JSON. Includes the events available for this order."
+                ? "One-page PDF and signed JSON. Includes the events available for this order."
                 : included && door.downloadable && !door.purchase
-                  ? "Included on this store. PDF report, CSV data and signed JSON file."
-                  : "PDF report, CSV data and signed JSON file."}
+                  ? "Included on this store. One-page PDF and signed JSON file."
+                  : "One-page PDF and signed JSON file."}
             </Text>
           </BlockStack>
         )}
@@ -173,15 +163,6 @@ export default function InkRecordDoor({
                 onClick={() => submit("pdf")}
               >
                 {compact ? "PDF" : "Download PDF"}
-              </Button>
-              <Button
-                {...pressed("csv")}
-                accessibilityLabel={
-                  orderLabel ? `Download CSV for ${orderLabel}` : undefined
-                }
-                onClick={() => submit("csv")}
-              >
-                {compact ? "CSV" : "Download CSV"}
               </Button>
               <Button
                 {...pressed("download")}
