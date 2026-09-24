@@ -19,6 +19,8 @@ import {
   BlockStack,
   Box,
   Card,
+  Divider,
+  InlineStack,
   Layout,
   Page,
   Pagination,
@@ -43,6 +45,7 @@ import { orderSearch, orderSort, orderSearchParams } from "../lib/ink-order-sear
 // cannot be read; the screen asks again every few seconds for a while.
 const POLL_MS = 3_000;
 const POLL_LIMIT = 25;
+const ORDERS_PER_PAGE = 20;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -128,7 +131,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const value = params.get(key);
     return value && value.length <= 1024 ? value : null;
   };
+  // Twenty to a page — the Ritualist's ledger shows the whole list on one
+  // screen; ink reads each order's record in parallel, so a page of twenty
+  // costs about what five did (measured on Corvara, 2026-09-24).
   const page = await readRecentOrderPage(admin, {
+    first: ORDERS_PER_PAGE,
     search,
     sort,
     after: cursor("after"),
@@ -297,13 +304,15 @@ export default function InkHome() {
             ) : (
               <Card padding="0">
                 <Box padding="400">
-                  <BlockStack gap="200">
-                    <Text as="h2" variant="headingMd">
-                      Recent orders
-                    </Text>
-                    <Text as="p" tone="subdued">
-                      Orders from the past 60 days. Open one to review its delivery and opens.
-                    </Text>
+                  <BlockStack gap="300">
+                    <BlockStack gap="100">
+                      <Text as="h2" variant="headingMd">
+                        Recent orders
+                      </Text>
+                      <Text as="p" tone="subdued">
+                        Orders from the past 60 days. Open one to review its delivery and opens.
+                      </Text>
+                    </BlockStack>
                     <InkOrderSearch
                       search={data.search || ""}
                       sort={data.sort || "newest"}
@@ -313,9 +322,11 @@ export default function InkHome() {
                   </BlockStack>
                 </Box>
                 {data.ordersError ? (
-                  <Banner tone="info">
-                    Orders could not be loaded. Refresh to try again.
-                  </Banner>
+                  <Box paddingInline="400" paddingBlockEnd="400">
+                    <Banner tone="info">
+                      Orders could not be loaded. Refresh to try again.
+                    </Banner>
+                  </Box>
                 ) : (
                   <InkRecentOrders
                     key={`${data.search}:${data.sort}:${params.get("after")}:${params.get("before")}`}
@@ -323,29 +334,37 @@ export default function InkHome() {
                     returnTo="/app/ink"
                     searching={Boolean(data.search)}
                     mapsKey={data.mapsKey}
+                    sort={data.sort || "newest"}
+                    onSort={(sort) => setParams(orderSearchParams(params, data.search || "", sort))}
+                    pending={navigation.state !== "idle"}
                   />
                 )}
                 {data.pageInfo &&
                   (data.pageInfo.hasPreviousPage ||
                     data.pageInfo.hasNextPage) && (
-                    <Box padding="400">
-                      <Pagination
-                        hasPrevious={
-                          data.pageInfo.hasPreviousPage &&
-                          navigation.state === "idle"
-                        }
-                        hasNext={
-                          data.pageInfo.hasNextPage &&
-                          navigation.state === "idle"
-                        }
-                        onPrevious={() =>
-                          go("before", data.pageInfo!.startCursor)
-                        }
-                        onNext={() => go("after", data.pageInfo!.endCursor)}
-                        previousTooltip="Previous page"
-                        nextTooltip="Next page"
-                      />
-                    </Box>
+                    <>
+                      <Divider />
+                      <Box padding="300">
+                        <InlineStack align="center">
+                          <Pagination
+                            hasPrevious={
+                              data.pageInfo.hasPreviousPage &&
+                              navigation.state === "idle"
+                            }
+                            hasNext={
+                              data.pageInfo.hasNextPage &&
+                              navigation.state === "idle"
+                            }
+                            onPrevious={() =>
+                              go("before", data.pageInfo!.startCursor)
+                            }
+                            onNext={() => go("after", data.pageInfo!.endCursor)}
+                            previousTooltip="Previous page"
+                            nextTooltip="Next page"
+                          />
+                        </InlineStack>
+                      </Box>
+                    </>
                   )}
               </Card>
             )}
