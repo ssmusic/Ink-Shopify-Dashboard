@@ -82,6 +82,34 @@ async function ritualistSessionOn(shop: string): Promise<boolean | null> {
   }
 }
 
+const TRACKING_NOW = `#graphql
+  query InkTrackingNow($id: ID!) {
+    fulfillment(id: $id) { trackingInfo { url } }
+  }
+`;
+
+/** The tracking URLs Shopify holds for this fulfillment RIGHT NOW, read just
+ *  before we write. The webhook payload is a snapshot from before either app
+ *  acted, so two apps reading the same payload both saw the carrier's link and
+ *  both wrote (Steve Madden #1029, 2026-09-24). null = could not read; the
+ *  caller then keeps today's behaviour. */
+async function trackingUrlsNow(
+  admin: { graphql: (query: string, opts?: any) => Promise<Response> },
+  fulfillmentRawId: unknown,
+): Promise<string[] | null> {
+  try {
+    const res = await admin.graphql(TRACKING_NOW, {
+      variables: { id: `gid://shopify/Fulfillment/${fulfillmentRawId}` },
+    });
+    const json: any = await res.json();
+    const info = json?.data?.fulfillment?.trackingInfo;
+    if (!Array.isArray(info)) return null;
+    return info.map((t: any) => String(t?.url || "")).filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
 /** Is this URL already ours? Guards the echo our own mutation causes. */
 export function isBrandedTrackingUrl(url?: string | null): boolean {
   if (isInk()) {
@@ -229,6 +257,15 @@ export async function assertBrandedTrackingUrl({
       ? { numbers, urls: numbers.map(() => resolved.pageUrl as string) }
       : { number: numbers[0], url: resolved.pageUrl }),
   };
+
+  // FIRST INK LINK WINS. If any in.ink page already holds this fulfillment's
+  // link — the other app's rewrite landed while we were resolving ours — we
+  // never overwrite it: the store keeps one host, its cookie and its mark.
+  const now = await trackingUrlsNow(admin, fulfillmentRawId);
+  if (now && now.length > 0 && now.every(isBrandedTrackingUrl)) {
+    console.log(`🔗 ${label}: an ink page already holds this link (${now[0]}) — first one wins; leaving it.`);
+    return { outcome: "skipped_already_branded", detail: "another ink rewrite landed first" };
+  }
 
   try {
     const res = await admin.graphql(MUTATION, {

@@ -38,11 +38,21 @@ vi.mock("./brand-page-url.server", () => ({
 
 /** A fake Shopify admin that records what we asked it, and answers how the
  *  real one does. The recording IS the assertion for the mutation shape. */
-function fakeAdmin(response: unknown = { data: { fulfillmentTrackingInfoUpdate: { userErrors: [] } } }) {
+function fakeAdmin(
+  response: unknown = { data: { fulfillmentTrackingInfoUpdate: { userErrors: [] } } },
+  /** What Shopify holds right now, read just before the write (the carrier's link by default). */
+  nowUrls: string[] = [],
+) {
   const calls: Array<{ query: string; variables: Record<string, unknown> }> = [];
+  const reads: Array<Record<string, unknown>> = [];
   return {
     calls,
+    reads,
     graphql: vi.fn(async (query: string, opts?: { variables?: Record<string, unknown> }) => {
+      if (query.includes("InkTrackingNow")) {
+        reads.push(opts?.variables ?? {});
+        return { json: async () => ({ data: { fulfillment: { trackingInfo: nowUrls.map((url) => ({ url })) } } }) } as unknown as Response;
+      }
       calls.push({ query, variables: opts?.variables ?? {} });
       return { json: async () => response } as unknown as Response;
     }),
@@ -85,7 +95,7 @@ describe("the outbox canary — the happy path actually rewrites the link", () =
 
     expect(result.outcome).toBe("updated");
     expect(result.url).toBe("https://clarev.in.ink/r/nfc_test_token");
-    expect(admin.graphql).toHaveBeenCalledOnce();
+    expect(admin.calls).toHaveLength(1);
   });
 
   it("sends the exact input shape Shopify's schema demands", async () => {
@@ -241,7 +251,7 @@ describe("under ink, the link does not wait for the carrier feed on a store ink 
     const admin = fakeAdmin();
     const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: false });
     expect(result.outcome).toBe("updated");
-    expect(admin.graphql).toHaveBeenCalledOnce();
+    expect(admin.calls).toHaveLength(1);
     expect(otherAppHoldsSession).toHaveBeenCalledWith("clarev-test.myshopify.com");
   });
 
@@ -294,5 +304,39 @@ describe("the Ritualist's gate is unchanged", () => {
     const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: false });
     expect(result.outcome).toBe("skipped_feed_unregistered");
     expect(otherAppHoldsSession).not.toHaveBeenCalled();
+  });
+});
+
+// FIRST INK LINK WINS (2026-09-24). Both apps read the same webhook payload —
+// a snapshot from before either acted — so both saw the carrier's link and
+// both wrote; on Steve Madden #1029 ink's www.in.ink link replaced the
+// Ritualist's brand page. The rewrite now re-reads the link just before
+// writing and never replaces an in.ink page with another.
+describe("first ink link wins", () => {
+  it("never overwrites an ink page that landed while we resolved ours", async () => {
+    const admin = fakeAdmin(undefined, ["https://stevemadden.in.ink/r/nfc_first"]);
+    const result = await assertBrandedTrackingUrl({ admin, ...base() });
+    expect(result.outcome).toBe("skipped_already_branded");
+    expect(admin.reads).toEqual([{ id: "gid://shopify/Fulfillment/998877" }]);
+    expect(admin.calls).toHaveLength(0);
+  });
+
+  it("the other flavor's host counts too (www.in.ink held, the brand host never replaces it)", async () => {
+    const admin = fakeAdmin(undefined, ["https://www.in.ink/r/nfc_first"]);
+    expect((await assertBrandedTrackingUrl({ admin, ...base() })).outcome).toBe("skipped_already_branded");
+    expect(admin.calls).toHaveLength(0);
+  });
+
+  it("a carrier link held now is still rewritten", async () => {
+    const admin = fakeAdmin(undefined, ["https://www.ups.com/track?tracknum=1Z999AA10123456784"]);
+    expect((await assertBrandedTrackingUrl({ admin, ...base() })).outcome).toBe("updated");
+    expect(admin.calls).toHaveLength(1);
+  });
+
+  it("a read that fails keeps today's behaviour and writes", async () => {
+    const admin = fakeAdmin();
+    admin.graphql.mockImplementationOnce(async () => { throw new Error("read refused"); });
+    expect((await assertBrandedTrackingUrl({ admin, ...base() })).outcome).toBe("updated");
+    expect(admin.calls).toHaveLength(1);
   });
 });
