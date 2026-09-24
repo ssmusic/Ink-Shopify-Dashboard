@@ -130,6 +130,12 @@ export const VALUE_WORDS: Record<string, string> = {
   signed_opens: "Signed opens",
   non_human_opens: "Excluded opens",
   location: "Location",
+  // The Delivery place's two places, side by side as the record's words
+  // (ink-backend #149/#150/#153, 2026-09-24) — the same labels as
+  // the-ritualist src/lib/audit-packet.ts: a record reads the same in ink
+  // and in The Ritualist. ⚠️ PLACEHOLDER COPY — Sam's to replace.
+  ship_to: "Ship-to",
+  carrier_delivered_place: "Carrier's delivered scan",
 };
 
 type LocationLine = {
