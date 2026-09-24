@@ -48,7 +48,7 @@ export function RecordWords({
             <Badge>{LEVEL_WORDS[el.status] || "Unknown"}</Badge>
           </InlineStack>
           <InlineGrid columns={{ xs: 1, sm: 2 }} gap="100">
-            {elementLines(el).map((line, i) => (
+            {elementLines(el, record).map((line, i) => (
               <InlineStack key={i} gap="200" blockAlign="baseline">
                 <Text as="span" tone="subdued">
                   {line.label}
@@ -58,7 +58,7 @@ export function RecordWords({
                 </Text>
               </InlineStack>
             ))}
-            {!elementLines(el).length && (
+            {!elementLines(el, record).length && (
               <Text as="p" tone="subdued">
                 Not recorded
               </Text>

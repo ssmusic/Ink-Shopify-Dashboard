@@ -235,8 +235,11 @@ describe('ink screens: facts, working controls and Polaris', () => {
 
   it('shows record evidence as reported, without claiming browser verification', () => {
     const t = text(renderToString(<AppProvider i18n={translations}><RecordWords record={RECORD} /></AppProvider>));
-    for (const part of ['Evidence levels reported by the record', 'Recorded and signed', 'Verified by ink', 'First open signed', 'Seen at the door', '719 m from the delivery address']) expect(t).toContain(part);
+    for (const part of ['Evidence levels reported by the record', 'Recorded and signed', 'First open signed', 'Nearest open', 'Opened 719 m from the delivery address.', '719 m from the delivery address']) expect(t).toContain(part);
     expect(t).not.toMatch(/flagged|Confirmed at the door|Checked in this browser|outside|default range/);
+    // Sam, 2026-09-24: "we cant confirm at door" — no level, row or word says a
+    // delivery was verified, confirmed or seen at the door.
+    expect(t).not.toMatch(/Verified by ink|Seen at the door|at the door|device-verified/i);
   });
 
   it('keeps the preview short while the full purchased event inspector loads on demand', () => {

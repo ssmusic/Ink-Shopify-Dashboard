@@ -18,7 +18,7 @@ import {
   type InspectEvent,
 } from "../lib/ink-record-inspection";
 import { RecordWords, type WordLine } from "./InkRecordEvidence";
-import { when, type RecordRead } from "../lib/record-words";
+import { DELIVERY_VERIFIED_TITLE, when, type RecordRead } from "../lib/record-words";
 import type { OrderTimelineData } from "./OrderTimeline";
 import InkOpens from "./InkOpens";
 import { everyOpenRows } from "../lib/every-open";
@@ -29,7 +29,9 @@ const eventName = (name: string) => {
     LOCATION_SHARED: "Location shared",
     ENROLLED: "Recorded",
     CARRIER_DELIVERED: "Carrier delivered",
-    DELIVERY_VERIFIED: "Seen at the door",
+    // What the signed event holds, never that a delivery was confirmed
+    // (Sam, 2026-09-24: "we cant confirm at door").
+    DELIVERY_VERIFIED: DELIVERY_VERIFIED_TITLE,
   };
   if (known[name]) return known[name];
   const words = name.replace(/_/g, " ").toLowerCase();

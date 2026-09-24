@@ -1,4 +1,4 @@
-import { elementLines, type RecordRead } from "../lib/record-words";
+import { elementLines, LEVEL_WORDS, type RecordRead } from "../lib/record-words";
 import type { InkInspection } from "../lib/ink-record-inspection";
 
 // Quote every cell and neutralize spreadsheet formulas in merchant-supplied values.
@@ -35,9 +35,12 @@ export function buildInkRecordCsv(
   );
   for (const element of record.elements) {
     lines.push(
-      row("Evidence", element.label, "Status reported by ink", element.status),
+      // The level in the screen's words: the raw `verified` read as a claim
+      // that ink verified the delivery place (Sam, 2026-09-24: "we cant
+      // confirm at door").
+      row("Evidence", element.label, "Status reported by ink", LEVEL_WORDS[element.status] || element.status),
     );
-    for (const line of elementLines(element))
+    for (const line of elementLines(element, record))
       lines.push(row("Evidence", element.label, line.label, line.words));
   }
   if (inspection.opens == null)

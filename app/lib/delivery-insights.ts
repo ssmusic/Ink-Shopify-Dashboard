@@ -8,8 +8,13 @@
 // pinned by a test on a fixture.
 //
 // ink's funnel is not the console's: ink has no page, so no "Clicked" step.
-// It runs orders → delivered → opened → location shared → seen at the door
-// (the orchestrator's brief, Sam's to overturn).
+// It runs orders → delivered → opened → location shared. It ended with "Seen
+// at the door" — orders whose record carries a signed DELIVERY_VERIFIED, an
+// open within 100 m after the carrier's scan — until Sam, 2026-09-24: "we cant
+// confirm at door" (and, the night before, "we dont have a default range").
+// That count is a 100 m pass with no neutral name, so it is not a step; the
+// rows still carry `verified_at_door` as data, and one line brings the step
+// back under Sam's own words.
 
 export type DeliveryRow = {
   enrolled_at?: string | null;
@@ -19,7 +24,8 @@ export type DeliveryRow = {
   gps_verdict?: string | null;
   /** Where the first open's distance came from: "gps" is the phone's own fix. */
   location_source?: string | null;
-  /** The buyer's phone confirmed the fix at the door (DELIVERY_VERIFIED). */
+  /** The proof carries a delivery fix — a signed DELIVERY_VERIFIED, an open
+   *  within 100 m after the carrier's scan. Data: no screen names it. */
   verified_at_door?: boolean | null;
   last_tracking_status?: string | null;
   carrier_name?: string | null;
@@ -61,13 +67,11 @@ export function funnel(rows: DeliveryRow[]): FunnelStep[] {
   const delivered = orders.filter((r) => at(r.delivered_at) != null);
   const opened = delivered.filter((r) => (r.tap_count ?? 0) > 0);
   const shared = opened.filter((r) => sharedLocation(r));
-  const door = shared.filter((r) => r.verified_at_door === true);
   const steps: [string, string, DeliveryRow[]][] = [
     ["orders", "Orders", orders],
     ["delivered", "Delivered", delivered],
     ["opened", "Open", opened],
     ["shared", "Location shared", shared],
-    ["door", "Seen at the door", door],
   ];
   return steps.map(([key, label, list], i) => ({
     key,
