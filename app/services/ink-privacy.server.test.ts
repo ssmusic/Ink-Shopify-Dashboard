@@ -17,6 +17,10 @@ const document = (name: string, id: string): any => ({
   update: async (v: any) => {
     bucket(name).set(id, { ...bucket(name).get(id), ...v });
   },
+  get: async () => ({
+    exists: bucket(name).has(id),
+    data: () => bucket(name).get(id),
+  }),
 });
 const firestore = {
   collection: (name: string) => ({
@@ -44,18 +48,19 @@ const firestore = {
 const otherAppHoldsSession = vi.fn();
 const purgeShopInInk = vi.fn();
 const redactCustomerInInk = vi.fn();
+const exportCustomerFromInk = vi.fn();
 const webhook = vi.fn();
 vi.mock("../firestore.server", () => ({ default: firestore }));
 vi.mock("../firestore-session-storage.server", () => ({
   otherAppHoldsSession,
   SESSION_COLLECTION: "shopify_sessions_ink",
 }));
-vi.mock("./ink-api.server", () => ({ purgeShopInInk, redactCustomerInInk }));
+vi.mock("./ink-api.server", () => ({ purgeShopInInk, redactCustomerInInk, exportCustomerFromInk }));
 vi.mock("./plan-precedence.server", () => ({
   restoreInkPlanOnRitualistUninstall: vi.fn(),
 }));
 vi.mock("../shopify.server", () => ({ authenticate: { webhook } }));
-const { handleInkPrivacy, readPrivacyRequests, PRIVACY_COLLECTION } =
+const { handleInkPrivacy, readPrivacyRequests, exportPrivacyRequest, PRIVACY_COLLECTION } =
   await import("./ink-privacy.server");
 const shop = "demo.myshopify.com";
 const payload = {
@@ -70,6 +75,11 @@ beforeEach(() => {
   otherAppHoldsSession.mockResolvedValue(false);
   purgeShopInInk.mockResolvedValue({ ok: true });
   redactCustomerInInk.mockResolvedValue({ ok: true });
+  exportCustomerFromInk.mockResolvedValue({
+    ok: true,
+    status: 200,
+    body: { ok: true, shop_resolved: true, export: { kind: "ink.customer_data_export", counts: { orders: 1 }, orders: [{ proof_id: "proof_x" }] } },
+  });
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("ink privacy requests", () => {
@@ -215,5 +225,79 @@ describe("ink privacy requests", () => {
     expect(collections.size).toBe(0);
     expect(purgeShopInInk).not.toHaveBeenCalled();
     expect(redactCustomerInInk).not.toHaveBeenCalled();
+  });
+});
+
+describe("a customer data request, answered", () => {
+  const onlyRequest = () => [...bucket(PRIVACY_COLLECTION).entries()][0];
+
+  it("downloads what ink holds for that customer, asked of the backend with the request's own identifiers, and marks it downloaded", async () => {
+    await handleInkPrivacy("data_request", shop, payload);
+    const [id] = onlyRequest();
+    const out = await exportPrivacyRequest(shop, id);
+    expect(out).toMatchObject({ ok: true, filename: "ink-customer-data-123.json" });
+    expect(exportCustomerFromInk).toHaveBeenCalledWith({
+      shopDomain: shop,
+      customerId: "456",
+      customerEmail: "private@example.test",
+      orderIds: ["789"],
+    });
+    if (!out.ok) throw new Error("expected a download");
+    expect(out.download).toMatchObject({ kind: "ink.customer_data_export", request_id: "123", orders: [{ proof_id: "proof_x" }] });
+    expect(onlyRequest()[1]).toMatchObject({ state: "downloaded" });
+    const listed = await readPrivacyRequests(shop);
+    expect(listed[0]).toMatchObject({ state: "downloaded" });
+    expect(listed[0].downloadedAt).toEqual(expect.any(String));
+    expect(JSON.stringify(listed)).not.toMatch(/private|customerId|orderIds|phone/);
+  });
+
+  it("stores no copy of the customer's data in this app", async () => {
+    await handleInkPrivacy("data_request", shop, payload);
+    await exportPrivacyRequest(shop, onlyRequest()[0]);
+    expect(JSON.stringify([...bucket(PRIVACY_COLLECTION).values()])).not.toContain("proof_x");
+  });
+
+  it("refuses another shop's request, a deletion receipt and a malformed id, and asks the backend nothing", async () => {
+    await handleInkPrivacy("data_request", "other.myshopify.com", payload);
+    const [otherId] = onlyRequest();
+    expect(await exportPrivacyRequest(shop, otherId)).toMatchObject({ ok: false });
+    collections.clear();
+    redactCustomerInInk.mockResolvedValue({ ok: false, status: 500 });
+    await handleInkPrivacy("redact", shop, payload);
+    expect(await exportPrivacyRequest(shop, onlyRequest()[0])).toMatchObject({ ok: false });
+    expect(await exportPrivacyRequest(shop, "../merchants/x")).toMatchObject({ ok: false });
+    expect(exportCustomerFromInk).not.toHaveBeenCalled();
+  });
+
+  it("says so, in the file, when the customer was erased before anyone downloaded it", async () => {
+    await handleInkPrivacy("data_request", shop, payload);
+    await handleInkPrivacy("redact", shop, payload);
+    const out = await exportPrivacyRequest(shop, onlyRequest()[0]);
+    if (!out.ok) throw new Error("expected the note file");
+    expect(String(out.download.note)).toContain("deleted by a Shopify deletion request");
+    expect(out.download.orders).toEqual([]);
+    expect(exportCustomerFromInk).not.toHaveBeenCalled();
+  });
+
+  it("keeps a downloaded copy downloaded when the customer is erased afterwards", async () => {
+    await handleInkPrivacy("data_request", shop, payload);
+    await exportPrivacyRequest(shop, onlyRequest()[0]);
+    await handleInkPrivacy("redact", shop, payload);
+    expect(onlyRequest()[1]).toMatchObject({ state: "downloaded", customerId: null, email: null, orderIds: [] });
+  });
+
+  it("never marks a failed export downloaded", async () => {
+    exportCustomerFromInk.mockResolvedValue({ ok: false, status: 0, body: { error: "timeout" } });
+    await handleInkPrivacy("data_request", shop, payload);
+    expect(await exportPrivacyRequest(shop, onlyRequest()[0])).toMatchObject({ ok: false });
+    expect(onlyRequest()[1]).toMatchObject({ state: "pending" });
+  });
+
+  it("answers a store the backend does not know with a file that says ink holds nothing", async () => {
+    exportCustomerFromInk.mockResolvedValue({ ok: true, status: 200, body: { ok: true, shop_resolved: false, export: null } });
+    await handleInkPrivacy("data_request", shop, payload);
+    const out = await exportPrivacyRequest(shop, onlyRequest()[0]);
+    if (!out.ok) throw new Error("expected the note file");
+    expect(out.download).toMatchObject({ note: "ink holds no records for this store.", orders: [] });
   });
 });

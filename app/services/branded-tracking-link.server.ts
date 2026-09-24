@@ -69,6 +69,18 @@ const MUTATION = `#graphql
   }
 `;
 
+/** Under ink: is the buyer's page on this store ink's own (the Ritualist not
+ *  installed here)? Only then does the page ignore the carrier feed. False
+ *  when the session store cannot answer. */
+async function inkPageIsTheBuyers(shop: string): Promise<boolean> {
+  try {
+    const { otherAppHoldsSession } = await import("../firestore-session-storage.server");
+    return !(await otherAppHoldsSession(shop));
+  } catch {
+    return false;
+  }
+}
+
 /** Is this URL already ours? Guards the echo our own mutation causes. */
 export function isBrandedTrackingUrl(url?: string | null): boolean {
   if (isInk()) {
@@ -143,7 +155,23 @@ export async function assertBrandedTrackingUrl({
 
   // NO SILENT CAPS: a skipped carrier is the measurement, so it says its own
   // name. This log is the expansion list for utils/shippoCarriers.js.
-  if (shippoRegistered !== true) {
+  //
+  // UNDER INK, ON A STORE WITHOUT THE RITUALIST, THE FEED IS NOT THE PAGE'S
+  // (2026-09-24, the App Store review). There the buyer's page is ink's:
+  // it records the open and forwards to the order's Shopify page. It shows
+  // no tracking status, so a feed that never updates cannot make it say
+  // "on its way" forever — the reason for this refusal. Holding the link
+  // back there only means ink records nothing for carriers the feed cannot
+  // follow, or for a number a reviewer makes up, while the listing says
+  // every tracking link. Where the Ritualist is installed its page may be
+  // the buyer's, and the refusal stands. An unreadable session store keeps
+  // the refusal too.
+  if (shippoRegistered !== true && isInk() && (await inkPageIsTheBuyers(shop))) {
+    console.log(
+      `🔗 ${label}: the carrier feed is not registered for "${carrier}" (shop ${shop}, proof ${proofId}) — ` +
+        `ink's page shows no tracking status, so the link is rewritten anyway.`,
+    );
+  } else if (shippoRegistered !== true) {
     console.log(
       `🔗 ${label}: SKIPPED — the carrier feed is not registered for "${carrier}" (shop ${shop}, proof ${proofId}). ` +
         `Shopify's own tracking link stays. Add this carrier to shippoCarriers.js if it keeps appearing.`,

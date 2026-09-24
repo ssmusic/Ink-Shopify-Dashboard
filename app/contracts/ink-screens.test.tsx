@@ -338,7 +338,8 @@ describe('ink screens: facts, working controls and Polaris', () => {
     vi.mocked(updateMerchant).mockClear();
     vi.mocked(authenticate.admin).mockResolvedValueOnce({ session: { shop: 'sample.myshopify.com' } } as never);
     const args = { request: new Request('https://app.test/app/ink/settings', {method:'POST',body:new URLSearchParams({flash_forward:'carrier'})}) } as never;
-    const response = await saveInkSettings(args);
+    // A retired form gets the plain 405 Response; only intent=privacy_export answers data.
+    const response = (await saveInkSettings(args)) as Response;
     expect(response.status).toBe(405);
     expect(response.headers.get('Allow')).toBe('GET');
     expect(patchMerchant).not.toHaveBeenCalled();
@@ -347,11 +348,30 @@ describe('ink screens: facts, working controls and Polaris', () => {
     await expect(saveInkSettings(args)).rejects.toMatchObject({status:401});
   });
 
-  it('shows outstanding privacy requests as awaiting completion', () => {
-    const t = text(render(InkSettings, {flashForward:null,canSave:true,ritualistUrl:'',privacy:[{id:'1',topic:'customers/data_request',requestId:'88',dueAt:'2026-10-23T00:00:00Z'}]}));
-    expect(t).toContain('awaiting completion');
-    expect(t).toContain('Data request 88');
-    expect(t).toContain('Contact support');
+  it('hands the merchant each customer data request as a download, and says when it was downloaded', () => {
+    const t = text(render(InkSettings, {flashForward:null,canSave:true,ritualistUrl:'',privacy:[
+      {id:'1',topic:'customers/data_request',requestId:'88',receivedAt:'2026-09-23T00:00:00Z',dueAt:'2026-10-23T00:00:00Z',state:'pending',downloadedAt:null},
+      {id:'2',topic:'customers/data_request',requestId:'89',receivedAt:'2026-09-20T00:00:00Z',dueAt:'2026-10-20T00:00:00Z',state:'downloaded',downloadedAt:'2026-09-21T00:00:00Z'},
+      {id:'3',topic:'customers/data_request',requestId:'90',receivedAt:'2026-09-19T00:00:00Z',dueAt:'2026-10-19T00:00:00Z',state:'response_required_after_redaction',downloadedAt:null},
+    ]}));
+    expect(t).toContain('Data request 88. Received Sep 23, 2026. Due Oct 23, 2026.');
+    expect(t.match(/Download \(JSON\)/g)?.length).toBe(3);
+    expect(t).toContain('Downloaded Sep 21, 2026.');
+    expect(t).toContain('This customer was deleted before the data was downloaded.');
+    // The old receipt-only wording promised a response somebody else would arrange.
+    expect(t).not.toContain('awaiting completion');
+  });
+
+  it('answers a data request download through the settings action, and still refuses every retired form', async () => {
+    const { authenticate } = await import('../shopify.server');
+    vi.mocked(authenticate.admin).mockResolvedValueOnce({ session: { shop: 'sample.myshopify.com' } } as never);
+    const privacy = await import('../services/ink-privacy.server');
+    const spy = vi.spyOn(privacy, 'exportPrivacyRequest').mockResolvedValueOnce({ ok: true, download: { kind: 'ink.customer_data_export' }, filename: 'ink-customer-data-88.json' });
+    const response = await saveInkSettings({ request: new Request('https://app.test/app/ink/settings', {method:'POST',body:new URLSearchParams({intent:'privacy_export',id:'a'.repeat(64)})}) } as never);
+    expect(spy).toHaveBeenCalledWith('sample.myshopify.com', 'a'.repeat(64));
+    const body = (response as { data: unknown }).data ?? response;
+    expect(JSON.stringify(body)).toContain('ink-customer-data-88.json');
+    spy.mockRestore();
   });
 });
 

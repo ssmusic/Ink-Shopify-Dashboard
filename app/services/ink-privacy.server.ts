@@ -4,7 +4,7 @@ import {
   otherAppHoldsSession,
   SESSION_COLLECTION,
 } from "../firestore-session-storage.server";
-import { purgeShopInInk, redactCustomerInInk } from "./ink-api.server";
+import { exportCustomerFromInk, purgeShopInInk, redactCustomerInInk } from "./ink-api.server";
 
 export const PRIVACY_COLLECTION = "ink_privacy_requests";
 const id = (v: unknown) =>
@@ -67,9 +67,78 @@ export async function readPrivacyRequests(shop: string) {
         topic: String(v.topic),
         receivedAt: String(v.receivedAt),
         dueAt: String(v.dueAt),
+        // What happened to it — never who it is about (the screen is told
+        // the request, not the customer).
+        state: typeof v.state === "string" ? v.state : "pending",
+        downloadedAt: typeof v.downloadedAt === "string" ? v.downloadedAt : null,
       };
     })
     .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
+}
+
+const REQUEST_DOC_ID = /^[0-9a-f]{64}$/;
+
+/** A customers/data_request, answered: the file the merchant downloads from
+ *  Settings. The backend builds it from what ink holds NOW (POST
+ *  /admin/export-customer), so nothing about the customer is copied into
+ *  this app's store; the request doc keeps only its receipt and when it was
+ *  downloaded. A request whose customer was erased first answers with a
+ *  file that says so. Refused for another shop's request or any other topic. */
+export async function exportPrivacyRequest(
+  shop: string,
+  requestDocId: string,
+): Promise<
+  | { ok: true; download: Record<string, unknown>; filename: string }
+  | { ok: false; note: string }
+> {
+  if (!REQUEST_DOC_ID.test(requestDocId))
+    return { ok: false, note: "Unknown request." }; // PLACEHOLDER
+  const ref = firestore.collection(PRIVACY_COLLECTION).doc(requestDocId);
+  const snap = await ref.get();
+  const v = snap.exists ? snap.data() : null;
+  if (!v || v.shop !== shop || v.topic !== "customers/data_request")
+    return { ok: false, note: "Unknown request." }; // PLACEHOLDER
+  const name = `ink-customer-data-${String(v.requestId || requestDocId.slice(0, 12)).replace(/[^A-Za-z0-9_-]/g, "")}.json`;
+  const receipt = {
+    request_id: v.requestId ?? null,
+    received_at: v.receivedAt ?? null,
+    due_at: v.dueAt ?? null,
+  };
+  const orderIds: string[] = Array.isArray(v.orderIds) ? v.orderIds : [];
+  if (!v.customerId && !v.email && orderIds.length === 0) {
+    // Erased by a customers/redact before anyone downloaded it.
+    return {
+      ok: true,
+      filename: name,
+      download: {
+        kind: "ink.customer_data_export",
+        ...receipt,
+        generated_at: new Date().toISOString(),
+        note: "This customer's data was deleted by a Shopify deletion request before this copy was downloaded. ink holds no record of them on this store.", // PLACEHOLDER
+        orders: [],
+      },
+    };
+  }
+  const result = await exportCustomerFromInk({
+    shopDomain: shop,
+    customerId: v.customerId ?? null,
+    customerEmail: v.email ?? null,
+    orderIds,
+  });
+  if (!result.ok || !result.body?.ok)
+    return { ok: false, note: "The data could not be prepared. Try again." }; // PLACEHOLDER
+  const exported = result.body.export;
+  const download = exported
+    ? { ...exported, request_id: receipt.request_id, received_at: receipt.received_at, due_at: receipt.due_at }
+    : {
+        kind: "ink.customer_data_export",
+        ...receipt,
+        generated_at: new Date().toISOString(),
+        note: "ink holds no records for this store.", // PLACEHOLDER
+        orders: [],
+      };
+  await ref.update({ state: "downloaded", downloadedAt: new Date().toISOString() });
+  return { ok: true, download, filename: name };
 }
 
 async function eraseWhere(collection: string, shop: string) {
@@ -95,8 +164,10 @@ export async function handleInkPrivacy(
   try {
     if (topic === "data_request") {
       await retainPrivacyRequest(shop, "customers/data_request", payload);
-      // Receipt only. Settings exposes the outstanding request. A complete
-      // backend export by customer/email is still required before submission.
+      // The receipt, kept before the 200. The merchant downloads the
+      // customer's data from Settings (exportPrivacyRequest): the backend
+      // builds it from what ink holds at that moment, so no copy of it is
+      // stored here.
       return new Response("Request received", { status: 200 });
     }
     if (topic === "redact") {
@@ -136,7 +207,12 @@ export async function handleInkPrivacy(
               customerId: null,
               email: null,
               orderIds: [],
-              state: "response_required_after_redaction",
+              // A copy already downloaded stays downloaded; one never
+              // downloaded now answers that the customer was erased first.
+              state:
+                v.state === "downloaded"
+                  ? "downloaded"
+                  : "response_required_after_redaction",
             });
           else await d.ref.delete();
         }

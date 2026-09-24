@@ -109,6 +109,11 @@ export default function InkHelp() {
             For billing, missing records or customer privacy requests, email{" "}
             <Link url="mailto:info@in.ink">info@in.ink</Link>.
           </Text>
+          <Text as="p">
+            {/* PLACEHOLDER */}
+            A customer data request you make in Shopify appears in Settings,
+            with a download of what ink holds about that customer.
+          </Text>
           <Text as="p" tone="subdued">
             Include your store name, the order number if relevant, and what you
             need help with.
