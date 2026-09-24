@@ -10,7 +10,6 @@ import {
   Page,
   Text,
 } from "@shopify/polaris";
-import InkPillNav from "./InkPillNav";
 import InkConnectionCard from "./InkConnectionCard";
 import type { InkConnection } from "../services/ink-connection.server";
 export type SettingsData = {
@@ -116,7 +115,6 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
-            <InkPillNav active="settings" />
             <InkConnectionCard connection={data.connection} checking={revalidator.state !== "idle"} onCheck={() => revalidator.revalidate()} />
             {data.ritualistUrl && (
               <Card>

@@ -110,6 +110,11 @@ export default function InkRecordDoor({
       }
     }
   }, [fetcher.data]);
+  // Only the pressed button spins, and the others wait for it: the three used
+  // to spin together, which read as nothing happening (Sam, 2026-09-24: "you
+  // click on one of 3 filetypes … and it spins").
+  const busy = fetcher.state !== "idle" ? String(fetcher.formData?.get("intent") ?? "") : null;
+  const pressed = (intent: string) => ({ loading: busy === intent, disabled: busy !== null && busy !== intent });
   const submit = (intent: string) => {
     setDownloadError(false);
     fetcher.submit(
@@ -143,7 +148,7 @@ export default function InkRecordDoor({
           {door.downloadable && (
             <>
               <Button
-                loading={fetcher.state !== "idle"}
+                {...pressed("pdf")}
                 accessibilityLabel={
                   orderLabel ? `Download PDF for ${orderLabel}` : undefined
                 }
@@ -152,7 +157,7 @@ export default function InkRecordDoor({
                 {compact ? "PDF" : "Download PDF"}
               </Button>
               <Button
-                loading={fetcher.state !== "idle"}
+                {...pressed("csv")}
                 accessibilityLabel={
                   orderLabel ? `Download CSV for ${orderLabel}` : undefined
                 }
@@ -161,7 +166,7 @@ export default function InkRecordDoor({
                 {compact ? "CSV" : "Download CSV"}
               </Button>
               <Button
-                loading={fetcher.state !== "idle"}
+                {...pressed("download")}
                 accessibilityLabel={
                   orderLabel ? `Download JSON for ${orderLabel}` : undefined
                 }
@@ -174,7 +179,7 @@ export default function InkRecordDoor({
           {door.offerLine && (
             <Button
               variant="primary"
-              loading={fetcher.state !== "idle"}
+              {...pressed("buy")}
               onClick={() => submit("buy")}
             >
               Get the record

@@ -842,19 +842,27 @@ export const createRecordPurchase = async (input: {
  *  (`retrievalPriceOf`: $29 unless the merchant names its own; 0 = free).
  *  null when the record is free, and null when the read fails: the screen
  *  then draws no door (the backend's own doors still lock). */
-export const readRecordPrice = async (shopId: string): Promise<{ price_cents: number; currency: string } | null> => {
-  if (!shopId) return null;
+export const readRecordPrice = async (shopId: string): Promise<{ price_cents: number; currency: string } | null> =>
+  (await readRecordPriceOrUnknown(shopId)) ?? null;
+
+/** The same read, telling a free record (null) from a read that failed
+ *  (undefined) — for a screen that says the record is included only when
+ *  the backend said so. */
+export const readRecordPriceOrUnknown = async (
+  shopId: string,
+): Promise<{ price_cents: number; currency: string } | null | undefined> => {
+  if (!shopId) return undefined;
   try {
     const response = await fetch(getAlanUrl(`/admin/purchases/price?shop_id=${encodeURIComponent(shopId)}`), {
       headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
     });
-    if (!response.ok) return null;
+    if (!response.ok) return undefined;
     const p = (await response.json())?.price;
     if (!p || !Number.isInteger(p.price_cents) || p.price_cents <= 0 || typeof p.currency !== "string") return null;
     return { price_cents: p.price_cents, currency: p.currency };
   } catch (err) {
     console.warn("[record] price read failed:", err);
-    return null;
+    return undefined;
   }
 };
 

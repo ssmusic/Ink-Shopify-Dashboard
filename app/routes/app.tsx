@@ -187,7 +187,7 @@ export default function App() {
       {/* The home link is hidden by App Bridge (rel="home"): the app name leads
           there, and /app/ink redirects to Orders. Every item has its own
           path, so the admin marks the right one (routes/app.ink.$section.tsx). */}
-      <NavMenu><a href="/app/ink" rel="home">Orders</a><a href="/app/ink/dashboard">Dashboard</a><a href="/app/ink/orders">Orders</a><a href="/app/ink/records">Records</a><a href="/app/ink/settings">Settings</a></NavMenu>
+      <NavMenu><a href="/app/ink" rel="home">Orders</a><a href="/app/ink/dashboard">Dashboard</a><a href="/app/ink/orders">Orders</a><a href="/app/ink/records">Records</a><a href="/app/ink/settings">Settings</a><a href="/app/ink/help">Help</a></NavMenu>
       <Outlet />
     </PolarisAppProvider>
   </ShopifyAppProvider>;

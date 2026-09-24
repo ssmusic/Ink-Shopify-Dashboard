@@ -18,6 +18,13 @@ export function merchantUrl(path: string) {
  *  so a slow one no longer holds the page. */
 export const RECORD_READ_TIMEOUT_MS = 15_000;
 
+/** A record's export (`proofs/{id}/export`, the files' bundle) takes longer
+ *  still: 0.7 s for one open, 6.3 s for 32, 14.1 s for 92 on the Steve
+ *  Madden test store (2026-09-24). At 6 s every download of a busy order
+ *  failed ("Downloads are unavailable"); a download is one merchant's click,
+ *  so it waits. */
+export const EXPORT_READ_TIMEOUT_MS = 30_000;
+
 /** No public fallback, redirects, admin credentials, error bodies or logs. */
 export async function merchantRead(
   apiKey: string | null | undefined,
