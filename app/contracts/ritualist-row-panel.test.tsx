@@ -1,8 +1,10 @@
 // THE RITUALIST'S SHIPMENTS ROW OPENS ONTO INK'S PANEL (Sam, 2026-09-24: "we
 // are making the ritualist as good as ink" · "it has to mirror the ritualist
-// webapp"). The row (components/OrderExpandedRow.tsx) draws ink's own panel
-// (components/InkRecentOrders.tsx OrderPanel), read the way ink's Orders reads
-// it (services/ritualist-rows.server.ts). Pinned here:
+// webapp"). A Shipments row is a row of ink's ledger, and opened it is the
+// Ritualist's row (components/OrderExpandedRow.tsx): ink's own panel
+// (components/InkRecentOrders.tsx OrderPanel) with "View full record" at its
+// foot, read the way ink's Orders reads it (services/ritualist-rows.server.ts).
+// Pinned here:
 //   · the honest rail: each step says where its time came from; a tick only
 //     on ink's own record or a carrier's scan — Shopify's fulfillment gets a
 //     ring, never a tick (#145);
@@ -26,7 +28,9 @@ vi.mock("../services/merchant-doc.server", () => ({
 }));
 
 const { default: OrderExpandedRow } = await import("../components/OrderExpandedRow");
-const { includedRecordDoor, readShipmentPanels, ritualistApiKey } = await import("../services/ritualist-rows.server");
+const { default: InkRecentOrders } = await import("../components/InkRecentOrders");
+const { includedRecordDoor, ritualistApiKey, ritualistRowRecord } = await import("../services/ritualist-rows.server");
+const { readJwks } = await import("../services/ink-record.server");
 const { timelineFrom } = await import("../services/ink-timeline.server");
 import type { RecordRead } from "../lib/record-words";
 
@@ -104,9 +108,16 @@ const rowWith = (record: RecordRead, proofBody: object, opensBody: object) => ({
   timeline: timelineFrom(proofBody, opensBody, record),
 });
 
+/** A Shipments row, opened: the ledger's row with the Ritualist's row drawn in it. */
 function open(row: ReturnType<typeof rowWith>) {
   const Stub = createRoutesStub([
-    { id: "screen", path: "/", Component: () => <OrderExpandedRow row={row as never} onCollapse={() => {}} onViewFull={() => {}} /> },
+    {
+      id: "screen",
+      path: "/",
+      Component: () => (
+        <InkRecentOrders orders={[row] as never} defaultExpandedId={row.id} renderPanel={(r) => <OrderExpandedRow row={r} onViewFull={() => {}} />} />
+      ),
+    },
   ]);
   return renderToString(
     <AppProvider i18n={translations}>
@@ -130,31 +141,46 @@ describe("the Ritualist's record is included", () => {
   });
 });
 
-describe("each row is read the way ink's Orders reads it", () => {
+describe("each row is read the way ink's Orders reads it, and streams", () => {
+  const asked: Array<{ url: string; auth: string | null }> = [];
+  const fake = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    const auth = (init?.headers as Record<string, string> | undefined)?.Authorization ?? null;
+    asked.push({ url, auth });
+    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    if (url.endsWith("/.well-known/jwks.json")) return json({ keys: [] });
+    if (url.endsWith(`/proofs/${PROOF}/audit`)) return json({ proof_id: PROOF, audience: "merchant", summary: RECORD.summary, verdict: { elements: RECORD.elements }, chain: [] });
+    if (url.endsWith(`/proofs/${PROOF}/opens`)) return json(OPENS_BODY);
+    if (url.endsWith(`/proofs/${PROOF}`)) return json(PROOF_BODY);
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
   it("the record through the merchant audit door with the merchant's key, the rail through the proof and opens doors", async () => {
-    const asked: Array<{ url: string; auth: string | null }> = [];
-    const fake = (async (input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
-      const auth = (init?.headers as Record<string, string> | undefined)?.Authorization ?? null;
-      asked.push({ url, auth });
-      const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
-      if (url.endsWith("/.well-known/jwks.json")) return json({ keys: [] });
-      if (url.endsWith(`/proofs/${PROOF}/audit`)) return json({ proof_id: PROOF, audience: "merchant", summary: RECORD.summary, verdict: { elements: RECORD.elements }, chain: [] });
-      if (url.endsWith(`/proofs/${PROOF}/opens`)) return json(OPENS_BODY);
-      if (url.endsWith(`/proofs/${PROOF}`)) return json(PROOF_BODY);
-      return new Response("not found", { status: 404 });
-    }) as typeof fetch;
-    const { records, timelines } = await readShipmentPanels("ink_key_example", [PROOF, null, "not-a-proof"], fake);
-    expect(records[PROOF]?.whole).toBe(true);
-    expect(timelines[PROOF]?.steps.find((s) => s.key === "delivered")?.note).toBe("From Shopify's fulfillment");
-    expect(timelines[PROOF]?.lastOpen?.distance_m).toBe(2600);
+    asked.length = 0;
+    const side = await ritualistRowRecord("ink_key_example", PROOF, readJwks(fake), fake);
+    expect(side.record?.whole).toBe(true);
+    expect(side.timeline?.steps.find((s) => s.key === "delivered")?.note).toBe("From Shopify's fulfillment");
+    expect(side.timeline?.lastOpen?.distance_m).toBe(2600);
+    expect(side.door).toEqual(includedRecordDoor("ink_key_example", PROOF));
+    expect(side.packet).toBeNull();
     for (const door of [`/proofs/${PROOF}/audit`, `/proofs/${PROOF}/opens`, `/proofs/${PROOF}`]) {
       const hit = asked.find((a) => a.url.endsWith(door));
       expect(hit, door).toBeDefined();
       expect(hit!.auth).toBe("Bearer ink_key_example");
     }
-    // No row, no read.
-    expect((await readShipmentPanels("ink_key_example", [null], fake)).records).toEqual({});
+  });
+
+  it("no proof, no read; a door that does not answer draws as a row without it", async () => {
+    asked.length = 0;
+    for (const proofId of [null, "not-a-proof"]) {
+      expect(await ritualistRowRecord("ink_key_example", proofId, null, fake)).toEqual({
+        record: null, door: includedRecordDoor("ink_key_example", proofId), packet: null, timeline: null,
+      });
+    }
+    expect(asked).toEqual([]);
+    const down = (async () => { throw new Error("backend down"); }) as typeof fetch;
+    const side = await ritualistRowRecord("ink_key_example", PROOF, null, down);
+    expect(side).toMatchObject({ record: null, timeline: null, packet: null });
   });
 });
 

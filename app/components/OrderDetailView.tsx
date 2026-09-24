@@ -6,11 +6,8 @@ import {
   BlockStack,
   Text,
   InlineStack,
-  Badge,
   Divider,
 } from "@shopify/polaris";
-import type { BadgeProps } from "@shopify/polaris";
-import { distanceBadgeWords, isDistanceRecorded, OPEN_DISTANCE_KEY } from "../lib/order-marks";
 import { LifecycleRail } from "./OrderTimeline";
 import type { InkRecentOrderRow } from "./InkRecentOrders";
 
@@ -63,18 +60,18 @@ const fmt = (amount: string | number, currency: string) => {
   return num.toLocaleString("en-US", { style: "currency", currency });
 };
 
-// The door notification's state (old word "verified", or new) takes no tone:
-// it was a green "Verified" until Sam, 2026-09-24: "wrong".
-const statusBadgeTone = (s: string): BadgeProps["tone"] => {
-  if (s === "enrolled") return "warning";
-  if (s === "active") return "info";
-  return undefined;
-};
-
-// The Shopify embed stays lean: order essentials + a handoff. The full delivery
-// proof — tap history, location, signed cryptographic record — lives in the
-// standalone ink. dashboard (its Advanced drawer), never here. Keeping the crypto
-// out of the embed is deliberate (engagement-led surface, not a forensics console).
+// THE ORDER'S FULL-PAGE VIEW — what "View full record" opens from a Shipments
+// row: the recipient, the products, the order's activity on the honest rail,
+// the way to the order in Shopify, and the handoff to the studio, where the
+// brand book, the pages and the campaigns live. The record itself — its
+// files, its words, the opens on their maps — is in the row (ink's panel).
+//
+// The recipient is the ship-to's own name and the order's own email, as the
+// Shipments ledger reads them (services/ink-links.server.ts). The title
+// carries no status badge: that list never reads the ink status word, so the
+// badge would have said "Pending" of every order; the rail says the order's
+// state, each step with where its time came from. (The door notification's
+// badge was a green "Verified" until Sam, 2026-09-24: "wrong".)
 export default function OrderDetailView({ order, onBack }: OrderDetailViewProps) {
   // Shop slug for the "View in Shopify" link.
   const settingsData = useRouteLoaderData("routes/app.settings") as any;
@@ -91,17 +88,9 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
     }
   })();
 
-  const statusRaw = order.status?.toLowerCase() || "pending";
-  // The door's state says the open's distance as data (lib/order-marks.ts,
-  // ⚠️ PLACEHOLDER COPY); every other state keeps its word.
-  const statusLabel = isDistanceRecorded(statusRaw)
-    ? distanceBadgeWords(order.metafields?.[OPEN_DISTANCE_KEY])
-    : statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1);
-
   return (
     <Page
       title={order.orderNumber}
-      titleMetadata={<Badge tone={statusBadgeTone(statusRaw)}>{statusLabel}</Badge>}
       subtitle={order.date}
       backAction={{ content: "Shipments", onAction: onBack }}
       secondaryActions={[
@@ -113,19 +102,20 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
       ]}
     >
       <Layout>
-        {/* Left column: Customer + Products */}
+        {/* Left column: Recipient + Products — ink's words for them
+            (components/InkRecentOrders.tsx). */}
         <Layout.Section variant="oneThird">
           <BlockStack gap="400">
             <Card>
               <BlockStack gap="300">
                 <Text as="h3" variant="headingSm">
-                  Customer
+                  Recipient
                 </Text>
                 <Text as="p" variant="bodyMd" fontWeight="medium">
                   {order.customerName}
                 </Text>
                 <Text as="p" variant="bodySm" tone="subdued">
-                  {order.customerEmail || "No email"}
+                  {`Order email: ${order.customerEmail || "Unavailable"}`}
                 </Text>
                 {order.customerAddress && (
                   <>

@@ -77,8 +77,9 @@ const UNREAD: InkRowRecord = {
 
 /** Draws with the row's record side: at once when it is here, else when its
  *  promise lands, with `fallback` until then. A read that failed draws as a
- *  row with no record — the words each part already says for that. */
-function WithRecord({
+ *  row with no record — the words each part already says for that. The
+ *  Ritualist's full-record view waits on its row the same way. */
+export function WithRecord({
   row,
   fallback,
   children,
@@ -627,6 +628,7 @@ export default function InkRecentOrders({
   sort,
   onSort,
   pending = false,
+  renderPanel,
 }: {
   orders: InkOrderRow[];
   returnTo?: string;
@@ -639,6 +641,11 @@ export default function InkRecentOrders({
   onSort?: (sort: InkOrderSort) => void;
   /** A search, sort or page is loading: the ledger dims until it lands. */
   pending?: boolean;
+  /** An opened order, drawn in place of the bare panel: the Ritualist's row
+   *  (components/OrderExpandedRow.tsx) is this same panel with its "View full
+   *  record" at the foot, as the web app's rows end on "View full order". ink
+   *  has no such page and passes none. The row may still be streaming. */
+  renderPanel?: (row: InkOrderRow) => ReactNode;
 }) {
   const [expanded, setExpanded] = useState(defaultExpandedId);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -692,7 +699,7 @@ export default function InkRecentOrders({
               {open && (
                 <>
                   <Divider />
-                  <OrderPanel row={row} mapsKey={mapsKey} />
+                  {renderPanel ? renderPanel(row) : <OrderPanel row={row} mapsKey={mapsKey} />}
                 </>
               )}
             </Collapsible>

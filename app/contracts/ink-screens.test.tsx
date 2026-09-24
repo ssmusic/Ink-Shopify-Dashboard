@@ -427,8 +427,10 @@ describe("help and store connection", () => {
 // the "View Full Record" button, the studio sentence ("Open history, location,
 // and the signed delivery record live in your Ritualist studio.") and no
 // footer. The history, the location and the record now sit in the row itself,
-// so the sentence is gone; the button stays, sentence case, still a button;
-// and the Ritualist's record is included, so the row never offers it.
+// so the sentence is gone; the button stays, sentence case, still a button, at
+// the foot of the row as the web app's rows end on "View full order"; the row
+// is a row of ink's ledger (Shipments), opened; and the Ritualist's record is
+// included, so the row never offers it.
 describe("the Ritualist's Shipments row opens onto ink's panel, the record included", () => {
   it("keeps its full-record button, draws ink's panel, and never offers the record or names a price", () => {
     const row = {
@@ -438,7 +440,9 @@ describe("the Ritualist's Shipments row opens onto ink's panel, the record inclu
     const html = renderToString(
       <AppProvider i18n={translations}>
         {(() => {
-          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => <OrderExpandedRow row={row as never} onCollapse={() => {}} onViewFull={() => {}} /> }]);
+          const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => (
+            <InkRecentOrders orders={[row] as never} defaultExpandedId={row.id} renderPanel={(r) => <OrderExpandedRow row={r} onViewFull={() => {}} />} />
+          ) }]);
           return <Stub initialEntries={["/"]} />;
         })()}
       </AppProvider>,

@@ -11,11 +11,12 @@ import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 
-// ink streams each order's record (routes/app.ink.$section.tsx), and a
-// record's whole read may take up to RECORD_READ_TIMEOUT_MS (15 s), so ink's
-// stream waits 20 s before it gives up on a row. The Ritualist streams nothing
-// and keeps its 5 s.
-export const streamTimeout = isInk() ? 20_000 : 5000;
+// Both apps stream each order's record — ink's Orders (routes/app.ink.$section.tsx),
+// the Ritualist's Orders and Dashboard (services/ritualist-rows.server.ts) — and
+// a record's whole read may take up to RECORD_READ_TIMEOUT_MS (15 s), so the
+// stream waits 20 s before it gives up on a row. (The Ritualist kept 5 s while
+// it streamed nothing; at 5 s its biggest records would draw as unread.)
+export const streamTimeout = 20_000;
 
 export default async function handleRequest(
   request: Request,
