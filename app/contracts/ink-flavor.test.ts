@@ -58,7 +58,11 @@ describe("shopify.app.ink.toml", () => {
     for (const uri of uris) expect(uri.startsWith("https://ink-app-250065525755.us-central1.run.app/webhooks/")).toBe(true);
     const topics = [...toml.matchAll(/^\s*(?:topics|compliance_topics) = \[ "([^"]+)" \]/gm)].map((m) => m[1]).sort();
     const liveTopics = [...live.matchAll(/^\s*(?:topics|compliance_topics) = \[ "([^"]+)" \]/gm)].map((m) => m[1]).sort();
-    expect(topics).toEqual(liveTopics);
+    // Every topic of the live record except the Ritualist's own plan
+    // (app_subscriptions/update → services/ritualist-plan-sync.server.ts):
+    // ink's subscriptions are ink's, and its handler is never mounted under ink.
+    expect(topics).toEqual(liveTopics.filter((t) => t !== "app_subscriptions/update"));
+    expect(liveTopics).toContain("app_subscriptions/update");
     expect(topics).toEqual(["app/scopes_update", "app/uninstalled", "customers/data_request", "customers/redact", "orders/create", "orders/fulfilled", "shop/redact"]);
     // The underscore spellings that match the flat-route handler files.
     expect(uris).toContain("https://ink-app-250065525755.us-central1.run.app/webhooks/orders_create");
@@ -194,7 +198,7 @@ describe("the Ritualist's queries, byte for byte", () => {
     // plan and the page must not appear before the merchant has one.
     const precedence = read("app/services/plan-precedence.server.ts");
     expect(precedence).not.toContain('plan: "ritualist"');
-    expect(precedence).toContain('patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null })');
+    expect(precedence).toContain('patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null })');
     // The arrival records the ENTITLEMENT, never the plan (ink-backend #121).
     expect(precedence).toContain("ritualist_installed_at: new Date().toISOString()");
     const uninstall = read("app/routes/webhooks.app.uninstalled.tsx");

@@ -16,6 +16,7 @@ import { appFlavor, isInk } from "../services/app-flavor.server";
 import { isDirectVisitWithoutAStore } from "../services/direct-visit.server";
 import { provisionInkMerchant } from "../services/ink-install.server";
 import { claimRitualistPlan } from "../services/plan-precedence.server";
+import { syncRitualistPlan } from "../services/ritualist-plan-sync.server";
 
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
@@ -114,6 +115,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       // publish. Made by the Ritualist (every merchant today) it returns at
       // once, with no call made.
       await claimRitualistPlan({ shop: session.shop, existing });
+      // THE RITUALIST'S PLAN, RECORDED (ritualist-plan-sync.server.ts): what
+      // Shopify says about this store's paid plan goes onto the backend
+      // merchant, which decides whether ink's record is included. At most
+      // once per ten minutes per store; a write only when it changed.
+      await syncRitualistPlan({ admin, shop: session.shop, existing });
     }
   })().catch((err) =>
     console.error("[App] INK self-provision error (non-blocking):", err)

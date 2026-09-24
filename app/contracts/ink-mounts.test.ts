@@ -88,6 +88,7 @@ const RITUALIST_ONLY = [
   "routes/ink.update",
   "routes/webhooks.fulfillments",
   "routes/webhooks.nfs.verify",
+  "routes/webhooks.app.subscriptions_update",
 ].sort();
 
 describe("the route contract between the two apps", () => {
