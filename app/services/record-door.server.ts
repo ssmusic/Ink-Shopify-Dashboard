@@ -125,6 +125,44 @@ export function recordReturnUrl(input: { shop: string; apiKey: string; proofId: 
   return u.toString();
 }
 
+/** Shopify ANSWERED and said no (its userErrors): no charge exists, so the
+ *  reservation may be released and the press offered again. Anything else —
+ *  a network failure, an answer without a charge — stays uncertain. */
+export class RecordChargeRefused extends Error {
+  readonly shopifySays: string;
+  constructor(shopifySays: string) {
+    super(`Shopify refused the charge: ${shopifySays}`);
+    this.name = "RecordChargeRefused";
+    this.shopifySays = shopifySays;
+  }
+}
+
+export const RECORD_CHARGES_QUERY = `#graphql
+  query InkRecordCharges {
+    currentAppInstallation {
+      oneTimePurchases(first: 25, reverse: true) { nodes { id name createdAt } }
+    }
+  }`;
+
+/** Did a charge of this name land on Shopify at or after `since`? Its gid,
+ *  null when Shopify says none did, undefined when Shopify could not say. */
+export async function findRecordCharge(
+  admin: AdminGraphql,
+  input: { name: string; since: string },
+): Promise<string | null | undefined> {
+  try {
+    const res = await admin.graphql(RECORD_CHARGES_QUERY);
+    const body = (await res.json()) as { data?: { currentAppInstallation?: { oneTimePurchases?: { nodes?: unknown } } } };
+    const nodes = body?.data?.currentAppInstallation?.oneTimePurchases?.nodes;
+    if (!Array.isArray(nodes)) return undefined;
+    const since = Date.parse(input.since) - 60_000;
+    const hit = nodes.find((n: any) => n?.name === input.name && typeof n?.id === "string" && !(Date.parse(n?.createdAt) < since));
+    return hit ? (hit as { id: string }).id : null;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Creates the charge (nothing is billed until the merchant approves it on
  *  Shopify's screen) and answers where to send them. Throws on refusal. */
 export async function createRecordCharge(
@@ -144,6 +182,7 @@ export async function createRecordCharge(
   };
   const out = body?.data?.appPurchaseOneTimeCreate;
   const errors = (out?.userErrors ?? []).map((e) => e?.message).filter(Boolean);
+  if (errors.length && !out?.appPurchaseOneTime?.id) throw new RecordChargeRefused(errors.join("; "));
   if (errors.length || !out?.confirmationUrl || !out?.appPurchaseOneTime?.id) {
     throw new Error(`Shopify refused the charge: ${errors.join("; ") || "no confirmation URL"}`);
   }
