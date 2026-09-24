@@ -146,23 +146,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             });
 
             if (ink && ["failed", "skipped_no_page_url"].includes(rewrite.outcome)) return new Response("Tracking link pending", { status: 503 });
-
-            // The Order status page — where the email's primary button lands —
-            // carries the brand's door once this shop metafield exists. One
-            // guard read per event, a real write once per merchant ever, and
-            // never fatal (order-door-metafield.server.ts). The Ritualist's
-            // block, not ink's: under ink no door is written.
-            if (!ink) {
-            const { assertOrderDoorMetafield } = await import("../services/order-door-metafield.server");
-            await assertOrderDoorMetafield({
-              admin,
-              shop,
-              merchantData: hit?.data ?? {},
-              merchantApiKey: apiKey,
-              proofId: trackingProofId,
-              label: `[${topic}] order-door`,
-            });
-            }
           } else {
             if (ink) return new Response("Tracking pending", { status: 503 });
             console.log(`⚠️ No ink_api_key for ${shop}; cannot forward tracking added on update.`);

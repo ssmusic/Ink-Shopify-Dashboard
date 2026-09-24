@@ -28,12 +28,13 @@ name = "ink."
 # ink-app-…run.app host does.
 application_url = "https://install.in.ink"
 embedded = true
-# ink ships NO extension. extensions/ holds the Ritualist's order-status block
-# (the order door), which renders only off an `ink:order_door` metafield that
-# nothing under APP_FLAVOR=ink writes — on this record it would be a dead
-# surface in ink's review. The CLI reads an EMPTY list as the default
-# ("extensions/*"), so the list names a directory that holds nothing.
-# shopify.app.toml sets no such key and keeps shipping the block.
+# ink ships NO extension. The CLI reads an EMPTY list as the default
+# ("extensions/*"), so the list names a directory that holds nothing: anything
+# ever added under extensions/ belongs to the Ritualist's record
+# (shopify.app.toml sets no such key) and never rides ink's deploy. The one the
+# Ritualist carried — the order-status block — came out 2026-09-24: it never
+# rendered on a real store, and App Store review paused the Ritualist on 5.6.1
+# for it.
 extension_directories = [ "extensions-ink/*" ]
 
 [build]
