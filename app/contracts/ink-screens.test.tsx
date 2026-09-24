@@ -197,8 +197,9 @@ describe('ink screens: facts, working controls and Polaris', () => {
   it('offers a real JSON download only when the record is available', () => {
     const html = render(() => <InkRecentOrders orders={[{...ROWS[0], door:{offerLine:null, downloadable:true}}]} defaultExpandedId={ROWS[0].id} />, {});
     expect(text(html)).toContain('Download record');
-    expect(text(html)).toContain('JSON file');
-    expect(text(html)).toContain('while it remains in the recent-order list');
+    // Sam, 2026-09-24: "loose this slop" — the buttons say what they give.
+    expect(text(html)).not.toContain('JSON file');
+    expect(text(html)).not.toContain('while it remains in the recent-order list');
     expect(text(html)).not.toContain('You can download it again from Records');
     expect(text(html)).toContain('Download PDF');
     expect(text(html)).not.toMatch(/attach as a file|Did you win/);
@@ -309,7 +310,9 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(t.indexOf('What this record contains')).toBeLessThan(t.indexOf('Checked in this browser'));
     expect(t.match(/Every open/g)?.length).toBe(1);
     expect(t).not.toContain('Inspect full record');
-    expect(t).toContain('No email is sent');
+    // Sam, 2026-09-24: "loose this slop" — no customer-details line under the files.
+    expect(t).not.toContain('No email is sent');
+    expect(t).not.toContain('Files can include customer details');
   });
 
   it('never guesses arrival against a promised window', () => {
