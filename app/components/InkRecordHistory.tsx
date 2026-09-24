@@ -34,7 +34,7 @@ function dateLabel(value: string | null) {
   );
 }
 
-function RecordHistoryItem({ row }: { row: HistoryItem }) {
+function RecordHistoryItem({ row, mapsKey }: { row: HistoryItem; mapsKey: string | null }) {
   const [open, setOpen] = useState(false);
   const orderLabel = row.orderName || `Record ${row.proofId.slice(-8)}`;
   const available = row.door?.downloadable === true;
@@ -115,6 +115,7 @@ function RecordHistoryItem({ row }: { row: HistoryItem }) {
                 <InkRecordInspection
                   proofId={row.proofId}
                   record={row.record}
+                  mapsKey={mapsKey}
                 />
               </Box>
             )}
@@ -132,6 +133,7 @@ export default function InkRecordHistory({
   hasPrevious,
   onNext,
   onPrevious,
+  mapsKey = null,
 }: {
   rows: HistoryItem[];
   error: boolean;
@@ -139,6 +141,8 @@ export default function InkRecordHistory({
   hasPrevious: boolean;
   onNext: () => void;
   onPrevious: () => void;
+  /** The Maps JavaScript browser key; none → no map, the words remain. */
+  mapsKey?: string | null;
 }) {
   const available = rows.filter((row) => row.door?.downloadable);
   const pending = rows.filter((row) => !row.door?.downloadable);
@@ -186,7 +190,7 @@ export default function InkRecordHistory({
                 Purchased records
               </Text>
               {available.map((row) => (
-                <RecordHistoryItem key={row.proofId} row={row} />
+                <RecordHistoryItem key={row.proofId} row={row} mapsKey={mapsKey} />
               ))}
             </BlockStack>
           )}
@@ -196,7 +200,7 @@ export default function InkRecordHistory({
                 Needs attention
               </Text>
               {pending.map((row) => (
-                <RecordHistoryItem key={row.proofId} row={row} />
+                <RecordHistoryItem key={row.proofId} row={row} mapsKey={mapsKey} />
               ))}
             </BlockStack>
           )}

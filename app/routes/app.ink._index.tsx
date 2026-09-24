@@ -92,6 +92,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return routeData({
       section,
       stage,
+      // The browser key for the open section's maps (components/OpensMap.tsx).
+      mapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY || null,
       historyError: history === null,
       recordHistory,
       historyPage: history?.page || 1,
@@ -200,6 +202,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         packet: packets[i],
         timeline: o.proofId ? (timelines[o.proofId] ?? null) : null,
       })),
+      // A BROWSER key, referrer-restricted to this app's hosts and to the Maps
+      // JavaScript API alone — never the backend's server key (components/OpensMap.tsx).
+      // The open section's maps draw with it; without it, the words remain.
+      mapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY || null,
     },
     { headers: { "Cache-Control": "private, no-store" } },
   );
@@ -286,6 +292,7 @@ export default function InkHome() {
                 hasPrevious={data.historyHasPrevious && navigation.state === "idle"}
                 onNext={() => goRecordPage(data.historyPage + 1)}
                 onPrevious={() => goRecordPage(data.historyPage - 1)}
+                mapsKey={data.mapsKey}
               />
             ) : (
               <Card padding="0">
@@ -315,6 +322,7 @@ export default function InkHome() {
                     orders={data.recentOrders}
                     returnTo="/app/ink"
                     searching={Boolean(data.search)}
+                    mapsKey={data.mapsKey}
                   />
                 )}
                 {data.pageInfo &&

@@ -6,6 +6,7 @@
 // signed events and the checks carry #137's words.
 
 import type { CheckoutVsOpens } from "./checkout-words";
+import type { RecordOpen } from "./every-open";
 
 export type RecordElement = {
   element: string;
@@ -75,6 +76,8 @@ export type RecordRead = {
   checks?: RecordChecks | null;
   /** The hand-over's price while it is for sale; null when bought or free. */
   forSale?: { price_cents: number; currency: string } | null;
+  /** Every signed open, in words (whole reads only; lib/every-open.ts). */
+  opens?: RecordOpen[];
 };
 
 /** The hand-over is the merchant's — bought, or free (lib/record-handover.ts).

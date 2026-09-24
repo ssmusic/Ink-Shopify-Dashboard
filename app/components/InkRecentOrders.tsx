@@ -17,9 +17,9 @@ import type { DisputePacketText } from "../services/ink-packet.server";
 import {
   LifecycleRail,
   DeliveryWindowBar,
-  OpensAgainstAddress,
   type OrderTimelineData,
 } from "./OrderTimeline";
+import InkOpens from "./InkOpens";
 import { opensOf, type RecordRead } from "../lib/record-words";
 import { INK_DATA, INK_DATA_TINT } from "../lib/ink-palette";
 import { checkoutLines } from "../lib/checkout-words";
@@ -118,7 +118,7 @@ export function DisputePacketView({ packet }: { packet: DisputePacketText }) {
     </BlockStack>
   );
 }
-function Panel({ row }: { row: InkRecentOrderRow }) {
+function Panel({ row, mapsKey }: { row: InkRecentOrderRow; mapsKey: string | null }) {
   const [advanced, setAdvanced] = useState(true);
   const d = row.detail;
   const openCount = opensOf(row.record);
@@ -244,6 +244,7 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
                       timeline={row.timeline}
                       addressLabel={addressLabel}
                       checkout={checkoutWords(row.record)}
+                      mapsKey={mapsKey}
                     />
                   ) : (
                     <>
@@ -251,12 +252,12 @@ function Panel({ row }: { row: InkRecentOrderRow }) {
                       {row.timeline && (
                         <>
                           <Divider />
-                          <OpensAgainstAddress
-                            address={row.timeline.address}
-                            opens={row.timeline.opens}
-                            available={row.timeline.opensAvailable}
-                            capped={row.timeline.opensCapped}
+                          {/* THE OPEN and EVERY OPEN — the record page's open section (components/InkOpens.tsx). */}
+                          <InkOpens
+                            record={row.record}
+                            timeline={row.timeline}
                             addressLabel={addressLabel}
+                            mapsKey={mapsKey}
                           />
                         </>
                       )}
@@ -281,11 +282,14 @@ export default function InkRecentOrders({
   orders,
   defaultExpandedId = null,
   searching = false,
+  mapsKey = null,
 }: {
   orders: InkRecentOrderRow[];
   returnTo?: string;
   defaultExpandedId?: string | null;
   searching?: boolean;
+  /** The Maps JavaScript browser key (GOOGLE_MAPS_BROWSER_KEY); none → no map, the words remain. */
+  mapsKey?: string | null;
 }) {
   const [expanded, setExpanded] = useState(defaultExpandedId);
   if (!orders.length)
@@ -383,7 +387,7 @@ export default function InkRecentOrders({
                 {open && (
                   <>
                     <Divider />
-                    <Panel row={row} />
+                    <Panel row={row} mapsKey={mapsKey} />
                   </>
                 )}
               </Collapsible>
