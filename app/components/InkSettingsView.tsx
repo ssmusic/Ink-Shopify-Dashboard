@@ -103,7 +103,10 @@ function DataRequestRow({ row }: { row: PrivacyRow }) {
 export default function InkSettingsView({ data }: { data: SettingsData }) {
   const revalidator = useRevalidator();
   return (
+    // Every ink page, one width (routes/app.ink.$section.tsx INK_PAGE_WIDTH).
+    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
     <Page
+      fullWidth
       title="Settings"
       secondaryActions={[
         {
@@ -172,5 +175,6 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
         </Layout.Section>
       </Layout>
     </Page>
+    </div>
   );
 }

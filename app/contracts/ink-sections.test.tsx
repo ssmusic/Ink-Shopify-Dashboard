@@ -300,6 +300,12 @@ describe("Sam's third pass, 2026-09-24: the record up front, the pills back, the
     const route = read("app/routes/app.ink.$section.tsx");
     expect(route).toContain("<InkPillNav active={data.section} />");
     expect(route).toContain("maxWidth: 1400");
+    // Every section, not Orders alone (Sam: "all pages are the same width as the orders page").
+    expect(route).toContain("<div style={INK_PAGE_WIDTH}>");
+    expect(route).not.toMatch(/fullWidth=\{data\.section/);
+    expect(read("app/components/InkSettingsView.tsx")).toContain('maxWidth: 1400');
+    // The list says where Shopify's window ends.
+    expect(route).toContain("Shopify shares only the last 60 days of orders with apps.");
     expect(read("app/components/InkSettingsView.tsx")).toContain('<InkPillNav active="settings" />');
   });
 });

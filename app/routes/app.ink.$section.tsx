@@ -300,6 +300,11 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({ formAction, formDat
   return defaultShouldRevalidate;
 };
 
+/** Every ink page, one width: wider than a Polaris page (998 px), narrower
+ *  than the frame (Sam, 2026-09-24: "split the difference" · "all pages are
+ *  the same width as the orders page (duh)"). Settings reads it too. */
+export const INK_PAGE_WIDTH = { maxWidth: 1400, margin: "0 auto" } as const;
+
 export default function InkHome() {
   const data = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
@@ -346,9 +351,9 @@ export default function InkHome() {
   return (
     // Orders is wider than a Polaris page and narrower than the frame (Sam,
     // 2026-09-24: "can this be wider" · "now too wide - split the difference").
-    <div style={data.section === "orders" ? { maxWidth: 1400, margin: "0 auto" } : undefined}>
+    <div style={INK_PAGE_WIDTH}>
     <Page
-      fullWidth={data.section === "orders"}
+      fullWidth
       title={data.section === "insights" ? "Dashboard" : data.section === "records" ? "Records" : data.section === "help" ? "Help" : "Orders"}
       secondaryActions={data.section === "help" ? [] : [
         {
@@ -431,6 +436,20 @@ export default function InkHome() {
                     onSort={(sort) => setParams(orderSearchParams(params, data.search || "", sort))}
                     pending={navigation.state !== "idle"}
                   />
+                )}
+                {/* The list ends where Shopify's window does: an app reads the
+                    last 60 days of orders (read_all_orders aside). The Steve
+                    Madden test store has exactly 10 there (2026-09-24: "the
+                    orders cap out at 10 - whats that about?"). */}
+                {!data.ordersError && data.recentOrders.length > 0 && !data.pageInfo?.hasNextPage && (
+                  <>
+                    <Divider />
+                    <Box padding="300">
+                      <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+                        That is every order from the past 60 days. Shopify shares only the last 60 days of orders with apps.
+                      </Text>
+                    </Box>
+                  </>
                 )}
                 {data.pageInfo &&
                   (data.pageInfo.hasPreviousPage ||
