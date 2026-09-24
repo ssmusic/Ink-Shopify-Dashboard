@@ -4,6 +4,7 @@
 
 import { useLocation } from "react-router";
 import PillNav, { type Pill } from "./PillNav";
+import StudioLink from "./StudioLink";
 
 export const RITUALIST_PILLS: readonly Pill[] = [
   { id: "dashboard", label: "Dashboard", to: "/app/dashboard" },
@@ -28,5 +29,15 @@ export function ritualistPillFor(pathname: string): string | null {
 
 export default function RitualistPillNav() {
   const { pathname } = useLocation();
-  return <PillNav pills={RITUALIST_PILLS} active={ritualistPillFor(pathname)} label="The Ritualist" />;
+  // The pills centred, the studio's wordmark at the right of the same line,
+  // on every page (components/StudioLink.tsx).
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: "12px" }}>
+      <span />
+      <PillNav pills={RITUALIST_PILLS} active={ritualistPillFor(pathname)} label="The Ritualist" />
+      <span style={{ justifySelf: "end" }}>
+        <StudioLink />
+      </span>
+    </div>
+  );
 }

@@ -143,13 +143,18 @@ export default function InkRecordDoor({
             <Text as="h3" variant="headingSm">
               {door.downloadable ? "Export the record" : "Record downloads"}
             </Text>
-            <Text as="p" variant="bodySm" tone="subdued">
-              {door.offerLine
-                ? "One-page PDF and signed JSON. Includes the events available for this order."
-                : included && door.downloadable && !door.purchase
-                  ? "Included on this store. One-page PDF and signed JSON file."
-                  : "One-page PDF and signed JSON file."}
-            </Text>
+            {/* Sam, 2026-09-24, on "One-page PDF and signed JSON file." and the
+                customer-details line under the buttons: "loose this slop". The
+                buttons say what they give; only a price or an inclusion is said. */}
+            {door.offerLine ? (
+              <Text as="p" variant="bodySm" tone="subdued">
+                One-page PDF and signed JSON. Includes the events available for this order.
+              </Text>
+            ) : included && door.downloadable && !door.purchase ? (
+              <Text as="p" variant="bodySm" tone="subdued">
+                Included on this store.
+              </Text>
+            ) : null}
           </BlockStack>
         )}
         <InlineStack gap="200">
@@ -206,15 +211,6 @@ export default function InkRecordDoor({
         <Text as="p" variant="bodySm" tone="subdued">
           One-time Shopify charge. Download here or again in Records. No email
           is sent.
-        </Text>
-      )}
-      {door.downloadable && !compact && (
-        <Text as="p" tone="subdued" variant="bodySm">
-          Files can include customer details.{" "}
-          {door.inHistory
-            ? "You can download them again from Records."
-            : "You can download them again from this order while it remains in the recent-order list."}{" "}
-          No email is sent.
         </Text>
       )}
       {door.pending && (
