@@ -42,7 +42,7 @@ const AccountSettings = () => {
   return (
     <BlockStack gap="800">
       <Layout>
-        <Layout.AnnotatedSection title="Connected Store">
+        <Layout.AnnotatedSection title="Connected store">
           <Card>
             <BlockStack gap="300">
               <Text as="p" variant="bodyMd" fontWeight="semibold">

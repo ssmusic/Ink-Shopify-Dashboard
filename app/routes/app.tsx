@@ -159,8 +159,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 //
 // Routing Polaris urls through React Router's Link makes them client-side
 // navigations, which keep the embedded session. This covers the whole class,
-// not just Billing's back arrow: app/components/settings/SettingsAdvanced.tsx
-// carries the identical backAction.
+// not just Billing's back arrow: every Polaris backAction and url in the app.
 const PolarisLink = forwardRef<HTMLAnchorElement, any>(function PolarisLink(
   { url = "", external, target, children, ...rest },
   ref,

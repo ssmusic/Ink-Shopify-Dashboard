@@ -298,7 +298,7 @@ const MediaRow = ({
             )}
             {item.size && (
               <div>
-                <p className="text-muted-foreground mb-0.5">File Size</p>
+                <p className="text-muted-foreground mb-0.5">File size</p>
                 <p className="text-foreground">{item.size}</p>
               </div>
             )}
@@ -616,7 +616,7 @@ const BrandingSettings = () => {
   return (
     <Layout>
       <Layout.AnnotatedSection
-        title="Loading Media"
+        title="Loading media"
         description="Upload the videos and images your customers see when they tap. The 'Primary' video is shown during the consumer tap experience!"
       >
         <input
@@ -677,7 +677,7 @@ const BrandingSettings = () => {
             className="flex items-center justify-between w-full p-4 bg-card hover:bg-muted/30 transition-colors"
           >
             <span className="text-sm font-medium text-foreground">
-              Video Guidelines
+              Video guidelines
             </span>
             <ChevronDown
               className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${

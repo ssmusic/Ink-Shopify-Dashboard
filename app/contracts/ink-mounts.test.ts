@@ -81,7 +81,6 @@ const RITUALIST_ONLY = [
   "routes/app.register-webhook",
   "routes/app.reorder-tags",
   "routes/app.settings",
-  "routes/app.settings_.advanced",
   "routes/app.tag-existing-orders",
   "routes/app.tagged-shipments",
   "routes/app.tagged-shipments.$orderId",

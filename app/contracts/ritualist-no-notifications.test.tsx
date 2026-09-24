@@ -29,17 +29,17 @@ describe("Settings › Notifications, while the Ritualist sends none", () => {
         </AppProvider>,
       ),
     );
-    for (const part of ["Your page in Shopify's emails", "Copy the line", "Return Window"]) expect(t).toContain(part);
+    for (const part of ["Your page in Shopify's emails", "Copy the line", "Return window"]) expect(t).toContain(part);
     for (const gone of [
-      "Notification Channel",
+      "Notification channel",
       "Send notifications by email.",
-      "Delivery Notifications",
+      "Delivery notifications",
       // "Out for delivery" and "Delivered" stay: they are Shopify's own email
       // templates, listed in the real section. What goes is the Ritualist's send.
       "Sent when a carrier scan shows the package is out for delivery.",
       "Sent when a carrier scan shows the package is delivered.",
       "Sent after the customer opens their page.",
     ])
-      expect(t).not.toContain(gone);
+      expect(t.toLowerCase()).not.toContain(gone.toLowerCase());
   });
 });
