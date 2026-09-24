@@ -3,6 +3,7 @@
 // data; the rings are scale guides named only by their radius.
 import { describe, expect, it } from "vitest";
 import {
+  KIND_WORDS,
   accuracyWords,
   browserCell,
   deviceCell,
@@ -100,9 +101,18 @@ describe("the opens door's own words for each open (ink-backend #135)", () => {
       [signed({})],
     );
     expect(rows.map((r) => r.kind)).toEqual(["first", "reload", "again"]);
-    // The door names a later row the first open (an earlier row was a scanner's): no second "first".
-    const later = everyOpenRows([door({ at: "2026-09-01T09:00:00Z", outcome: "success", kind: null }), door({ kind: "first" })], []);
+    // The door names a later row the first open: no second "first" is guessed before it.
+    const later = everyOpenRows([door({ at: "2026-09-01T09:00:00Z", outcome: "success" }), door({ kind: "first" })], []);
     expect(later.map((r) => r.kind)).toEqual(["again", "first"]);
+  });
+
+  it("never guesses a first open where the door declined to say (a capped history)", () => {
+    const capped = everyOpenRows([door({ kind: null }), door({ at: "2026-09-01T11:00:00Z", kind: "again" })], [signed({})]);
+    expect(capped.map((r) => r.kind)).toEqual(["unknown", "again"]);
+    expect(KIND_WORDS[capped[0].kind]).toBe("not recorded");
+    // An older signed open on the record settles it: that one is the first, the declined row again.
+    const settled = everyOpenRows([door({ kind: null })], [signed({ event_id: "event_old00000000000000000000", at: "2026-08-01T00:00:00Z" }), signed({})]);
+    expect(settled.map((r) => r.kind)).toEqual(["first", "again"]);
   });
 });
 

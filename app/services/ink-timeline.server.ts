@@ -162,7 +162,9 @@ export function timelineFrom(
             // never a user agent, never an id. Absent on an older door.
             device: DEVICE_WORDS.has(o?.device) ? (o.device as string) : null,
             browser: typeof o?.browser === "string" && /^[A-Z]{1,3}$/.test(o.browser) ? o.browser : null,
-            kind: OPEN_KINDS.has(o?.kind) ? (o.kind as OpenKind) : null,
+            // null is the door declining to say (a capped history); an absent or
+            // unknown word is read as a door that said nothing.
+            kind: o?.kind === null ? null : OPEN_KINDS.has(o?.kind) ? (o.kind as OpenKind) : undefined,
           };
         })
       : null;
