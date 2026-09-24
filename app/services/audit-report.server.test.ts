@@ -9,7 +9,7 @@
 //      one content stream per page, trailer.
 //   4. A missing evidence reference is stated as MISSING, never invented.
 import { describe, expect, it } from "vitest";
-import { auditReportLines, buildAuditReportPdf, integritySentence, qrRects, type AuditPacket } from "./audit-report.server";
+import { auditReportLines, buildAuditReportPdf, integritySentence, openLocationSentence, qrRects, type AuditPacket } from "./audit-report.server";
 
 function packet(over: Partial<AuditPacket> = {}): AuditPacket {
   const ev = (seq: number, type: string, prev: string | null) => ({
@@ -40,6 +40,24 @@ function packet(over: Partial<AuditPacket> = {}): AuditPacket {
 const URL = "https://www.in.ink/verify/proof_" + "a".repeat(24);
 
 describe("auditReportLines", () => {
+  it("says an open's distance as data in the OPEN block's sentences — never the backend's verdict word (Sam: \"we dont judge delivery\")", () => {
+    for (const verdict of ["pass", "near", "flagged"]) {
+      expect(openLocationSentence({ verdict, distance_m: 719, accuracy_m: 35 })).toBe("Opened 719 m from the delivery address. Accuracy ±35 m.");
+      expect(openLocationSentence({ verdict, distance_m: 2600 })).toBe("Opened 2.6 km from the delivery address.");
+    }
+    expect(openLocationSentence({ verdict: "not_shared", distance_m: null })).toBe("Location not shared.");
+    expect(openLocationSentence({ verdict: "unmeasured", distance_m: null })).toBe("A location was shared, but no distance was stored.");
+    expect(openLocationSentence({ verdict: "imprecise", distance_m: null, accuracy_m: 900 })).toBe("A location was shared, but no distance was stored. Accuracy ±900 m.");
+    expect(openLocationSentence(null)).toBeNull();
+    const p = packet();
+    p.verdict.elements = p.verdict.elements.map((e) =>
+      e.element === "the_open" ? { ...e, value: { ...e.value, location: { verdict: "flagged", distance_m: 719, accuracy_m: 35 } } } : e,
+    );
+    // The report wraps long lines; read it as one run of words.
+    const text = auditReportLines(p, { verifyUrl: URL }).map((l) => l.text).join(" ").replace(/\s+/g, " ");
+    expect(text).toContain("Opened 719 m from the delivery address. Accuracy ±35 m.");
+    expect(text).not.toMatch(/\((pass|near|flagged)\)|outside|within/);
+  });
   it("says what the record supports, each element's level and evidence, every event's hashes and signature, and the verify link", () => {
     const text = auditReportLines(packet(), { verifyUrl: URL }).map((l) => l.text).join("\n");
     expect(text).toContain("AUDIT REPORT");
@@ -48,7 +66,7 @@ describe("auditReportLines", () => {
     expect(text).toContain("Buyer: Maya Chen (returning)");
     expect(text).toContain("Ship to: 123 Hidden St, Los Angeles, CA, 90026, US");
     expect(text).toContain("The open: Device-verified");
-    expect(text).toContain("location not shared by the buyer");
+    expect(text).toContain("Location not shared.");
     expect(text).toContain("evidence: evt_3");
     expect(text).toContain("Delivery date: Recorded and signed");
     expect(text).toContain("Event 2 - Carrier delivered");
