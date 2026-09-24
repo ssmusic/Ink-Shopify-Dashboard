@@ -128,6 +128,13 @@ describe("the Shipments ledger reads its page the way ink's Orders does", () => 
     expect(out).toMatchObject({ ordersError: true, orders: [] });
   });
 
+  it("the stream waits as long as a record's whole read may take, as ink's does", async () => {
+    vi.stubEnv("APP_FLAVOR", "");
+    const { streamTimeout } = await import("../entry.server");
+    const { RECORD_READ_TIMEOUT_MS } = await import("../services/ink-reader.server");
+    expect(streamTimeout).toBeGreaterThan(RECORD_READ_TIMEOUT_MS);
+  });
+
   it("no timer re-reads every row's record", () => {
     const src = readFileSync(resolve(process.cwd(), "app/routes/app.tagged-shipments._index.tsx"), "utf8");
     expect(src).not.toMatch(/setInterval\(/);
