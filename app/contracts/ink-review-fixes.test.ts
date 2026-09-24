@@ -80,11 +80,17 @@ describe("ink's App URL with no store (App Store review, 2026-09-23)", () => {
     expect(await outcome(() => loginAction({ request: posted, params: {}, context: {} } as unknown as Parameters<typeof loginAction>[0]))).toEqual(home);
   });
 
-  it("keeps ink's rule ink's: the Ritualist answers a malformed store as it did", async () => {
+  it("sends the Ritualist's malformed store to its own landing too — the form is gone from both apps", async () => {
     vi.stubEnv("APP_FLAVOR", "");
-    expect(await outcome(() => loginLoader(args("https://app.in.ink/auth/login?shop=not*a*shop")))).toEqual({
-      data: { errors: { shop: "Please enter a valid shop domain to log in" } },
-    });
+    const landing = { status: 302, location: "/" };
+    expect(await outcome(() => loginLoader(args("https://app.in.ink/auth/login?shop=not*a*shop")))).toEqual(landing);
+    const posted = new Request("https://app.in.ink/auth/login?shop=not*a*shop", { method: "POST", body: new URLSearchParams({ shop: "not*a*shop" }) });
+    expect(await outcome(() => loginAction({ request: posted, params: {}, context: {} } as unknown as Parameters<typeof loginAction>[0]))).toEqual(landing);
+  });
+
+  it("renders no page at all: the route is a door, with no shop-domain form left to show", async () => {
+    const route = await import("../routes/auth.login/route");
+    expect("default" in route).toBe(false);
   });
 });
 
