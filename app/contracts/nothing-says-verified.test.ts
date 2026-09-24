@@ -31,7 +31,6 @@ describe("the Ritualist's Shopify order marks", () => {
     expect(shipments).not.toMatch(/label: "Verified"/);
     expect(shipments).not.toMatch(/`Verified \(/);
     expect(shipments).not.toMatch(/tone: "success"/);
-    expect(read("app/components/OrderDetailView.tsx")).not.toMatch(/"verified"\) return "success"/);
     expect(read("app/components/ui/lifecycle-badge.tsx")).not.toMatch(/ink-badge-success/);
   });
 });

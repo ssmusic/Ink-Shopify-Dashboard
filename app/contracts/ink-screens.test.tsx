@@ -436,7 +436,7 @@ describe("help and store connection", () => {
 // is a row of ink's ledger (Shipments), opened; and the Ritualist's record is
 // included, so the row never offers it.
 describe("the Ritualist's Shipments row opens onto ink's panel, the record included", () => {
-  it("keeps its full-record button, draws ink's panel, and never offers the record or names a price", () => {
+  it("draws ink's panel with no full-record button, and never offers the record or names a price", () => {
     const row = {
       ...ROWS[0],
       door: { offerLine: null, pending: false, paidPendingRecord: false, resumeUrl: null, downloadable: true, inHistory: false, purchase: null },
@@ -445,14 +445,15 @@ describe("the Ritualist's Shipments row opens onto ink's panel, the record inclu
       <AppProvider i18n={translations}>
         {(() => {
           const Stub = createRoutesStub([{ id: "screen", path: "/", Component: () => (
-            <InkRecentOrders orders={[row] as never} defaultExpandedId={row.id} renderPanel={(r) => <OrderExpandedRow row={r} onViewFull={() => {}} />} />
+            <InkRecentOrders orders={[row] as never} defaultExpandedId={row.id} renderPanel={(r) => <OrderExpandedRow row={r} advancedOpen />} />
           ) }]);
           return <Stub initialEntries={["/"]} />;
         })()}
       </AppProvider>,
     );
     const t = text(html);
-    expect(t).toContain("View full record");
+    // The full-record button is gone (Sam, 2026-09-24).
+    expect(t).not.toContain("View full record");
     expect(html).not.toContain("href=");
     for (const part of ["Products", "Recipient", "Advanced", "Export the record", "Download PDF"]) expect(t).toContain(part);
     expect(t).not.toContain("Download CSV");
