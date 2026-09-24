@@ -65,10 +65,9 @@ describe("ink's App URL with no store (App Store review, 2026-09-23)", () => {
     expect(r).toEqual({ status: 302, location: "https://admin.shopify.com/store/fresh-shop/oauth/install" });
   });
 
-  it("leaves the Ritualist's login page as it was", async () => {
+  it("sends the Ritualist's visitor with no store to its own landing (2.3.1, since 2026-09-24)", async () => {
     vi.stubEnv("APP_FLAVOR", "");
-    const r = await outcome(() => loginLoader(args("https://app.in.ink/auth/login")));
-    expect("data" in r).toBe(true);
+    expect(await outcome(() => loginLoader(args("https://app.in.ink/auth/login")))).toEqual({ status: 302, location: "/" });
   });
 });
 

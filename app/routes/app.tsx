@@ -1,7 +1,7 @@
 import { flavorLogger } from "../services/ink-log.server";
 const console = flavorLogger("app");
 import { forwardRef } from "react";
-import { Outlet, useLoaderData, useRouteError, useRouteLoaderData, Link, type HeadersFunction, type LoaderFunctionArgs, type LinksFunction } from "react-router";
+import { Outlet, redirect, useLoaderData, useRouteError, useRouteLoaderData, Link, type HeadersFunction, type LoaderFunctionArgs, type LinksFunction } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
 import { NavMenu } from "@shopify/app-bridge-react";
@@ -12,7 +12,8 @@ import { ensureCarrierServiceRegistered } from "../services/carrier-service.serv
 import { createMerchant } from "../services/ink-api.server";
 import { getMerchant, updateMerchant } from "../services/merchant.server";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "../services/notification-settings";
-import { appFlavor } from "../services/app-flavor.server";
+import { appFlavor, isInk } from "../services/app-flavor.server";
+import { isDirectVisitWithoutAStore } from "../services/direct-visit.server";
 import { provisionInkMerchant } from "../services/ink-install.server";
 import { claimRitualistPlan } from "../services/plan-precedence.server";
 
@@ -27,6 +28,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const queryClient = new QueryClient();
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // A browser tab with no store goes to the Ritualist's front door instead of
+  // the library's App Bridge bounce, which renders "200" outside the admin
+  // (direct-visit.server.ts). ink's /app answers exactly as it did.
+  if (!isInk() && isDirectVisitWithoutAStore(request)) throw redirect("/");
   const { admin, session } = await authenticate.admin(request);
 
   // WHICH APP THIS PROCESS IS (app/services/app-flavor.server.ts). Unset is
