@@ -21,6 +21,9 @@ const PROOF_BODY = {
   proof_id: PROOF,
   enrolled_at: "2026-08-25T20:28:07.559Z",
   delivered_at: "2026-08-25T20:29:50.138Z",
+  // Corvara #1012: its delivery came from Shopify's fulfillment update (the embed's
+  // fulfillments/update webhook → PATCH /proofs/:id/delivered, source "merchant").
+  delivery_source: "merchant",
   first_tap_at: "2026-08-25T20:29:59.868Z",
   first_tap_distance_to_shipping_m: 3552,
   gps_verdict: "flagged",
@@ -109,19 +112,22 @@ describe("an order's timeline", () => {
       [3552, "flagged", true],
       [null, "not_shared", false],
     ]);
-    // Codex's rail, as Sam chose it on 2026-09-23: Recorded · Shipped · In
-    // transit · Delivered · Opened, then the return and refund steps.
-    expect(t?.steps.map((s) => [s.key, s.state])).toEqual([
-      ["enrolled", "done"],
-      ["shipped", "not_recorded"],
-      ["in_transit", "not_recorded"],
-      ["delivered", "done"],
-      ["opened", "done"],
-      ["return_started", "not_recorded"],
-      ["refund_cleared", "not_recorded"],
+    // Codex's rail, as Sam chose it on 2026-09-23 — each step saying where its
+    // time came from (Sam, on this very order: "this isnt honest"). Shopify's
+    // fulfillment said delivered, one minute after ink recorded the order: it
+    // is said as Shopify's word, never ticked like something ink or a carrier saw.
+    expect(t?.steps.map((s) => [s.key, s.state, s.note])).toEqual([
+      ["enrolled", "done", "Recorded by ink"],
+      ["shipped", "not_recorded", null],
+      ["in_transit", "not_recorded", null],
+      ["delivered", "reported", "From Shopify's fulfillment"],
+      ["opened", "done", "Recorded by ink"],
+      ["return_started", "not_recorded", null],
+      ["refund_cleared", "not_recorded", "no event for refunds yet"],
     ]);
     expect(t?.opensAvailable).toBe(true);
     expect(t?.window).toMatchObject({
+      deliveredNote: "From Shopify's fulfillment",
       withinExpectedWindow: true,
       windowEnd: "2026-08-28T20:29:50.138Z",
     });

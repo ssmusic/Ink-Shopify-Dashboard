@@ -75,9 +75,16 @@ export function timelineFrom(
 
   // The first open's moment: the record's own, else the proof's.
   const firstOpenAt = str(record?.summary.first_open_at) ?? str(p.first_tap_at);
+  // Who said delivered: the record's own word for its delivery date (the
+  // signed carrier event's source when it verifies), else the proof's.
+  const deliveryWords = record?.elements.find((e) => e.element === "delivery_date")?.value as
+    | { source?: unknown }
+    | null
+    | undefined;
   const steps = lifecycle({
     enrolled_at: str(p.enrolled_at),
     delivered_at: str(p.delivered_at),
+    delivered_source: str(deliveryWords?.source) ?? str(p.delivery_source),
     first_tap_at: firstOpenAt,
     return_started_at: str(p.return_initiated_at) ?? str(p.return_started_at),
     carrier_journey:
@@ -129,6 +136,7 @@ export function timelineFrom(
   }
 
   const window = deliveryWindow({
+    delivered_note: steps.find((s) => s.key === "delivered")?.note ?? null,
     delivered_at: str(p.delivered_at),
     interaction_window_end: str(p.interaction_window_closed_at),
     enrolled_at: str(p.enrolled_at),

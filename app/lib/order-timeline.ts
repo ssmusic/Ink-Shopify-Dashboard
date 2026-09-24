@@ -1,4 +1,7 @@
-export type StepState = "done" | "carrier" | "not_recorded";
+// A step's mark says who saw it: "done" — ink recorded it itself; "carrier" —
+// a carrier's scan; "reported" — someone else said so (Shopify's fulfillment,
+// the demo clock), shown with its source and never ticked; "not_recorded".
+export type StepState = "done" | "carrier" | "reported" | "not_recorded";
 export type LifecycleStep = {
   key: string;
   label: string;
@@ -12,6 +15,11 @@ export type JourneyEvent = { at?: string | null; stage?: string | null };
 export type LifecycleFields = {
   enrolled_at?: string | null;
   delivered_at?: string | null;
+  /** Who said the parcel was delivered: the proof's `delivery_source`
+   *  (ink-backend utils/markDelivered.js) — a carrier's tracking (shippo_*,
+   *  easypost*), Shopify's fulfillment update ("merchant", the embed's
+   *  fulfillments/update webhook), or the demo clock ("demo_clock"). */
+  delivered_source?: string | null;
   first_tap_at?: string | null;
   return_started_at?: string | null;
   carrier_journey?: { events?: JourneyEvent[] | null } | null;
@@ -33,31 +41,57 @@ const earliest = (events: JourneyEvent[], stages: string[]): string | null => {
   return best?.at ?? null;
 };
 
-// Only recorded timestamps complete a lifecycle step.
+// Each step says where its time came from (Sam, 2026-09-23, on a Delivered
+// ticked one minute after the order was recorded: "this isnt honest"). PLACEHOLDER words.
+export const SOURCE_WORDS = {
+  ink: "Recorded by ink",
+  carrier: "From the carrier's scan",
+  shopify: "From Shopify's fulfillment",
+  demo: "Set by the demo clock",
+} as const;
+
+/** Where a delivered time came from, in words, and whether it is a carrier's
+ *  scan. Null when the backend cannot say ("system", or nothing). */
+export function deliverySource(source: string | null | undefined): { words: string; carrier: boolean } | null {
+  const s = String(source ?? "").trim().toLowerCase();
+  if (/^(carrier|shippo|easypost)/.test(s)) return { words: SOURCE_WORDS.carrier, carrier: true };
+  if (s === "merchant") return { words: SOURCE_WORDS.shopify, carrier: false };
+  if (s === "demo_clock") return { words: SOURCE_WORDS.demo, carrier: false };
+  return null;
+}
+
+// Only recorded timestamps complete a lifecycle step, and each names its source:
+// ink's own record, a carrier's scan, or — for a delivery nobody but Shopify or
+// a demo clock reported — that report, never ticked. A delivery whose source
+// the backend cannot say is not recorded here.
 export function lifecycle(p: LifecycleFields): LifecycleStep[] {
   const journey = p.carrier_journey?.events ?? [];
   const shipped = earliest(journey, ["shipped"]);
   const transit = earliest(journey, ["transit", "in_transit"]);
+  const deliveredScan = earliest(journey, ["delivered"]);
   const step = (
     key: string,
     label: string,
     at: string | null | undefined,
-    note: string | null = null,
-  ): LifecycleStep => ({
-    key,
-    label,
-    state:
-      time(at ?? null) != null ? (note ? "carrier" : "done") : "not_recorded",
-    at: time(at ?? null) != null ? (at as string) : null,
-    note,
-  });
+    state: StepState,
+    note: string | null,
+  ): LifecycleStep =>
+    time(at ?? null) != null
+      ? { key, label, state, at: at as string, note }
+      : { key, label, state: "not_recorded", at: null, note: null };
+  const source = deliverySource(p.delivered_source);
+  const delivered = deliveredScan
+    ? step("delivered", "Delivered", deliveredScan, "carrier", SOURCE_WORDS.carrier)
+    : source
+      ? step("delivered", "Delivered", p.delivered_at, source.carrier ? "carrier" : "reported", source.words)
+      : step("delivered", "Delivered", null, "not_recorded", null);
   return [
-    step("enrolled", "Recorded", p.enrolled_at),
-    step("shipped", "Shipped", shipped, "from the carrier"),
-    step("in_transit", "In transit", transit, "from the carrier"),
-    step("delivered", "Delivered", p.delivered_at),
-    step("opened", "Opened", p.first_tap_at),
-    step("return_started", "Return started", p.return_started_at),
+    step("enrolled", "Recorded", p.enrolled_at, "done", SOURCE_WORDS.ink),
+    step("shipped", "Shipped", shipped, "carrier", SOURCE_WORDS.carrier),
+    step("in_transit", "In transit", transit, "carrier", SOURCE_WORDS.carrier),
+    delivered,
+    step("opened", "Opened", p.first_tap_at, "done", SOURCE_WORDS.ink),
+    step("return_started", "Return started", p.return_started_at, "done", SOURCE_WORDS.ink),
     {
       key: "refund_cleared",
       label: "Refund cleared",
@@ -104,6 +138,8 @@ export function openSentence(
 
 export type DeliveryWindow = {
   deliveredAt: string;
+  /** Where the delivered time came from, in words (the rail's own). */
+  deliveredNote: string;
   windowEnd: string;
   firstOpenAt: string | null;
   /** Hours from the delivered scan to the first open; negative = opened before delivery. */
@@ -113,22 +149,25 @@ export type DeliveryWindow = {
   withinExpectedWindow: boolean | null;
 };
 
-/** The bar exists only once the carrier has said delivered. */
+/** The bar exists only once a delivery is recorded with its source — the
+ *  rail's Delivered step (`delivered_note`); an unsourced delivery draws none. */
 export function deliveryWindow(p: {
   delivered_at?: string | null;
+  delivered_note?: string | null;
   interaction_window_end?: string | null;
   enrolled_at?: string | null;
   first_tap_at?: string | null;
   within_expected_window?: boolean | null;
 }): DeliveryWindow | null {
   const delivered = time(p.delivered_at);
-  if (delivered == null) return null;
+  if (delivered == null || !p.delivered_note) return null;
   const end = time(p.interaction_window_end);
   if (end == null || end <= delivered) return null;
   const first = time(p.first_tap_at);
   const total = end - delivered;
   return {
     deliveredAt: new Date(delivered).toISOString(),
+    deliveredNote: p.delivered_note,
     windowEnd: new Date(end).toISOString(),
     firstOpenAt: first != null ? new Date(first).toISOString() : null,
     hoursToOpen:
