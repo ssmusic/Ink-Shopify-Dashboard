@@ -23,12 +23,12 @@ const MediaMetadataPanel = ({
   onDownload,
 }: MediaMetadataProps) => {
   const rows = [
-    { label: "File Name", value: fileName },
+    { label: "File name", value: fileName },
     { label: "Format", value: format },
-    { label: "File Size", value: fileSize },
+    { label: "File size", value: fileSize },
     { label: "Duration", value: duration },
     { label: "Resolution", value: resolution },
-    { label: "Last Updated", value: lastUpdated },
+    { label: "Last updated", value: lastUpdated },
   ];
 
   return (

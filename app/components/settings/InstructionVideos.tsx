@@ -63,7 +63,7 @@ const InstructionVideos = () => {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-base font-medium text-foreground">Tap Instructions</h3>
+          <h3 className="text-base font-medium text-foreground">Tap instructions</h3>
           <p className="text-sm text-muted-foreground mt-1">
             Device-specific videos showing customers how to tap their package.
           </p>
@@ -124,7 +124,7 @@ const InstructionVideos = () => {
                 <currentDevice.icon className="h-8 w-8 text-foreground" />
               </div>
               <p className="text-sm font-medium text-foreground mb-1">
-                {currentDevice.name} Tap Instructions
+                {currentDevice.name} tap instructions
               </p>
               <p className="text-xs text-muted-foreground">
                 Shows how to tap NFC on {activeDevice === "iphone" ? "iOS" : "Android"} devices

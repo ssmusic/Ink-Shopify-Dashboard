@@ -292,7 +292,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
           window (below) are real and stay. */}
       {FEATURE_NOTIFICATIONS && (<>
       <Layout.AnnotatedSection
-        title="Notification Channel"
+        title="Notification channel"
         description="How customers receive notifications about their deliveries."
       >
         <Card>
@@ -308,7 +308,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
       </Layout.AnnotatedSection>
 
       <Layout.AnnotatedSection
-        title="Delivery Notifications"
+        title="Delivery notifications"
         description="Messages sent to customers during the delivery process."
       >
         <Card>
@@ -344,7 +344,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
       </>)}
 
       <Layout.AnnotatedSection
-        title="Return Window"
+        title="Return window"
         description="How long customers have to start a return after delivery. This sets the real window."
       >
         <Card>

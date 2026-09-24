@@ -17,7 +17,7 @@ const VideoGuidelines = ({ className = "" }: VideoGuidelinesProps) => {
     <div className={`bg-muted/30 border border-border rounded-sm p-4 ${className}`}>
       <div className="flex items-start gap-2 mb-3">
         <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-        <h4 className="text-sm font-medium text-foreground">Video Guidelines</h4>
+        <h4 className="text-sm font-medium text-foreground">Video guidelines</h4>
       </div>
       <ul className="space-y-1.5 ml-6">
         {guidelines.map((guideline, index) => (
