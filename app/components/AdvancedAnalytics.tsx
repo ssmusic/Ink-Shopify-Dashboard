@@ -6,7 +6,6 @@ import {
   Text,
   Spinner,
   Badge,
-  Divider,
 } from "@shopify/polaris";
 import type { MerchantInsights } from "~/services/ink-api.server";
 
@@ -30,15 +29,9 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
-const OUTCOME_TONE: Record<string, "success" | "info" | "warning" | undefined> = {
-  ACCEPTED: "success",
-  RETURNED: "info",
-  EXPIRED: "warning",
-  UNCONFIRMED: undefined,
-  DISPUTED: undefined,
-};
-
-/** The outcome's word. UNCONFIRMED (no open on the record yet) read
+/** The outcome's word, in a plain badge: no outcome is drawn green, blue or
+ *  yellow — a colour would judge it (ink's Dashboard judges nothing).
+ *  UNCONFIRMED (no open on the record yet) read
  *  "Unconfirmed" — as if ink confirmed the others (Sam, 2026-09-24: ink never
  *  says a delivery was confirmed). It says the Ritualist's own word for the
  *  same outcome (the-ritualist src/pages/Shipments.tsx). ⚠️ PLACEHOLDER. */
@@ -50,9 +43,14 @@ const OUTCOME_WORDS: Record<string, string> = {
   DISPUTED: "Disputed",
 };
 
-// Native Advanced KPIs — operational + integrity, from the server-side aggregate
+// Native Advanced KPIs — integrity and outcomes, from the server-side aggregate
 // (/app/api/dashboard/insights → ink-backend /api/merchant-insights). Replaces the
 // Metabase iframe. No dispute/recovery cards; engagement metrics live on the lead view.
+// 2026-09-24: the Dashboard now leads with ink's (components/DeliveryDashboard.tsx),
+// which says the throughput — orders, opens, the open rate, shared locations —
+// from this same door, so it is not said twice here. The average open distance
+// left too: "Geofence accuracy" judged a distance, and each open's distance is
+// said as data in its order's panel.
 export default function AdvancedAnalytics() {
   const fetcher = useFetcher<InsightsResponse>();
 
@@ -80,7 +78,7 @@ export default function AdvancedAnalytics() {
     );
   }
 
-  const { throughput: t, integrity: ig, sample_size: n } = data;
+  const { integrity: ig, sample_size: n } = data;
   const smallN = n < 20;
   const o = ig.outcomes;
 
@@ -93,20 +91,6 @@ export default function AdvancedAnalytics() {
         </Text>
       ) : null}
 
-      {/* Throughput */}
-      <BlockStack gap="300">
-        <Text as="h3" variant="headingSm">
-          Throughput
-        </Text>
-        <InlineStack gap="800" wrap>
-          <Stat label="Enrollments" value={t.enrollments.toLocaleString()} />
-          <Stat label="Opened" value={t.opened.toLocaleString()} />
-          <Stat label="Open rate" value={`${t.open_rate_pct}%`} sub={`${t.opened}/${t.enrollments}`} />
-        </InlineStack>
-      </BlockStack>
-
-      <Divider />
-
       {/* Integrity */}
       <BlockStack gap="300">
         <Text as="h3" variant="headingSm">
@@ -118,11 +102,6 @@ export default function AdvancedAnalytics() {
             value={`${ig.payload_integrity_pct}%`}
             sub="signed records intact"
           />
-          <Stat
-            label="Geofence accuracy"
-            value={ig.geofence.avg_distance_m != null ? `${ig.geofence.avg_distance_m} m` : "—"}
-            sub={`${ig.geofence.gps_count} GPS · ${ig.geofence.ip_count} IP`}
-          />
         </InlineStack>
         <BlockStack gap="100">
           <Text as="span" variant="bodySm" tone="subdued">
@@ -130,9 +109,7 @@ export default function AdvancedAnalytics() {
           </Text>
           <InlineStack gap="200" wrap>
             {(["ACCEPTED", "UNCONFIRMED", "RETURNED", "EXPIRED", "DISPUTED"] as const).map((k) => (
-              <Badge key={k} tone={OUTCOME_TONE[k]}>
-                {`${OUTCOME_WORDS[k]}: ${o[k]}`}
-              </Badge>
+              <Badge key={k}>{`${OUTCOME_WORDS[k]}: ${o[k]}`}</Badge>
             ))}
           </InlineStack>
         </BlockStack>
