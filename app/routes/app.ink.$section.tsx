@@ -127,10 +127,19 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
   }
 
   if (section === "insights") {
-    const [kpis, delivery] = await Promise.all([
+    const [insights, delivery] = await Promise.all([
       readInkKpis(apiKey),
       readDeliveryDashboard(apiKey),
     ]);
+    // "Location shared" is the orders with an open that shared a location —
+    // the delivery rows' count (lib/delivery-insights.ts sharedLocation), the
+    // same orders the funnel's step counts. merchant-insights' own number is
+    // a first open's alone: 3 where 16 had shared on the Steve Madden test
+    // store (Sam, 2026-09-24).
+    const kpis =
+      insights && delivery && delivery.locationShared <= insights.recorded
+        ? { ...insights, locationShared: delivery.locationShared }
+        : insights;
     return routeData(
       {
         section,

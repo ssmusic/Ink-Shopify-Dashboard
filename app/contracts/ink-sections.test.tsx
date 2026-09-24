@@ -33,6 +33,8 @@ vi.mock("../services/ink-merchant.server", () => ({
 vi.mock("../services/ink-links.server", () => ({
   readRecentOrderPage: vi.fn(async () => ({ rows: [], pageInfo: null })),
 }));
+vi.mock("../services/ink-kpis.server", () => ({ readInkKpis: vi.fn(async () => null) }));
+vi.mock("../services/ink-delivery.server", () => ({ readDeliveryDashboard: vi.fn(async () => null) }));
 
 const { loader: homeDoor } = await import("../routes/app.ink._index");
 const { default: InkRecentOrders } = await import("../components/InkRecentOrders");
@@ -148,5 +150,31 @@ describe("the Orders list does not wait for its slowest record", () => {
     const t = text(html);
     expect(t).toContain("#1011");
     expect(t).toContain("3 opens");
+  });
+});
+
+describe("the Dashboard's Location shared", () => {
+  const KPIS = { recorded: 488, opened: 25, openRate: 5, locationShared: 3, capped: false };
+  const load = async () => {
+    const { authenticate } = await import("../shopify.server");
+    vi.mocked(authenticate.admin).mockResolvedValueOnce({ admin: {}, session: { shop: "sample.myshopify.com" } } as never);
+    const { loader } = await import("../routes/app.ink.$section");
+    return ((await loader({ request: new Request("https://install.in.ink/app/ink/dashboard"), params: { section: "dashboard" }, context: {} } as never)) as { data: { kpis: typeof KPIS | null } }).data.kpis;
+  };
+
+  it("counts the orders with an open that shared a location — the funnel's own count, not a first open's alone", async () => {
+    const { readInkKpis } = await import("../services/ink-kpis.server");
+    const { readDeliveryDashboard } = await import("../services/ink-delivery.server");
+    vi.mocked(readInkKpis).mockResolvedValueOnce(KPIS as never);
+    vi.mocked(readDeliveryDashboard).mockResolvedValueOnce({ locationShared: 16 } as never);
+    expect(await load()).toEqual({ ...KPIS, locationShared: 16 });
+  });
+
+  it("keeps the insights' own number when the delivery rows are unavailable", async () => {
+    const { readInkKpis } = await import("../services/ink-kpis.server");
+    const { readDeliveryDashboard } = await import("../services/ink-delivery.server");
+    vi.mocked(readInkKpis).mockResolvedValueOnce(KPIS as never);
+    vi.mocked(readDeliveryDashboard).mockResolvedValueOnce(null);
+    expect(await load()).toEqual(KPIS);
   });
 });
