@@ -134,8 +134,8 @@ describe("order 3 — the Ritualist uninstalls", () => {
     expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("restored");
 
     expect(otherAppHoldsSession).toHaveBeenCalledWith(SHOP);
-    expect(patchMerchant).toHaveBeenCalledWith("shop_abc123", { plan: "ink", ritualist_installed_at: null });
-    expect(updateMerchant).toHaveBeenCalledWith(SHOP, { ritualist_plan_claimed_at: null });
+    expect(patchMerchant).toHaveBeenCalledWith("shop_abc123", { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null });
+    expect(updateMerchant).toHaveBeenCalledWith(SHOP, { ritualist_plan_claimed_at: null, ritualist_plan_active_at: null });
     expect(updateMerchant.mock.calls[0][1]).not.toHaveProperty("ink_api_key");
   });
 

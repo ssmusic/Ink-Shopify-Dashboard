@@ -40,6 +40,9 @@ export interface MerchantData {
    *  plan: "ritualist"); cleared (null) when the Ritualist uninstalls and
    *  hands the merchant back to ink, so a re-install claims it again. */
   ritualist_plan_claimed_at?: string | null;
+  /** The Ritualist's PAID plan is active on this store since this instant,
+   *  or null (none) — the mirror of what the backend holds (ritualist-plan-sync.server.ts). */
+  ritualist_plan_active_at?: string | null;
 }
 
 export const getMerchant = async (shop: string): Promise<MerchantData | null> => {

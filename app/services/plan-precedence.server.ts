@@ -127,7 +127,9 @@ export async function restoreInkPlanOnRitualistUninstall(shop: string): Promise<
   }
 
   try {
-    await patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null });
+    // The plan leaves with the app: ink-backend #154 includes the record only
+    // while the Ritualist is installed AND its paid plan is active.
+    await patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null });
   } catch (e: any) {
     const status = e instanceof InkApiError ? e.status : 0;
     if (status >= 400 && status < 500) {
@@ -140,7 +142,7 @@ export async function restoreInkPlanOnRitualistUninstall(shop: string): Promise<
     return "transient_failure";
   }
 
-  await updateMerchant(shop, { ritualist_plan_claimed_at: null });
+  await updateMerchant(shop, { ritualist_plan_claimed_at: null, ritualist_plan_active_at: null });
   console.log(`[plan] ${shop}: the Ritualist left, ink stays — plan → ink, entitlement cleared (${shopId}).`);
   return "restored";
 }

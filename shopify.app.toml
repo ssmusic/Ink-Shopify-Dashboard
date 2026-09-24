@@ -50,6 +50,13 @@ api_version = "2025-10"
   topics = [ "app/scopes_update" ]
   uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/app/scopes_update"
 
+  # THE RITUALIST'S PLAN (services/ritualist-plan-sync.server.ts): a subscribe,
+  # a cancel or a lapse, recorded on the backend — the handler re-reads
+  # Shopify's active subscriptions and never trusts the payload alone.
+  [[webhooks.subscriptions]]
+  topics = [ "app_subscriptions/update" ]
+  uri = "https://shopify-app-250065525755.us-central1.run.app/webhooks/app/subscriptions_update"
+
   [[webhooks.subscriptions]]
   topics = [ "orders/create" ]
   # Must match the flat-route handler file webhooks.orders_create.ts → the path
