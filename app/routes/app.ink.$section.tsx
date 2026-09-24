@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   data as routeData,
   useLoaderData,
+  type ShouldRevalidateFunction,
   useSearchParams,
   useNavigation,
   useRevalidator,
@@ -31,12 +32,12 @@ import { readInkMerchant, stageOf } from "../services/ink-merchant.server";
 import { readRecentOrderPage } from "../services/ink-links.server";
 import { readInkKpis } from "../services/ink-kpis.server";
 import InkRecentOrders, { type InkRowRecord } from "../components/InkRecentOrders";
-import InkPillNav from "../components/InkPillNav";
 import DeliveryDashboard from "../components/DeliveryDashboard";
 import { readTimelineReads, timelineOfReads } from "../services/ink-timeline.server";
 import { readDeliveryDashboard } from "../services/ink-delivery.server";
 import { readInkRecordHistory } from "../services/ink-record-history.server";
-import InkRecordHistory from "../components/InkRecordHistory";
+import InkRecordHistory, { type HistoryItem } from "../components/InkRecordHistory";
+import { readRecordPriceOrUnknown } from "../services/ink-api.server";
 import InkHelp from "../components/InkHelp";
 import InkOrderSearch from "../components/InkOrderSearch";
 import { orderSearch, orderSort, orderSearchParams } from "../lib/ink-order-search";
@@ -93,6 +94,29 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
   if (section === "records") {
     const requestedPage = Number(params.get("page") || "1");
     const history = await readInkRecordHistory(session.shop, requestedPage).catch(() => null);
+    // A STORE WHOSE RECORDS ARE INCLUDED buys none, so its purchase history is
+    // always empty and Records only pointed back to Orders (Sam, 2026-09-24,
+    // on the Steve Madden test store: "records just sends you back to
+    // orders"). When the backend says the record is free there (no price —
+    // The Ritualist includes it), Records lists the recent orders' records,
+    // each with its downloads; the export door still decides each file.
+    let includedRecords: HistoryItem[] | null = null;
+    if (history && history.rows.length === 0 && apiKey && view.shopId) {
+      const price = await readRecordPriceOrUnknown(view.shopId);
+      if (price === null) {
+        const recent = await readRecentOrderPage(admin, { first: ORDERS_PER_PAGE }).catch(() => null);
+        includedRecords = (recent?.rows ?? [])
+          .filter((o) => o.proofId)
+          .map((o) => ({
+            proofId: o.proofId!,
+            orderName: o.name,
+            createdAt: o.createdAt,
+            state: "included",
+            door: { offerLine: null, downloadable: true },
+            record: null,
+          }));
+      }
+    }
     // The published keys, read once: each record's signatures are checked against them (#137).
     const keys = apiKey && history?.rows.length ? readJwks() : null;
     const recordHistory = history
@@ -120,6 +144,7 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
       mapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY || null,
       historyError: history === null,
       recordHistory,
+      includedRecords,
       historyPage: history?.page || 1,
       historyHasNext: history?.hasNext || false,
       historyHasPrevious: history?.hasPrevious || false,
@@ -248,6 +273,18 @@ export const loader = async ({ request, params: routeParams }: LoaderFunctionArg
   );
 };
 
+// A record's inspection and its files are reads: they change nothing on this
+// screen, so they do not reload it. Every download used to be followed by the
+// whole Orders list reloading (6–7 s on the Steve Madden test store), its rows
+// back to their placeholders under the button (2026-09-24). A purchase, and
+// everything else, still reloads.
+const RECORD_READS = new Set(["inspect", "pdf", "csv", "download"]);
+export const shouldRevalidate: ShouldRevalidateFunction = ({ formAction, formData, defaultShouldRevalidate }) => {
+  if (formAction && new URL(formAction, "https://ink.invalid").pathname === "/app/record" && RECORD_READS.has(String(formData?.get("intent") ?? "")))
+    return false;
+  return defaultShouldRevalidate;
+};
+
 export default function InkHome() {
   const data = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
@@ -291,6 +328,8 @@ export default function InkHome() {
 
   return (
     <Page
+      // Orders takes the frame's whole width (Sam, 2026-09-24: "can this be wider").
+      fullWidth={data.section === "orders"}
       title={data.section === "insights" ? "Dashboard" : data.section === "records" ? "Records" : data.section === "help" ? "Help" : "Orders"}
       secondaryActions={data.section === "help" ? [] : [
         {
@@ -303,8 +342,9 @@ export default function InkHome() {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
-            <InkPillNav active={data.section} />
-
+            {/* One navigation: the admin's left nav names every section
+                (routes/app.tsx). The pill bar repeated it (Sam, 2026-09-24:
+                "one or the other"). */}
             {settingUp && (
               <Banner tone="info">
                 {pollingEnded
@@ -319,7 +359,8 @@ export default function InkHome() {
               <DeliveryDashboard kpis={data.kpis} delivery={data.delivery} />
             ) : data.section === "records" ? (
               <InkRecordHistory
-                rows={data.recordHistory}
+                rows={data.includedRecords ?? data.recordHistory}
+                included={Array.isArray(data.includedRecords)}
                 error={data.historyError}
                 hasNext={data.historyHasNext && navigation.state === "idle"}
                 hasPrevious={data.historyHasPrevious && navigation.state === "idle"}
@@ -358,6 +399,8 @@ export default function InkHome() {
                     key={`${data.search}:${data.sort}:${params.get("after")}:${params.get("before")}`}
                     orders={data.recentOrders}
                     returnTo="/app/ink/orders"
+                    detailed
+                    advancedOpen={false}
                     searching={Boolean(data.search)}
                     mapsKey={data.mapsKey}
                     sort={data.sort || "newest"}

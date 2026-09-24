@@ -290,23 +290,60 @@ function LedgerHeadings({
 
 /** A press anywhere on the row opens it — except on a control of its own, and
  *  except a drag that selected text (an email being copied is not a press). */
-export function pressedTheRow(event: Pick<MouseEvent<HTMLElement>, "target">): boolean {
+export function pressedTheRow(
+  event: Pick<MouseEvent<HTMLElement>, "target"> & { currentTarget?: EventTarget | null },
+): boolean {
   const target = event.target as HTMLElement | null;
   if (target?.closest("button, a, input, select, textarea, label")) return false;
   const selection = typeof window !== "undefined" ? window.getSelection?.() : null;
-  return !(selection && selection.toString().length > 0);
+  if (!selection || selection.toString().length === 0) return true;
+  // Text selected IN this row (an email being copied) is not a press; a
+  // selection left anywhere else on the page no longer swallows the click
+  // (Sam, 2026-09-24: "it kinda works but not great").
+  const row = event.currentTarget as Node | null | undefined;
+  if (!row || typeof (row as Node).contains !== "function") return false;
+  return !(selection.anchorNode && row.contains(selection.anchorNode));
+}
+
+/** A short moment for a row: "Sep 5, 7:00 PM", in the viewer's own time. */
+function shortWhen(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/** The order's last open, from the activity the row already carries. */
+function lastOpenOf(row: InkRecentOrderRow): { at: string; device: string | null } | null {
+  const t = row.timeline;
+  if (t?.lastOpen?.at) return { at: t.lastOpen.at, device: t.lastOpen.device ?? null };
+  const at = (t?.opens ?? []).map((o) => o.at).filter((x): x is string => !!x).sort().pop();
+  return at ? { at, device: null } : null;
+}
+
+/** Where the order ships: "Dallas, TX" — and the country when it is not the US. */
+function shipsTo(d: InkOrderDetail | null): string | null {
+  const a = d?.customerAddress;
+  if (!a) return null;
+  const country = a.country && !/^(US|USA|United States)$/i.test(a.country) ? a.country : null;
+  const place = [a.city, a.provinceCode, country].filter(Boolean).join(", ");
+  return place || null;
 }
 
 function OrderRow({
   row,
   open,
   onToggle,
+  detailed = false,
 }: {
   row: InkOrderRow;
   open: boolean;
   onToggle: () => void;
+  detailed?: boolean;
 }) {
   const d = row.detail;
+  const moreItems = detailed && d && d.items.length > 1 ? `+${d.items.length - 1} more` : null;
+  const place = detailed ? shipsTo(d) : null;
+  const units = detailed && d?.items.length ? d.items.reduce((n, i) => n + (Number.isFinite(i.quantity) ? i.quantity : 0), 0) : 0;
   const product = d?.items[0]?.title ?? null;
   const recipient =
     d?.customerName && d.customerName !== "Name unavailable"
@@ -335,6 +372,11 @@ function OrderRow({
                 {product}
               </Text>
             ) : null}
+            {moreItems ? (
+              <Text as="p" variant="bodySm" tone="subdued" truncate>
+                {moreItems}
+              </Text>
+            ) : null}
           </BlockStack>
         </InlineGrid>
         <Box paddingInlineStart={{ xs: "800", md: "0" }}>
@@ -348,18 +390,30 @@ function OrderRow({
             <Text as="p" variant="bodySm" tone="subdued" truncate>
               {d?.customerEmail || "Email unavailable"}
             </Text>
+            {place ? (
+              <Text as="p" variant="bodySm" tone="subdued" truncate>
+                {place}
+              </Text>
+            ) : null}
           </BlockStack>
         </Box>
         <Box paddingInlineStart={{ xs: "800", md: "0" }}>
           <WithRecord row={row} fallback={<SkeletonBodyText lines={2} />}>
-            {(full) => <Activity row={full} />}
+            {(full) => <Activity row={full} detailed={detailed} />}
           </WithRecord>
         </Box>
       </InlineGrid>
       <InlineGrid columns={RIGHT} gap={{ xs: "050", md: "400" }} alignItems="start">
-        <Text as="p" alignment="end" numeric>
-          {d ? money(d.total, d.currency) : "Total unavailable"}
-        </Text>
+        <BlockStack gap="050">
+          <Text as="p" alignment="end" numeric>
+            {d ? money(d.total, d.currency) : "Total unavailable"}
+          </Text>
+          {units ? (
+            <Text as="p" variant="bodySm" alignment="end" tone="subdued">
+              {`${units} ${units === 1 ? "item" : "items"}`}
+            </Text>
+          ) : null}
+        </BlockStack>
         <Text as="p" alignment="end" tone="subdued">
           {d?.date || "Date unavailable"}
         </Text>
@@ -370,9 +424,12 @@ function OrderRow({
 
 /** The Activity column: how many times the page was opened, and the parcel's
  *  latest word from the order's activity (lib/order-activity.ts). */
-function Activity({ row }: { row: InkRecentOrderRow }) {
+function Activity({ row, detailed = false }: { row: InkRecentOrderRow; detailed?: boolean }) {
   const count = opensOf(row.record);
   const delivery = deliveryLine(row.timeline?.steps);
+  // ink's Orders says when the last open was, and on what — never where.
+  const last = detailed && count ? lastOpenOf(row) : null;
+  const lastWords = last ? shortWhen(last.at) : null;
   return (
     <BlockStack gap="050">
       <Text as="p" tone={count ? undefined : "subdued"}>
@@ -381,6 +438,11 @@ function Activity({ row }: { row: InkRecentOrderRow }) {
       {delivery ? (
         <Text as="p" variant="bodySm" tone="subdued" truncate>
           {delivery}
+        </Text>
+      ) : null}
+      {lastWords ? (
+        <Text as="p" variant="bodySm" tone="subdued" truncate>
+          {`Last open ${lastWords}${last?.device ? ` · ${last.device}` : ""}`}
         </Text>
       ) : null}
     </BlockStack>
@@ -426,8 +488,19 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
  *  Shipments row (components/OrderExpandedRow.tsx). What differs is the row's
  *  door, which each loader builds: the Ritualist's record is included, so its
  *  door never offers it and never names a price. */
-export function OrderPanel({ row, mapsKey }: { row: InkOrderRow; mapsKey: string | null }) {
-  const [advanced, setAdvanced] = useState(true);
+export function OrderPanel({
+  row,
+  mapsKey,
+  advancedOpen = true,
+}: {
+  row: InkOrderRow;
+  mapsKey: string | null;
+  /** Advanced's first state: open for the Ritualist's rows; ink's Orders opens
+   *  it closed (Sam, 2026-09-24: "open the acordian with the advanced section
+   *  collapsed"). */
+  advancedOpen?: boolean;
+}) {
+  const [advanced, setAdvanced] = useState(advancedOpen);
   const d = row.detail;
   const address = d?.customerAddress;
   const addressLabel = address
@@ -629,8 +702,17 @@ export default function InkRecentOrders({
   onSort,
   pending = false,
   renderPanel,
+  detailed = false,
+  advancedOpen = true,
 }: {
   orders: InkOrderRow[];
+  /** ink's Orders: each cell carries a line more — the other items, where the
+   *  order ships, the last open and its device, how many items (Sam,
+   *  2026-09-24: "have some more info in the cell"). Never a distance, a
+   *  verdict or a coordinate. */
+  detailed?: boolean;
+  /** Advanced's first state in an opened order (OrderPanel). */
+  advancedOpen?: boolean;
   returnTo?: string;
   defaultExpandedId?: string | null;
   searching?: boolean;
@@ -681,25 +763,32 @@ export default function InkRecentOrders({
             <Divider />
             <div
               onClick={(event) => {
+                // A double click is one press, not two: it opened the row and
+                // closed it again (Sam, 2026-09-24: "it kinda works but not great").
+                if (event.detail > 1) return;
                 if (pressedTheRow(event)) toggle();
+              }}
+              onMouseDown={(event) => {
+                // …and it no longer selects a word under the pointer.
+                if (event.detail > 1) event.preventDefault();
               }}
               onMouseEnter={() => setHovered(row.id)}
               onMouseLeave={() => setHovered((id) => (id === row.id ? null : id))}
-              style={open ? { background: INK_DATA_TINT } : undefined}
+              style={{ cursor: "pointer", ...(open ? { background: INK_DATA_TINT } : {}) }}
             >
               <Box
                 paddingInline="300"
                 paddingBlock={{ xs: "300", md: "200" }}
                 background={!open && hovered === row.id ? "bg-surface-hover" : undefined}
               >
-                <OrderRow row={row} open={open} onToggle={toggle} />
+                <OrderRow row={row} open={open} onToggle={toggle} detailed={detailed} />
               </Box>
             </div>
             <Collapsible id={`order-${row.id}`} open={open}>
               {open && (
                 <>
                   <Divider />
-                  {renderPanel ? renderPanel(row) : <OrderPanel row={row} mapsKey={mapsKey} />}
+                  {renderPanel ? renderPanel(row) : <OrderPanel row={row} mapsKey={mapsKey} advancedOpen={advancedOpen} />}
                 </>
               )}
             </Collapsible>

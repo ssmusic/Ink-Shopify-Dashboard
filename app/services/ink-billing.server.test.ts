@@ -34,6 +34,8 @@ vi.mock("./ink-record.server", async (importOriginal) => ({ ...(await importOrig
 vi.mock("./ink-reader.server", () => ({
   merchantRead,
   PROOF_ID: /^proof_[0-9a-f]{24}$/,
+  RECORD_READ_TIMEOUT_MS: 15_000,
+  EXPORT_READ_TIMEOUT_MS: 30_000,
 }));
 vi.mock("./ink-api.server", () => ({ createRecordPurchase }));
 vi.mock("./record-door.server", async (importOriginal) => ({
@@ -301,9 +303,12 @@ describe("ink Shopify billing", () => {
     doors({ locked: false, purchased: true, price_cents: 2900, currency: "USD" });
     const out = await inkRecordAction(admin, shop, "own-key", form("download"));
     expect(out.download).toMatchObject({ manifest: { signed: true } });
+    // The export gets its own long wait: 14 s for a busy record (2026-09-24).
     expect(merchantRead).toHaveBeenCalledWith(
       "own-key",
       `proofs/${proof}/export`,
+      expect.any(Function),
+      30_000,
     );
     // For sale (the merchant's whole view, not bought), or locked: nothing is handed over,
     // even if the export door were to answer.
@@ -329,7 +334,7 @@ describe("ink Shopify billing", () => {
     expect(out.ok).toBe(true);
     expect(out.filename).toBe(`ink-record-${proof}.pdf`);
     expect(Buffer.from(out.pdfBase64!, "base64").toString("latin1")).toContain("%PDF-1.4");
-    expect(merchantRead).toHaveBeenCalledWith("own-key", `proofs/${proof}/audit`);
+    expect(merchantRead).toHaveBeenCalledWith("own-key", `proofs/${proof}/audit`, expect.any(Function), 15_000);
     for (const patch of [
       { proof_id: "proof_bbbbbbbbbbbbbbbbbbbbbbbb" },
       { audience: "public" },

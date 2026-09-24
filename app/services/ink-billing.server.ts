@@ -19,7 +19,7 @@ import { buildInkRecordPdf } from "./ink-record-pdf.server";
 import { buildInkRecordCsv } from "./ink-record-csv.server";
 import { inspectionFromAudit } from "../lib/ink-record-inspection";
 import { recordDownloadsAvailable } from "../lib/record-words";
-import { merchantRead, PROOF_ID } from "./ink-reader.server";
+import { EXPORT_READ_TIMEOUT_MS, merchantRead, PROOF_ID, RECORD_READ_TIMEOUT_MS } from "./ink-reader.server";
 import {
   createRecordCharge,
   readRecordCharge,
@@ -185,9 +185,16 @@ export async function inkRecordAction(
     return no("The record is unavailable. Refresh and try again.");
   // The merchant audit can be viewable before purchase. Only the export door
   // authorizes handing over files; this also covers genuinely free records.
-  let bundle: any = null;
-  if (["download", "pdf", "csv"].includes(intent)) {
-    bundle = await merchantRead(apiKey, `proofs/${proofId}/export`);
+  // What the intent needs is read side by side, each with its own time: the
+  // export alone took 14 s for a busy record, and the three reads used to
+  // follow one another (2026-09-24).
+  const files = ["download", "pdf", "csv"].includes(intent);
+  const [bundle, audit, opens]: any[] = await Promise.all([
+    files ? merchantRead(apiKey, `proofs/${proofId}/export`, fetch, EXPORT_READ_TIMEOUT_MS) : null,
+    files || intent === "inspect" ? merchantRead(apiKey, `proofs/${proofId}/audit`, fetch, RECORD_READ_TIMEOUT_MS) : null,
+    intent === "pdf" || intent === "csv" || intent === "inspect" ? merchantRead(apiKey, `proofs/${proofId}/opens`) : null,
+  ]);
+  if (files) {
     if (
       bundle?.manifest?.proof_id !== proofId ||
       !bundle.files ||
@@ -200,7 +207,6 @@ export async function inkRecordAction(
     // The signed JSON is the hand-over itself: never while it is for sale —
     // the export door must answer for this record (above), and the audit's
     // record block must say the hand-over is the merchant's.
-    const audit = await merchantRead(apiKey, `proofs/${proofId}/audit`);
     if (audit?.proof_id !== proofId || handoverClosed(audit?.record))
       return no("The record is unavailable. Check record access and try again.");
     return {
@@ -215,7 +221,6 @@ export async function inkRecordAction(
     };
   }
   if (intent === "pdf" || intent === "csv" || intent === "inspect") {
-    const audit = await merchantRead(apiKey, `proofs/${proofId}/audit`);
     const record = recordFromBody(audit);
     if (audit?.proof_id !== proofId || audit?.audience !== "merchant" || !record || record.locked)
       return no("The record is unavailable. Check record access and try again.");
@@ -225,7 +230,6 @@ export async function inkRecordAction(
     // files, so they wait for the hand-over like the signed JSON.
     if (intent !== "inspect" && handoverClosed(audit?.record))
       return no("The record is unavailable. Check record access and try again.");
-    const opens = await merchantRead(apiKey, `proofs/${proofId}/opens`);
     const inspection = inspectionFromAudit(audit, opens);
     if (!inspection || inspection.proofId !== proofId) return no("The record is unavailable. Try again.");
     if (intent === "inspect") return {

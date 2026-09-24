@@ -134,8 +134,12 @@ export default function InkRecordHistory({
   onNext,
   onPrevious,
   mapsKey = null,
+  included = false,
 }: {
   rows: HistoryItem[];
+  /** The records are included on this store (no price): `rows` are its recent
+   *  orders' records, not purchases (routes/app.ink.$section.tsx). */
+  included?: boolean;
   error: boolean;
   hasNext: boolean;
   hasPrevious: boolean;
@@ -154,8 +158,9 @@ export default function InkRecordHistory({
             Your record library
           </Text>
           <Text as="p" tone="subdued">
-            Buy a record from its order. Records purchased in this app stay here
-            for repeat downloads, including older orders.
+            {included
+              ? "Records are included on this store. Download any recent order's record here."
+              : "Buy a record from its order. Records purchased in this app stay here for repeat downloads, including older orders."}
           </Text>
           <Text as="p" tone="subdued">
             Choose PDF for a report, CSV for a spreadsheet, or JSON for the
@@ -171,11 +176,12 @@ export default function InkRecordHistory({
         <Card>
           <BlockStack gap="300">
             <Text as="h2" variant="headingMd">
-              No purchased records yet
+              {included ? "No records in the past 60 days" : "No purchased records yet"}
             </Text>
             <Text as="p">
-              Review an order before choosing whether to buy its record
-              downloads.
+              {included
+                ? "A record appears here once an order from the past 60 days has one."
+                : "Review an order before choosing whether to buy its record downloads."}
             </Text>
             <InlineStack>
               <Button url="/app/ink/orders">View orders</Button>
@@ -187,7 +193,7 @@ export default function InkRecordHistory({
           {available.length > 0 && (
             <BlockStack gap="300">
               <Text as="h2" variant="headingMd">
-                Purchased records
+                {included ? "Recent records" : "Purchased records"}
               </Text>
               {available.map((row) => (
                 <RecordHistoryItem key={row.proofId} row={row} mapsKey={mapsKey} />
@@ -220,7 +226,7 @@ export default function InkRecordHistory({
       )}
       <Text as="p" variant="bodySm" tone="subdued">
         Downloads remain available while this app and record access are active.
-        If a past purchase is missing,{" "}
+        {included ? " If a record is missing," : " If a past purchase is missing,"}{" "}
         <Link url="mailto:info@in.ink">contact support</Link>.
       </Text>
     </BlockStack>
