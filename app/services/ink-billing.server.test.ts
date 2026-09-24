@@ -104,7 +104,7 @@ describe("ink Shopify billing", () => {
   it("offers the hand-over, never the files, while it is for sale — the merchant door's whole view is not a purchase", async () => {
     const door = await inkDoor(admin, shop, "own-key", proof);
     expect(door).toMatchObject({ downloadable: false, pending: false });
-    expect(door.offerLine).toContain("Get the record");
+    expect(door.offerLine).toContain("Buy the record");
     // The words of a priced record (no whole read): no files, no offer.
     readRecord.mockResolvedValue({ locked: true, elements: [], summary: {} });
     expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({ downloadable: false, offerLine: null });
@@ -114,7 +114,7 @@ describe("ink Shopify billing", () => {
     expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({ downloadable: false, offerLine: null });
   });
   it("offers Shopify purchase when the whole record is visible but the hand-over is not bought", async () => {
-    expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({ downloadable: false, offerLine: "Get the record ($29 USD)" });
+    expect(await inkDoor(admin, shop, "own-key", proof)).toMatchObject({ downloadable: false, offerLine: "Buy the record ($29 USD)" });
     expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(true);
     expect(createRecordCharge).toHaveBeenCalledOnce();
   });

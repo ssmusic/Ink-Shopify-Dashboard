@@ -72,7 +72,7 @@ const detail = (over: Record<string, unknown> = {}) => ({
   items: [{ title: "Bar Tape", quantity: 2, price: "29.00", sku: "BT-1" }], metafields: {}, ...over,
 });
 const ROWS = [
-  { id: "gid://shopify/Order/2", name: "#1010", proofId: "proof_aec827b527fb30457c1da890", detail: detail(), record: RECORD, door: { offerLine: "Get the record ($29 USD)", purchase: null }, timeline: TIMELINE },
+  { id: "gid://shopify/Order/2", name: "#1010", proofId: "proof_aec827b527fb30457c1da890", detail: detail(), record: RECORD, door: { offerLine: "Buy the record ($29 USD)", purchase: null }, timeline: TIMELINE },
   { id: "gid://shopify/Order/1", name: "#1009", proofId: null, detail: null, record: null, door: { offerLine: null, purchase: null } },
 ];
 
@@ -150,14 +150,15 @@ describe("the Orders ledger: the Ritualist's page, in Polaris", () => {
 
   it("opens onto the quick glance first — what was bought and who it went to — then the order's activity, then Advanced with the record's door at its top", () => {
     const t = text(ledger({ defaultExpandedId: ROWS[0].id }));
-    const order = ["Products", "Bar Tape", "BT-1 · Quantity 2", "$58.00", "Order total $58.00", "Recipient", "Order email: buyer@example.com", "1 Test St", "Order activity", "Advanced", "Get the record", "What this record contains"];
+    const order = ["Products", "Bar Tape", "BT-1 · Quantity 2", "$58.00", "Order total $58.00", "Recipient", "Order email: buyer@example.com", "1 Test St", "Order activity", "Advanced", "Buy the record", "What this record contains"];
     let at = t.indexOf("Products");
     for (const part of order) {
       const next = t.indexOf(part, at);
       expect(next, part).toBeGreaterThanOrEqual(at);
       at = next;
     }
-    expect(t).not.toContain("$29");
+    // The price is on the button (Sam, 2026-09-24: "no clear Buy the record button").
+    expect(t).toContain("Buy the record ($29 USD)");
   });
 
   it("marks the open row with ink's one blue and its tint, never Polaris's info colour", () => {
