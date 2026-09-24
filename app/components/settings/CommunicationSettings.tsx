@@ -15,6 +15,7 @@ import {
   Text,
 } from "@shopify/polaris";
 import { toast } from "../../hooks/use-toast";
+import { FEATURE_NOTIFICATIONS } from "../../flags";
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
   TEMPLATE_KEYS,
@@ -285,6 +286,11 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
         </Card>
       </Layout.AnnotatedSection>
 
+      {/* THE RITUALIST'S OWN NOTIFICATIONS — tabled behind FEATURE_NOTIFICATIONS
+          (app/flags.ts): they do not send yet (Sam, 2026-09-24), so the tab
+          does not offer them. Shopify's own emails (above) and the return
+          window (below) are real and stay. */}
+      {FEATURE_NOTIFICATIONS && (<>
       <Layout.AnnotatedSection
         title="Notification Channel"
         description="How customers receive notifications about their deliveries."
@@ -335,6 +341,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
           </BlockStack>
         </Card>
       </Layout.AnnotatedSection>
+      </>)}
 
       <Layout.AnnotatedSection
         title="Return Window"
