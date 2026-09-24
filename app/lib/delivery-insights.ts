@@ -24,6 +24,9 @@ export type DeliveryRow = {
   gps_verdict?: string | null;
   /** Where the first open's distance came from: "gps" is the phone's own fix. */
   location_source?: string | null;
+  /** Any of the order's opens carried the phone's own fix (ink-backend
+   *  merchant-delivery, 2026-09-24). Absent from an older backend. */
+  location_shared?: boolean | null;
   /** The proof carries a delivery fix — a signed DELIVERY_VERIFIED, an open
    *  within 100 m after the carrier's scan. Data: no screen names it. */
   verified_at_door?: boolean | null;
@@ -52,13 +55,17 @@ const at = (iso: string | null | undefined): number | null => {
 const pct = (n: number, d: number): number | null =>
   d > 0 ? Math.round((n / d) * 1000) / 10 : null;
 
-/** The phone shared its location on the first open: the distance came from
- *  its own fix. (Older proofs carry a verdict with no source — the NFC era's —
- *  which is not a shared location; merchant-insights counts gps_count alike.) */
+/** The phone shared its location on one of the order's opens. Sam,
+ *  2026-09-24: "i think more than 3 of 488 orders have shared location" —
+ *  on the Steve Madden test store 16 orders had an open with a fix, and the
+ *  first open's source alone said 3. The backend's `location_shared` says it
+ *  for any open; a backend without it says only the first open's source
+ *  ("gps" is the phone's own fix — older proofs carry a verdict with no
+ *  source, the NFC era's, which is not a shared location). */
 export function sharedLocation(
-  row: Pick<DeliveryRow, "location_source">,
+  row: Pick<DeliveryRow, "location_source" | "location_shared">,
 ): boolean {
-  return (row.location_source ?? "").toLowerCase() === "gps";
+  return row.location_shared === true || (row.location_source ?? "").toLowerCase() === "gps";
 }
 
 // PLACEHOLDER labels — the console's words where it has them.
