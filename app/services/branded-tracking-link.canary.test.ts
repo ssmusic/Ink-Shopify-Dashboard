@@ -245,11 +245,11 @@ describe("under ink, the link does not wait for the carrier feed on a store ink 
     expect(otherAppHoldsSession).toHaveBeenCalledWith("clarev-test.myshopify.com");
   });
 
-  it("keeps the carrier's link when the Ritualist is installed on the same store", async () => {
+  it("leaves the link to the Ritualist when the Ritualist is installed on the same store", async () => {
     otherAppHoldsSession.mockResolvedValue(true);
     const admin = fakeAdmin();
     const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: false });
-    expect(result.outcome).toBe("skipped_feed_unregistered");
+    expect(result.outcome).toBe("skipped_ritualist_installed");
     expect(admin.graphql).not.toHaveBeenCalled();
   });
 
@@ -261,11 +261,29 @@ describe("under ink, the link does not wait for the carrier feed on a store ink 
     expect(admin.graphql).not.toHaveBeenCalled();
   });
 
-  it("asks nothing extra when the feed is registered", async () => {
+  it("rewrites with a registered feed when ink alone serves the store, asking the sessions once", async () => {
+    otherAppHoldsSession.mockResolvedValue(false);
     const admin = fakeAdmin();
     const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: true });
     expect(result.outcome).toBe("updated");
-    expect(otherAppHoldsSession).not.toHaveBeenCalled();
+    expect(otherAppHoldsSession).toHaveBeenCalledTimes(1);
+  });
+
+  // THE OVERWRITE (Steve Madden #1029, 2026-09-24): with a registered feed both
+  // apps rewrote, and ink's www.in.ink link replaced the Ritualist's page.
+  it("never overwrites the Ritualist's link, even with a registered feed", async () => {
+    otherAppHoldsSession.mockResolvedValue(true);
+    const admin = fakeAdmin();
+    const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: true });
+    expect(result.outcome).toBe("skipped_ritualist_installed");
+    expect(admin.graphql).not.toHaveBeenCalled();
+  });
+
+  it("a session store that cannot answer keeps today's behaviour with a registered feed", async () => {
+    otherAppHoldsSession.mockRejectedValue(new Error("firestore unavailable"));
+    const admin = fakeAdmin();
+    const result = await assertBrandedTrackingUrl({ admin, ...base(), shippoRegistered: true });
+    expect(result.outcome).toBe("updated");
   });
 });
 

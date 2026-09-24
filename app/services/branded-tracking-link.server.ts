@@ -41,6 +41,7 @@ export type BrandedTrackingOutcome =
   | "skipped_disabled_env"
   | "skipped_disabled_merchant"
   | "skipped_already_branded"
+  | "skipped_ritualist_installed"
   | "skipped_feed_unregistered"
   | "skipped_no_page_url"
   | "skipped_no_fulfillment_id"
@@ -72,12 +73,12 @@ const MUTATION = `#graphql
 /** Under ink: is the buyer's page on this store ink's own (the Ritualist not
  *  installed here)? Only then does the page ignore the carrier feed. False
  *  when the session store cannot answer. */
-async function inkPageIsTheBuyers(shop: string): Promise<boolean> {
+async function ritualistSessionOn(shop: string): Promise<boolean | null> {
   try {
     const { otherAppHoldsSession } = await import("../firestore-session-storage.server");
-    return !(await otherAppHoldsSession(shop));
+    return await otherAppHoldsSession(shop);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -166,7 +167,22 @@ export async function assertBrandedTrackingUrl({
   // every tracking link. Where the Ritualist is installed its page may be
   // the buyer's, and the refusal stands. An unreadable session store keeps
   // the refusal too.
-  if (shippoRegistered !== true && isInk() && (await inkPageIsTheBuyers(shop))) {
+  // UNDER INK, ON A STORE THAT ALSO RUNS THE RITUALIST, THE LINK IS THE
+  // RITUALIST'S (2026-09-24). Both apps hear the same fulfilment webhook and
+  // both used to rewrite the link; whichever wrote last won. Measured on the
+  // Steve Madden rig, #1029: the Ritualist wrote stevemadden.in.ink/r/… at
+  // 21:27:48.63 and ink overwrote it with www.in.ink/r/… in the same second,
+  // so buyers of a Ritualist store opened ink's page and were forwarded to
+  // Shopify's order page instead of the brand's. The Ritualist includes ink,
+  // so where it is installed ink leaves the link alone. A session store that
+  // cannot answer keeps today's behaviour below.
+  const ritualistHere = isInk() ? await ritualistSessionOn(shop) : null;
+  if (ritualistHere === true) {
+    console.log(`🔗 ${label}: the Ritualist is installed on ${shop} — its link is the buyer's; ink leaves it.`);
+    return { outcome: "skipped_ritualist_installed" };
+  }
+
+  if (shippoRegistered !== true && isInk() && ritualistHere === false) {
     console.log(
       `🔗 ${label}: the carrier feed is not registered for "${carrier}" (shop ${shop}, proof ${proofId}) — ` +
         `ink's page shows no tracking status, so the link is rewritten anyway.`,
