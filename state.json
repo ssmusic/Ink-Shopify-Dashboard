@@ -36,9 +36,13 @@
       "request": "Track PR #160: Shopify paused The Ritualist's review on 5.6.1 because its order-status customer-account block shows nothing. The PR deletes extensions/order-page-block, the Settings › Communication 'The order status page' section, its API route and the ink:order_door metafield writer. HELD FOR SAM: merge, then his `shopify app deploy --config shopify.app.toml` from clean main, then Submit fixes in the Partner Dashboard.",
       "branch": "review/the-order-status-block-comes-out",
       "pr": 160,
-      "phase": "ready",
+      "phase": "working",
       "assignedAgent": "claude",
-      "owner": null,
+      "owner": {
+        "agent": "claude",
+        "sessionId": "3b5f52c4-b451-4ee7-bfac-405da269c474",
+        "acknowledgedSha": "6ba1ee20223394397c0ec479ae329447de381909"
+      },
       "handoffTo": null,
       "checkpoint": {
         "codeSha": "6ba1ee20223394397c0ec479ae329447de381909",
@@ -59,7 +63,7 @@
         "writer": "claude",
         "sessionId": "3b5f52c4-b451-4ee7-bfac-405da269c474"
       },
-      "updatedAt": "2026-09-24T16:46:56.054Z"
+      "updatedAt": "2026-09-24T16:57:53.965Z"
     }
   ],
   "projects": [],
@@ -117,6 +121,11 @@
     {
       "id": "7e2b9c14-3f6a-4d8e-a1b5-2c9f0e6d4a83",
       "fingerprint": "9b3037c32713a0f6464cedee9f859ea90af691e2bf8f2776d7f4e1b5ecf8eb38",
+      "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1"
+    },
+    {
+      "id": "b1e2c3d4-5f60-4718-8293-a4b5c6d7e8f9",
+      "fingerprint": "b0d7ea6e2483095d960f1091887daf41c7d2d138c8260f887483ce0349520785",
       "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1"
     }
   ],
@@ -186,6 +195,12 @@
       "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1",
       "action": "checkpoint",
       "detail": "Verified published code at 6ba1ee20223394397c0ec479ae329447de381909; saved context for claude. Ownership released for the next turn or session."
+    },
+    {
+      "at": "2026-09-24T16:57:53.965Z",
+      "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1",
+      "action": "claim",
+      "detail": "claude acknowledged 6ba1ee20223394397c0ec479ae329447de381909."
     }
   ]
 }
