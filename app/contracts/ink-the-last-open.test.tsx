@@ -142,3 +142,31 @@ describe("InkOpens picks the block from the doors", () => {
     expect(html).not.toContain('data-testid="the-last-open"');
   });
 });
+
+// A RECORD WITHOUT A DELIVERY POINT (Sam, 2026-09-24, on #TOWELS: "also is
+// this a problem"): the delivery address's block names the fact the record
+// carries (summary.address_state, lib/delivery-point.ts) — never "never
+// geocoded" on an order that has no shipping address at all.
+describe("THE LAST OPEN — a record without a delivery point", () => {
+  const saying = (word: "none" | "ungeocoded"): RecordRead => ({ ...RECORD, summary: { ...RECORD.summary, address_state: word } });
+  const last = readLastOpen({ last_open: { ...LAST, distance_m: null } })!;
+
+  it("no shipping address: the block says so, and the last open is drawn alone", () => {
+    const html = wrap(<TheLastOpen record={saying("none")} rows={ROWS} address={null} addressLabel={null} lastOpen={last} />);
+    const t = text(html);
+    expect(t).toContain("Delivery address No shipping address on this order.");
+    expect(t).not.toMatch(/geocod/i);
+    expect(html).toMatch(/data-testid="open-map"[^>]*data-address="absent"/);
+    expect(t).not.toMatch(COORDINATE);
+  });
+
+  it("an address with no map point yet says that", () => {
+    const t = text(wrap(<TheLastOpen record={saying("ungeocoded")} rows={ROWS} address={null} addressLabel={null} lastOpen={last} />));
+    expect(t).toContain("Delivery address The address is on file but has no map point yet.");
+  });
+
+  it("a record that does not say keeps the old line", () => {
+    const t = text(wrap(<TheLastOpen record={RECORD} rows={ROWS} address={null} addressLabel={null} lastOpen={last} />));
+    expect(t).toContain("not recorded — the address was never geocoded");
+  });
+});

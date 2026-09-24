@@ -29,6 +29,7 @@
 // browser. The key-bearing read goes over services/ink-reader.server.ts
 // (HTTPS only, no redirect, no cache).
 
+import { addressStateWord } from "../lib/delivery-point";
 import { checkRecord, type Jwks, type WholePacket } from "./record-check.server";
 import { merchantRead } from "./ink-reader.server";
 import { handoverPrice } from "../lib/record-handover";
@@ -162,6 +163,9 @@ function summaryOf(raw: unknown): RecordSummary {
   const out: RecordSummary = {};
   for (const key of SUMMARY_KEYS) if (typeof s[key] === "string") out[key] = s[key] as string;
   if (typeof s.opens === "number" && Number.isFinite(s.opens) && s.opens >= 0) out.opens = s.opens;
+  // Which fact the delivery point is — one of its three words, or nothing.
+  const addressState = addressStateWord(s.address_state);
+  if (addressState) out.address_state = addressState;
   return out;
 }
 

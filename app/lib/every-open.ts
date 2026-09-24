@@ -26,6 +26,7 @@
 // Every visible string is PLACEHOLDER copy, the record page's — Sam's words
 // replace it.
 
+import { noPointSentence, type AddressState } from "./delivery-point";
 import { kmOrM } from "./order-timeline";
 
 /** A distance in words, as the record page says it: "56 m", "2.6 km",
@@ -292,12 +293,17 @@ export const NOT_SIGNED = "not on the signed record";
 
 /** A row, opened: the words under its map (or in its place, with no fix).
  *  A distance is said as a distance; the accuracy only when the row carries it. */
-export function rowCaption(row: EveryOpenRow, address: MapPoint | null): string {
+export function rowCaption(row: EveryOpenRow, address: MapPoint | null, state: AddressState | null = null): string {
   const accuracy = row.accuracy_m != null ? ` Accuracy ${accuracyWords(row.accuracy_m)}.` : "";
   const hasFix = row.lat != null && row.lng != null;
   if (row.distance_m != null) return `Opened ${distanceWords(row.distance_m)} from the delivery address.${accuracy}`;
   if (hasFix || sharedOf(row)) {
-    const noAddress = hasFix && !address ? " The delivery address was never geocoded: the open alone, with no rings." : "";
+    // Which fact the missing point is (lib/delivery-point.ts, 2026-09-24,
+    // #TOWELS); a record that does not say keeps the old line.
+    const noPoint = noPointSentence(state);
+    const noAddress = hasFix && !address
+      ? noPoint ? ` ${noPoint} The open alone, with no rings.` : " The delivery address was never geocoded: the open alone, with no rings."
+      : "";
     return `A location was shared, but no distance was stored.${accuracy}${noAddress}`;
   }
   return "Location not shared.";
@@ -326,6 +332,9 @@ export type TheOpenReading = {
   fix: MapPoint | null;
   address: MapPoint | null;
   words: string;
+  /** Which fact the delivery point is (lib/delivery-point.ts): none ·
+   *  ungeocoded · geocoded; null when the record does not say. */
+  state: AddressState | null;
 };
 
 /** Great-circle metres between two points — arithmetic, never a verdict. */
@@ -349,6 +358,8 @@ export function theOpenReading(input: {
   rows: EveryOpenRow[] | null | undefined;
   address: MapPoint | null;
   opens: number;
+  /** The record's word for the delivery point (lib/delivery-point.ts addressStateOf). */
+  addressState?: AddressState | null;
 }): TheOpenReading {
   const served = input.served ?? null;
   const verdict = typeof served?.verdict === "string" ? served.verdict.toLowerCase() : null;
@@ -367,20 +378,25 @@ export function theOpenReading(input: {
   const d = servedD != null ? Math.round(servedD) : doorD != null ? Math.round(doorD) : here;
   const source: TheOpenReading["source"] = servedD != null ? (served?.signed ? "signed" : "record") : doorD != null ? "record" : here != null ? "here" : null;
   const shared = !!fix || (verdict != null && SHARED.has(verdict));
-  const base = { accuracy_m: accuracy, source, shared, fix, address };
-  const tail = address ? " The delivery address is on file and is shown below." : " The delivery address is not geocoded on this row.";
+  // No point: say which fact it is — no shipping address, or an address with
+  // no map point yet (Sam, 2026-09-24, #TOWELS). A record that does not say
+  // keeps the sentences the block always had.
+  const state: AddressState | null = address ? "geocoded" : input.addressState === "none" || input.addressState === "ungeocoded" ? input.addressState : null;
+  const noPoint = noPointSentence(state);
+  const base = { accuracy_m: accuracy, source, shared, fix, address, state };
+  const tail = address ? " The delivery address is on file and is shown below." : noPoint ? ` ${noPoint}` : " The delivery address is not geocoded on this row.";
 
   if (verdict === "imprecise" && d == null) {
     return { ...base, result: "imprecise", distance_m: null, source: served?.signed ? "signed" : "record", words: `A location was shared, but no distance was stored.${accuracy != null ? ` Accuracy ${accuracyWords(accuracy)}.` : ""}${tail}` };
   }
   if (!opens && !shared) {
-    return { ...base, result: "no_open", distance_m: null, words: address ? "No open on the record yet. The delivery address is on file and is shown below." : "No open on the record yet, and the delivery address is not geocoded on this row." };
+    return { ...base, result: "no_open", distance_m: null, words: address ? "No open on the record yet. The delivery address is on file and is shown below." : noPoint ? `No open on the record yet. ${noPoint}` : "No open on the record yet, and the delivery address is not geocoded on this row." };
   }
   if (!shared) {
-    return { ...base, result: "not_shared", distance_m: null, words: address ? "No open shared a location, so the distance could not be measured. The delivery address is on file and is shown below." : "No open shared a location, and the delivery address is not geocoded on this row." };
+    return { ...base, result: "not_shared", distance_m: null, words: address ? "No open shared a location, so the distance could not be measured. The delivery address is on file and is shown below." : noPoint ? `No open shared a location. ${noPoint}` : "No open shared a location, and the delivery address is not geocoded on this row." };
   }
   if (d == null) {
-    return { ...base, result: "unmeasured", distance_m: null, words: address ? "A location was shared, but no distance was stored." : "The delivery address is not geocoded on this row, so there is nothing to measure the open against. The open's location was recorded." };
+    return { ...base, result: "unmeasured", distance_m: null, words: address ? "A location was shared, but no distance was stored." : noPoint ? `${noPoint} The open's location was recorded.` : "The delivery address is not geocoded on this row, so there is nothing to measure the open against. The open's location was recorded." };
   }
   const after = served?.after_carrier_scan;
   const when = after === false ? " Before the carrier's scan." : after === true ? " After the carrier's scan." : "";

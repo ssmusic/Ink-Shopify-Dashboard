@@ -35,6 +35,7 @@ import MiniMap from "./MiniMap";
 import type { OrderTimelineData } from "./OrderTimeline";
 import { INK_DATA, INK_DATA_TINT, INK_HAIRLINE, INK_MUTED, INK_NEUTRAL } from "../lib/ink-palette";
 import { browsersLine, opensOf, when, type RecordRead } from "../lib/record-words";
+import { addressStateOf, noPointCaption, noPointSentence, type AddressState } from "../lib/delivery-point";
 import {
   CORROBORATING,
   KIND_WORDS,
@@ -71,6 +72,12 @@ function servedOf(record: RecordRead | null | undefined): ServedLocation | null 
  *  by their radius, the open at its bearing with the distance on the line —
  *  and when nothing was measured, the guides alone with what the record says. */
 export function OpenRings({ v }: { v: TheOpenReading }) {
+  // NO POINT, NO ADDRESS ON THE DRAWING (Sam, 2026-09-24, #TOWELS): with no
+  // delivery point and no distance measured against one, there is nothing at
+  // the centre and nothing for the rings to measure from — the diagram used to
+  // draw an "address" the order does not have. (A distance ink measured at the
+  // open was measured against a real point: that one still draws.)
+  if (!v.address && v.distance_m == null) return <OpenAlone v={v} />;
   const g = ringsGeometry(v);
   const [inner, outer] = g.rings;
   const label = g.open
@@ -127,6 +134,40 @@ export function OpenRings({ v }: { v: TheOpenReading }) {
   );
 }
 
+/** The diagram with no delivery point: no rings, no address — the open alone
+ *  at the centre when it shared a location, and a caption naming the fact (the
+ *  record page's OpenAloneDiagram; PLACEHOLDER words). A record that does not
+ *  say which fact keeps the caption the block always had. */
+export function OpenAlone({ v }: { v: TheOpenReading }) {
+  const g = ringsGeometry(v);
+  const fact = noPointCaption(v.state);
+  const base = g.caption ?? "unmeasured";
+  const words = fact ? (v.fix ? fact : `${base} · ${fact}`) : base;
+  return (
+    <svg
+      viewBox={`0 0 ${g.width} ${g.height}`}
+      width="100%"
+      role="img"
+      aria-label={v.fix ? `The open alone, with no rings; ${words}` : words}
+      data-testid="the-open-rings"
+      data-no-point="true"
+      style={{ display: "block", maxHeight: 220, background: "var(--p-color-bg-surface)", border: "1px solid var(--p-color-border)", borderRadius: "var(--p-border-radius-200)" }}
+    >
+      {v.fix ? (
+        <>
+          <circle cx={g.cx} cy={g.cy} r={9} fill={INK_DATA} stroke="#ffffff" strokeWidth={2.5} />
+          <text x={g.cx + 14} y={g.cy - 12} fontSize={8} fill={INK_NEUTRAL}>
+            open
+          </text>
+        </>
+      ) : null}
+      <text x={g.cx} y={g.height - 18} textAnchor="middle" fontSize={9} fill={INK_MUTED}>
+        {words}
+      </text>
+    </svg>
+  );
+}
+
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <BlockStack gap="050">
@@ -152,7 +193,7 @@ export function TheOpen({
   address: MapPoint | null;
   addressLabel?: string | null;
 }) {
-  const v = theOpenReading({ served: servedOf(record), rows, address, opens: opensOf(record) ?? 0 });
+  const v = theOpenReading({ served: servedOf(record), rows, address, opens: opensOf(record) ?? 0, addressState: addressStateOf(record, address) });
   const line = v.shared ? theOpenEventLine(rows) : null;
   const where = addressLabel && addressLabel !== "Address unavailable" ? addressLabel : null;
   return (
@@ -179,7 +220,7 @@ export function TheOpen({
             <MiniMap lat={address.lat} lng={address.lng} label="Delivery address" height={200} />
           ) : (
             <Text as="p" tone="subdued">
-              not recorded — the address was never geocoded
+              {noPointSentence(v.state) ?? "not recorded — the address was never geocoded"}
             </Text>
           )}
         </BlockStack>
@@ -225,6 +266,8 @@ export function TheLastOpen({
   const point = lastOpen?.point ?? null;
   const where = addressLabel && addressLabel !== "Address unavailable" ? addressLabel : null;
   const first = firstOpenLine({ served: servedOf(record), rows, address, opens: opensOf(record) ?? 0 });
+  // Which fact a missing point is (lib/delivery-point.ts, 2026-09-24, #TOWELS).
+  const noPoint = noPointSentence(addressStateOf(record, address));
   return (
     <div data-testid="the-last-open">
       <BlockStack gap="400">
@@ -273,7 +316,7 @@ export function TheLastOpen({
                 <OpenMap address={address} open={null} height={150} />
               ) : (
                 <Text as="p" tone="subdued">
-                  not recorded — the address was never geocoded
+                  {noPoint ?? "not recorded — the address was never geocoded"}
                 </Text>
               )}
               {where ? (
@@ -301,7 +344,7 @@ export function TheLastOpen({
 }
 
 /** A row, opened: its own map when the open carried a fix, then its words. */
-export function OpenRowDetail({ row, address }: { row: EveryOpenRow; address: MapPoint | null }) {
+export function OpenRowDetail({ row, address, state = null }: { row: EveryOpenRow; address: MapPoint | null; state?: AddressState | null }) {
   const fix = row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null;
   return (
     <BlockStack gap="200">
@@ -312,7 +355,7 @@ export function OpenRowDetail({ row, address }: { row: EveryOpenRow; address: Ma
         />
       ) : null}
       <Text as="p" variant="bodySm">
-        {rowCaption(row, address)}
+        {rowCaption(row, address, state)}
       </Text>
     </BlockStack>
   );
@@ -357,9 +400,12 @@ export function EveryOpen({
   browsers = null,
   recorded = null,
   defaultOpen = [],
+  addressState = null,
 }: {
   rows: EveryOpenRow[];
   address: MapPoint | null;
+  /** Which fact the delivery point is (lib/delivery-point.ts), for each open's own caption. */
+  addressState?: AddressState | null;
   /** The opens door answered: every open is here. */
   available?: boolean;
   /** The opens door limited the history it returned. */
@@ -485,7 +531,7 @@ export function EveryOpen({
                         {/* Every column: the seven named ones and the chevron's. */}
                         <td colSpan={HEADINGS.length + 1}>
                           <div className="ink-every-open-map">
-                            <OpenRowDetail row={r} address={address} />
+                            <OpenRowDetail row={r} address={address} state={addressState} />
                           </div>
                         </td>
                       </tr>
@@ -563,6 +609,7 @@ export default function InkOpens({
       <EveryOpen
         rows={rows}
         address={home}
+        addressState={addressStateOf(record, home)}
         available={available ?? timeline?.opensAvailable ?? false}
         capped={capped ?? timeline?.opensCapped ?? false}
         browsers={browsersLine(record?.browsers)}

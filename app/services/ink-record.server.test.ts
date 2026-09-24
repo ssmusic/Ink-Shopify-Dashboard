@@ -200,3 +200,17 @@ describe("recordFromBody — only known fields leave the server (the ink review,
     expect(audit?.[1].redirect).toBe("error");
   });
 });
+
+// WHICH FACT THE DELIVERY POINT IS (2026-09-24, lib/delivery-point.ts): the
+// summary keeps the backend's word — one of three — and nothing else in its place.
+describe("the record's delivery point word", () => {
+  it("keeps none, ungeocoded and geocoded", () => {
+    for (const word of ["none", "ungeocoded", "geocoded"]) {
+      expect(recordFromBody({ ...BODY, summary: { ...BODY.summary, address_state: word } })?.summary.address_state).toBe(word);
+    }
+  });
+  it("drops anything else, and a record from before the word has none", () => {
+    expect(recordFromBody({ ...BODY, summary: { ...BODY.summary, address_state: "88 N 6th St, Brooklyn" } })?.summary.address_state).toBeUndefined();
+    expect(recordFromBody(BODY)?.summary.address_state).toBeUndefined();
+  });
+});

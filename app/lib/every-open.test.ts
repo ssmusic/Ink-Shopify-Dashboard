@@ -149,6 +149,13 @@ describe("a row, in words", () => {
     expect(rowCaption(row({ distance_m: null, verdict: "imprecise", accuracy_m: 3200 }), address)).toBe("A location was shared, but no distance was stored. Accuracy ±3.2 km.");
     expect(rowCaption(row({ distance_m: null, verdict: "not_shared", lat: null, lng: null, accuracy_m: null }), address)).toBe("Location not shared.");
     expect(rowCaption(row({ distance_m: null, verdict: "unmeasured", accuracy_m: null }), null)).toContain("the open alone, with no rings");
+    // Which fact the missing point is, when the record says (2026-09-24, #TOWELS).
+    expect(rowCaption(row({ distance_m: null, verdict: "unmeasured", accuracy_m: null }), null, "none")).toBe(
+      "A location was shared, but no distance was stored. No shipping address on this order. The open alone, with no rings.",
+    );
+    expect(rowCaption(row({ distance_m: null, verdict: "unmeasured", accuracy_m: null }), null, "ungeocoded")).toBe(
+      "A location was shared, but no distance was stored. The address is on file but has no map point yet. The open alone, with no rings.",
+    );
     expect(accuracyWords(40)).toBe("±40 m");
   });
 });

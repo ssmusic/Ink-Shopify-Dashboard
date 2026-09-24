@@ -14,6 +14,7 @@
 // delivery place's door row says its nearest open (nearestOpenWords), in the
 // record page's own sentences (the-ritualist src/lib/audit-packet.ts).
 
+import type { AddressState } from "./delivery-point";
 import type { CheckoutVsOpens } from "./checkout-words";
 import type { RecordOpen } from "./every-open";
 import { deliverySource, kmOrM } from "./order-timeline";
@@ -35,6 +36,9 @@ export type RecordSummary = {
   first_open_at?: string | null;
   last_open_at?: string | null;
   opens?: number | null;
+  /** Which fact the delivery point is (lib/delivery-point.ts): none ·
+   *  ungeocoded · geocoded. Absent from a backend before 2026-09-24. */
+  address_state?: AddressState | null;
 };
 
 /** One browser an order was opened from, in words (ink-backend

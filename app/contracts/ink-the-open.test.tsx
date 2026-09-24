@@ -151,6 +151,47 @@ describe("THE OPEN — the buyer's device against the delivery address", () => {
     expect(words).toMatch(/Buyer's device not shared/);
     expect(words).not.toMatch(JUDGED);
   });
+
+  // A RECORD WITHOUT A DELIVERY POINT (Sam, 2026-09-24, on #TOWELS: "also is
+  // this a problem"). Two facts said one sentence; the record now says which
+  // (summary.address_state, ink-backend utils/deliveryPoint.js), and the
+  // diagram stops drawing an address the order does not have.
+  const shared = everyOpenRows([door({ verdict: "unmeasured", distance_m: null })], [signed({ verdict: "unmeasured", distance_m: null })]);
+  const saying = (word: "none" | "ungeocoded") => ({
+    ...RECORD,
+    summary: { ...RECORD.summary, address_state: word },
+    elements: [{ element: "the_open", label: "The open", status: "verified", value: { location: { verdict: "unmeasured" } } }],
+  });
+
+  it("no shipping address: says so, never blames geocoding, and draws the open alone with no rings", () => {
+    const html = wrap(<TheOpen record={saying("none")} rows={shared} address={null} addressLabel={null} />);
+    const words = text(html);
+    expect(words).toContain("No shipping address on this order. The open's location was recorded.");
+    expect(words).not.toMatch(/geocod/i);
+    const svg = html.match(/<svg[\s\S]*?<\/svg>/)?.[0] ?? "";
+    expect(svg).toContain('data-no-point="true"');
+    expect(text(svg).trim()).toBe("open no shipping address");
+    expect((svg.match(/<circle/g) ?? []).length).toBe(1);
+    expect(words).not.toMatch(COORDINATE);
+  });
+
+  it("an address with no map point yet: says that, with the open alone", () => {
+    const html = wrap(<TheOpen record={saying("ungeocoded")} rows={shared} address={null} addressLabel={null} />);
+    const words = text(html);
+    expect(words).toContain("The address is on file but has no map point yet. The open's location was recorded.");
+    const svg = html.match(/<svg[\s\S]*?<\/svg>/)?.[0] ?? "";
+    expect(text(svg).trim()).toBe("open no map point yet");
+  });
+
+  it("no location shared and no shipping address: both facts, and no drawing but the words", () => {
+    const none = everyOpenRows([door({ verdict: "not_shared", distance_m: null, accuracy_m: null, lat: null, lng: null })], [signed({ verdict: "not_shared", distance_m: null, accuracy_m: null })]);
+    const r = { ...RECORD, summary: { ...RECORD.summary, address_state: "none" as const }, elements: [{ element: "the_open", label: "The open", status: "verified", value: { location: { verdict: "not_shared" } } }] };
+    const html = wrap(<TheOpen record={r} rows={none} address={null} addressLabel={null} />);
+    expect(text(html)).toContain("No open shared a location. No shipping address on this order.");
+    const svg = html.match(/<svg[\s\S]*?<\/svg>/)?.[0] ?? "";
+    expect(text(svg).trim()).toBe("location not shared · no shipping address");
+    expect(svg).not.toContain("<circle");
+  });
 });
 
 describe("EVERY OPEN — each open, each onto its own map", () => {
@@ -216,6 +257,17 @@ describe("EVERY OPEN — each open, each onto its own map", () => {
     const opened = wrap(<EveryOpen rows={ROWS} address={null} defaultOpen={[1]} />);
     expect(opened).toMatch(/data-testid="open-map"[^>]*data-address="absent"/);
     expect(text(opened)).toContain("Opened 2.6 km from the delivery address.");
+  });
+
+  // A RECORD WITHOUT A DELIVERY POINT (Sam, 2026-09-24, #TOWELS): each open's
+  // own caption names the fact the record carries (lib/delivery-point.ts).
+  it("each open's own caption says which fact the missing point is", () => {
+    const shared = everyOpenRows([door({ verdict: "unmeasured", distance_m: null })], [signed({ verdict: "unmeasured", distance_m: null })]);
+    const none = text(wrap(<EveryOpen rows={shared} address={null} addressState="none" defaultOpen={[1]} />));
+    expect(none).toContain("No shipping address on this order. The open alone, with no rings.");
+    expect(none).not.toMatch(/never geocoded/);
+    const later = text(wrap(<EveryOpen rows={shared} address={null} addressState="ungeocoded" defaultOpen={[1]} />));
+    expect(later).toContain("The address is on file but has no map point yet. The open alone, with no rings.");
   });
 
   it("a press opens a row; the same press closes it; the others keep their own state", () => {
