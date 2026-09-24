@@ -67,7 +67,6 @@ const RITUALIST_ONLY = [
   "routes/app.api.settings.inventory",
   "routes/app.api.settings.media",
   "routes/app.api.settings.notifications",
-  "routes/app.api.settings.order-door",
   "routes/app.api.users",
   "routes/app.api.warehouse.enroll",
   "routes/app.api.warehouse.inventory",
