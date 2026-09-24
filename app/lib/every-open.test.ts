@@ -75,11 +75,18 @@ describe("every open, joined to its signed event", () => {
     expect(rows.map((r) => r.kind)).toEqual(["scanner", "first", "reload"]);
   });
 
-  it("lets a signed open's own measurement win over the row's, and never gives a distance to a word that measured nothing", () => {
+  it("lets a signed open's own measurement win over the row's; a coarse fix keeps the door's distance; nothing shared is nothing measured", () => {
     const [row] = everyOpenRows([door({ verdict: "pass", distance_m: 40 })], [signed({ verdict: "flagged", distance_m: 2623 })]);
     expect(row.distance_m).toBe(2623);
+    // A COARSE FIX IS A FIX (2026-09-24): the door measures it (ink-backend #142).
     const [imprecise] = everyOpenRows([door({ verdict: "imprecise", distance_m: 900 })], []);
-    expect(imprecise.distance_m).toBeNull();
+    expect(imprecise.distance_m).toBe(900);
+    const [signedCoarse] = everyOpenRows([door({ verdict: "imprecise", distance_m: 13226984 })], [signed({ verdict: "imprecise", distance_m: null, accuracy_m: 7578 })]);
+    expect(signedCoarse.distance_m).toBe(13226984);
+    expect(rowCaption(signedCoarse, address)).toBe("Opened 13,227 km from the delivery address. Accuracy ±7.6 km.");
+    expect(locationCell(signedCoarse)).toBe("location shared · 13,227\u00a0km from the address");
+    const [none] = everyOpenRows([door({ verdict: "not_shared", distance_m: 900, lat: null, lng: null })], []);
+    expect(none.distance_m).toBeNull();
     expect(everyOpenRows(null, null)).toEqual([]);
   });
 });
@@ -163,10 +170,14 @@ describe("the open against the delivery address", () => {
     expect(v.words).toMatch(/^Opened [\d.]+ km from the delivery address\. Measured here from the two points, not by ink\.$/);
   });
 
-  it("says a fix too wide to measure as a shared location with its accuracy — no range", () => {
+  it("measures a fix too wide for the record's word — the door's distance for it, else here — and says its accuracy; with no point it says so — no range", () => {
     const v = theOpenReading({ served: { verdict: "imprecise", accuracy_m: 3200 }, rows, address, opens: 1 });
-    expect(v.words).toBe("A location was shared, but no distance was stored. Accuracy ±3.2 km. The delivery address is on file and is shown below.");
-    expect(v.distance_m).toBeNull();
+    expect(v.words).toBe("Opened 2.6 km from the delivery address. Accuracy ±3.2 km.");
+    expect(v.source).toBe("record");
+    const pointless = everyOpenRows([door({ verdict: "imprecise", distance_m: null, lat: null, lng: null })], []);
+    const none = theOpenReading({ served: { verdict: "imprecise", accuracy_m: 3200 }, rows: pointless, address, opens: 1 });
+    expect(none.words).toBe("A location was shared, but no distance was stored. Accuracy ±3.2 km. The delivery address is on file and is shown below.");
+    expect(none.distance_m).toBeNull();
   });
 
   it("says no open and no location in the record page's own words", () => {
@@ -222,6 +233,7 @@ describe("the rings diagram", () => {
     const g = ringsGeometry(theOpenReading({ served: { verdict: "not_shared" }, rows: [], address, opens: 1 }));
     expect(g.open).toBeNull();
     expect(g.caption).toBe("location not shared");
-    expect(ringsGeometry(theOpenReading({ served: { verdict: "imprecise" }, rows, address, opens: 1 })).caption).toBe("unmeasured");
+    const pointless = everyOpenRows([door({ verdict: "imprecise", distance_m: null, lat: null, lng: null })], []);
+    expect(ringsGeometry(theOpenReading({ served: { verdict: "imprecise" }, rows: pointless, address, opens: 1 })).caption).toBe("unmeasured");
   });
 });

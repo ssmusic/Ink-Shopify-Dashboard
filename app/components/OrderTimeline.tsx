@@ -18,6 +18,7 @@ import {
 import { when } from "../lib/record-words";
 import { INK_DATA, INK_HAIRLINE, INK_MUTED } from "../lib/ink-palette";
 import type { EveryOpenRow } from "../lib/every-open";
+import type { LastOpen } from "../lib/last-open";
 export type TimelineOpen = {
   at: string | null;
   verdict: string | null;
@@ -35,6 +36,9 @@ export type OrderTimelineData = {
   opensCapped?: boolean;
   /** Every open, joined to its signed event (lib/every-open.ts) — the Every open table's rows. */
   rows?: EveryOpenRow[];
+  /** The order's last open, as the opens door (else the proof door) serves it
+   *  (ink-backend #142). undefined: neither door carried the field; null: none. */
+  lastOpen?: LastOpen | null;
 };
 export function LifecycleRail({ steps }: { steps: LifecycleStep[] }) {
   return (

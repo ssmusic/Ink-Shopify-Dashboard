@@ -28,6 +28,14 @@
 
 import { kmOrM } from "./order-timeline";
 
+/** A distance in words, as the record page says it: "56 m", "2.6 km",
+ *  "13,227 km" (2026-09-24 — a coarse fix 13,227 km away read "13226.9 km"
+ *  through the shared kmOrM, which other flavours' words keep). The ink
+ *  screens' Every open and last open only. */
+export function distanceWords(m: number): string {
+  return m >= 1000 ? `${(m / 1000).toLocaleString("en-US", { maximumFractionDigits: m >= 10000 ? 0 : 1 })} km` : `${Math.round(m)} m`;
+}
+
 export type MapPoint = { lat: number; lng: number };
 
 /** One signed open, as the whole record read projects it on the server
@@ -134,9 +142,15 @@ function nonHuman(outcome: unknown): string | null {
   return NON_HUMAN.has(v) ? v : null;
 }
 
-/** A distance belongs to a measured word only, and is a real one. */
-function distanceOf(verdict: string | null, d: number | null): number | null {
-  return verdict && MEASURED.has(verdict.toLowerCase()) && d != null && d >= 0 ? d : null;
+/** A row's distance: a measured word's own; and — A COARSE FIX IS A FIX
+ *  (Sam, 2026-09-24: "why isnt the map resolving? fix this") — for any fix
+ *  the door measured whatever its radius (ink-backend #142), when the word
+ *  does not say nothing was shared. A real, positive number only. */
+function distanceOf(verdict: string | null, d: number | null, hasFix = false): number | null {
+  if (d == null || !(d > 0)) return null;
+  const word = (verdict ?? "").toLowerCase();
+  if (MEASURED.has(word)) return d;
+  return hasFix && word !== "not_shared" ? d : null;
 }
 
 /** Every open the record knows, oldest first — the record page's open log.
@@ -182,7 +196,9 @@ export function everyOpenRows(door: DoorOpen[] | null | undefined, signed: Recor
       lat: fix?.lat ?? null,
       lng: fix?.lng ?? null,
       verdict: verdict ?? null,
-      distance_m: distanceOf(verdict ?? null, own ? own.distance_m : t.distance_m),
+      // The signed distance when the open signed one; else the door's for
+      // this fix — a coarse fix's too (ink-backend #142).
+      distance_m: distanceOf(verdict ?? null, (own ? own.distance_m : null) ?? t.distance_m, !!fix),
       accuracy_m: own ? own.accuracy_m ?? t.accuracy_m : t.accuracy_m,
       outcome: match ? nonHuman(match.outcome) : nonHuman(t.outcome),
       doorKind: t.kind,
@@ -237,12 +253,12 @@ export function sharedOf(row: Pick<EveryOpenRow, "lat" | "lng" | "verdict">): bo
 }
 
 /** A distance that never breaks between its number and its unit. */
-const distanceWords = (m: number) => kmOrM(m).replace(" ", "\u00a0");
+const cellDistance = (m: number) => distanceWords(m).replace(" ", "\u00a0");
 
 /** The Location column: "location shared · 2.6 km from the address" · "location shared" · "not shared". */
 export function locationCell(row: EveryOpenRow): string {
   if (!sharedOf(row)) return "not shared";
-  return row.distance_m != null ? `location shared · ${distanceWords(row.distance_m)} from the address` : "location shared";
+  return row.distance_m != null ? `location shared · ${cellDistance(row.distance_m)} from the address` : "location shared";
 }
 
 /** The Device column: the browser's device word, else the network the open signed. */
@@ -279,7 +295,7 @@ export const NOT_SIGNED = "not on the signed record";
 export function rowCaption(row: EveryOpenRow, address: MapPoint | null): string {
   const accuracy = row.accuracy_m != null ? ` Accuracy ${accuracyWords(row.accuracy_m)}.` : "";
   const hasFix = row.lat != null && row.lng != null;
-  if (row.distance_m != null) return `Opened ${kmOrM(row.distance_m)} from the delivery address.${accuracy}`;
+  if (row.distance_m != null) return `Opened ${distanceWords(row.distance_m)} from the delivery address.${accuracy}`;
   if (hasFix || sharedOf(row)) {
     const noAddress = hasFix && !address ? " The delivery address was never geocoded: the open alone, with no rings." : "";
     return `A location was shared, but no distance was stored.${accuracy}${noAddress}`;
@@ -342,15 +358,19 @@ export function theOpenReading(input: {
   const address = input.address;
   const servedD = verdict && MEASURED.has(verdict) ? finite(served?.distance_m ?? null) : null;
   const opens = Math.max(input.opens, (input.rows ?? []).length);
-  // A word the record refused to measure is never measured here.
-  const here = servedD == null && verdict !== "imprecise" && fix && address ? Math.round(metresBetween(fix, address)) : null;
-  const d = servedD != null ? Math.round(servedD) : here;
-  const source: TheOpenReading["source"] = servedD != null ? (served?.signed ? "signed" : "record") : here != null ? "here" : null;
+  // A COARSE FIX IS A FIX (Sam, 2026-09-24): a word the record signed no
+  // distance for through a wide radius ('imprecise') is measured like any
+  // fix — the door's distance for it (ink-backend #142), else here from the
+  // two points — its accuracy said beside it.
+  const doorD = servedD == null && verdict === "imprecise" && first?.distance_m != null ? first.distance_m : null;
+  const here = servedD == null && doorD == null && fix && address ? Math.round(metresBetween(fix, address)) : null;
+  const d = servedD != null ? Math.round(servedD) : doorD != null ? Math.round(doorD) : here;
+  const source: TheOpenReading["source"] = servedD != null ? (served?.signed ? "signed" : "record") : doorD != null ? "record" : here != null ? "here" : null;
   const shared = !!fix || (verdict != null && SHARED.has(verdict));
   const base = { accuracy_m: accuracy, source, shared, fix, address };
   const tail = address ? " The delivery address is on file and is shown below." : " The delivery address is not geocoded on this row.";
 
-  if (verdict === "imprecise") {
+  if (verdict === "imprecise" && d == null) {
     return { ...base, result: "imprecise", distance_m: null, source: served?.signed ? "signed" : "record", words: `A location was shared, but no distance was stored.${accuracy != null ? ` Accuracy ${accuracyWords(accuracy)}.` : ""}${tail}` };
   }
   if (!opens && !shared) {
@@ -365,7 +385,30 @@ export function theOpenReading(input: {
   const after = served?.after_carrier_scan;
   const when = after === false ? " Before the carrier's scan." : after === true ? " After the carrier's scan." : "";
   const measured = source === "here" ? " Measured here from the two points, not by ink." : "";
-  return { ...base, result: "measured", distance_m: d, words: `Opened ${kmOrM(d)} from the delivery address.${when}${measured}` };
+  const wide = verdict === "imprecise" && accuracy != null ? ` Accuracy ${accuracyWords(accuracy)}.` : "";
+  return { ...base, result: "measured", distance_m: d, words: `Opened ${distanceWords(d)} from the delivery address.${wide}${when}${measured}` };
+}
+
+/** The order's FIRST open in one line, for the last open's block: its own
+ *  served word — the distance with its accuracy and where it stood against
+ *  the carrier's scan; a coarse first open measured from its own point; or
+ *  that it shared nothing. PLACEHOLDER copy, the record's own sentences. */
+export function firstOpenLine(input: { served: ServedLocation | null | undefined; rows: EveryOpenRow[] | null | undefined; address: MapPoint | null; opens: number }): string {
+  const served = input.served ?? null;
+  const verdict = typeof served?.verdict === "string" ? served.verdict.toLowerCase() : null;
+  if (!served || !verdict) return input.opens || (input.rows ?? []).length ? NOT_RECORDED : "No open on the record yet.";
+  const accuracy = finite(served.accuracy_m ?? null);
+  const tail = accuracy != null ? ` Accuracy ${accuracyWords(accuracy)}.` : "";
+  const after = served.after_carrier_scan;
+  const when = after === false ? " Before the carrier's scan." : after === true ? " After the carrier's scan." : "";
+  const d = MEASURED.has(verdict) ? finite(served.distance_m ?? null) : null;
+  if (d != null) return `Opened ${distanceWords(d)} from the delivery address.${tail}${when}`;
+  if (verdict === "not_shared") return "Location not shared.";
+  const first = (input.rows ?? []).find((r) => r.kind === "first") ?? null;
+  const own = first && first.lat != null && first.lng != null ? { lat: first.lat, lng: first.lng } : null;
+  const measured = first?.distance_m ?? (own && input.address ? Math.round(metresBetween(own, input.address)) : null);
+  if (measured != null) return `Opened ${distanceWords(measured)} from the delivery address.${tail}${when}`;
+  return `A location was shared, but no distance was stored.${tail}`;
 }
 
 /** The line under the words that names the signed event the location stands on. */
@@ -386,7 +429,7 @@ export function deviceFact(v: TheOpenReading): string {
 /** The Distance fact: the distance and where it came from. */
 export function distanceFact(v: TheOpenReading): string {
   if (v.distance_m == null) return NOT_RECORDED;
-  return `${kmOrM(v.distance_m)} · ${v.source === "signed" ? "signed" : v.source === "record" ? "the record's word" : "measured here"}`;
+  return `${distanceWords(v.distance_m)} · ${v.source === "signed" ? "signed" : v.source === "record" ? "the record's word" : "measured here"}`;
 }
 
 export const CORROBORATING =
@@ -453,5 +496,5 @@ export function ringsGeometry(v: TheOpenReading): RingsGeometry {
   const rp = Math.min(outerR + 18, d <= outer ? (d / outer) * outerR : outerR + 6 + Math.log10(d / outer) * 6);
   const x = cx + ux * rp;
   const y = cy - uy * rp;
-  return { width, height, cx, cy, rings, address, open: { x, y, mx: (cx + x) / 2, my: (cy + y) / 2, label: kmOrM(d) }, caption: null };
+  return { width, height, cx, cy, rings, address, open: { x, y, mx: (cx + x) / 2, my: (cy + y) / 2, label: distanceWords(d) }, caption: null };
 }
