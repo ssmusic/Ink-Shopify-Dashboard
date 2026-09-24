@@ -58,7 +58,10 @@ export type RecordOpen = {
 };
 
 /** One row of the opens door (ink-backend routes/api/merchantOpens.js): the
- *  open's own time, word, distance, accuracy and fix — the fix for the map. */
+ *  open's own time, word, distance, accuracy and fix — the fix for the map.
+ *  Since ink-backend #135 the door also names each open's device word, its
+ *  browser's letter and its kind; a door before it carries none of the three
+ *  (undefined), and the row is read as before. */
 export type DoorOpen = {
   at: string | null;
   outcome: string | null;
@@ -67,6 +70,12 @@ export type DoorOpen = {
   accuracy_m: number | null;
   lat: number | null;
   lng: number | null;
+  /** THIS open's device word ("iPhone"), off its own row. */
+  device?: string | null;
+  /** The record's letter for the open's browser ("A"). */
+  browser?: string | null;
+  /** The record's word for the open: the first person's open, again, a reload, a scanner's visit. */
+  kind?: OpenKind | null;
 };
 
 export type OpenKind = "first" | "again" | "reload" | "scanner";
@@ -134,7 +143,7 @@ function distanceOf(verdict: string | null, d: number | null): number | null {
 export function everyOpenRows(door: DoorOpen[] | null | undefined, signed: RecordOpen[] | null | undefined): EveryOpenRow[] {
   const opens = (signed ?? []).filter((e) => time(e.at) != null).slice().sort((a, b) => (time(a.at) as number) - (time(b.at) as number));
   const used = new Set<string>();
-  type Draft = Omit<EveryOpenRow, "n" | "kind"> & { outcome: string | null };
+  type Draft = Omit<EveryOpenRow, "n" | "kind"> & { outcome: string | null; doorKind: OpenKind | null };
   const rows: Draft[] = [];
   const signedSide = (m: RecordOpen) => ({
     event_id: m.event_id,
@@ -157,15 +166,22 @@ export function everyOpenRows(door: DoorOpen[] | null | undefined, signed: Recor
     // The signed measurement wins when the open signed one; else the row's own.
     const own = match && match.verdict ? match : null;
     const verdict = own ? own.verdict : t.verdict;
+    const side = match ? signedSide(match) : unsigned;
     rows.push({
       at: t.at,
-      ...(match ? signedSide(match) : unsigned),
+      ...side,
+      // The door's words for THIS open win: its own device word, its browser's
+      // letter; the signed side's (the browser's device, "browser unknown")
+      // stand where the door has none.
+      device: t.device ?? side.device,
+      browser: t.browser ? `browser ${t.browser}` : side.browser,
       lat: fix?.lat ?? null,
       lng: fix?.lng ?? null,
       verdict: verdict ?? null,
       distance_m: distanceOf(verdict ?? null, own ? own.distance_m : t.distance_m),
       accuracy_m: own ? own.accuracy_m ?? t.accuracy_m : t.accuracy_m,
       outcome: match ? nonHuman(match.outcome) : nonHuman(t.outcome),
+      doorKind: t.kind ?? null,
     });
   }
   // A signed open no row describes: its words, and no point for the map.
@@ -180,18 +196,23 @@ export function everyOpenRows(door: DoorOpen[] | null | undefined, signed: Recor
       distance_m: distanceOf(e.verdict, e.distance_m),
       accuracy_m: e.accuracy_m,
       outcome: nonHuman(e.outcome),
+      doorKind: null,
     });
   }
   rows.sort((a, b) => (time(a.at) ?? 0) - (time(b.at) ?? 0));
+  // The door's word for an open's kind wins (it knows a re-open the page
+  // called a reload); where the door gave none, the record's signed word and
+  // the order of the rows say it.
+  const doorSaysFirst = rows.some((r) => r.doorKind === "first");
   let firstSeen = false;
-  return rows.map(({ outcome, ...r }, i) => {
+  return rows.map(({ outcome, doorKind, ...r }, i) => {
     let kind: OpenKind;
-    if (outcome === "proxy") kind = "scanner";
+    if (doorKind) kind = doorKind;
+    else if (outcome === "proxy") kind = "scanner";
     else if (outcome === "stale") kind = "reload";
-    else if (!firstSeen) {
-      kind = "first";
-      firstSeen = true;
-    } else kind = "again";
+    else if (!firstSeen && !doorSaysFirst) kind = "first";
+    else kind = "again";
+    if (kind === "first") firstSeen = true;
     return { ...r, n: i + 1, kind };
   });
 }

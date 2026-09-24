@@ -83,6 +83,29 @@ describe("every open, joined to its signed event", () => {
   });
 });
 
+describe("the opens door's own words for each open (ink-backend #135)", () => {
+  it("lets the door's device word and browser letter for THIS open win, and the signed side stand where the door has none", () => {
+    const [row] = everyOpenRows([door({ device: "Mac", browser: "B" })], [signed({ device: "iPhone", browser: "browser A" })]);
+    expect(row).toMatchObject({ device: "Mac", browser: "browser B" });
+    const [older] = everyOpenRows([door({})], [signed({ device: "iPhone", browser: "browser A" })]);
+    expect(older).toMatchObject({ device: "iPhone", browser: "browser A" });
+    const [unsignedRow] = everyOpenRows([door({ device: "Android", browser: null })], []);
+    expect(unsignedRow).toMatchObject({ device: "Android", browser: null, signed: false });
+    expect(deviceCell(unsignedRow)).toBe("Android");
+  });
+
+  it("takes the door's kind — a re-open the page called a reload reads as one — and keeps one first open", () => {
+    const rows = everyOpenRows(
+      [door({ kind: "first" }), door({ at: "2026-09-01T11:00:00Z", kind: "reload" }), door({ at: "2026-09-01T12:00:00Z", kind: "again" })],
+      [signed({})],
+    );
+    expect(rows.map((r) => r.kind)).toEqual(["first", "reload", "again"]);
+    // The door names a later row the first open (an earlier row was a scanner's): no second "first".
+    const later = everyOpenRows([door({ at: "2026-09-01T09:00:00Z", outcome: "success", kind: null }), door({ kind: "first" })], []);
+    expect(later.map((r) => r.kind)).toEqual(["again", "first"]);
+  });
+});
+
 describe("a row, in words", () => {
   const row = (over: Partial<EveryOpenRow>): EveryOpenRow => ({
     ...everyOpenRows([door({})], [signed({})])[0],
