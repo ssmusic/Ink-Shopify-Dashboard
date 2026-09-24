@@ -10,8 +10,10 @@ import {
 import { brandSlugFromDoc } from "../services/brand-page-url.server";
 import { getShopIdByDomain } from "../services/ink-api.server";
 import {
+  emailDoorOf,
   notificationSnippet,
   SNIPPET_TEMPLATES,
+  type EmailDoor,
 } from "../services/notification-snippet";
 
 /**
@@ -106,12 +108,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // that looks right and 404s. Fail-soft: no slug ⇒ the www fallback, which
     // resolves for every brand.
     let brandSlug = "";
+    let emailDoor: EmailDoor | null = null;
     try {
       const shopId = await getShopIdByDomain(auth.shop);
       const backend = shopId
         ? (await firestore.collection("merchants").doc(shopId).get()).data() ?? {}
         : {};
       brandSlug = brandSlugFromDoc({ ...hit.data, ...backend }, auth.shop);
+      // The line's own evidence: real taps on the order door (emailDoorOf).
+      emailDoor = emailDoorOf(backend);
     } catch (e: any) {
       console.warn(
         `[settings/notifications] brand slug unresolved (${e?.message}) — snippet falls back to www.in.ink`,
@@ -122,6 +127,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       settings,
       snippet: notificationSnippet(brandSlug),
       snippetTemplates: SNIPPET_TEMPLATES,
+      emailDoor,
     });
   } catch (err: any) {
     console.error("[settings/notifications] GET error:", err.message);
