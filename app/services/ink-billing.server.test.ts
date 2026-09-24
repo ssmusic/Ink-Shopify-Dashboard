@@ -38,11 +38,14 @@ vi.mock("./ink-reader.server", () => ({
   EXPORT_READ_TIMEOUT_MS: 30_000,
 }));
 vi.mock("./ink-api.server", () => ({ createRecordPurchase }));
+const findRecordCharge = vi.fn();
 vi.mock("./record-door.server", async (importOriginal) => ({
   ...(await importOriginal<any>()),
   createRecordCharge,
   readRecordCharge,
+  findRecordCharge,
 }));
+const { RecordChargeRefused } = await import("./record-door.server");
 const { inkRecordAction, settleInkCharge, inkDoor } = await import(
   "./ink-billing.server"
 );
@@ -182,6 +185,55 @@ describe("ink Shopify billing", () => {
     const retry = await inkRecordAction(admin, shop, "own-key", form());
     expect(retry.note).toContain("Contact support before trying again");
     expect(createRecordCharge).toHaveBeenCalledOnce();
+  });
+  // A REFUSED CHARGE GIVES THE BUTTON BACK (Sam, 2026-09-24, corvara #1013:
+  // Shopify answered "Custom apps cannot use the Billing API"; the press sat
+  // at "creating" for good and the door said "The charge status could not be
+  // confirmed" with no button). Shopify's own refusal creates nothing, so the
+  // reservation is released and the merchant reads Shopify's reason.
+  it("a charge Shopify refused releases the reservation, says Shopify's reason, and offers the button again", async () => {
+    createRecordCharge.mockRejectedValueOnce(new RecordChargeRefused("Custom apps cannot use the Billing API"));
+    const first = await inkRecordAction(admin, shop, "own-key", form());
+    expect(first.ok).toBe(false);
+    expect(first.note).toContain("Custom apps cannot use the Billing API");
+    const door = await inkDoor(admin, shop, "own-key", proof);
+    expect(door.pending).toBe(false);
+    expect(door.offerLine).toMatch(/\$29/);
+    const again = await inkRecordAction(admin, shop, "own-key", form());
+    expect(again.ok).toBe(true);
+    expect(createRecordCharge).toHaveBeenCalledTimes(2);
+  });
+  it("an old reservation with no answer heals: no charge on Shopify releases it, a charge found is adopted, a failed read leaves it", async () => {
+    const old = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    // Reserve through the real path, then make it old and answerless.
+    createRecordCharge.mockRejectedValueOnce(new Error("timeout"));
+    await inkRecordAction(admin, shop, "own-key", form());
+    const [id] = [...rows.keys()];
+    rows.set(id, { ...rows.get(id), createdAt: old });
+
+    findRecordCharge.mockResolvedValueOnce(undefined); // Shopify could not be asked
+    expect((await inkDoor(admin, shop, "own-key", proof)).pending).toBe(true);
+
+    findRecordCharge.mockResolvedValueOnce(null); // asked: no charge exists
+    const healed = await inkDoor(admin, shop, "own-key", proof);
+    expect(healed.pending).toBe(false);
+    expect(healed.offerLine).toMatch(/\$29/);
+    expect(rows.get(id).state).toBe("released");
+
+    // A reservation whose charge DID land on Shopify is adopted, never re-charged.
+    rows.set(id, { ...rows.get(id), state: "creating", createdAt: old });
+    findRecordCharge.mockResolvedValueOnce("gid://shopify/AppPurchaseOneTime/7");
+    readRecordCharge.mockResolvedValueOnce(null);
+    const adopted = await inkDoor(admin, shop, "own-key", proof);
+    expect(rows.get(id)).toMatchObject({ state: "pending", chargeId: "gid://shopify/AppPurchaseOneTime/7" });
+    expect(adopted.offerLine).toBeNull();
+  });
+  it("a fresh reservation with no answer is left alone — a create may still be in flight", async () => {
+    createRecordCharge.mockRejectedValueOnce(new Error("timeout"));
+    await inkRecordAction(admin, shop, "own-key", form());
+    findRecordCharge.mockResolvedValue(null);
+    expect((await inkDoor(admin, shop, "own-key", proof)).pending).toBe(true);
+    expect(findRecordCharge).not.toHaveBeenCalled();
   });
   it("settles a saved, matching ACTIVE charge even if the kill switch has since closed", async () => {
     await inkRecordAction(admin, shop, "own-key", form());

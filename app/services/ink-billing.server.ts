@@ -22,7 +22,10 @@ import { recordDownloadsAvailable } from "../lib/record-words";
 import { EXPORT_READ_TIMEOUT_MS, merchantRead, PROOF_ID, RECORD_READ_TIMEOUT_MS } from "./ink-reader.server";
 import {
   createRecordCharge,
+  findRecordCharge,
   readRecordCharge,
+  RecordChargeRefused,
+  recordChargeName,
   recordOffer,
   recordPriceWords,
   recordReturnUrl,
@@ -35,6 +38,12 @@ const chargeRef = (shop: string, proof: string) =>
   );
 type Admin = Parameters<typeof createRecordCharge>[0];
 
+// A reservation that never heard back from Shopify ("creating", no charge id)
+// is asked about after this long: long past any create still in flight.
+export const STUCK_AFTER_MS = 5 * 60 * 1000;
+// States that hold no charge on Shopify: a new press may reserve again.
+const RESERVABLE = ["declined", "expired", "refused", "released"];
+
 export async function settleInkCharge(
   admin: Admin,
   shop: string,
@@ -44,13 +53,27 @@ export async function settleInkCharge(
   const ref = chargeRef(shop, proofId);
   const snap = await ref.get();
   const row = snap.exists ? snap.data() : null;
-  if (
-    !row ||
-    row.state === "minted" ||
-    row.state === "declined" ||
-    row.state === "expired"
-  )
-    return;
+  if (!row || row.state === "minted" || RESERVABLE.includes(row.state)) return;
+  // THE STUCK RESERVATION HEALS (2026-09-24, corvara #1013 sat at "creating"
+  // after Shopify refused the charge): an old reservation with no answer asks
+  // Shopify whether its charge exists. None → released, the press is offered
+  // again; one → adopted, never charged twice; Shopify cannot say → left.
+  if (row.state === "creating" && !row.chargeId) {
+    const age = Date.now() - Date.parse(String(row.createdAt || ""));
+    if (!(age > STUCK_AFTER_MS)) return;
+    const found = await findRecordCharge(admin, {
+      name: recordChargeName(String(row.orderName || proofId)),
+      since: String(row.createdAt),
+    });
+    if (found === undefined) return;
+    if (found === null) {
+      await ref.update({ state: "released", releasedAt: new Date().toISOString() });
+      return;
+    }
+    await ref.update({ chargeId: found, state: "pending" });
+    row.chargeId = found;
+    row.state = "pending";
+  }
   if (row.state === "creating" || !row.chargeId) return;
   const charge = await readRecordCharge(admin, row.chargeId);
   if (!charge) return;
@@ -288,7 +311,7 @@ export async function inkRecordAction(
   const reserved = await firestore.runTransaction(async (tx) => {
     const previous = await tx.get(ref);
     const state = previous.exists ? previous.data()?.state : null;
-    if (state && !["declined", "expired"].includes(state)) return false;
+    if (state && !RESERVABLE.includes(state)) return false;
     tx.set(ref, {
       shop,
       proofId,
@@ -329,7 +352,15 @@ export async function inkRecordAction(
       inspection: null,
       filename: null,
     };
-  } catch {
+  } catch (err) {
+    // Shopify said no and created nothing: release the reservation and say
+    // Shopify's reason (PLACEHOLDER wording). Anything else stays reserved —
+    // a retried create could bill twice — until the heal above asks Shopify.
+    if (err instanceof RecordChargeRefused) {
+      await ref.update({ state: "refused", refusal: err.shopifySays, refusedAt: new Date().toISOString() });
+      console.error(`[ink billing] ${shop}: Shopify refused the record charge: ${err.shopifySays}`);
+      return no(`Shopify refused the charge: ${err.shopifySays}`);
+    }
     return no(
       "The payment status could not be confirmed. Contact support before trying again.",
     );
