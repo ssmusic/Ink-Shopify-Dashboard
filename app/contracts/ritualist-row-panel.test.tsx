@@ -1,8 +1,10 @@
 // THE RITUALIST'S SHIPMENTS ROW OPENS ONTO INK'S PANEL (Sam, 2026-09-24: "we
 // are making the ritualist as good as ink" · "it has to mirror the ritualist
-// webapp"). The row (components/OrderExpandedRow.tsx) draws ink's own panel
-// (components/InkRecentOrders.tsx OrderPanel), read the way ink's Orders reads
-// it (services/ritualist-rows.server.ts). Pinned here:
+// webapp"). A Shipments row is a row of ink's ledger, and opened it is the
+// Ritualist's row (components/OrderExpandedRow.tsx): ink's own panel
+// (components/InkRecentOrders.tsx OrderPanel) with "View full record" at its
+// foot, read the way ink's Orders reads it (services/ritualist-rows.server.ts).
+// Pinned here:
 //   · the honest rail: each step says where its time came from; a tick only
 //     on ink's own record or a carrier's scan — Shopify's fulfillment gets a
 //     ring, never a tick (#145);
@@ -26,6 +28,7 @@ vi.mock("../services/merchant-doc.server", () => ({
 }));
 
 const { default: OrderExpandedRow } = await import("../components/OrderExpandedRow");
+const { default: InkRecentOrders } = await import("../components/InkRecentOrders");
 const { includedRecordDoor, readShipmentPanels, ritualistApiKey } = await import("../services/ritualist-rows.server");
 const { timelineFrom } = await import("../services/ink-timeline.server");
 import type { RecordRead } from "../lib/record-words";
@@ -104,9 +107,16 @@ const rowWith = (record: RecordRead, proofBody: object, opensBody: object) => ({
   timeline: timelineFrom(proofBody, opensBody, record),
 });
 
+/** A Shipments row, opened: the ledger's row with the Ritualist's row drawn in it. */
 function open(row: ReturnType<typeof rowWith>) {
   const Stub = createRoutesStub([
-    { id: "screen", path: "/", Component: () => <OrderExpandedRow row={row as never} onCollapse={() => {}} onViewFull={() => {}} /> },
+    {
+      id: "screen",
+      path: "/",
+      Component: () => (
+        <InkRecentOrders orders={[row] as never} defaultExpandedId={row.id} renderPanel={(r) => <OrderExpandedRow row={r} onViewFull={() => {}} />} />
+      ),
+    },
   ]);
   return renderToString(
     <AppProvider i18n={translations}>

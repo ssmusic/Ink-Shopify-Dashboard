@@ -542,6 +542,7 @@ export default function InkRecentOrders({
   sort,
   onSort,
   pending = false,
+  renderPanel,
 }: {
   orders: InkRecentOrderRow[];
   returnTo?: string;
@@ -554,6 +555,11 @@ export default function InkRecentOrders({
   onSort?: (sort: InkOrderSort) => void;
   /** A search, sort or page is loading: the ledger dims until it lands. */
   pending?: boolean;
+  /** An opened order, drawn in place of the bare panel: the Ritualist's row
+   *  (components/OrderExpandedRow.tsx) is this same panel with its "View full
+   *  record" at the foot, as the web app's rows end on "View full order". ink
+   *  has no such page and passes none. */
+  renderPanel?: (row: InkRecentOrderRow) => ReactNode;
 }) {
   const [expanded, setExpanded] = useState(defaultExpandedId);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -607,7 +613,7 @@ export default function InkRecentOrders({
               {open && (
                 <>
                   <Divider />
-                  <OrderPanel row={row} mapsKey={mapsKey} />
+                  {renderPanel ? renderPanel(row) : <OrderPanel row={row} mapsKey={mapsKey} />}
                 </>
               )}
             </Collapsible>

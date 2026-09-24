@@ -1,10 +1,12 @@
-// WHAT THE RITUALIST'S SHIPMENTS ROW READS, AND THE DOOR ITS RECORD ASKS.
+// WHAT THE RITUALIST'S SHIPMENTS LEDGER READS, AND THE DOOR ITS RECORD ASKS.
 //
-//   · The Shipments loader hands each ink order its panel — the record, the
-//     timeline and the Ritualist's door (services/ritualist-rows.server.ts) —
-//     read with the merchant's own key, by the proof id asked for by key.
-//   · The panel says "Recipient": the ship-to's own name, and the order's own
-//     email; the list's Customer column keeps the buyer.
+//   · The Shipments loader reads its page the way ink's Orders reads it —
+//     twenty orders, searched and sorted by Shopify (services/ink-links.server.ts)
+//     — and hands each row its panel: the record, the timeline and the
+//     Ritualist's door (services/ritualist-rows.server.ts), read with the
+//     merchant's own key.
+//   · The row says "Recipient": the ship-to's own name, and the order's own email.
+//   · A failed read is an error the screen says as one, never "no orders".
 //   · No timer re-reads every row's record twice a minute.
 //   · /app/record answers the included record's inspection and files on the
 //     Ritualist through the same function ink's Records library uses, with the
@@ -20,9 +22,7 @@ const TIMELINE = { steps: [], address: null, opens: [], window: null };
 
 vi.mock("../firestore.server", () => ({ default: {}, firestore: {}, app: {} }));
 vi.mock("../shopify.server", () => ({ authenticate: { admin: vi.fn() } }));
-vi.mock("../services/merchant.server", () => ({ getMerchant: vi.fn(), updateMerchant: vi.fn() }));
 vi.mock("../services/ink-api.server", () => ({
-  enrollOrder: vi.fn(),
   readRecordPrice: vi.fn(async () => null),
   setRecordPurchaseOutcome: vi.fn(),
 }));
@@ -46,6 +46,7 @@ vi.mock("../services/ritualist-rows.server", async (importOriginal) => {
 const { authenticate } = await import("../shopify.server");
 const { inkRecordAction } = await import("../services/ink-billing.server");
 const { readShipmentPanels } = await import("../services/ritualist-rows.server");
+const { RECENT_ORDERS_DETAIL_QUERY } = await import("../services/ink-links.server");
 const { loader: shipmentsLoader } = await import("../routes/app.tagged-shipments._index");
 const { action: recordAction } = await import("../routes/app.record");
 
@@ -54,55 +55,58 @@ const node = (over: Record<string, unknown>) => ({
   id: "gid://shopify/Order/1042",
   name: "#1042",
   createdAt: "2026-09-20T15:00:00Z",
-  displayFinancialStatus: "PAID",
-  displayFulfillmentStatus: "FULFILLED",
   email: "order@example.com",
   totalPriceSet: { shopMoney: { amount: "58.00", currencyCode: "USD" } },
-  customer: { firstName: "Made", lastName: "Up", email: "buyer@example.com" },
   shippingAddress: { name: "Gift Recipient", address1: "1 Test St", address2: "", city: "Brooklyn", provinceCode: "NY", zip: "11201", country: "United States" },
-  billingAddress: null,
-  tags: ["Recorded by ink."],
-  // Ten other ink metafields: `first: 10` stops short of proof_reference, which is asked for by key.
-  metafields: { edges: Array.from({ length: 10 }, (_, i) => ({ node: { key: `other_${i}`, value: "x" } })) },
-  openDistance: null,
+  lineItems: { pageInfo: { hasNextPage: false }, nodes: [{ title: "Bar Tape", quantity: 2, sku: "BT-1", originalUnitPriceSet: { shopMoney: { amount: "29.00" } } }] },
   proof: { value: PROOF },
-  lineItems: { pageInfo: { hasNextPage: false }, edges: [{ node: { title: "Bar Tape", quantity: 2, sku: "BT-1", originalUnitPriceSet: { shopMoney: { amount: "29.00" } }, image: null, customAttributes: [] } }] },
-  shippingLine: { title: "Standard" },
   ...over,
 });
-const ORDERS = {
+const PAGE = {
   data: {
     shop: { ianaTimezone: "America/New_York" },
-    orders: { edges: [{ node: node({}) }, { node: node({ id: "gid://shopify/Order/1041", name: "#1041", tags: [], proof: null }) }] },
+    orders: {
+      pageInfo: { hasNextPage: true, hasPreviousPage: false, startCursor: "c1", endCursor: "c2" },
+      nodes: [node({}), node({ id: "gid://shopify/Order/1041", name: "#1041", proof: null })],
+    },
   },
 };
+const load = (url: string) => shipmentsLoader({ request: new Request(url), params: {}, context: {} } as never) as Promise<any>;
 
 afterEach(() => vi.unstubAllEnvs());
 
-describe("the Shipments loader hands each ink order its panel", () => {
+describe("the Shipments ledger reads its page the way ink's Orders does", () => {
   let graphql: ReturnType<typeof vi.fn>;
   beforeEach(() => {
-    graphql = vi.fn(async () => ({ json: async () => ORDERS }));
+    graphql = vi.fn(async () => ({ json: async () => PAGE }));
     vi.mocked(authenticate.admin).mockResolvedValue({ admin: { graphql }, session: { shop: SHOP } } as never);
     vi.mocked(readShipmentPanels).mockClear();
   });
 
-  it("reads the record and the rail with the merchant's key, for the ink orders, by the proof id asked for by key", async () => {
-    const out = (await shipmentsLoader({ request: new Request("https://app.test/app/tagged-shipments"), params: {}, context: {} } as never)) as any;
-    expect(String(graphql.mock.calls[0][0])).toContain('proof: metafield(namespace: "ink", key: "proof_reference") { value }');
-    expect(readShipmentPanels).toHaveBeenCalledWith("ink_key_example", [PROOF]);
-    expect(out.orders).toHaveLength(1);
-    const row = out.orders[0].row;
-    expect(row).toMatchObject({ id: "gid://shopify/Order/1042", name: "#1042", proofId: PROOF, record: RECORD, timeline: TIMELINE });
-    expect(row.door).toEqual({ offerLine: null, pending: false, paidPendingRecord: false, resumeUrl: null, downloadable: true, inHistory: false, purchase: null });
+  it("asks Shopify for twenty orders, searched and sorted there", async () => {
+    const out = await load("https://app.test/app/tagged-shipments?q=%231042&sort=total_desc");
+    expect(graphql).toHaveBeenCalledWith(RECENT_ORDERS_DETAIL_QUERY, {
+      variables: expect.objectContaining({ first: 20, query: 'name:"1042"', sortKey: "TOTAL_PRICE", reverse: true }),
+    });
+    expect(out).toMatchObject({ search: "#1042", sort: "total_desc", ordersError: false, pageInfo: { hasNextPage: true, endCursor: "c2" } });
   });
 
-  it("the panel's recipient is the ship-to's own name with the order's email; the list keeps the buyer", async () => {
-    const out = (await shipmentsLoader({ request: new Request("https://app.test/app/tagged-shipments"), params: {}, context: {} } as never)) as any;
-    const detail = out.orders[0].row.detail;
-    expect(detail).toMatchObject({ customerName: "Gift Recipient", customerEmail: "order@example.com", orderNumber: "#1042", total: "58.00", currency: "USD" });
-    expect(detail.customerAddress).toMatchObject({ address1: "1 Test St", city: "Brooklyn", provinceCode: "NY", zip: "11201", country: "United States" });
-    expect(out.orders[0].customerName).toBe("Made Up");
+  it("hands each row its record and rail, read with the merchant's key, and the Ritualist's door", async () => {
+    const out = await load("https://app.test/app/tagged-shipments");
+    expect(readShipmentPanels).toHaveBeenCalledWith("ink_key_example", [PROOF, null]);
+    const [recorded, bare] = out.orders;
+    expect(recorded).toMatchObject({ id: "gid://shopify/Order/1042", name: "#1042", proofId: PROOF, record: RECORD, timeline: TIMELINE });
+    expect(recorded.door).toEqual({ offerLine: null, pending: false, paidPendingRecord: false, resumeUrl: null, downloadable: true, inHistory: false, purchase: null });
+    expect(recorded.detail).toMatchObject({ customerName: "Gift Recipient", customerEmail: "order@example.com", orderNumber: "#1042", total: "58.00" });
+    // An order ink did not record says so in its row; it offers nothing.
+    expect(bare).toMatchObject({ proofId: null, record: null, timeline: null });
+    expect(bare.door.downloadable).toBe(false);
+  });
+
+  it("a failed read is an error the screen says as one", async () => {
+    graphql.mockRejectedValue(new Error("down"));
+    const out = await load("https://app.test/app/tagged-shipments");
+    expect(out).toMatchObject({ ordersError: true, orders: [] });
   });
 
   it("no timer re-reads every row's record", () => {
