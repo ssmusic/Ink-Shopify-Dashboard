@@ -11,6 +11,8 @@
 
 import qrcode from "qrcode-generator";
 import { buildTextPdf, wrapToken, wrapWords, type PdfLine, type PdfRect } from "./pdf-lite.server";
+import { kmOrM } from "../lib/order-timeline";
+import { accuracyWords, sharedOf } from "../lib/every-open";
 
 export type AuditEvent = {
   event_id: string | null;
@@ -94,6 +96,22 @@ export function fmtDate(iso: string | null | undefined, tz = "UTC"): string {
   return d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+// The open's location in the OPEN block's own sentences (lib/every-open.ts
+// rowCaption): a distance is data, with its accuracy when the record carries
+// one — never the backend's pass / near / flagged word beside it (Sam,
+// 2026-09-23: "we dont judge delivery so this is weird").
+export function openLocationSentence(
+  loc: { verdict?: string | null; distance_m?: number | null; accuracy_m?: number | null } | null | undefined,
+): string | null {
+  if (!loc) return null;
+  const accuracy = typeof loc.accuracy_m === "number" && Number.isFinite(loc.accuracy_m) && loc.accuracy_m >= 0 ? ` Accuracy ${accuracyWords(loc.accuracy_m)}.` : "";
+  if (typeof loc.distance_m === "number" && Number.isFinite(loc.distance_m) && loc.distance_m >= 0)
+    return `Opened ${kmOrM(loc.distance_m)} from the delivery address.${accuracy}`;
+  if (loc.verdict === "not_shared") return "Location not shared.";
+  if (sharedOf({ lat: null, lng: null, verdict: loc.verdict ?? null })) return `A location was shared, but no distance was stored.${accuracy}`;
+  return null;
+}
+
 function elementLine(el: AuditElement, tz: string): string {
   const v = el.value ?? {};
   const bits: string[] = [];
@@ -105,10 +123,9 @@ function elementLine(el: AuditElement, tz: string): string {
   if (el.element === "the_open") {
     if (v.first_open_at) bits.push(`first ${fmtDate(String(v.first_open_at), tz)}${v.first_open_signed ? " (signed)" : ""}`);
     if (v.opens != null) bits.push(`${String(v.opens)} open${Number(v.opens) === 1 ? "" : "s"}${v.signed_opens != null ? ` (${String(v.signed_opens)} signed)` : ""}`);
-    const loc = v.location as { verdict?: string; distance_m?: number | null } | null | undefined;
-    if (loc?.verdict === "not_shared") bits.push("location not shared by the buyer");
-    else if (loc?.verdict === "unmeasured") bits.push("location shared, no distance available");
-    else if (loc?.verdict && loc.distance_m != null) bits.push(`${Math.round(loc.distance_m)} m from the delivery address (${loc.verdict})`);
+    const loc = v.location as { verdict?: string; distance_m?: number | null; accuracy_m?: number | null } | null | undefined;
+    const words = openLocationSentence(loc);
+    if (words) bits.push(words);
   }
   return bits.filter(Boolean).join(" - ");
 }
