@@ -214,7 +214,7 @@ describe("what the Dashboard draws", () => {
     const t = text(render(whole));
     const order = [
       "Dashboard", "Refresh",
-      "Your Ritualist dashboard", "Open your Ritualist dashboard",
+      "The Ritualist Studio", "Open The Ritualist Studio",
       "Orders", "Location shared", "Counts cover orders with a record.",
       "Open rate", "Delivery rate", "Location sharing",
       "Delivery and opens", "Time to delivery", "Delivery status", "Opens without a tracking update",
@@ -250,7 +250,9 @@ describe("what the Dashboard draws", () => {
     const t = text(render({ kpis: null, delivery: null, recentOrders: null }));
     expect(t).toContain("Dashboard unavailable. Refresh to try again.");
     expect(t).toContain("Orders could not be loaded. Refresh to try again.");
-    expect(t).toContain("Open your Ritualist dashboard");
+    expect(t).toContain("Open The Ritualist Studio");
+    // Sam, 2026-09-24: "its called open The Ritualist Studio not dashboard".
+    expect(t).not.toContain("Ritualist dashboard");
     expect(text(render({ ...whole, recentOrders: [] }))).toContain("No orders are available from the past 60 days.");
   });
 });

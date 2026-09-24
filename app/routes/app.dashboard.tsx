@@ -129,7 +129,7 @@ export const action = async ({
     console.error("[dashboard] mint magic token failed:", err);
     return {
       url: null,
-      error: "Couldn't open your Ritualist dashboard. Try again in a moment.",
+      error: "Couldn't open The Ritualist Studio. Try again in a moment.",
     };
   }
 };
@@ -192,16 +192,16 @@ const Dashboard = () => {
             <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
               <BlockStack gap="100">
                 <Text as="h2" variant="headingMd">
-                  Your Ritualist dashboard
+                  The Ritualist Studio
                 </Text>
                 <Text as="p" tone="subdued">
-                  Open the Ritualist studio — where your enrolled orders, pages,
+                  Open The Ritualist Studio — where your enrolled orders, pages,
                   and returns live. You'll be signed in automatically — no
                   password needed.
                 </Text>
               </BlockStack>
               <Button variant="primary" loading={opening} onClick={openParallel}>
-                Open your Ritualist dashboard
+                Open The Ritualist Studio
               </Button>
             </InlineStack>
           </Card>
@@ -256,8 +256,8 @@ const Dashboard = () => {
                     Advanced — operational analytics
                   </Text>
                   <Text as="p" tone="subdued">
-                    Detailed operational metrics. The full Ritualist dashboard
-                    lives in your Ritualist app.
+                    Detailed operational metrics. The full dashboard lives in
+                    The Ritualist Studio.
                   </Text>
                 </BlockStack>
                 <Button

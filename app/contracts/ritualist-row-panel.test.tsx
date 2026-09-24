@@ -248,7 +248,7 @@ describe("the row's full-record view says the same activity, and no invented shi
 
   it("keeps the way to Shopify and the handoff to the studio", () => {
     expect(t).toContain("View in Shopify");
-    expect(t).toContain("lives in your Ritualist studio. Open it from the Dashboard.");
+    expect(t).toContain("lives in The Ritualist Studio. Open it from the Dashboard.");
   });
 });
 

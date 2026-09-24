@@ -454,7 +454,7 @@ describe("the Ritualist's Shipments row opens onto ink's panel, the record inclu
     expect(t).toContain("View full record");
     expect(html).not.toContain("href=");
     for (const part of ["Products", "Recipient", "Advanced", "Export the record", "Download PDF", "Download CSV"]) expect(t).toContain(part);
-    for (const gone of ["Get the record", "Buy the record", "$29", "Ritualist studio", "View Full Record", "CUSTOMER", "DELIVERY"]) expect(t).not.toContain(gone);
+    for (const gone of ["Get the record", "Buy the record", "$29", "Ritualist studio", "Ritualist Studio", "View Full Record", "CUSTOMER", "DELIVERY"]) expect(t).not.toContain(gone);
   });
 });
 

@@ -203,7 +203,7 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
               <Divider />
               <Text as="p" variant="bodySm" tone="subdued">
                 The full delivery record — open history, location, and the signed
-                record — lives in your Ritualist studio. Open it from the Dashboard.
+                record — lives in The Ritualist Studio. Open it from the Dashboard.
               </Text>
             </BlockStack>
           </Card>
