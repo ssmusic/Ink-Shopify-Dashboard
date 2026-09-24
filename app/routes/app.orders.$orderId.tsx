@@ -17,9 +17,7 @@ import { openRecordFromProof, openRowsFromTapEvents, locationLine } from "../ser
 import type { OpenRow } from "../services/order-open-record";
 import TapOpensList from "../components/TapOpensList";
 import VerifiableRecordCard from "../components/VerifiableRecordCard";
-import RecordDoor from "../components/RecordDoor";
-import { readInkMerchant } from "../services/ink-merchant.server";
-import { readRecordDoors, recordDoorFor, type RecordDoorView } from "../services/record-charges.server";
+import { RITUALIST_BILLING_PATH, RITUALIST_PLAN_SENTENCE } from "../lib/record-handover";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
     Page,
@@ -34,6 +32,7 @@ import {
     Badge,
     Divider,
     Modal,
+    Link,
 } from "@shopify/polaris";
 import {
     getStagedUploadTarget,
@@ -223,7 +222,7 @@ type LoaderData = {
     order: OrderDetail | null;
     error: string | null;
     /** THE RECORD'S DOOR for this order (services/record-charges.server.ts). */
-    recordDoor?: RecordDoorView | null;
+    recordNeedsPlan?: boolean;
 };
 
 type ActionData = {
@@ -489,22 +488,15 @@ export const loader = async ({
             } : null,
         };
 
-        // THE RECORD'S DOOR — the same door the in.ink screen draws, on this
-        // order. Only when the audit door spoke of a price (locked or bought):
-        // an unpriced merchant — every merchant today — pays no extra call.
-        // Best-effort: an order page never fails on it.
-        let recordDoor: RecordDoorView | null = null;
-        if (order.localProof?.proof_id && order.localProof.record_priced) {
-            try {
-                const view = await readInkMerchant(session.shop);
-                const doors = await readRecordDoors(admin, view, [order.localProof.proof_id]);
-                recordDoor = recordDoorFor(doors, order.localProof.proof_id);
-            } catch (doorErr: any) {
-                console.warn("[order-detail] record door unavailable:", doorErr?.message ?? doorErr);
-            }
-        }
+        // THE RECORD ON THE RITUALIST (Sam, 2026-09-24; ink-backend #154):
+        // this page is mounted only in the Ritualist, which never sells the
+        // record and never names ink's price. A record the backend prices
+        // means the store has no active Ritualist plan: the card says the plan
+        // includes it and links to Billing (VerifiableRecordCard hides the PDF
+        // and the export, which would answer 402).
+        const recordNeedsPlan = !!(order.localProof?.proof_id && order.localProof.record_locked);
 
-        return { order, error: null, recordDoor };
+        return { order, error: null, recordNeedsPlan };
     } catch (error) {
         console.error("Loader error:", error);
         return { order: null, error: "Failed to load order" };
@@ -653,7 +645,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function OrderDetails() {
-    const { order, error, recordDoor } = useLoaderData() as LoaderData;
+    const { order, error, recordNeedsPlan } = useLoaderData() as LoaderData;
     const actionData = useActionData() as ActionData | undefined;
     const navigate = useNavigate();
 
@@ -1213,13 +1205,10 @@ export default function OrderDetails() {
                                     published={order.localProof.record_published}
                                     locked={order.localProof.record_locked}
                                 >
-                                    {recordDoor && (
-                                        <RecordDoor
-                                            proofId={order.localProof.proof_id}
-                                            orderName={order.name}
-                                            returnTo={`/app/orders/${encodeURIComponent(order.id)}`}
-                                            door={recordDoor}
-                                        />
+                                    {recordNeedsPlan && (
+                                        <Text as="p" variant="bodySm" tone="subdued">
+                                            {RITUALIST_PLAN_SENTENCE} <Link url={RITUALIST_BILLING_PATH}>Billing</Link>
+                                        </Text>
                                     )}
                                 </VerifiableRecordCard>
                             </div>

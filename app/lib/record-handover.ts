@@ -37,6 +37,26 @@ export function handoverLocked(record: unknown): boolean {
   return handoverPrice(record) !== null;
 }
 
+// THE RITUALIST WITHOUT A PLAN (Sam, 2026-09-24; ink-backend #154). The
+// backend includes the record on the Ritualist's plan (absent included), or
+// when the Ritualist is installed AND its plan is active, or by Sam's dial.
+// A store with the app installed and no active plan is priced like any ink
+// store, so the Ritualist's downloads would answer 402. The Ritualist never
+// sells the record and never names ink's price: it says so in one line and
+// links to Billing. PLACEHOLDER copy — Sam's words replace it.
+export const RITUALIST_PLAN_SENTENCE = "The record is included with a Ritualist plan.";
+export const RITUALIST_BILLING_PATH = "/app/billing";
+
+/** The Ritualist is looking at a record the backend prices: the store has no
+ *  active Ritualist plan. A bought record is the merchant's, so it does not
+ *  count; a free one never carries a price. */
+export function recordNeedsRitualistPlan(record: unknown): boolean {
+  const r = blockOf(record) as (RecordBlock & { forSale?: unknown }) | null;
+  if (!r) return false;
+  if (r.forSale && typeof r.forSale === "object") return true;
+  return handoverLocked(r) || r.locked === true;
+}
+
 // PLACEHOLDER copy — Sam's words replace it. Said beside "Get the record — $29":
 // what the price buys is the copy to hand over, never the sight of the record.
 export const HANDOVER_SENTENCE = "The signed copy to hand over.";

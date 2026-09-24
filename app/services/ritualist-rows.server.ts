@@ -17,7 +17,10 @@
 // on a test store, 2026-09-24); waiting for every record, then every timeline,
 // kept a page blank for 10 to 15 s.
 //
-// WHAT MAKES THE RITUALIST'S ROW ITS OWN: the record is included. The
+// WHAT MAKES THE RITUALIST'S ROW ITS OWN: the record is included — on the
+// Ritualist's plan. A store with the app installed and no active plan
+// (ink-backend #154) is priced by the backend; its row says the plan includes
+// the record and links to Billing (ritualistDoorFor), never ink's price. The
 // backend's price author returns null for a merchant on the Ritualist, so its
 // audit door answers the whole record with no record block and its export
 // door answers without a purchase. The door built here says so: it never
@@ -33,6 +36,7 @@ import { PROOF_ID } from "./ink-reader.server";
 import { readRecord } from "./ink-record.server";
 import { readTimelineReads, timelineOfReads } from "./ink-timeline.server";
 import type { Jwks } from "./record-check.server";
+import { recordNeedsRitualistPlan } from "../lib/record-handover";
 
 /** The merchant's own key, as the Ritualist's order page resolves it; null
  *  while the install has not provisioned one. */
@@ -60,6 +64,14 @@ export function includedRecordDoor(apiKey: string | null, proofId: string | null
   };
 }
 
+/** The door once the record has answered: a record the backend prices means
+ *  this store has no active Ritualist plan (ink-backend #154 — an install
+ *  alone no longer includes it), so the door says the plan includes it and
+ *  offers no download the backend would refuse. */
+export function ritualistDoorFor(door: InkDoor, record: unknown): InkDoor {
+  return recordNeedsRitualistPlan(record) ? { ...door, downloadable: false, needsPlan: true } : door;
+}
+
 /** One row's record side, as ink's Orders reads its own (routes/app.ink.$section.tsx
  *  rowRecord): the record and the timeline's two reads side by side, then the
  *  timeline made from them with the record. `keys` is the published key set,
@@ -80,7 +92,7 @@ export async function ritualistRowRecord(
     ]);
     const timeline =
       apiKey && reads ? await timelineOfReads(apiKey, proofId, reads, record, fetchImpl).catch(() => null) : null;
-    return { record, door, packet: null, timeline };
+    return { record, door: ritualistDoorFor(door, record), packet: null, timeline };
   } catch {
     return { record: null, door, packet: null, timeline: null };
   }

@@ -143,8 +143,11 @@ describe("the wiring", () => {
     expect(card).toContain("{!locked && (");
     const orderPage = src("../routes/app.orders.$orderId.tsx");
     expect(orderPage).toContain("locked={order.localProof.record_locked}");
-    // An unpriced merchant pays no extra call on the order page.
-    expect(orderPage).toContain("if (order.localProof?.proof_id && order.localProof.record_priced) {");
+    // The Ritualist's order page never sells the record and never names ink's
+    // price: a priced record says the plan includes it (ink-backend #154).
+    expect(orderPage).not.toMatch(/readRecordDoors|<RecordDoor\b/);
+    expect(orderPage).toContain("const recordNeedsPlan = !!(order.localProof?.proof_id && order.localProof.record_locked);");
+    expect(orderPage).toContain("{RITUALIST_PLAN_SENTENCE} <Link url={RITUALIST_BILLING_PATH}>Billing</Link>");
     // ink's Recent orders: the door sits at the bottom of each row's accordion
     // (components/InkRecentOrders.tsx — Sam, 2026-09-23).
     expect(src("../routes/app.ink.$section.tsx")).toMatch(/<InkRecentOrders\s[^]*?orders=\{data\.recentOrders\}\s+returnTo="\/app\/ink\/orders"/);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import { BlockStack, Button, InlineStack, Link, Select, Text } from "@shopify/polaris";
 import type { action } from "../routes/app.record";
+import { RITUALIST_BILLING_PATH, RITUALIST_PLAN_SENTENCE } from "../lib/record-handover";
 
 export type InkPurchase = { id: string; packet_url: string | null; outcome: "open" | "won" | "lost" | "unknown" };
 
@@ -12,6 +13,10 @@ export type InkDoor = {
   resumeUrl?: string | null;
   downloadable?: boolean;
   inHistory?: boolean;
+  /** The Ritualist on a store with no active plan: the backend prices the
+   *  record, so the door says the plan includes it and links to Billing —
+   *  never a download (it would answer 402), never a price. */
+  needsPlan?: boolean;
   /** The backend's purchase of this record, once bought (its outcome is the merchant's word). */
   purchase?: InkPurchase | null;
 };
@@ -126,6 +131,13 @@ export default function InkRecordDoor({
       { method: "post", action: "/app/record" },
     );
   };
+  if (door.needsPlan) {
+    return (
+      <Text as="p" tone="subdued">
+        {RITUALIST_PLAN_SENTENCE} <Link url={RITUALIST_BILLING_PATH}>Billing</Link>
+      </Text>
+    );
+  }
   if (!door.offerLine && !door.downloadable && !door.pending && !door.purchase) {
     return (
       <Text as="p" tone="subdued">
