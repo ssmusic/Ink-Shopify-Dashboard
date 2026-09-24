@@ -65,7 +65,10 @@ describe("auditReportLines", () => {
     expect(text).toContain("6 of 6 elements are backed by signed events; the 3-event chain verifies.");
     expect(text).toContain("Buyer: Maya Chen (returning)");
     expect(text).toContain("Ship to: 123 Hidden St, Los Angeles, CA, 90026, US");
-    expect(text).toContain("The open: Device-verified");
+    // The `verified` level reads as the attested one (Sam, 2026-09-24: "we
+    // cant confirm at door").
+    expect(text).toContain("The open: Recorded and signed");
+    expect(text).toContain("address on file - Nearest open: Location not shared.");
     expect(text).toContain("Location not shared.");
     expect(text).toContain("evidence: evt_3");
     expect(text).toContain("Delivery date: Recorded and signed");
@@ -76,6 +79,34 @@ describe("auditReportLines", () => {
     expect(text).toContain("Signature:      " + "ab".repeat(32));
     expect(text).toContain(URL);
     expect(text).toContain("the buyer's location is a commitment inside the signed bytes");
+  });
+
+  it("a signed DELIVERY_VERIFIED is titled by what it holds; the delivery place says its nearest open; nothing claims the door", () => {
+    const bytes = (data: Record<string, unknown>) => JSON.stringify({ event_data: data });
+    const p = packet();
+    const [e1, e2, e3] = p.chain;
+    p.chain = [
+      e1,
+      e2,
+      { ...e3, signed_bytes: bytes({ tap_id: "t1", tap_outcome: "success", gps_verdict: "pass", distance_m: 22, accuracy_m: 9 }) },
+      { ...e3, event_id: "evt_4", seq: 4, event_type: "DELIVERY_VERIFIED", signed_bytes: bytes({ tap_id: "t1", gps_verdict: "pass", distance_m: 22 }) },
+    ];
+    p.verdict.elements = p.verdict.elements.map((e) =>
+      e.element === "delivery_place" ? { ...e, status: "verified", value: { geocoded: true, verified_at_door: true }, evidence_event_ids: ["evt_1", "evt_4"] }
+        : e.element === "the_open" ? { ...e, value: { ...e.value, location: { verdict: "pass", distance_m: 22, accuracy_m: 9, after_carrier_scan: true } } }
+          : e,
+    );
+    const text = auditReportLines(p, { verifyUrl: URL }).map((l) => l.text).join(" ").replace(/\s+/g, " ");
+    expect(text).toContain("Delivery place: Recorded and signed");
+    expect(text).toContain("address on file - Nearest open: Opened 22 m from the delivery address. After the carrier's scan.");
+    expect(text).toContain("Event 4 - Distance recorded");
+    expect(text).not.toMatch(/at the door|device-verified|confirmed at|seen at|delivery verified/i);
+    // A scanner's nearer visit is not a person's open; an old placeholder's
+    // "flagged" DELIVERY_VERIFIED measured nothing.
+    p.chain.push({ ...e3, event_id: "evt_5", seq: 5, signed_bytes: bytes({ tap_id: "t2", tap_outcome: "proxy", gps_verdict: "pass", distance_m: 3 }) });
+    p.chain.push({ ...e3, event_id: "evt_6", seq: 6, event_type: "DELIVERY_VERIFIED", signed_bytes: bytes({ gps_verdict: "flagged", distance_m: 1 }) });
+    const again = auditReportLines(p, { verifyUrl: URL }).map((l) => l.text).join(" ").replace(/\s+/g, " ");
+    expect(again).toContain("Nearest open: Opened 22 m from the delivery address.");
   });
 
   it("a missing reference is stated, never invented; a broken chain is said", () => {

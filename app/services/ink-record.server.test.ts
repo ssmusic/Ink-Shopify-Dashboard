@@ -109,14 +109,19 @@ describe("the record in words", () => {
   });
   // Sam, 2026-09-23 23:22Z, on the range words: "we dont judge delivery so this
   // is weird" — no verdict word on a distance anywhere; the distance is a data
-  // row. A real "seen at the door" signed event is data, not a distance verdict,
-  // so the delivery place's yes/no stays as Codex had it (the orchestrator).
-  it("says the delivery place's at-the-door yes/no as data, beside the address on file", () => {
+  // row. The delivery place's at-the-door yes/no stayed as Codex had it then;
+  // Sam, 2026-09-24 01:10Z: "we cant confirm at door" — so the row says the
+  // fact instead: the nearest open's distance, and where it stood against the
+  // carrier's scan. The field stays data on the record.
+  it("says the delivery place's nearest open beside the address on file — never a yes/no to a door", () => {
     const place = { element: "delivery_place", label: "Delivery place", status: "attested", value: { geocoded: true, verified_at_door: false } };
-    expect(elementLines(place)).toEqual([
+    // Without the record to read the opens from, the door row is left out.
+    expect(elementLines(place)).toEqual([{ label: "Address on file", words: "Yes" }]);
+    expect(elementLines(place, record)).toEqual([
       { label: "Address on file", words: "Yes" },
-      { label: "Seen at the door", words: "No" },
+      { label: "Nearest open", words: expect.stringMatching(/^(Opened .+ from the delivery address\.( (Before|After) the carrier's scan\.)?|A location was shared, but no distance was stored\.|Location not shared\.|No open on the record yet\.)$/) },
     ]);
+    expect(JSON.stringify(elementLines(place, record))).not.toMatch(/door|confirm|verif|seen/i);
   });
 });
 

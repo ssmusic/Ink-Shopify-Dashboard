@@ -6,13 +6,18 @@
 // appendix (every event's payload hash, previous hash and signature); and the
 // QR that re-runs the PUBLIC verification in any browser.
 //
-// The words are the merchant's: opened, delivered, confirmed at the door. The
-// crypto lives in the appendix. Deterministic for a fixed packet.
+// The words are the merchant's: opened, delivered, recorded and signed, the
+// distance as data. Nothing says a delivery was confirmed, verified or seen at
+// the door (Sam, 2026-09-24: "we cant confirm at door"): the signed
+// DELIVERY_VERIFIED is titled by what it holds and the delivery place says its
+// nearest open (lib/record-words.ts). The crypto lives in the appendix.
+// Deterministic for a fixed packet.
 
 import qrcode from "qrcode-generator";
 import { buildTextPdf, wrapToken, wrapWords, type PdfLine, type PdfRect } from "./pdf-lite.server";
 import { kmOrM } from "../lib/order-timeline";
 import { accuracyWords, sharedOf } from "../lib/every-open";
+import { DELIVERY_VERIFIED_TITLE, carrierScanOf, nearestOpenWords, type NearestCandidate, type NearestInput } from "../lib/record-words";
 
 export type AuditEvent = {
   event_id: string | null;
@@ -69,7 +74,8 @@ export type AuditPacket = {
 };
 
 const LEVEL_WORDS: Record<string, string> = {
-  verified: "Device-verified",
+  // Was "Device-verified": on the delivery place it meant the door.
+  verified: "Recorded and signed",
   attested: "Recorded and signed",
   asserted: "In the record, unsigned",
   missing: "Missing",
@@ -79,7 +85,7 @@ const EVENT_WORDS: Record<string, string> = {
   ENROLLED: "Order enrolled",
   CARRIER_DELIVERED: "Carrier delivered",
   TAP_RECORDED: "Opened",
-  DELIVERY_VERIFIED: "Confirmed at the door",
+  DELIVERY_VERIFIED: DELIVERY_VERIFIED_TITLE,
   MEDIA_UPLOADED: "Photos attached",
   RETURN_INITIATED: "Return started",
   RETURN_LABEL_GENERATED: "Return label made",
@@ -112,13 +118,60 @@ export function openLocationSentence(
   return null;
 }
 
-function elementLine(el: AuditElement, tz: string): string {
+/** What the packet's signed bytes say of one moment, or null. */
+function signedData(e: AuditEvent): Record<string, unknown> | null {
+  if (typeof e.signed_bytes !== "string") return null;
+  try {
+    const data = (JSON.parse(e.signed_bytes) as { event_data?: unknown }).event_data;
+    return data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The nearest open's inputs from the packet: every signed open's and late
+ *  share's own measurement, a DELIVERY_VERIFIED's own distance (a pass only —
+ *  any other word on one is an old world's placeholder), and the first open's
+ *  served line. */
+export function nearestInputOfPacket(p: AuditPacket): NearestInput {
+  const candidates: NearestCandidate[] = [];
+  for (const e of [...p.chain, ...p.legacy_events]) {
+    if (e.event_type !== "TAP_RECORDED" && e.event_type !== "LOCATION_SHARED" && e.event_type !== "DELIVERY_VERIFIED") continue;
+    const d = signedData(e);
+    if (!d) continue;
+    const verdict = typeof d.gps_verdict === "string" ? d.gps_verdict : null;
+    if (e.event_type === "DELIVERY_VERIFIED" && verdict !== "pass") continue;
+    candidates.push({
+      at: e.timestamp,
+      verdict,
+      distance_m: typeof d.distance_m === "number" ? d.distance_m : null,
+      outcome: typeof d.tap_outcome === "string" ? d.tap_outcome : null,
+    });
+  }
+  const open = p.verdict.elements.find((el) => el.element === "the_open");
+  const loc = (open?.value as { location?: { verdict?: string; distance_m?: number | null; after_carrier_scan?: boolean | null } } | null)?.location;
+  if (loc) {
+    candidates.push({
+      at: p.summary.first_open_at,
+      verdict: loc.verdict ?? null,
+      distance_m: loc.distance_m ?? null,
+      after_carrier_scan: typeof loc.after_carrier_scan === "boolean" ? loc.after_carrier_scan : null,
+    });
+  }
+  return { deliveredAt: carrierScanOf(p.verdict.elements, p.summary.delivered_at), candidates, opens: p.summary.opens ?? 0 };
+}
+
+function elementLine(el: AuditElement, tz: string, nearest: string | null = null): string {
   const v = el.value ?? {};
   const bits: string[] = [];
   if (el.element === "order" && v.order_number) bits.push(String(v.order_number));
   if (el.element === "buyer" && v.tier) bits.push(String(v.tier));
   if (el.element === "delivery_date" && v.delivered_at) bits.push(`${fmtDate(String(v.delivered_at), tz)}${v.source ? ` (${String(v.source)})` : ""}${v.signed ? " - signed" : ""}${v.mismatch ? ` - RECORD SAYS ${fmtDate(String(v.record_says), tz)}` : ""}`);
-  if (el.element === "delivery_place") bits.push(v.verified_at_door ? "confirmed at the door" : v.geocoded ? "address on file" : "no address");
+  // The door row says the nearest open, never Yes/No to a door.
+  if (el.element === "delivery_place") {
+    bits.push(v.geocoded ? "address on file" : "no address");
+    if ("verified_at_door" in v && nearest) bits.push(`Nearest open: ${nearest}`);
+  }
   if (el.element === "carrier_scan") bits.push([v.last_status, v.carrier].filter(Boolean).join(" - ") + (v.last_at ? ` - ${fmtDate(String(v.last_at), tz)}` : ""));
   if (el.element === "the_open") {
     if (v.first_open_at) bits.push(`first ${fmtDate(String(v.first_open_at), tz)}${v.first_open_signed ? " (signed)" : ""}`);
@@ -188,9 +241,10 @@ export function auditReportLines(p: AuditPacket, opts: { verifyUrl: string; tz?:
 
   push("THE SIX ELEMENTS AND THEIR EVIDENCE", { font: "sans-bold", size: 9, gap: 16 });
   prose("Each row names its evidence level and the signed events that back it. A missing reference is stated as missing.", { size: 8, gap: 2 });
+  const nearest = nearestOpenWords(nearestInputOfPacket(p));
   for (const el of p.verdict.elements) {
     push(`${el.label}: ${LEVEL_WORDS[el.status] ?? el.status}`, { font: "sans-bold", gap: 6 });
-    const detail = elementLine(el, tz);
+    const detail = elementLine(el, tz, nearest);
     if (detail) push(`  ${detail}`, { size: 9 });
     push(`  evidence: ${el.evidence_event_ids.length ? el.evidence_event_ids.join(", ") : "none - MISSING"}`, { font: "mono", size: 8 });
   }

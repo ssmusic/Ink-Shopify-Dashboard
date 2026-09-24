@@ -77,21 +77,18 @@ describe("the delivery dashboard", () => {
     },
   ];
 
-  it("runs the funnel orders → delivered → opened → location shared → seen at the door, each as a share of the step above", () => {
+  // Sam, 2026-09-24: "we cant confirm at door." The funnel ended with "Seen at
+  // the door" (a signed DELIVERY_VERIFIED: a 100 m pass after the scan); that
+  // count has no neutral name, so it is not a step. The rows keep the field.
+  it("runs the funnel orders → delivered → opened → location shared, each as a share of the step above — and no step claims the door", () => {
     expect(funnel(rows)).toEqual([
       { key: "orders", label: "Orders", count: 6, ofAbovePct: null },
       { key: "delivered", label: "Delivered", count: 5, ofAbovePct: 83.3 },
       { key: "opened", label: "Open", count: 4, ofAbovePct: 80 },
       { key: "shared", label: "Location shared", count: 2, ofAbovePct: 50 },
-      { key: "door", label: "Seen at the door", count: 1, ofAbovePct: 50 },
     ]);
-    expect(funnel([]).map((s) => s.ofAbovePct)).toEqual([
-      null,
-      null,
-      null,
-      null,
-      null,
-    ]);
+    expect(funnel([]).map((s) => s.ofAbovePct)).toEqual([null, null, null, null]);
+    for (const s of funnel(rows)) expect(s.label).not.toMatch(/door|confirm|verif|seen/i);
   });
 
   it("buckets time in transit with the console's buckets, skipping a missing or negative pair", () => {

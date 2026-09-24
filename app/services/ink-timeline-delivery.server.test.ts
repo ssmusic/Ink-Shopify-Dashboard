@@ -285,7 +285,9 @@ describe("the delivery dashboard", () => {
       Authorization: "Bearer ink_live_key",
     });
     expect(d?.orders).toBe(2);
-    expect(d?.funnel.map((s) => s.count)).toEqual([2, 1, 1, 1, 1]);
+    // Orders → delivered → opened → location shared: no door step (Sam,
+    // 2026-09-24: "we cant confirm at door").
+    expect(d?.funnel.map((s) => s.count)).toEqual([2, 1, 1, 1]);
     expect(d?.waited).toEqual({ stuck: 1, withData: 1, sharePct: 100 });
     expect(d?.carrier[0]).toEqual({
       status: "Delivered",

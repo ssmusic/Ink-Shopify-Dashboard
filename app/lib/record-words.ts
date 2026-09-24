@@ -4,9 +4,19 @@
 // price buys the hand-over (lib/record-handover.ts). The words of the levels,
 // values and opens are Codex's (4022900), as Sam chose on 2026-09-23; the
 // signed events and the checks carry #137's words.
+//
+// NOTHING SAYS CONFIRMED AT THE DOOR (Sam, 2026-09-24 01:10Z: "we cant
+// confirm at door"). The signed DELIVERY_VERIFIED — minted when an open lands
+// within 100 m after the carrier's delivered scan — and the record's
+// `verified` level stay data; no word here says a delivery was confirmed,
+// verified or seen at the door. The `verified` level reads as the attested
+// one; the event is titled by what it holds (DELIVERY_VERIFIED_TITLE); the
+// delivery place's door row says its nearest open (nearestOpenWords), in the
+// record page's own sentences (the-ritualist src/lib/audit-packet.ts).
 
 import type { CheckoutVsOpens } from "./checkout-words";
 import type { RecordOpen } from "./every-open";
+import { deliverySource, kmOrM } from "./order-timeline";
 
 export type RecordElement = {
   element: string;
@@ -88,7 +98,8 @@ export function recordDownloadsAvailable(record: RecordRead | null | undefined):
 }
 
 export const LEVEL_WORDS: Record<string, string> = {
-  verified: "Verified by ink",
+  // Was "Verified by ink": on the delivery place it meant the door.
+  verified: "Recorded and signed",
   attested: "Recorded and signed",
   asserted: "Not verified by ink",
   missing: "Missing",
@@ -102,7 +113,9 @@ export const VALUE_WORDS: Record<string, string> = {
   source: "Source",
   signed: "Signed",
   geocoded: "Address on file",
-  verified_at_door: "Seen at the door",
+  // The key stays the record's; its row says the nearest open instead.
+  // ⚠️ PLACEHOLDER COPY — the label is Sam's to replace.
+  verified_at_door: "Nearest open",
   last_status: "Last scan",
   last_at: "Scanned",
   carrier: "Carrier",
@@ -164,12 +177,20 @@ export function valueWords(key: string, v: unknown): string {
   return String(v);
 }
 
-/** Each value of an element as a labelled line; a later share gets its own. */
+/** Each value of an element as a labelled line; a later share gets its own.
+ *  The delivery place's door row (`verified_at_door`) says the record's
+ *  nearest open — never Yes or No to a door; without the record to read it
+ *  from, the row is left out. */
 export function elementLines(
   el: RecordElement,
+  record?: RecordRead | null,
 ): { label: string; words: string }[] {
   const lines: { label: string; words: string }[] = [];
   for (const [k, v] of Object.entries(el.value ?? {})) {
+    if (k === NEAREST_OPEN_KEY) {
+      if (record) lines.push({ label: VALUE_WORDS[k], words: nearestOpenWords(nearestInputOf(record)) });
+      continue;
+    }
     lines.push({ label: VALUE_WORDS[k] ?? k, words: valueWords(k, v) });
     const later =
       k === "location" && v && typeof v === "object"
@@ -233,11 +254,19 @@ export function opensOf(record: RecordRead | null | undefined): number | null {
 // src/lib/verify-record.ts headlineFor/signaturesWords/linksWords), said of
 // the published key rather than of a browser: here the app ran the checks.
 
+/** The title of a signed DELIVERY_VERIFIED: what it holds — an open's
+ *  location and its distance from the delivery address — never that a
+ *  delivery was confirmed. The record page's spelling (the-ritualist
+ *  src/lib/audit-packet.ts DELIVERY_VERIFIED_TITLE); every ink screen and
+ *  file that titles the event reads this one.
+ *  ⚠️ PLACEHOLDER COPY — Sam's words replace it. */
+export const DELIVERY_VERIFIED_TITLE = "Distance recorded";
+
 export const EVENT_WORDS: Record<string, string> = {
   ENROLLED: "Order recorded",
   CARRIER_DELIVERED: "Carrier delivered",
   TAP_RECORDED: "Opened",
-  DELIVERY_VERIFIED: "Confirmed at the door",
+  DELIVERY_VERIFIED: DELIVERY_VERIFIED_TITLE,
   MEDIA_UPLOADED: "Photos attached",
   RETURN_INITIATED: "Return started",
   RETURN_LABEL_GENERATED: "Return label made",
@@ -309,4 +338,94 @@ export const UNCHECKED: RecordChecks = { sound: false, headline: "Not checked: t
 export function eventWords(type: string | null | undefined): string {
   if (!type) return "Event";
   return EVENT_WORDS[type] ?? type.toLowerCase().replace(/_/g, " ");
+}
+
+// ── The delivery place's nearest open ────────────────────────────────────
+// Sam, 2026-09-24 01:10Z: "we cant confirm at door." The delivery place's row
+// said "Seen at the door: Yes/No" off the element's `verified_at_door` (a
+// signed DELIVERY_VERIFIED). It says the fact instead: the nearest open's
+// distance from the delivery address and where that open stood against the
+// carrier's scan, in the record page's sentences ("Opened 40 m from the
+// delivery address.", "After the carrier's scan.", "Location not shared.").
+// The field and the signed event stay data.
+
+/** The key of the delivery place's door row, whose words are the nearest open's. */
+export const NEAREST_OPEN_KEY = "verified_at_door";
+
+const MEASURED_WORDS = new Set(["pass", "near", "flagged"]);
+const SHARED_WORDS = new Set(["pass", "near", "flagged", "imprecise", "unmeasured"]);
+const NOT_A_PERSON = new Set(["stale", "proxy"]);
+
+/** One measured moment: an open's (or its late share's) distance, when. */
+export type NearestCandidate = {
+  at: string | null;
+  verdict: string | null;
+  distance_m: number | null;
+  outcome?: string | null;
+  /** Where the moment stood against the carrier's scan, when the record said so. */
+  after_carrier_scan?: boolean | null;
+};
+
+/** What the nearest open is read from, whichever door answered. */
+export type NearestInput = {
+  /** The carrier's delivered scan, when the record's delivery date is one —
+   *  a signed CARRIER_DELIVERED, or a carrier's feed (deliverySource). A date
+   *  from Shopify's fulfillment or a demo clock is no scan: null. */
+  deliveredAt: string | null;
+  candidates: NearestCandidate[];
+  /** Opens the record counted, for the words when none carried a distance. */
+  opens: number;
+};
+
+const lower = (v: unknown) => (typeof v === "string" ? v.toLowerCase() : "");
+
+/** The words of the delivery place's door row: the nearest person's open that
+ *  carries a measured distance, and where it stood against the carrier's
+ *  scan; with no distance, whether any open shared a location; with no open,
+ *  that. A scanner's or a reload's open is not a person's; a placeholder's
+ *  word measured nothing. */
+export function nearestOpenWords(input: NearestInput): string {
+  const scan = Date.parse(input.deliveredAt ?? "");
+  let best: { d: number; at: string | null; after: boolean | null } | null = null;
+  for (const c of input.candidates) {
+    if (NOT_A_PERSON.has(lower(c.outcome))) continue;
+    const d = c.distance_m;
+    if (!MEASURED_WORDS.has(lower(c.verdict)) || typeof d !== "number" || !Number.isFinite(d) || d <= 0) continue;
+    const t = Date.parse(c.at ?? "");
+    const after = typeof c.after_carrier_scan === "boolean" ? c.after_carrier_scan : Number.isFinite(t) && Number.isFinite(scan) ? t >= scan : null;
+    if (!best || d < best.d || (d === best.d && (c.at ?? "") < (best.at ?? ""))) best = { d, at: c.at, after };
+  }
+  if (best) {
+    const when = best.after === false ? " Before the carrier's scan." : best.after === true ? " After the carrier's scan." : "";
+    return `Opened ${kmOrM(best.d)} from the delivery address.${when}`;
+  }
+  const people = input.candidates.filter((c) => !NOT_A_PERSON.has(lower(c.outcome)));
+  if (people.some((c) => SHARED_WORDS.has(lower(c.verdict)))) return "A location was shared, but no distance was stored.";
+  return input.opens > 0 || people.length ? "Location not shared." : "No open on the record yet.";
+}
+
+/** The nearest open's inputs from a record read: every signed open's own
+ *  measurement (its late share's when it shared later) and the first open's
+ *  served line, with the moment it stood against the carrier's scan. */
+export function nearestInputOf(record: RecordRead): NearestInput {
+  const candidates: NearestCandidate[] = (record.opens ?? []).map((o) => ({ at: o.at, verdict: o.verdict, distance_m: o.distance_m, outcome: o.outcome }));
+  const open = record.elements.find((e) => e.element === "the_open");
+  const loc = (open?.value as { location?: { verdict?: string; distance_m?: number | null; after_carrier_scan?: boolean | null } } | null)?.location;
+  if (loc) {
+    candidates.push({
+      at: record.summary.first_open_at ?? null,
+      verdict: loc.verdict ?? null,
+      distance_m: loc.distance_m ?? null,
+      after_carrier_scan: typeof loc.after_carrier_scan === "boolean" ? loc.after_carrier_scan : null,
+    });
+  }
+  return { deliveredAt: carrierScanOf(record.elements, record.summary.delivered_at ?? null), candidates, opens: record.summary.opens ?? 0 };
+}
+
+/** The delivered instant when it is a carrier's scan (#145's rule: a signed
+ *  scan or a carrier's feed), else null — the moment an open is said against. */
+export function carrierScanOf(elements: ReadonlyArray<{ element: string; value: Record<string, unknown> | null }>, deliveredAt: string | null): string | null {
+  const v = elements.find((e) => e.element === "delivery_date")?.value ?? null;
+  if (!v || !deliveredAt) return null;
+  return v.signed === true || deliverySource(typeof v.source === "string" ? v.source : null)?.carrier ? deliveredAt : null;
 }

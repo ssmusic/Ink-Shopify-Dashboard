@@ -4,7 +4,7 @@ import {
   wrapWords,
   type PdfLine,
 } from "./pdf-lite.server";
-import { elementLines, LEVEL_WORDS, when, type RecordRead } from "../lib/record-words";
+import { DELIVERY_VERIFIED_TITLE, elementLines, LEVEL_WORDS, when, type RecordRead } from "../lib/record-words";
 import type { InkInspection } from "../lib/ink-record-inspection";
 
 type Event = {
@@ -53,7 +53,7 @@ const eventName = (value: unknown) => {
     LOCATION_SHARED: "Location shared",
     ENROLLED: "Recorded",
     CARRIER_DELIVERED: "Carrier delivered",
-    DELIVERY_VERIFIED: "Seen at the door",
+    DELIVERY_VERIFIED: DELIVERY_VERIFIED_TITLE,
   };
   if (known[value]) return known[value];
   const words = value.replace(/_/g, " ").toLowerCase();
@@ -129,7 +129,7 @@ export function buildInkRecordPdf(
       `${element.label}: ${LEVEL_WORDS[element.status] || "Unknown"}`,
       { font: "sans-bold", size: 10, gap: 9 },
     );
-    for (const line of elementLines(element))
+    for (const line of elementLines(element, record))
       prose(`${line.label}: ${line.words}`, { size: 9, gap: 2 });
     const ids = audit.verdict?.elements?.find(
       (item) => item.element === element.element,

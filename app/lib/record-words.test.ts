@@ -37,10 +37,13 @@ describe("browsersLine — PLACEHOLDER copy", () => {
 });
 
 describe("the level words (2026-09-23, Codex's screens restored)", () => {
-  it("are Codex's, as Sam chose them — an asserted element is never called unsigned", async () => {
+  // Sam, 2026-09-24: "we cant confirm at door." The `verified` level was
+  // "Verified by ink" — on the delivery place, the door. It reads as the
+  // attested level; the level stays data on the record.
+  it("are Codex's, as Sam chose them — an asserted element is never called unsigned, and nothing says a delivery was verified", async () => {
     const { LEVEL_WORDS } = await import("./record-words");
     expect(LEVEL_WORDS).toEqual({
-      verified: "Verified by ink",
+      verified: "Recorded and signed",
       attested: "Recorded and signed",
       asserted: "Not verified by ink",
       missing: "Missing",
@@ -50,4 +53,52 @@ describe("the level words (2026-09-23, Codex's screens restored)", () => {
   // PARKED: Codex's words print a bare "ink"; Sam's "ink always has a period
   // after it" was said of the app's name. His word decides whether copy follows.
   it.todo("never a bare ink in the level words (Sam: \"ink always has a period after it\")");
+});
+
+// THE DELIVERY PLACE SAYS ITS NEAREST OPEN (Sam, 2026-09-24 01:10Z: "we cant
+// confirm at door"). The row that said "Seen at the door: Yes/No" says the
+// nearest open's distance, and where it stood against the carrier's scan only
+// when the record's delivery date IS a carrier's scan (#145's rule).
+describe("nearestOpenWords — the fact behind the door", () => {
+  const record = (over: { source?: string | null; signed?: boolean; opens?: Array<Record<string, unknown>>; location?: Record<string, unknown> | null; delivered_at?: string | null; count?: number } = {}) => ({
+    summary: { delivered_at: over.delivered_at === undefined ? "2026-09-13T12:00:00.000Z" : over.delivered_at, first_open_at: "2026-09-14T12:00:00.000Z", opens: over.count ?? (over.opens?.length ?? 1) },
+    elements: [
+      { element: "delivery_date", label: "Delivery date", status: "attested", value: { delivered_at: "2026-09-13T12:00:00.000Z", source: over.source === undefined ? "easypost" : over.source, signed: over.signed ?? false } },
+      { element: "delivery_place", label: "Delivery place", status: "verified", value: { geocoded: true, verified_at_door: true } },
+      { element: "the_open", label: "The open", status: "verified", value: over.location === null ? null : { location: over.location ?? { verdict: "flagged", distance_m: 2623 } } },
+    ],
+    locked: false,
+    opens: (over.opens ?? []) as never,
+  });
+
+  it("the nearest person's open, after a carrier's scan", async () => {
+    const { nearestOpenWords, nearestInputOf } = await import("./record-words");
+    const r = record({ opens: [
+      { event_id: "e1", at: "2026-09-14T12:00:00.000Z", verdict: "flagged", distance_m: 2623, outcome: null },
+      { event_id: "e2", at: "2026-09-15T12:00:00.000Z", verdict: "pass", distance_m: 40, outcome: null },
+      { event_id: "e3", at: "2026-09-15T13:00:00.000Z", verdict: "pass", distance_m: 3, outcome: "proxy" },
+    ] });
+    expect(nearestOpenWords(nearestInputOf(r))).toBe("Opened 40 m from the delivery address. After the carrier's scan.");
+  });
+
+  it("a delivery date from Shopify's fulfillment is no carrier's scan: the distance alone", async () => {
+    const { nearestOpenWords, nearestInputOf } = await import("./record-words");
+    expect(nearestOpenWords(nearestInputOf(record({ source: "merchant" })))).toBe("Opened 2.6 km from the delivery address.");
+    // A signed scan counts whatever its source says.
+    expect(nearestOpenWords(nearestInputOf(record({ source: "merchant", signed: true })))).toBe("Opened 2.6 km from the delivery address. After the carrier's scan.");
+    // The backend's own word on the first open is said as it said it.
+    expect(nearestOpenWords(nearestInputOf(record({ source: "merchant", location: { verdict: "pass", distance_m: 56, after_carrier_scan: false } })))).toBe("Opened 56 m from the delivery address. Before the carrier's scan.");
+  });
+
+  it("with no distance: whether a location was shared, else whether anyone opened", async () => {
+    const { nearestOpenWords, nearestInputOf } = await import("./record-words");
+    expect(nearestOpenWords(nearestInputOf(record({ location: { verdict: "imprecise", distance_m: null } })))).toBe("A location was shared, but no distance was stored.");
+    expect(nearestOpenWords(nearestInputOf(record({ location: { verdict: "not_shared" } })))).toBe("Location not shared.");
+    expect(nearestOpenWords(nearestInputOf(record({ location: null, count: 0 })))).toBe("No open on the record yet.");
+  });
+
+  it("never a verdict word, and never the door", async () => {
+    const { nearestOpenWords, nearestInputOf } = await import("./record-words");
+    expect(nearestOpenWords(nearestInputOf(record()))).not.toMatch(/\b(within|outside|beyond|near|pass|flagged|range|default)\b|door|confirm|verif/i);
+  });
 });
