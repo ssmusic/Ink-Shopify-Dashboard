@@ -4,10 +4,12 @@ import {
   Layout,
   Card,
   BlockStack,
+  Box,
   Text,
   InlineStack,
   Divider,
 } from "@shopify/polaris";
+import RitualistPillNav from "./RitualistPillNav";
 import { LifecycleRail } from "./OrderTimeline";
 import type { InkRecentOrderRow } from "./InkRecentOrders";
 
@@ -90,6 +92,7 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
 
   return (
     <Page
+      fullWidth
       title={order.orderNumber}
       subtitle={order.date}
       backAction={{ content: "Orders", onAction: onBack }}
@@ -101,6 +104,9 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
         },
       ]}
     >
+      <Box paddingBlockEnd="400">
+        <RitualistPillNav />
+      </Box>
       <Layout>
         {/* Left column: Recipient + Products — ink's words for them
             (components/InkRecentOrders.tsx). */}

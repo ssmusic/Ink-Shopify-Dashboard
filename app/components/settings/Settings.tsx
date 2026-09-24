@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { Page, Tabs } from "@shopify/polaris";
+import { Box, Page, Tabs } from "@shopify/polaris";
 import PolarisAppLayout from "../PolarisAppLayout";
+import RitualistPillNav from "../RitualistPillNav";
 import AccountSettings from "./AccountSettings";
 import TagsSettings from "./TagsSettings";
 import { FEATURE_NFC } from "../../flags";
@@ -46,7 +47,10 @@ const Settings = ({ initialData }: { initialData?: any }) => {
 
   return (
     <PolarisAppLayout>
-      <Page title="Settings">
+      <Page fullWidth title="Settings">
+        <Box paddingBlockEnd="400">
+          <RitualistPillNav />
+        </Box>
         <Tabs tabs={tabs} selected={selected} onSelect={handleTabChange}>
           <div style={{ paddingTop: "16px" }}>
             {renderTabContent()}

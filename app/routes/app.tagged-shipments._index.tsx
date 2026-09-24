@@ -25,6 +25,7 @@ import {
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import PolarisAppLayout from "../components/PolarisAppLayout";
+import RitualistPillNav from "../components/RitualistPillNav";
 import InkRecentOrders, {
   WithRecord,
   type InkOrderRow,
@@ -197,6 +198,7 @@ export default function ShipmentsIndex() {
   return (
     <PolarisAppLayout>
       <Page
+        fullWidth
         // One name for both apps (Sam, 2026-09-24): "Orders", as ink says it.
         title="Orders"
         secondaryActions={[
@@ -207,6 +209,9 @@ export default function ShipmentsIndex() {
           },
         ]}
       >
+        <Box paddingBlockEnd="400">
+          <RitualistPillNav />
+        </Box>
         <Card padding="0">
           <Box padding="400">
             <BlockStack gap="300">

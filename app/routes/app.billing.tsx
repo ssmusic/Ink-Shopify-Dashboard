@@ -2,8 +2,9 @@ import { authenticate } from "../shopify.server";
 import type { LoaderFunctionArgs, HeadersFunction } from "react-router";
 import { useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { Page, BlockStack, Card, Text } from "@shopify/polaris";
+import { Page, BlockStack, Box, Card, Text } from "@shopify/polaris";
 import PolarisAppLayout from "../components/PolarisAppLayout";
+import RitualistPillNav from "../components/RitualistPillNav";
 import { readRitualistPlans } from "../services/ritualist-plan.server";
 
 // THE PLAN, AS SHOPIFY HAS IT (Sam, 2026-09-24, on "Your Shopify plan is
@@ -36,10 +37,10 @@ export default function BillingPage() {
   const { plans } = useLoaderData<typeof loader>();
   return (
     <PolarisAppLayout>
-      <Page
-        title="Billing"
-        backAction={{ content: "Settings", url: "/app/settings" }}
-      >
+      <Page fullWidth title="Billing">
+        <Box paddingBlockEnd="400">
+          <RitualistPillNav />
+        </Box>
         <Card>
           <BlockStack gap="400">
             <Text as="h2" variant="headingMd">

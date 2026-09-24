@@ -196,6 +196,12 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ShopifyAppProvider embedded apiKey={apiKey}>
         <PolarisAppProvider i18n={translations} linkComponent={PolarisLink}>
+          {/* The admin's left nav, every page (Sam, 2026-09-24: "left side
+              representing all pages"). The home link is hidden by App Bridge
+              (rel="home"): the app's name leads there, and /app opens the
+              Dashboard. The same five, in the same order, are the pills on
+              top of every page (components/RitualistPillNav.tsx). */}
+          <NavMenu><a href="/app" rel="home">Dashboard</a><a href="/app/dashboard">Dashboard</a><a href="/app/tagged-shipments">Orders</a><a href="/app/settings">Settings</a><a href="/app/billing">Billing</a><a href="/app/help">Help</a></NavMenu>
           <ShopProvider>
             <TooltipProvider>
               <Toaster />
