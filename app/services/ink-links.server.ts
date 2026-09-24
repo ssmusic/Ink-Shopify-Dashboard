@@ -17,7 +17,19 @@
 // and address are protected customer data: where Shopify redacts them it
 // answers with errors, and the read falls back to order identifiers alone. A
 // failed fallback is an error the screen says as one — never "no orders".
-import { shopifyOrderSearch, shopifyOrderSort } from "../lib/ink-order-search";
+import {
+  shopifyOrderDates,
+  shopifyOrderSearch,
+  shopifyOrderSort,
+  type InkOrderDates,
+} from "../lib/ink-order-search";
+
+/** The shop's own time zone: custom dates are the shop's days, as the ledger
+ *  prints them (orderDetailFrom). */
+export const SHOP_ZONE_QUERY = `#graphql
+  query InkShopZone {
+    shop { ianaTimezone }
+  }`;
 
 export const RECENT_ORDERS_QUERY = `#graphql
   query InkRecentOrders($first: Int, $last: Int, $after: String, $before: String, $query: String, $sortKey: OrderSortKeys = CREATED_AT, $reverse: Boolean = true) {
@@ -258,6 +270,19 @@ function pageFrom(body: RecentOrdersBody | null, detail: boolean): OrderPage {
   };
 }
 
+/** The shop's zone, or UTC when Shopify does not say: a day's edges then fall
+ *  on UTC's midnight, never an error in place of the list. */
+async function readShopZone(admin: AdminGraphql): Promise<string> {
+  try {
+    const res = await admin.graphql(SHOP_ZONE_QUERY);
+    const body = (await res.json()) as { data?: { shop?: { ianaTimezone?: unknown } | null } } | null;
+    const zone = body?.data?.shop?.ianaTimezone;
+    return typeof zone === "string" && zone ? zone : "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 export async function readRecentOrderPage(
   admin: AdminGraphql,
   options: {
@@ -266,6 +291,10 @@ export async function readRecentOrderPage(
     before?: string | null;
     search?: string;
     sort?: string;
+    /** The ledger's dates (lib/ink-order-search.ts); none is the whole window. */
+    dates?: InkOrderDates;
+    /** The clock a preset counts back from; now, unless a test says. */
+    now?: number;
   } = {},
 ): Promise<OrderPage> {
   const count = Math.min(20, Math.max(1, options.first ?? 5));
@@ -274,9 +303,23 @@ export async function readRecentOrderPage(
     : options.after
       ? { first: count, after: options.after }
       : { first: count };
+  const dates = options.dates
+    ? shopifyOrderDates(
+        options.dates,
+        options.now ?? Date.now(),
+        // Only a custom day needs the shop's zone; a preset counts back from now.
+        options.dates.range === "custom" ? await readShopZone(admin) : "UTC",
+      )
+    : null;
+  const terms = [
+    options.search !== undefined ? shopifyOrderSearch(options.search) : null,
+    dates,
+  ].filter((term): term is string => Boolean(term));
   const variables = {
     ...page,
-    ...(options.search !== undefined ? { query: shopifyOrderSearch(options.search) } : {}),
+    ...(options.search !== undefined || options.dates !== undefined
+      ? { query: terms.length ? terms.join(" AND ") : null }
+      : {}),
     ...(options.sort !== undefined ? shopifyOrderSort(options.sort) : {}),
   };
   try {

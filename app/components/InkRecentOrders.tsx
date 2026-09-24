@@ -697,6 +697,7 @@ export default function InkRecentOrders({
   orders,
   defaultExpandedId = null,
   searching = false,
+  dated = false,
   mapsKey = null,
   sort,
   onSort,
@@ -716,6 +717,8 @@ export default function InkRecentOrders({
   returnTo?: string;
   defaultExpandedId?: string | null;
   searching?: boolean;
+  /** The list is narrowed to some dates (lib/ink-order-search.ts). */
+  dated?: boolean;
   /** The Maps JavaScript browser key (GOOGLE_MAPS_BROWSER_KEY); none → no map, the words remain. */
   mapsKey?: string | null;
   /** The list's sort, for the headings; with onSort a heading press re-sorts (the Ritualist's). */
@@ -738,9 +741,14 @@ export default function InkRecentOrders({
     return (
       <Box paddingBlock="1600" paddingInline="400">
         <Text as="p" alignment="center" tone="subdued">
-          {searching
-            ? "No orders match this search. Try another order number, name or email, or clear the search."
-            : "No orders are available from the past 60 days."}
+          {/* ⚠️ PLACEHOLDER: the dated lines are Sam's to word. */}
+          {searching && dated
+            ? "No orders match this search on these dates."
+            : searching
+              ? "No orders match this search. Try another order number, name or email, or clear the search."
+              : dated
+                ? "No orders from these dates."
+                : "No orders are available from the past 60 days."}
         </Text>
       </Box>
     );
