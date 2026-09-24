@@ -238,7 +238,11 @@ describe("what the Dashboard draws", () => {
 
   it("keeps the Ritualist's own cards, in sentence case", () => {
     const t = text(render(whole));
-    for (const part of ["Enrolled order value", "Last 30 days", "Cost", "Your Shopify plan is Free.", "Advanced — operational analytics"]) expect(t).toContain(part);
+    for (const part of ["Enrolled order value", "Last 30 days", "Advanced — operational analytics"]) expect(t).toContain(part);
+    // Changed on purpose: this kept the plan card. Sam, 2026-09-24, on its
+    // "Your Shopify plan is Free.": "get rid of that" — Billing says the plan
+    // as Shopify has it (ritualist-billing.test.tsx).
+    expect(t).not.toContain("plan is Free");
     for (const gone of ["Open Funnel", "Enrolled Order Value", "Recent Activity", "View All", "Get the record", "$29", "Geofence"]) expect(t).not.toContain(gone);
   });
 

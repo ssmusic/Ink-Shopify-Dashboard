@@ -7,8 +7,8 @@
 // The replacements are PLACEHOLDER (lib/order-marks.ts and the files below);
 // this contract pins only that the old words are never written again as
 // code — a comment may still quote them for Sam.
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const read = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8");
@@ -68,11 +68,18 @@ describe("what the merchant and a visitor read", () => {
 // "Order confirmation" and "Shipping confirmation" emails, and the old tags and
 // shipping titles the readers still recognise on old orders.
 describe("what the Ritualist's own screens say", () => {
-  it("Advanced settings no longer draws distance thresholds that auto-verify a delivery, and keeps the file", () => {
-    const advanced = code("app/components/settings/AdvancedSettings.tsx");
-    expect(advanced).not.toMatch(/VerificationSettings|verif/i);
+  it("no page draws the distance thresholds that auto-verified a delivery, and the file stays", () => {
+    // Changed on purpose: this pinned the Advanced settings page's one line.
+    // Sam, 2026-09-24, on that line: "get rid of that" — the page is gone.
+    expect(existsSync(resolve(process.cwd(), "app/routes/app.settings_.advanced.tsx"))).toBe(false);
     expect(read("app/components/settings/VerificationSettings.tsx")).toMatch(/const VerificationSettings/);
-    expect(code("app/components/settings/SettingsAdvanced.tsx")).toMatch(/title="Advanced settings"/);
+    const files = (function walk(dir: string): string[] {
+      return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(join(dir, e.name)) : /\.tsx?$/.test(e.name) ? [join(dir, e.name)] : [],
+      );
+    })(resolve(process.cwd(), "app"));
+    const drawers = files.filter((f) => !f.endsWith("VerificationSettings.tsx") && !/\.test\.tsx?$/.test(f) && /<VerificationSettings\b/.test(readFileSync(f, "utf8")));
+    expect(drawers).toEqual([]);
   });
 
   it("the Delivered notification follows a carrier scan, never a carrier's confirmation", () => {

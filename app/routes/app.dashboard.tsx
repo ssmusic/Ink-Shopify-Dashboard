@@ -36,7 +36,6 @@ import OrderExpandedRow from "../components/OrderExpandedRow";
 // NFC hardware lane — tabled behind FEATURE_NFC (see app/flags.ts), never deleted.
 import NFCTagInventory from "../components/NFCTagInventory";
 import RevenueThisPeriod from "../components/RevenueThisPeriod";
-import PlanCard from "../components/billing/PlanCard";
 import AdvancedAnalytics from "../components/AdvancedAnalytics";
 import { FEATURE_NFC } from "../flags";
 // Removed from render (kept in tree, unreferenced): TimeToEngagement +
@@ -66,8 +65,11 @@ import { FEATURE_NFC } from "../flags";
 //     button, its brand read "Your brand", and its link opened a popup. The
 //     Communications card said "Email notifications: On" for the same missing
 //     feature. ink's Dashboard has neither card.
+//   · PlanCard ("Cost — Your Shopify plan is Free."): the Ritualist is paid
+//     (Sam, 2026-09-24: "get rid of that"). Billing says the plan as Shopify
+//     has it (routes/app.billing.tsx).
 // What stays the Ritualist's: the door to the studio, the order value of the
-// last 30 days, the plan, and Advanced.
+// last 30 days, and Advanced.
 const RECENT_ORDERS = 6;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -240,12 +242,8 @@ const Dashboard = () => {
             </InlineGrid>
           )}
 
-          {/* The order value of the last 30 days and the honest plan card.
-              Each card its own height: stretched, the value card is half empty. */}
-          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400" alignItems="start">
-            <RevenueThisPeriod />
-            <PlanCard />
-          </InlineGrid>
+          {/* The order value of the last 30 days. */}
+          <RevenueThisPeriod />
 
           {/* Advanced — what ink's Dashboard does not show, collapsed by default.
               Relocated here (not deleted) so the embed stays lean; the rich

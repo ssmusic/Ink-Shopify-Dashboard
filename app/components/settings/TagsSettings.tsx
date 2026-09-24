@@ -28,14 +28,14 @@ const TagsSettings = ({ inventoryData }: { inventoryData?: { current: string, us
   return (
     <Layout>
       <Layout.AnnotatedSection
-        title="Current Inventory"
+        title="Current inventory"
         description="Your NFC tag stock levels and usage this period."
       >
         <InlineStack gap="400" wrap={false}>
           <div style={{ flex: 1 }}>
             <Card>
               <BlockStack gap="200">
-                <Text as="p" tone="subdued" variant="bodySm">In Stock</Text>
+                <Text as="p" tone="subdued" variant="bodySm">In stock</Text>
                 <Text as="p" variant="headingLg">{inventoryData?.current || "0"}</Text>
                 <Text as="p" tone="subdued" variant="bodySm">tags remaining</Text>
               </BlockStack>
@@ -44,7 +44,7 @@ const TagsSettings = ({ inventoryData }: { inventoryData?: { current: string, us
           <div style={{ flex: 1 }}>
             <Card>
               <BlockStack gap="200">
-                <Text as="p" tone="subdued" variant="bodySm">Used This Month</Text>
+                <Text as="p" tone="subdued" variant="bodySm">Used this month</Text>
                 <Text as="p" variant="headingLg">{inventoryData?.usedThisPeriod || "0"}</Text>
                 <Text as="p" tone="subdued" variant="bodySm">tags shipped</Text>
               </BlockStack>
@@ -78,7 +78,7 @@ const TagsSettings = ({ inventoryData }: { inventoryData?: { current: string, us
                 <Divider />
                 <InlineStack align="space-between" blockAlign="center">
                   <BlockStack gap="100">
-                    <Text as="p" variant="bodySm" fontWeight="medium">Refill Quantity</Text>
+                    <Text as="p" variant="bodySm" fontWeight="medium">Refill quantity</Text>
                     <Text as="p" tone="subdued" variant="bodySm">
                       Number of tags to order per refill
                     </Text>
@@ -96,7 +96,7 @@ const TagsSettings = ({ inventoryData }: { inventoryData?: { current: string, us
                 </InlineStack>
 
                 <Divider />
-                <Text as="p" variant="bodySm" fontWeight="medium">Trigger Conditions</Text>
+                <Text as="p" variant="bodySm" fontWeight="medium">Trigger conditions</Text>
 
                 <InlineStack align="space-between" blockAlign="center">
                   <InlineStack gap="300" blockAlign="start">
