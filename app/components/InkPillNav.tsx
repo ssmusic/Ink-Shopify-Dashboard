@@ -20,11 +20,11 @@ import { Link } from "react-router";
 export type InkSection = "orders" | "insights" | "records" | "settings" | "help";
 
 const PILLS: { id: InkSection; label: string; to: string }[] = [
-  { id: "insights", label: "Dashboard", to: "/app/ink?view=insights" },
-  { id: "orders", label: "Orders", to: "/app/ink" },
-  { id: "records", label: "Records", to: "/app/ink?view=records" },
+  { id: "insights", label: "Dashboard", to: "/app/ink/dashboard" },
+  { id: "orders", label: "Orders", to: "/app/ink/orders" },
+  { id: "records", label: "Records", to: "/app/ink/records" },
   { id: "settings", label: "Settings", to: "/app/ink/settings" },
-  { id: "help", label: "Help", to: "/app/ink?view=help" },
+  { id: "help", label: "Help", to: "/app/ink/help" },
 ];
 
 const PILL_CSS = ".ink-pill{padding:6px 20px}@media (max-width:480px){.ink-pill{padding:6px 11px}}";

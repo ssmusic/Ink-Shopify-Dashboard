@@ -1,5 +1,5 @@
 import { Box, Button, InlineStack } from "@shopify/polaris";
-import { OrderPanel, type InkRecentOrderRow } from "./InkRecentOrders";
+import { OrderPanel, type InkOrderRow } from "./InkRecentOrders";
 
 // THE RITUALIST'S SHIPMENTS ROW, OPENED — ink's own panel
 // (components/InkRecentOrders.tsx OrderPanel), the same one ink's Orders
@@ -17,8 +17,9 @@ import { OrderPanel, type InkRecentOrderRow } from "./InkRecentOrders";
 // studio, where the brand book, the pages and the campaigns live.
 
 interface OrderExpandedRowProps {
-  /** The order as ink's panel reads it: the glance, the record, the door, the timeline. */
-  row: InkRecentOrderRow;
+  /** The order as ink's panel reads it: the glance, the record, the door, the
+   *  timeline — the record side here, or still streaming, as on ink's Orders. */
+  row: InkOrderRow;
   /** The Ritualist's full-page view of the order. */
   onViewFull?: () => void;
   /** Threaded to the panel as ink's list threads it; the maps here are OpenStreetMap's and need none. */

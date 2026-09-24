@@ -32,7 +32,7 @@ import type {
   TimelineOpen,
 } from "../components/OrderTimeline";
 
-import { merchantRead, PROOF_ID } from "./ink-reader.server";
+import { merchantRead, PROOF_ID, RECORD_READ_TIMEOUT_MS } from "./ink-reader.server";
 import { inspectionFromAudit } from "../lib/ink-record-inspection";
 import { openLocationOf } from "../lib/open-location";
 import { everyOpenRows, type DoorOpen, type OpenKind } from "../lib/every-open";
@@ -200,21 +200,47 @@ export function timelineFrom(
   };
 }
 
-export async function readTimeline(
+/** A timeline's two reads, the proof and its opens — which need no record,
+ *  so the order screen starts them beside the record's own read. */
+export type TimelineReads = { proof: any | null; opens: any | null };
+
+export async function readTimelineReads(
   apiKey: string,
   proofId: string,
   fetchImpl: typeof fetch = fetch,
-  record?: RecordRead | null,
-): Promise<OrderTimelineData | null> {
+): Promise<TimelineReads | null> {
   if (!apiKey || !PROOF_ID.test(proofId)) return null;
   const id = encodeURIComponent(proofId);
   const [proof, opens] = await Promise.all([
     merchantRead(apiKey, `proofs/${id}`, fetchImpl),
     merchantRead(apiKey, `proofs/${id}/opens`, fetchImpl),
   ]);
+  return { proof, opens };
+}
+
+export async function readTimeline(
+  apiKey: string,
+  proofId: string,
+  fetchImpl: typeof fetch = fetch,
+  record?: RecordRead | null,
+): Promise<OrderTimelineData | null> {
+  const reads = await readTimelineReads(apiKey, proofId, fetchImpl);
+  return reads ? timelineOfReads(apiKey, proofId, reads, record, fetchImpl) : null;
+}
+
+/** The timeline from its two reads and the order's record — readTimeline's
+ *  answer exactly, for reads made before the record arrived. */
+export async function timelineOfReads(
+  apiKey: string,
+  proofId: string,
+  { proof, opens }: TimelineReads,
+  record?: RecordRead | null,
+  fetchImpl: typeof fetch = fetch,
+): Promise<OrderTimelineData | null> {
+  const id = encodeURIComponent(proofId);
   let availableOpens = opens;
   if (!availableOpens && proof && record && !record.locked) {
-    const audit = await merchantRead(apiKey, `proofs/${id}/audit`, fetchImpl);
+    const audit = await merchantRead(apiKey, `proofs/${id}/audit`, fetchImpl, RECORD_READ_TIMEOUT_MS);
     const inspection = inspectionFromAudit(audit, null);
     if (inspection?.opens)
       availableOpens = {

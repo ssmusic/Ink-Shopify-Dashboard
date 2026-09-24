@@ -155,6 +155,12 @@ export async function captureInkMark({
 /** The backend merchant id for this shop: the one the install recorded, or
  *  — for a doc the Ritualist wrote before ink existed — the list scan the
  *  Ritualist's own screens use. Empty when neither knows. */
+// A key's shop id never changes, and under ink the only door that says it is
+// merchant-insights, which scans the shop's records to answer (1 to 1.7 s on
+// Steve Madden's test store, 2026-09-24) — once for every screen of a store
+// whose merchant doc carries no ink_shop_id. Remembered per key, per process.
+const SHOP_ID_BY_KEY = new Map<string, string>();
+
 export async function resolveInkShopId(
   shop: string,
   doc: { ink_shop_id?: string; ink_api_key?: string } | null | undefined,
@@ -162,8 +168,13 @@ export async function resolveInkShopId(
   if (doc?.ink_shop_id) return doc.ink_shop_id;
   try {
     if (!isInk()) return await getShopIdByDomain(shop);
-    const body = await merchantRead(doc?.ink_api_key, "merchant-insights");
-    return typeof body?.shop_id === "string" ? body.shop_id : "";
+    const key = doc?.ink_api_key;
+    const known = key ? SHOP_ID_BY_KEY.get(key) : undefined;
+    if (known) return known;
+    const body = await merchantRead(key, "merchant-insights");
+    const shopId = typeof body?.shop_id === "string" ? body.shop_id : "";
+    if (key && shopId) SHOP_ID_BY_KEY.set(key, shopId);
+    return shopId;
   } catch (e: any) {
     console.warn(`[ink] shop_id unresolved for ${shop}: ${e?.message ?? e}`);
     return "";

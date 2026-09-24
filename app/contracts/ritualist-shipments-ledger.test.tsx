@@ -105,6 +105,15 @@ describe("Shipments, as ink's Orders ledger", () => {
     for (const gone of ["All (", "Enrolled (", "Distance recorded (", "Expired (", "Customer", "Pending", "Enrolled"]) expect(t).not.toContain(gone);
   });
 
+  it("shows each order at once while its record is still on its way", () => {
+    const { record: _record, door: _door, timeline: _timeline, ...base } = ORDERS[0];
+    const t = text(render({ orders: [{ ...base, more: new Promise(() => {}) }] }));
+    for (const part of ["#1042", "Bar Tape", "Gift Recipient", "order@example.com", "$58.00", "Sep 20, 2026"]) expect(t).toContain(part);
+    // The activity waits for the record; nothing is said before it lands.
+    expect(t).not.toContain("1 open");
+    expect(t).not.toContain("Opens unavailable");
+  });
+
   it("offers no price and no purchase anywhere on the list", () => {
     const t = text(render({ orders: ORDERS }));
     for (const gone of ["Get the record", "$29"]) expect(t).not.toContain(gone);
