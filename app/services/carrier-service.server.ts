@@ -9,7 +9,22 @@
  * expose a customer-paid checkout option.
  */
 
-const CARRIER_SERVICE_NAME = "ink. Verified Delivery";
+/** The carrier service's name, as Shopify shows it to the merchant in
+ *  Settings → Shipping and delivery (the service is inactive and returns no
+ *  rates, so no checkout shows it). ⚠️ PLACEHOLDER — Sam's word. Was
+ *  "ink. Verified Delivery" (Sam, 2026-09-24: "wrong" — ink never says a
+ *  delivery was verified). */
+export const CARRIER_SERVICE_NAME = "ink.";
+
+/** The names this app registered before. A shop that holds one is renamed
+ *  in place by ensureCarrierServiceRegistered, through the same
+ *  carrierServiceUpdate it already makes — never a second service beside it. */
+export const LEGACY_CARRIER_SERVICE_NAMES: readonly string[] = ["ink. Verified Delivery"];
+
+/** Is this carrier service ours, under its name or an old one? */
+export function isInkCarrierServiceName(name: unknown): boolean {
+  return name === CARRIER_SERVICE_NAME || (typeof name === "string" && LEGACY_CARRIER_SERVICE_NAMES.includes(name));
+}
 
 /**
  * Find this shop's INK carrier service id (or null if not registered).
@@ -30,7 +45,7 @@ async function findInkCarrierServiceId(admin: any): Promise<string | null> {
   const data = await response.json();
   const edges = data?.data?.carrierServices?.edges || [];
   const match = edges.find(
-    (edge: any) => edge.node.name === CARRIER_SERVICE_NAME
+    (edge: any) => isInkCarrierServiceName(edge.node.name)
   );
   return match?.node?.id || null;
 }
@@ -126,16 +141,19 @@ export async function ensureCarrierServiceRegistered(admin: any, appUrl: string)
     const existingServices = listData?.data?.carrierServices?.edges || [];
     
     const existingInk = existingServices.find(
-      (edge: any) => edge.node.name === CARRIER_SERVICE_NAME
+      (edge: any) => isInkCarrierServiceName(edge.node.name)
     );
 
     if (existingInk) {
       // Already registered — check if callback URL needs updating and force
       // inactive so no customer-paid INK delivery option appears at checkout.
+      // A service still wearing an old name ("ink. Verified Delivery") is
+      // renamed here, in the same update (2026-09-24).
       const currentCallbackUrl = `${appUrl}/api/shipping-rates`;
-      if (existingInk.node.callbackUrl !== currentCallbackUrl || existingInk.node.active) {
-        console.log(`[CarrierService] Updating callback URL to ${currentCallbackUrl} and deactivating`);
-        await admin.graphql(`
+      const renamed = existingInk.node.name !== CARRIER_SERVICE_NAME;
+      if (renamed || existingInk.node.callbackUrl !== currentCallbackUrl || existingInk.node.active) {
+        console.log(`[CarrierService] Updating callback URL to ${currentCallbackUrl}${renamed ? `, the name to "${CARRIER_SERVICE_NAME}"` : ""} and deactivating`);
+        const update = (input: Record<string, unknown>) => admin.graphql(`
           mutation carrierServiceUpdate($input: DeliveryCarrierServiceUpdateInput!) {
             carrierServiceUpdate(input: $input) {
               carrierService {
@@ -150,15 +168,17 @@ export async function ensureCarrierServiceRegistered(admin: any, appUrl: string)
               }
             }
           }
-        `, {
-          variables: {
-            input: {
-              id: existingInk.node.id,
-              callbackUrl: currentCallbackUrl,
-              active: false,
-            }
-          }
-        });
+        `, { variables: { input } });
+        const base = { id: existingInk.node.id, callbackUrl: currentCallbackUrl, active: false };
+        const res = await update(renamed ? { ...base, name: CARRIER_SERVICE_NAME } : base);
+        const errors = (await res.json())?.data?.carrierServiceUpdate?.userErrors;
+        if (errors && errors.length > 0) {
+          console.error("[CarrierService] Update errors:", JSON.stringify(errors, null, 2));
+          // A refused rename must never cost the deactivation: the update is
+          // one mutation, so Shopify refuses all of it. Keep the old name and
+          // make sure the service is off.
+          if (renamed) await update(base);
+        }
       }
       console.log(`[CarrierService] Already registered (${existingInk.node.id})`);
       return;

@@ -10,6 +10,8 @@ interface ActivityItem {
   date: string;
   amount: string;
   status: LifecycleState;
+  /** The distance as data, for an order the door notification reached. */
+  label?: string;
 }
 
 const RecentActivity = () => {
@@ -76,7 +78,7 @@ const RecentActivity = () => {
                     {activity.customer}
                   </span>
                 </div>
-                <LifecycleBadge state={activity.status} />
+                <LifecycleBadge state={activity.status} label={activity.label} />
               </div>
               <div className="flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">
@@ -113,7 +115,7 @@ const RecentActivity = () => {
                 <span className="text-foreground whitespace-nowrap hidden md:block">
                   {activity.amount}
                 </span>
-                <LifecycleBadge state={activity.status} />
+                <LifecycleBadge state={activity.status} label={activity.label} />
               </div>
             </div>
           </div>

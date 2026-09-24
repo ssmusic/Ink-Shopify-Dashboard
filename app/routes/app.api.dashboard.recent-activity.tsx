@@ -1,5 +1,6 @@
 import { type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import { carriesInkTag, distanceBadgeWords, DISTANCE_RECORDED, isDistanceRecorded } from "../lib/order-marks";
 
 const json = (data: any, init?: ResponseInit) =>
   new Response(JSON.stringify(data), {
@@ -45,6 +46,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             metafields(namespace: "ink", first: 10) {
               edges { node { key value } }
             }
+            openDistance: metafield(namespace: "ink", key: "open_distance_m") { value }
             lineItems(first: 20) {
               edges {
                 node {
@@ -79,9 +81,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       });
 
       // Eligibility Logic (matching app.tagged-shipments._index.tsx)
-      const hasInkTag =
-        order.tags?.includes("INK-Premium-Delivery") ||
-        order.tags?.includes("INK-Verified-Delivery");
+      // ink's tag, old or new (lib/order-marks.ts).
+      const hasInkTag = carriesInkTag(order.tags);
       const hasDeliveryTypeMetafield = metafields.delivery_type === "premium";
       const hasInkMetafield = metafields.ink_premium_order === "true";
       const shippingTitle = (order.shippingLine?.title || "").toLowerCase();
@@ -122,6 +123,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const verificationStatus = (
         metafields.verification_status || "pending"
       ).toLowerCase();
+      // The door notification's word, old ("verified") or new, is one state:
+      // drawn neutral, saying the open's distance (Sam, 2026-09-24: the green
+      // "verified" was "wrong").
+      const doorRecorded = isDistanceRecorded(verificationStatus);
 
       return {
         orderNumber: order.name,
@@ -143,7 +148,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           order.totalPriceSet.shopMoney.amount,
           order.totalPriceSet.shopMoney.currencyCode,
         ),
-        status: verificationStatus === "active" ? "enrolled" : verificationStatus,
+        status: verificationStatus === "active" ? "enrolled" : doorRecorded ? DISTANCE_RECORDED : verificationStatus,
+        ...(doorRecorded ? { label: distanceBadgeWords(order.openDistance?.value) } : {}),
       };
     }).filter(Boolean);
 

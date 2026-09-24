@@ -145,7 +145,10 @@ export const NotificationService = {
         messageBody = `Your ${payload.merchantName} order ${payload.orderName} has arrived.${payload.verifyUrl ? ` Your receipt + returns: ${payload.verifyUrl}` : ""}`;
         break;
       case "deliveryConfirmed":
-        messageBody = `Delivery confirmed for your ${payload.merchantName} order ${payload.orderName}.${payload.verifyUrl ? ` Your receipt + returns: ${payload.verifyUrl}` : ""}`;
+        // Sent after the door notification. Was "Delivery confirmed for your
+        // … order …" (Sam, 2026-09-24: "wrong"); it reuses the delivered
+        // text's own sentence until Sam writes this one. ⚠️ PLACEHOLDER COPY.
+        messageBody = `Your ${payload.merchantName} order ${payload.orderName} has arrived.${payload.verifyUrl ? ` Your receipt + returns: ${payload.verifyUrl}` : ""}`;
         break;
       case "return7d":
         messageBody = `Hi ${payload.customerName}, you have 7 days left to return order ${payload.orderName}. Need to start a return? Click here: ${payload.verifyUrl}`;
@@ -172,7 +175,8 @@ export const NotificationService = {
   async sendEmail(payload: NotificationPayload): Promise<boolean> {
     if (!payload.toEmail) return false;
 
-    // For Delivery Confirmed, we use the existing Return Passport Email template
+    // After the door notification (the "deliveryConfirmed" key — a name in
+    // code, never shown), we use the existing Return Passport Email template
     if (payload.type === "deliveryConfirmed" && payload.verifyUrl) {
       return EmailService.sendReturnPassportEmail({
         to: payload.toEmail,

@@ -2,6 +2,7 @@ import { type ActionFunctionArgs } from "react-router";
 import { allowRequest, clientIp, rateLimitResponse } from "../services/rate-limit.server";
 import { serialNumberToToken } from "../utils/nfc-conversion.server";
 import { INK_NAMESPACE } from "../utils/metafields.server";
+import { DISTANCE_RECORDED } from "../lib/order-marks";
 import { getProof } from "../services/ink-api.server";
 import { brandSlugFromDomain } from "../services/email.server";
 import firestore from "../firestore.server";
@@ -456,7 +457,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             namespace: "ink",
                             key: "verification_status",
                             type: "single_line_text_field",
-                            value: "verified",
+                            // Was "verified" (Sam, 2026-09-24: "wrong") — the
+                            // neutral word, lib/order-marks.ts ⚠️ PLACEHOLDER.
+                            value: DISTANCE_RECORDED,
                         },
                         {
                             ownerId: orderGid,
@@ -515,7 +518,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         console.error("⚠️ Metafield errors:", metaResult.data.metafieldsSet.userErrors);
                     } else {
                         console.log("✅ Metafields updated immediately via fallback");
-                        console.log(`   - verification_status: verified`);
+                        console.log(`   - verification_status: ${DISTANCE_RECORDED}`);
                         console.log(`   - gps_verdict: ${alanData.gps_verdict || "unknown"}`);
                     }
                 

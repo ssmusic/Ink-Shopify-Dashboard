@@ -1,6 +1,7 @@
 import { type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
 import { verifyProxyToken } from "../services/token-verify.server";
+import { isDistanceRecorded } from "../lib/order-marks";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const json = (data: any, init?: ResponseInit) =>
@@ -120,13 +121,14 @@ async function queryShopifyOrders(shopDomain: string, accessToken: string, searc
 
   const edges = result.data?.orders?.edges || [];
 
-  // Filter out orders that are already enrolled or verified
-  const unverifiedEdges = edges.filter((edge: any) => {
+  // Filter out orders that are already enrolled, or that the door
+  // notification reached (its word, old or new — lib/order-marks.ts)
+  const openEdges = edges.filter((edge: any) => {
     const status = edge.node.metafield?.value;
-    return status !== "enrolled" && status !== "verified";
+    return status !== "enrolled" && !isDistanceRecorded(status);
   });
 
-  return unverifiedEdges.map((edge: any) => {
+  return openEdges.map((edge: any) => {
     const node = edge.node;
     const lineItems = node.lineItems.edges.map((e: any) => ({
       title: e.node.title,

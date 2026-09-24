@@ -10,6 +10,7 @@ import {
   Divider,
 } from "@shopify/polaris";
 import type { BadgeProps } from "@shopify/polaris";
+import { distanceBadgeWords, isDistanceRecorded, OPEN_DISTANCE_KEY } from "../lib/order-marks";
 
 interface OrderItem {
   title: string;
@@ -57,8 +58,9 @@ const fmt = (amount: string | number, currency: string) => {
   return num.toLocaleString("en-US", { style: "currency", currency });
 };
 
+// The door notification's state (old word "verified", or new) takes no tone:
+// it was a green "Verified" until Sam, 2026-09-24: "wrong".
 const statusBadgeTone = (s: string): BadgeProps["tone"] => {
-  if (s === "verified") return "success";
   if (s === "enrolled") return "warning";
   if (s === "active") return "info";
   return undefined;
@@ -85,7 +87,11 @@ export default function OrderDetailView({ order, onBack }: OrderDetailViewProps)
   })();
 
   const statusRaw = order.status?.toLowerCase() || "pending";
-  const statusLabel = statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1);
+  // The door's state says the open's distance as data (lib/order-marks.ts,
+  // ⚠️ PLACEHOLDER COPY); every other state keeps its word.
+  const statusLabel = isDistanceRecorded(statusRaw)
+    ? distanceBadgeWords(order.metafields?.[OPEN_DISTANCE_KEY])
+    : statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1);
   const deliveredAt = order.metafields.delivery_verified_at || "";
 
   return (

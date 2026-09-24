@@ -23,6 +23,14 @@ import PolarisAppLayout from "../components/PolarisAppLayout";
 import OrderExpandedRow from "../components/OrderExpandedRow";
 import OrderDetailView from "../components/OrderDetailView";
 import AppLayout from "../components/AppLayout";
+import {
+  carriesInkTag,
+  distanceBadgeWords,
+  DISTANCE_RECORDED,
+  DISTANCE_RECORDED_LABEL,
+  isDistanceRecorded,
+  OPEN_DISTANCE_KEY,
+} from "../lib/order-marks";
 
 const json = (data: any, init?: ResponseInit) =>
   new Response(JSON.stringify(data), {
@@ -53,6 +61,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             metafields(namespace: "ink", first: 10) {
               edges { node { key value } }
             }
+            openDistance: metafield(namespace: "ink", key: "open_distance_m") { value }
             lineItems(first: 20) {
               edges {
                 node {
@@ -113,10 +122,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     order.metafields?.edges?.forEach((mfEdge: any) => {
       metafields[mfEdge.node.key] = mfEdge.node.value;
     });
+    // The door's distance, read by key: `first: 10` above can stop short of it.
+    if (order.openDistance?.value) metafields[OPEN_DISTANCE_KEY] = order.openDistance.value;
 
-    const hasInkTag =
-      order.tags?.includes("INK-Premium-Delivery") ||
-      order.tags?.includes("INK-Verified-Delivery");
+    // ink's tag, old or new (lib/order-marks.ts).
+    const hasInkTag = carriesInkTag(order.tags);
     const hasDeliveryTypeMetafield = metafields.delivery_type === "premium";
     const hasInkMetafield = metafields.ink_premium_order === "true";
     const shippingTitle = (order.shippingLine?.title || "").toLowerCase();
@@ -190,8 +200,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       total: order.totalPriceSet.shopMoney.amount,
       subtotal: subtotal.toFixed(2),
       currency: order.totalPriceSet.shopMoney.currencyCode,
+      // The door notification's word, old ("verified") or new, is one state
+      // (lib/order-marks.ts), so an old order and a new one share its tab.
       status:
-        verificationStatus === "active" ? "enrolled" : verificationStatus,
+        verificationStatus === "active"
+          ? "enrolled"
+          : isDistanceRecorded(verificationStatus)
+            ? DISTANCE_RECORDED
+            : verificationStatus,
       rawStatus: verificationStatus,
       isEligible: isInkOrder,
       items,
@@ -208,7 +224,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     cooldown: eligibleOrders.filter((o: any) => o.status === "cooldown")
       .length,
     active: eligibleOrders.filter((o: any) => o.status === "active").length,
-    verified: eligibleOrders.filter((o: any) => o.status === "verified")
+    recorded: eligibleOrders.filter((o: any) => o.status === DISTANCE_RECORDED)
       .length,
     expired: eligibleOrders.filter((o: any) => o.status === "expired").length,
   };
@@ -227,17 +243,27 @@ const statusBadgeProps: Record<
   // `active` is remapped to `enrolled` before it ever reaches a badge (see the
   // loader), so this entry is unreachable today. Kept as a defensive default
   // in case a raw status ever surfaces — but it must NOT share a word with
-  // `verified`, which is what produced two badges reading "Active".
+  // the door notification's state, which is what once produced two badges
+  // reading "Active".
   active: { tone: "info", label: "Enrolled" },
-  // WAS ALSO "Active". Two distinct states wearing one word means a merchant
-  // cannot tell them apart, and the filter bar rendered "Active (0)" beside
-  // "Active (3)" (TECH_BIBLE law 5: no two causes share a sentence).
-  // "Verified" is the word the dashboard already uses for this state.
-  verified: { tone: "success", label: "Verified" },
+  // The door notification's state has no entry here: its badge is the
+  // distance as data, per order (badgeFor below). It was a green "Verified"
+  // until Sam, 2026-09-24: "wrong".
   expired: { tone: undefined, label: "Expired" },
   cooldown: { tone: "attention", label: "Cooldown" },
   pending: { tone: undefined, label: "Pending" },
 };
+
+/** One order's badge. The door notification's state says the open's
+ *  distance from the delivery address, or the event's neutral title when no
+ *  distance was stored (orders from before 2026-09-24) — no tone, no green.
+ *  ⚠️ PLACEHOLDER COPY (lib/order-marks.ts). */
+function badgeFor(order: any): { tone: BadgeProps["tone"]; label: string } {
+  if (order.status === DISTANCE_RECORDED) {
+    return { tone: undefined, label: distanceBadgeWords(order.metafields?.[OPEN_DISTANCE_KEY]) };
+  }
+  return statusBadgeProps[order.status] || { tone: undefined, label: order.status };
+}
 
 // ─────────────────────────────────────────────
 // Component
@@ -273,9 +299,10 @@ export default function ShipmentsIndex() {
     // be anything else. A filter that can only ever say (0) is not a filter,
     // and it sat directly beside a second tab also called "Active".
     {
-      id: "verified",
-      content: `Verified (${counts?.verified || 0})`,
-      panelID: "verified",
+      // Was "Verified (N)" (Sam, 2026-09-24: "wrong"). ⚠️ PLACEHOLDER COPY.
+      id: DISTANCE_RECORDED,
+      content: `${DISTANCE_RECORDED_LABEL} (${counts?.recorded || 0})`,
+      panelID: DISTANCE_RECORDED,
     },
     {
       id: "expired",
@@ -345,8 +372,7 @@ export default function ShipmentsIndex() {
 
   const tableRows = sortedOrders.flatMap((order: any, index: number) => {
     const isExpanded = expandedOrder === order.id;
-    const badgeConfig =
-      statusBadgeProps[order.status] || { tone: undefined, label: order.status };
+    const badgeConfig = badgeFor(order);
 
     const row = (
       <IndexTable.Row
@@ -502,11 +528,7 @@ export default function ShipmentsIndex() {
             <div className="lg:hidden space-y-2 pt-2">
               {sortedOrders.map((order: any) => {
                 const isExpanded = expandedOrder === order.id;
-                const badgeConfig =
-                  statusBadgeProps[order.status] || {
-                    tone: undefined,
-                    label: order.status,
-                  };
+                const badgeConfig = badgeFor(order);
                 return (
                   <div key={order.id}>
                     <div
