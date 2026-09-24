@@ -37,8 +37,6 @@ import OrderExpandedRow from "../components/OrderExpandedRow";
 import NFCTagInventory from "../components/NFCTagInventory";
 import RevenueThisPeriod from "../components/RevenueThisPeriod";
 import PlanCard from "../components/billing/PlanCard";
-import CommsCard from "../components/CommsCard";
-import OnboardingChecklist from "../components/OnboardingChecklist";
 import AdvancedAnalytics from "../components/AdvancedAnalytics";
 import { FEATURE_NFC } from "../flags";
 // Removed from render (kept in tree, unreferenced): TimeToEngagement +
@@ -59,8 +57,17 @@ import { FEATURE_NFC } from "../flags";
 //     OrdersInsightsPanel.tsx) — one press away through the studio door.
 //   · RecentActivity — Shopify's tags and a status badge; the rows are now the
 //     ledger's own (routes/app.tagged-shipments._index.tsx), opening in place.
-// What stays the Ritualist's: set-up, the door to the studio, the order value
-// of the last 30 days, Communications, the plan, and Advanced.
+//   · OnboardingChecklist ("Set up the Ritualist", 2 of 3) and the brand preview
+//     inside it, and CommsCard (Sam, 2026-09-24, on the live Dashboard: "were
+//     onboarding in this app now?" · "we dont have notifacations yet" · "is dead"
+//     · "this is horrifying"). Its steps claimed delivery notifications the
+//     Ritualist does not send yet (nothing schedules api.jobs.notifications); a
+//     done step led nowhere; the preview's "Track your order" was a picture of a
+//     button, its brand read "Your brand", and its link opened a popup. The
+//     Communications card said "Email notifications: On" for the same missing
+//     feature. ink's Dashboard has neither card.
+// What stays the Ritualist's: the door to the studio, the order value of the
+// last 30 days, the plan, and Advanced.
 const RECENT_ORDERS = 6;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -178,9 +185,6 @@ const Dashboard = () => {
             <Banner tone="critical">{fetcher.data.error}</Banner>
           )}
 
-          {/* First-run setup — self-hides once complete (real state). */}
-          <OnboardingChecklist onOpenStudio={openParallel} studioOpening={opening} />
-
           {/* Open the merchant's ink. dashboard, auto-signed-in. */}
           <Card>
             <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
@@ -236,14 +240,11 @@ const Dashboard = () => {
             </InlineGrid>
           )}
 
-          {/* The order value of the last 30 days, the comms state, the honest plan card.
+          {/* The order value of the last 30 days and the honest plan card.
               Each card its own height: stretched, the value card is half empty. */}
           <InlineGrid columns={{ xs: 1, md: 2 }} gap="400" alignItems="start">
             <RevenueThisPeriod />
-            <BlockStack gap="400">
-              <CommsCard />
-              <PlanCard />
-            </BlockStack>
+            <PlanCard />
           </InlineGrid>
 
           {/* Advanced — what ink's Dashboard does not show, collapsed by default.

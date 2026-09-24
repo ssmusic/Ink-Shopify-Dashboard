@@ -238,7 +238,7 @@ describe("what the Dashboard draws", () => {
 
   it("keeps the Ritualist's own cards, in sentence case", () => {
     const t = text(render(whole));
-    for (const part of ["Enrolled order value", "Last 30 days", "Communications", "Manage in Settings", "Cost", "Your Shopify plan is Free.", "Advanced — operational analytics"]) expect(t).toContain(part);
+    for (const part of ["Enrolled order value", "Last 30 days", "Cost", "Your Shopify plan is Free.", "Advanced — operational analytics"]) expect(t).toContain(part);
     for (const gone of ["Open Funnel", "Enrolled Order Value", "Recent Activity", "View All", "Get the record", "$29", "Geofence"]) expect(t).not.toContain(gone);
   });
 
@@ -252,6 +252,19 @@ describe("what the Dashboard draws", () => {
 });
 
 describe("what left the render, and what stays in the tree", () => {
+  it("draws no set-up card and no notifications card, and deletes neither (Sam, 2026-09-24)", () => {
+    // Changed on purpose: this contract kept "Communications" on the Dashboard.
+    // Sam, on the live Dashboard: "we dont have notifacations yet" — the set-up
+    // card asked for them, the Communications card said email was on, a done
+    // step led nowhere and the brand preview's button was a picture.
+    const dashboard = code("app/routes/app.dashboard.tsx");
+    expect(dashboard).not.toMatch(/OnboardingChecklist|CommsCard|BrandPreviewCard/);
+    for (const file of ["OnboardingChecklist", "CommsCard", "BrandPreviewCard"])
+      expect(existsSync(resolve(process.cwd(), `app/components/${file}.tsx`)), file).toBe(true);
+    const t = text(render({ kpis: kpisFromBody(INSIGHTS), delivery: dashboardFrom(DELIVERY_ROWS), recentOrders: [ROW] }));
+    for (const gone of ["Set up the Ritualist", "Turn on delivery notifications", "Communications", "Email notifications", "Track your order", "Your brand"]) expect(t).not.toContain(gone);
+  });
+
   it("draws neither the four-colour funnel nor the tag-and-badge feed, and deletes neither", () => {
     const dashboard = code("app/routes/app.dashboard.tsx");
     expect(dashboard).not.toMatch(/EngagementFunnel|RecentActivity/);
