@@ -36,16 +36,30 @@
       "request": "Track PR #160: Shopify paused The Ritualist's review on 5.6.1 because its order-status customer-account block shows nothing. The PR deletes extensions/order-page-block, the Settings › Communication 'The order status page' section, its API route and the ink:order_door metafield writer. HELD FOR SAM: merge, then his `shopify app deploy --config shopify.app.toml` from clean main, then Submit fixes in the Partner Dashboard.",
       "branch": "review/the-order-status-block-comes-out",
       "pr": 160,
-      "phase": "working",
+      "phase": "ready",
       "assignedAgent": "claude",
-      "owner": {
-        "agent": "claude",
-        "sessionId": "3b5f52c4-b451-4ee7-bfac-405da269c474",
-        "acknowledgedSha": "6ba1ee20223394397c0ec479ae329447de381909"
-      },
+      "owner": null,
       "handoffTo": null,
-      "checkpoint": null,
-      "updatedAt": "2026-09-24T16:45:59.437Z"
+      "checkpoint": {
+        "codeSha": "6ba1ee20223394397c0ec479ae329447de381909",
+        "summary": "Shopify paused The Ritualist (ref 104187) on 5.6.1: its order-status customer-account block shows nothing. Measured: it never rendered (08-23); Help Center says blocks must be placed in the checkout & accounts editor; its ink:order_door metafield needs a brand_slug that neither the review store nor Corvara has; the ink namespace is hidden from customer-account extensions. PR #160 deletes extensions/order-page-block, the Settings › Communication 'The order status page' section, app.api.settings.order-door, order-door-metafield.server(+test) and both webhook calls. Live config == main toml (config pull diff), so the deploy only removes the extension, with no re-consent.",
+        "decisions": [
+          "Remove the block rather than fix it: it never rendered, cannot self-place, and has nothing to show on a store without a brand page",
+          "Deleted the metafield writer too (restore path = revert #160); the metafields already written are inert"
+        ],
+        "checks": [
+          "npm run typecheck: 0 errors",
+          "npx vitest run: 659 passed, 1 todo",
+          "npm run build: green",
+          "CI check / container-node / merge-gate: pass",
+          "Settings › Communication rendered before/after in the local harness"
+        ],
+        "next": "HELD FOR SAM: merge #160 → `shopify app deploy --config shopify.app.toml` from clean main (CLI must list only 'ink order page' removed) → Partner Dashboard Submit fixes (Run automated checks first if expired). #106 is moot while the block is out.",
+        "savedAt": "2026-09-24T16:46:56.054Z",
+        "writer": "claude",
+        "sessionId": "3b5f52c4-b451-4ee7-bfac-405da269c474"
+      },
+      "updatedAt": "2026-09-24T16:46:56.054Z"
     }
   ],
   "projects": [],
@@ -98,6 +112,11 @@
     {
       "id": "3d0c1a52-5e0b-4b8e-9d0e-7a61c2b4f9a1",
       "fingerprint": "b1d38841bb8e9291e59b8626ac16d4e80cc79fae3e0a70bc5cbffd0e31e53397",
+      "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1"
+    },
+    {
+      "id": "7e2b9c14-3f6a-4d8e-a1b5-2c9f0e6d4a83",
+      "fingerprint": "9b3037c32713a0f6464cedee9f859ea90af691e2bf8f2776d7f4e1b5ecf8eb38",
       "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1"
     }
   ],
@@ -161,6 +180,12 @@
       "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1",
       "action": "claim",
       "detail": "claude acknowledged 6ba1ee20223394397c0ec479ae329447de381909."
+    },
+    {
+      "at": "2026-09-24T16:46:56.054Z",
+      "taskId": "task-852a6af2-6c3c-476e-b897-89b67a9755f1",
+      "action": "checkpoint",
+      "detail": "Verified published code at 6ba1ee20223394397c0ec479ae329447de381909; saved context for claude. Ownership released for the next turn or session."
     }
   ]
 }
