@@ -151,14 +151,20 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(t).toContain('Refresh');
   });
 
-  it('names the tab Dashboard and uses Polaris tabs with links', () => {
+  it('names the tab Dashboard and draws the pill nav with links, Dashboard first', () => {
+    // Sam, 2026-09-24: "i remember enjoying your nav over the codex one" — the
+    // black pill bar again, with Codex's five destinations in Codex's order.
     const html = render(InkHome, { section: 'insights', stage: 'ready', kpis: null, delivery: null });
     expect(text(html)).toContain('Dashboard');
     expect(text(html)).not.toContain('Insights');
-    expect(html).toContain('Polaris-Tabs');
-    expect(html).toContain('aria-selected="true"');
+    expect(html).not.toContain('Polaris-Tabs');
+    expect(html).toContain('role="tablist"');
+    const order = ['insights', 'orders', 'records', 'settings', 'help'].map((id) => html.indexOf(`data-pill="${id}"`));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html).toMatch(/aria-selected="true"[^>]*data-pill="insights"|data-pill="insights"[^>]*aria-selected="true"/);
     expect(html).toContain('href="/app/ink/settings"');
-    expect(html.indexOf('href="/app/ink?view=insights"')).toBeLessThan(html.indexOf('href="/app/ink"'));
+    expect(html).toContain('href="/app/ink?view=help"');
   });
 
   it('has exactly three KPI labels, no subtitles or unsupported integrity claims', () => {
