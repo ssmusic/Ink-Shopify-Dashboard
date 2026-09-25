@@ -6,7 +6,6 @@ import RitualistPillNav from "../RitualistPillNav";
 import AccountSettings from "./AccountSettings";
 import TagsSettings from "./TagsSettings";
 import { FEATURE_NFC } from "../../flags";
-import BrandingSettings from "./BrandingSettings";
 import CommunicationSettings from "./CommunicationSettings";
 import DeliveryModeSettings from "./DeliveryModeSettings";
 
@@ -15,7 +14,6 @@ const tabs = [
   { id: "delivery", content: "Delivery" },
   // NFC tag inventory — tabled behind FEATURE_NFC (app/flags.ts)
   ...(FEATURE_NFC ? [{ id: "tags", content: "Inventory" }] : []),
-  { id: "branding", content: "Media" },
   { id: "communication", content: "Notifications" },
 ];
 
@@ -37,7 +35,6 @@ const Settings = ({ initialData }: { initialData?: any }) => {
       case "account": return <AccountSettings />;
       case "delivery": return <DeliveryModeSettings />;
       case "tags": return <TagsSettings inventoryData={initialData?.inventoryData} />;
-      case "branding": return <BrandingSettings />;
       // shopDomain builds the deep link into THIS store's Shopify notification
       // settings — the merchant shouldn't have to go find it.
       case "communication": return <CommunicationSettings shopDomain={initialData?.shopDomain} />;

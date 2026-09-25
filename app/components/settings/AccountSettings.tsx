@@ -1,5 +1,5 @@
 import { useShop } from "../../contexts/ShopContext";
-import { useNavigate, useRouteLoaderData } from "react-router";
+import { useRouteLoaderData } from "react-router";
 import {
   BlockStack,
   Card,
@@ -8,12 +8,10 @@ import {
   SkeletonDisplayText,
   InlineStack,
   Layout,
-  Button,
 } from "@shopify/polaris";
 
 const AccountSettings = () => {
   const { currentShop, loading } = useShop();
-  const navigate = useNavigate();
   
   // Dynamic data from the `app.settings` route loader
   const shopData = useRouteLoaderData("routes/app.settings") as any;
@@ -64,24 +62,6 @@ const AccountSettings = () => {
           </Card>
         </Layout.AnnotatedSection>
 
-        <Layout.AnnotatedSection title="Cost">
-          <Card>
-            <BlockStack gap="300">
-              <Text as="p" variant="bodyMd" fontWeight="semibold">
-                Your Shopify plan is Free.
-              </Text>
-              <Text as="p" variant="bodyMd">
-                There is no subscription charge, trial, usage fee, or
-                off-platform invoice. Installing the app creates no charge. If
-                paid plans are introduced later, you&rsquo;ll choose and approve
-                one inside Shopify &mdash; nothing will start on its own.
-              </Text>
-              <div>
-                <Button onClick={() => navigate("/app/billing")}>View details</Button>
-              </div>
-            </BlockStack>
-          </Card>
-        </Layout.AnnotatedSection>
       </Layout>
     </BlockStack>
   );
