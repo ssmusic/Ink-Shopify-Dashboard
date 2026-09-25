@@ -7,6 +7,9 @@ const COLLECTION = "merchants";
 
 export interface MerchantData {
   shop: string;
+  /** Shopify's word, mirrored after the backend took it
+   *  (test-store-sync.server.ts): a development store is a test store. */
+  test_store?: boolean | null;
   ink_api_key?: string;
   verified_delivery_mode?: "addon" | "background";
   /** Seeded at provision. Every sender treats a MISSING value as "send
