@@ -1,6 +1,6 @@
 # The Ritualist: resubmission, 2026-09-25
 
-> **September 25 round-two note:** This document records earlier audit stages. The current code and live-release status are tracked in `RELEASE-PREP-both-apps-2026-09-25.md`. In particular, §8 and §10 contain superseded config and pricing instructions; use the newer checklist before any release or submission.
+> **September 25 live-release note:** This document records earlier audit stages. The current release state and remaining checks are in `LIVE-RELEASE-AUDIT-both-apps-2026-09-25.md`. In particular, §8 and §10 contain superseded config and pricing instructions; do not repeat them.
 
 The Ritualist's review (ref 104187) paused on 5.6.1, the order-status block. The block is gone (`the-ritualist-17`, released 2026-09-24 16:49Z). The app has changed a great deal since, so this is a fresh submission on the same app record (client `8da1…`, app.in.ink, Cloud Run `shopify-app`). **Every line marked PLACEHOLDER is Sam's to replace.** Nothing here was typed into the Partner Dashboard.
 
