@@ -226,6 +226,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   } catch (err: any) {
     console.error("Auth Error in Dashboard Metrics:", err);
-    return new Response(JSON.stringify({ error: "Unauthorized or missing token context: " + err.message }), { status: 200, headers: CORS_HEADERS });
+    return new Response(
+      JSON.stringify({ error: graphqlClient ? "Metrics unavailable" : "Unauthorized or missing token context" }),
+      { status: graphqlClient ? 503 : 401, headers: CORS_HEADERS },
+    );
   }
 };

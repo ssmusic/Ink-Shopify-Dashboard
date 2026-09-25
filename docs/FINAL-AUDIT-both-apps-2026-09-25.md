@@ -1,0 +1,192 @@
+# Final pre-submission audit — The Ritualist and Ink. — September 25, 2026
+
+**Scope and evidence rule.** This audit used `origin/main` at `7d5ba87` (the active services were `shopify-app-00440-h5s` and `ink-app-00106-9h7` when checked), the current Shopify App Store review requirements fetched with Shopify CLI, Shopify Admin on the two development stores, the two draft listing editors, read-only Cloud Run/Firestore checks, and the local code changes in this PR. **VERIFIED** means directly observed, executed, or read in code with the evidence named; **ASSUMED** means the relevant production behavior was not observed. Local fixes in this PR are not described as live until CI deploys them. No application was submitted, no listing media was uploaded, no backend was directly deployed, and no real charge was approved.
+
+## Verdict
+
+| App | Verdict | Reasons |
+| --- | --- | --- |
+| The Ritualist | **NOT READY** | The paused review still lists a removed “checkout UI extension”; Shopify has not confirmed that the stale capability can be cleared. The existing screenshots/video have not been visually approved against the final UI. A fresh reinstall reached the $0 Starter approval screen and awaits its terms acceptance; the app must load again afterward. A delayed Shopify `shop/redact` from today's uninstall cannot be observed until about September 27. |
+| Ink. | **NOT READY** | Draft listing has no desktop screenshots, screencast URL, video URL, or video thumbnail, and Partner review shows “Complete your listing content.” The current live Settings screen mislabels completed privacy deletions until the fix in this PR deploys. A fresh reinstall loaded Orders and retained purchased Records #1001, #1002 and #1005. |
+
+These are release gates, not a claim that the working order flows fail. The Ritualist's old checkout block is absent from active config `the-ritualist-20`; Ink's active config is `ink-4`. Both config files passed `shopify app config validate` with zero issues.
+
+## Ranked findings
+
+| Severity | App / requirement | Evidence class and evidence | Reproduce | Fix / status |
+| --- | --- | --- | --- | --- |
+| **LIKELY-REJECT** | Ink / listing completeness, 5.7.4 | **VERIFIED** — Ink listing editor shows empty desktop screenshots 1–6, empty screencast URL, and an empty selected video URL/thumbnail with validation messages. Partner review says Draft / “Complete your listing content”; Submit for review is disabled. | Open Ink's Partner listing editor, inspect media fields and review summary. | Sam reviews and uploads final matching media; **OPEN**. |
+| **LIKELY-REJECT** | Ritualist / 5.6.1 | **VERIFIED** — paused Partner review summary says “checkout UI extension, embedded”; active `the-ritualist-20` has no extension; `shopify.app.toml` has none. | Open paused review summary and active version side by side. | Ask Shopify to clear the stale capability before Submit fixes, or include the note below; **OPEN external review state**. |
+| **RISK** | Both / privacy presentation | **VERIFIED** — five `ink_privacy_requests` receipts: three data requests downloaded, two customer redactions completed, none pending/failed. Both live Settings screens nevertheless showed “Deletion request. In progress. Due Oct 25, 2026.” `app/components/InkSettingsView.tsx:134` hardcoded that message; `app/services/ink-privacy.server.ts:66` included shop erasure receipts in customer requests. | Settings → Account/Privacy requests on each store. | Render completed state and filter to customer topics; regression tests; **FIXED IN THIS PR, LIVE RETEST PENDING**. |
+| **RISK** | Ritualist / authenticated API semantics, 1.1.1 | **VERIFIED** — `GET https://app.in.ink/app/api/dashboard/metrics` without Shopify auth returned HTTP 200 with `{ "error": "Unauthorized..." }`; forged PWA token with `X-Client-Type: PWA` returned 401. `app/routes/app.api.dashboard.metrics.tsx:227` was the 200 fallback. No sales data leaked in either probe. Ink does not mount this route (404). | Repeat the two GETs; inspect status and body. | Return 401 without a valid client, 503 after a client exists but metrics fail; **FIXED IN THIS PR, LIVE RETEST PENDING**. |
+| **RISK** | Both / delayed shop erasure | **ASSUMED** for future delivery — #229's `thisAppHoldsSession(shop)` guard is present at `app/services/ink-privacy.server.ts:266`; no delayed receipt has arrived yet. `app/firestore-session-storage.server.ts:35` treats any offline session as proof of reinstall. If an uninstall webhook failed to remove a stale session, genuine erasure could be skipped. | After September 27, inspect Shopify-origin `shop/redact` HTTP status, `ink_privacy_requests` state, and app load; also simulate a missed uninstall in a test. | Strengthen with a persisted uninstall/install generation or timestamp and compare it with receipt time; **OPEN follow-up**, do not assert live deletion passed. |
+| **RISK** | Ritualist / testing notes | **VERIFIED** — listing says Settings has “Communications,” while live navigation says “Notifications.” The notes otherwise name `corvara-cicli`, require no separate login, and explain making an order. | Compare draft reviewer notes with live Settings tabs. | Edit the draft label before submission; **OPEN listing text**. |
+| **RISK** | Both / buyer page | **ASSUMED** — an older #1013 tracking link opened Shopify's customer account order, while new #1014 had Other tracking without a customer-page URL. The intended branded Ritualist page was not reached from a new order in this pass. | Fulfill a new order with a usable tracking URL, open the resulting order link as a buyer. | Verify the actual buyer entry path and whether a page exists for the order; **OPEN live evidence**. |
+| **NIT** | Ink / JSON download | **VERIFIED** — #1002 JSON reached Safari Downloads after Safari's explicit allow-download dialog for `admin.shopify.com` and `install.in.ink`. The file parsed as JSON. #1001 and new #1005 JSON also downloaded. This explains the earlier missing file; no code defect reproduced. | Records → #1002 → JSON in Safari; grant Safari's download permission, then inspect Downloads. | No code change; **CLOSED as browser permission**, Chrome reproduction remains unverified because Chrome was unavailable to the browser controller. |
+| **NIT** | Both / support address | **VERIFIED** — Ritualist listing and Help both say `support@in.ink`; Ink listing and Help both say `info@in.ink`. The privacy pages use `info@in.ink` as a privacy contact. Different support/privacy mailboxes are coherent; Claude's proposed global replacement would have introduced a listing mismatch. | Compare each listing support field, Help, and privacy page. | No change; **CLOSED**, Sam may consolidate mailboxes later if desired. |
+
+## Live reviewer walk (September 25, 2026 UTC)
+
+| Store / app | Result and evidence class |
+| --- | --- |
+| `corvara-cicli` / Ritualist | **VERIFIED** fresh embedded Dashboard, Orders and Load more, #1010 Advanced, one-page PDF and parseable JSON, Settings Account/Delivery/Notifications, Billing, and Help. Growth then Starter plan changes both used Shopify's explicit $0 development-store test approval; Billing returned Starter. New free order #1014 was fulfilled and appeared in Orders. **VERIFIED** Shopify-Captain-Hook 200 responses: `/webhooks/orders_create` at 19:32:29.666493Z, `/webhooks/orders_fulfilled` and `/webhooks/fulfillments_create` at 19:32:46Z, `/webhooks/fulfillments_update` at 19:33:08.105380Z. The order's app-created activity was observed; a separate event-count assertion remains unverified. **VERIFIED** later uninstall and reinstall reached the plan gate and $0 Starter approval; completing that final approval and checking app load is pending terms confirmation. |
+| `ink-review` / Ink. | **VERIFIED** Dashboard, Orders and Load more, Records, Settings, Help. Free test order #1005 was created, fulfilled, tagged “Recorded by ink.”, offered a $29 record, and after a canceled test charge offered it again. A Shopify-labeled test charge was approved; #1005 appeared in Records with one-page PDF and parseable JSON. #1001/#1002 JSON downloaded and parsed; Safari required download permission first. **VERIFIED** Shopify-Captain-Hook 200 responses: `/webhooks/orders_create` 19:29:07.738121Z, `/webhooks/orders_fulfilled` 19:29:40.144351Z, `/webhooks/fulfillments_create` 19:29:40.473774Z, `/webhooks/fulfillments_update` 19:30:14.411254Z and 19:30:17.654712Z. A fresh uninstall/reinstall after #229 returned directly to Orders; purchased Records #1001, #1002 and #1005 remained available. |
+| Both / order subscription scope | **VERIFIED** read-only Admin GraphQL `webhookSubscriptions` query on both stores returned `errors: []` and no shop-scoped order subscriptions. App-scoped subscriptions remain in both TOMLs. This rules out the duplicate shop-scoped order listeners previously removed; it does not prove exactly one backend enrollment per Shopify event. |
+| Both / privacy | **VERIFIED** five Firestore receipts as above; signed synthetic `customers/redact` and authenticated worker success are documented in `docs/LIVE-RELEASE-AUDIT-both-apps-2026-09-25.md`. **ASSUMED** for a real customer: Shopify's delayed customer erasure cannot be observed before submission. |
+
+### Public route probes and code review
+
+Probes were run against both public hosts with a normal browser User-Agent. Ritualist: bad-HMAC `POST /webhooks/customers/redact` **401**, retired `POST /api/photos/upload` **404**, forged PWA token `GET /app/api/dashboard/metrics` **401**, `POST /app.data` **405**, unsigned **GET** `/api/jobs/privacy` **401**. Ink: same HMAC **401**, upload **404**, metrics **404** (route not mounted), app.data **405**, unsigned GET worker **401**. An unsigned **POST** to the worker gives framework **405**, because the worker intentionally exposes GET only; treating that as a failed auth probe would be wrong. An earlier bare Python client got 403 from Ink's edge; curl with a normal browser User-Agent reproduced the application-layer results.
+
+**VERIFIED code review of #226–#229:** the privacy worker checks both OIDC audience and service-account email (`app/routes/api.jobs.privacy.tsx`), claims receipts transactionally and retries (`app/services/ink-privacy.server.ts`), and validates Shopify compliance HMAC via `authenticate.webhook`. The new root error page does not disclose credentials. Onboarding follows the active-subscription result instead of a cached plan. Legacy record copy was changed from “proof” to order activity where merchants see it. A search over all `api.*`, `app.api.*`, and `webhooks.*` routes found authenticated Admin routes, verified warehouse JWT routes, the guarded shared-secret return route, HMAC webhooks, disabled NFC/photo doors, and a public shipping-rate endpoint that returns an empty rates array. `app.api.auth.login` remains a credential login for the warehouse app and allows CORS `*`; this is a wider public attack surface than the embedded review flow and deserves a separate rate-limit review, but no bypass was demonstrated. Do not turn `FEATURE_NFC` back on: the legacy photo route still uses a fallback offline session with no shop selector.
+
+`shopify app config validate -c shopify.app.toml -j` and `-c shopify.app.ink.toml -j` both returned `valid:true, issues:[]`. The Ritualist requests nine scopes; Ink requests four. The code uses order read/write, fulfillment read and tracking update; Ritualist alone also uses customer/product reads. Static Admin GraphQL extraction found 75 parseable operations: 61 schema successes, 13 deprecation advisories, and one inapplicable Admin failure for `app/services/ink-connection.server.ts:21` (`shop.brand`, a Storefront query). The Admin validation did **not** validate that Storefront operation. Deprecation warnings are maintenance items, not observed review failures.
+
+## Listing comparison and Partner review
+
+| Field | Ritualist draft vs live | Ink draft vs live |
+| --- | --- | --- |
+| Name and positioning | “The Ritualist”; intro/details/features describe order pages, carrier events, opens, optional shared locations. Live Dashboard/Orders/Settings support those capabilities. No delivery-verification claim found in inspected draft. | “Ink.”; intro/details/features describe order activity records and optional purchase. Live Orders/Records support these. |
+| Pricing | Shopify App Pricing Starter/Growth/Pro, 45-day trial. Live dev store plan page showed $299/$599/$999 regular rates and $0 to test, with Shopify approval for changes. | Manual pricing, Free plus optional $29 per-order one-time charge. Live dev approval said test charge/no billing; cancel then approve worked. `RECORD_PURCHASE_TEST=false` on live service was previously verified in the release audit, and code uses `shop.plan.partnerDevelopment` for dev-only tests. |
+| Support/privacy | `support@in.ink` matches Help; privacy URL `https://www.in.ink/ritualist-privacy.html` resolves to a page using `info@in.ink` for privacy contact. | `info@in.ink` matches Help and privacy page; privacy URL `https://www.in.ink/ink-privacy.html`. |
+| Testing notes | No separate app login; `corvara-cicli`; describes obtaining an order. One label drift: “Communications” vs live “Notifications.” | No separate login; `ink-review`; steps reference #1001–#1004 and are still usable with #1005 now present. |
+| Media | Feature image, three screenshots with alt text, and screencast URL `https://youtu.be/1kneSaUJd_Y` are populated. **ASSUMED** that image/video contents match the final UI until Sam visually approves them. | Video media selected but URL and thumbnail empty; desktop screenshots 1–6 empty; screencast URL empty. **VERIFIED** listing validation messages. |
+| Review state | Paused; Partner review still labels “checkout UI extension, embedded” although active config has no extension. Common-error automated check showed Pass. No editable capability control or rerun control was visible; Submit fixes was not pressed. | Draft; common-error automated check showed Pass, but listing content remains incomplete and Submit for review disabled. No manual rerun control was visible. |
+
+**Draft note for Shopify with Ritualist fixes:** “The order-status checkout UI extension identified in the prior review was removed in version the-ritualist-17. The active release, the-ritualist-20, contains no extensions; The Ritualist is now an embedded admin app only. The paused review summary still lists ‘checkout UI extension.’ Please clear that stale capability label and assess the current embedded app and its updated testing steps.”
+
+## Shopify review requirements — applicable common requirements
+
+Source: `shopify doc fetch` of Shopify's [App Store self-review requirements](https://shopify.dev/docs/apps/launch/app-store-review/app-store-ai-self-review-requirements), fetched September 25. “Pass” is evidence-limited to the named check; “Open” is a release gate; “N/A” means neither app implements that product category. The detailed per-ID inventory below preserves every ID in the fetched checklist.
+
+| ID / requirement | Ritualist | Ink | Evidence |
+| --- | --- | --- | --- |
+| 1.1.1 session-token authentication | Pass — **VERIFIED** | Pass — **VERIFIED** | Live Shopify Admin embed and rejected forged token/HMAC probes; `authenticate.admin` on app routes. |
+| 1.1.2 Shopify checkout | N/A | N/A | Neither changes checkout or sells a buyer add-on. |
+| 1.1.4 factual information | Open — **ASSUMED** media | Open — **VERIFIED** missing media | Draft copy checked line by line; final media content needs Sam review. |
+| 1.1.9 explicit buyer consent for charges | N/A | N/A | Charges are merchant app charges, not buyer cart charges. |
+| 1.2.1–1.2.3 Shopify billing and plan changes | Pass — **VERIFIED** | Pass — **VERIFIED** | Ritualist Shopify App Pricing test upgrades/downgrades and plan gate; Ink Manual pricing, canceled and approved dev one-time charge. Ink has no recurring plan to change. |
+| 2.2.1 / 2.2.3 / 2.2.4 Shopify APIs, App Bridge, GraphQL Admin | Pass for API/GraphQL — **VERIFIED**; latest App Bridge — **ASSUMED** | Same | Embedded live UI, API route review, 75 static GraphQL docs (one Storefront exclusion). The installed App Bridge version was not compared with Shopify's latest release. |
+| 2.3.1–2.3.4 installation and reinstall | Open — **VERIFIED** through plan gate; final approval pending | Pass — **VERIFIED** fresh reinstall | Shopify-owned app installation flow observed; fresh Ritualist reinstall redirected immediately to $0 plan page. |
+| 3.1.1 valid TLS | Pass — **VERIFIED** | Pass — **VERIFIED** | HTTPS public hosts and successful live requests. |
+| 3.2.1–3.2.5 sensitive scopes | Pass — **VERIFIED** absence of listed special scopes | Pass — **VERIFIED** | Nine and four scopes in validated TOMLs; neither requests `read_all_orders`, `write_payment_mandate`, checkout extension or pixel scopes. |
+| 5.6.1 checkout extension rendering (paused email) | Open — **VERIFIED** stale review label | N/A | Ritualist active version has no extension; Partner review state has not been corrected. |
+| 5.6.7 Chat UI components (paused email) | N/A — **VERIFIED** no checkout chat | N/A — **VERIFIED** no checkout chat | Current configs and live apps contain no checkout extension/chat interface. |
+| 4.5.4 / 4.5.5 reviewer test credentials (paused email) | Pass — **VERIFIED** notes, with small label drift | Pass — **VERIFIED** notes | Both list no separate app login and name a test store; orders can be made in Shopify Admin. |
+
+## Sam-only completion checklist
+
+- Complete the Ritualist's $0 Starter approval after confirming Shopify's terms, then verify Dashboard and Orders load on the reinstalled `corvara-cicli` store.
+- Review The Ritualist's existing screenshots/video against the final UI; correct the reviewer-note tab label. Resolve the stale extension capability with Shopify before pressing **Submit fixes**.
+- Review and upload Ink's video URL/thumbnail, desktop screenshots (at least the required first three; all six are currently empty), and screencast, then re-open its listing validation.
+- After this PR merges and auto-deploys, retest Settings' completed-deletion wording and the Ritualist metrics 401/503 status on the live services.
+- From about September 27, verify Shopify-origin delayed `shop/redact` 200, `skipped_reinstalled` receipt, and functioning reinstalled stores; a real `customers/redact` cannot be forced before Shopify's delay.
+- Keep both Cloud Run services' one minimum instance during review. The read-only service check found `minScale=1` for both.
+- Check both apps at a true phone viewport. The browser controller's viewport override did not change the Shopify Admin canvas in this pass, so responsive layout remains **ASSUMED** despite desktop screens passing.
+- Decide when to submit each application. This audit deliberately did not submit either one.
+
+
+### Per-ID inventory from the fetched Shopify checklist
+
+| ID | Shopify requirement | Ritualist | Ink | Evidence / applicability |
+| --- | --- | --- | --- | --- |
+| 1.1.1 | Use session tokens for authentication | Pass — VERIFIED | Pass — VERIFIED | Embedded auth and negative token/HMAC probes |
+| 1.1.2 | Use Shopify checkout | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.1.3 | Direct merchants to the Shopify Theme Store | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.1.4 | Use only factual information | Open — ASSUMED | Open — VERIFIED | Listing copy inspected; media approval/missing media above |
+| 1.1.6 | Build single-merchant storefronts. Marketplaces should be sales channels | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.1.7 | Always build Payment Gateway apps using the Payments API and after obtaining authorization | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.1.8 | Build apps for Shopify POS only, not third-party systems | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.1.9 | Obtain explicit buyer consent before adding charges | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.1.10 | Maintain the cheapest shipping option as default | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.1.13 | Duplicate only authorized product information | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.1.14 | Don't connect merchants to external agencies and developers | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.1.15 | Process refunds only through the original payment processor | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.1.16 | Don't provide capital lending | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app performs the named checkout, storefront marketplace, payment-gateway, POS, refund, lending, agency, shipping-default, or product-copy action. |
+| 1.2.1 | Use Shopify App Pricing or the Shopify Billing API | Pass — VERIFIED | Pass — VERIFIED | Shopify plan page / one-time Billing approval |
+| 1.2.2 | Implement Shopify App Pricing or the Shopify Billing API correctly | Pass — VERIFIED | Pass — VERIFIED | Upgrade/downgrade; cancel/approve test charge |
+| 1.2.3 | Allow pricing plan changes | Pass — VERIFIED | Pass — VERIFIED | Ritualist self-service plan picker; Ink has no recurring tier |
+| 2.2.1 | Use Shopify APIs | Pass — VERIFIED | Pass — VERIFIED | Shopify Admin GraphQL and webhook code, live calls |
+| 2.2.3 | Use the latest version of Shopify App Bridge | Pass — ASSUMED | Pass — ASSUMED | App Bridge used; exact latest release not independently checked |
+| 2.2.4 | Use the GraphQL Admin API | Pass — VERIFIED | Pass — VERIFIED | 75 static GraphQL docs; Storefront query excluded |
+| 2.2.6 | Don't display promotions or advertisements in admin extensions | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app uses the named admin-extension promotion or modal surface. |
+| 2.2.7 | Only launch Max modal with merchant interaction | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app uses the named admin-extension promotion or modal surface. |
+| 2.3.1 | Initiate installation from a Shopify-owned surface | Pass — VERIFIED | Pass — VERIFIED | Shopify Admin app installation surface |
+| 2.3.2 | Authenticate immediately after install | Pass — VERIFIED | Pass — VERIFIED | Immediate Shopify authentication/plan page |
+| 2.3.3 | Redirect to the app UI after installation | Open — VERIFIED | Pass — VERIFIED | Ritualist waiting at plan approval; Ink fresh reinstall returned to Orders |
+| 2.3.4 | Require OAuth authentication immediately after reinstall | Open — VERIFIED | Pass — VERIFIED | Ritualist fresh reinstall through approval; Ink fresh reinstall loaded Orders |
+| 3.1.1 | Use a valid TLS/SSL certificate | Pass — VERIFIED | Pass — VERIFIED | HTTPS host and successful TLS requests |
+| 3.2.1 | Request read_all_orders access scope only if it provides necessary app functionality | Pass — VERIFIED | Pass — VERIFIED | Neither config requests read_all_orders |
+| 3.2.2 | Request write_payment_mandate scope only if it provides necessary app functionality | Pass — VERIFIED | Pass — VERIFIED | Neither config requests payment mandate |
+| 3.2.3 | Request write_checkout_extensions_apis scope only if it provides necessary app functionality | Pass — VERIFIED | Pass — VERIFIED | Neither config requests checkout extensions API |
+| 3.2.4 | Request read_advanced_dom_pixel_events scope only if it provides necessary app functionality | Pass — VERIFIED | Pass — VERIFIED | Neither config requests advanced pixel events |
+| 3.2.5 | Request read_checkout_extensions_chat scope only when required | Pass — VERIFIED | Pass — VERIFIED | Neither config requests checkout chat |
+| 5.1.1 | Use theme app extensions | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a theme app extension. |
+| 5.1.3 | Include detailed onboarding instructions for theme app extensions | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a theme app extension. |
+| 5.1.5 | Send collected data back to the merchant | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a theme app extension. |
+| 5.2.4 | Use correct payment API scopes | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a payment app. |
+| 5.2.5 | Build payment apps as standalone, not embedded | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a payment app. |
+| 5.2.6 | Allow buyers to cancel/abandon payment with the payment gateway | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a payment app. |
+| 5.2.7 | Redirect merchants back to the Shopify admin using the proper URL | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a payment app. |
+| 5.2.10 | Display only Shopify-approved payment methods | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a payment app. |
+| 5.2.11 | Offer a test mode | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a payment app. |
+| 5.2.12 | Don't upsell any product or features in the payment flow | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a payment app. |
+| 5.2.13 | Appropriately name payment apps | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a payment app. |
+| 5.3.3 | Must be free for merchants | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a public app for the named category. |
+| 5.4.2 | Use correct subscription API scopes | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.3 | Don't use incorrect API scopes for purchase option apps | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.5 | Allow buyers to modify subscription payment methods | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.6 | Enable merchants to create and manage selling plans from the product page and choose products for subscriptions | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.7 | Include access to your subscription portal through Shopify's customer portal | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.8 | Enable buyers to cancel their purchase option, or clearly communicate cancellation conditions | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.9 | Navigate buyers to the customer portal | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.10 | Display purchase options and charge timing clearly | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.12 | Link subscriptions directly to the linked Customers in Shopify Admin | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.13 | Show buyers all of their purchased subscriptions in the Customer portal clearly | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.14 | Update multi-currency pricing and discount codes correctly on the product page | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.15 | Link subscriptions directly to the linked Orders in Shopify Admin | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.16 | Display selling plan name in the Cart page | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.17 | Communicate pre-order delays with pre-stated shipment times to buyers | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.18 | Clearly indicate details for prepaid items, including unit price, length of subscription, and price per delivery | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.4.19 | Enable variant-level product selection for buyers | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a purchase-option or subscription-selling app for buyers. |
+| 5.5.1 | Enable merchants to request fulfillment | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a fulfillment-service app. |
+| 5.5.2 | Include details of cost of goods sold | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a fulfillment-service app. |
+| 5.5.5 | Verify payment before marking orders as fulfilled | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a fulfillment-service app. |
+| 5.6.2 | Give merchants full control over promotional content | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships an active checkout UI extension; the stale Ritualist review label is separately OPEN. |
+| 5.6.3 | Don't display self-promotion or advertisements in checkout extensions | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships an active checkout UI extension; the stale Ritualist review label is separately OPEN. |
+| 5.6.5 | Get explicit customer consent prior to making any changes that affect the order total in any way | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships an active checkout UI extension; the stale Ritualist review label is separately OPEN. |
+| 5.6.6 | Don't add countdown timers to the checkout | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships an active checkout UI extension; the stale Ritualist review label is separately OPEN. |
+| 5.6.7 | Use Chat UI components for customer service | N/A — VERIFIED | N/A — VERIFIED | No checkout extension or chat UI |
+| 5.6.9 | Don't request payment information in checkout UI extension | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships an active checkout UI extension; the stale Ritualist review label is separately OPEN. |
+| 5.7.2 | Build with Polaris components and style guide | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.4 | Provide details in the publishing section | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.5 | Provide the marketplace link in the channel interface | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.6 | Communicate commission | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.7 | Open terms and conditions in a new window | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.8 | Use banners for approval or rejection of products | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.9 | Use Polaris cards in the publishing section | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.10 | Redirect to the account section after install | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.11 | Provide error feedback in the publishing section | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.12 | Must allow merchants to disconnect their account | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.13 | Display account information properly | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.15 | Must communicate account approval process | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.16 | Use Sales Attribution | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.7.17 | Communicate eligibility issues | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a sales channel; listing publishing detail is separately OPEN for Ink. |
+| 5.8.1 | Add the `write_checkout_extensions_apis` scope | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a post-purchase upsell extension. |
+| 5.8.2 | Ensure the upsell is transparent to the buyer and include accept and decline buttons | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a post-purchase upsell extension. |
+| 5.8.3 | Show the same product information on post purchase upsell | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a post-purchase upsell extension. |
+| 5.8.4 | Limit consecutive requests displayed to customers | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a post-purchase upsell extension. |
+| 5.8.5 | Correctly assign the purchase option category for each selling plan created | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a post-purchase upsell extension. |
+| 5.8.6 | Redirect to the order confirmation page when done | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a post-purchase upsell extension. |
+| 5.8.7 | Use the calloutbanner component to display callout banners | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a post-purchase upsell extension. |
+| 5.8.8 | Update price breakdown to reflect price changes | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a post-purchase upsell extension. |
+| 5.8.9 | Don't display third party ads or promotions | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a post-purchase upsell extension. |
+| 5.8.10 | Exclude order tracking/status from your post purchase page | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app ships a post-purchase upsell extension. |
+| 5.9.2 | Include submission info for the Apple App Store and Google Play | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a mobile app builder. |
+| 5.9.3 | Provide app theme customization or presets | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app is a mobile app builder. |
+| 5.10.1 | Give instruction on how to hide add-to-cart on donation products | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app processes charitable donations. |
+| 5.10.2 | Provide merchants with proof of donation | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app processes charitable donations. |
+| 5.10.3 | Indicate operating cost in UI and listing | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app processes charitable donations. |
+| 5.10.5 | Use a theme app block to add donation products | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app processes charitable donations. |
+| 5.10.6 | Collect donation funds using PCI-compliant third party gateways or the Billing API | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app processes charitable donations. |
+| 5.10.7 | Process customer’s donations through Shopify Checkout | N/A — VERIFIED code/config | N/A — VERIFIED code/config | Neither app processes charitable donations. |

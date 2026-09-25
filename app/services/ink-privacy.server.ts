@@ -69,6 +69,10 @@ export async function readPrivacyRequests(shop: string) {
     .where("shop", "==", shop)
     .get();
   return snap.docs
+    .filter((d) => {
+      const topic = d.data().topic;
+      return topic === "customers/data_request" || topic === "customers/redact";
+    })
     .map((d) => {
       const v = d.data();
       return {

@@ -112,6 +112,7 @@ describe("ink privacy requests", () => {
   it("only exposes receipt metadata to the authenticated Settings screen", async () => {
     await handleInkPrivacy("data_request", shop, payload);
     await handleInkPrivacy("data_request", "other.myshopify.com", payload);
+    await handleInkPrivacy("shop", shop, {});
     const out = await readPrivacyRequests(shop);
     expect(out).toHaveLength(1);
     expect(JSON.stringify(out)).not.toMatch(
