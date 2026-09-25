@@ -45,6 +45,7 @@ import { opensOf, type RecordRead } from "../lib/record-words";
 import { INK_DATA, INK_DATA_TINT } from "../lib/ink-palette";
 import { checkoutLines } from "../lib/checkout-words";
 import { deliveryLine, opensLine } from "../lib/order-activity";
+import { withShopifyShipped } from "../lib/order-timeline";
 import { ORDER_SORT_OPTIONS, type InkOrderSort } from "../lib/ink-order-search";
 
 /** A row's record side: the record, what the record door offers, a bought
@@ -93,7 +94,16 @@ export function WithRecord({
   return (
     <Suspense fallback={fallback}>
       <Await resolve={more} errorElement={<>{children({ ...base, ...UNREAD })}</>}>
-        {(side: InkRowRecord) => children({ ...base, ...side })}
+        {(side: InkRowRecord) =>
+          children({
+            ...base,
+            ...side,
+            // Shipped from Shopify's fulfillment when no carrier has scanned yet.
+            timeline: side.timeline
+              ? { ...side.timeline, steps: withShopifyShipped(side.timeline.steps, base.detail?.fulfilledAt) }
+              : side.timeline,
+          })
+        }
       </Await>
     </Suspense>
   );
