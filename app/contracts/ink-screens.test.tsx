@@ -25,6 +25,7 @@ vi.mock("../services/ink-merchant.server", () => ({
 }));
 vi.mock("../services/merchant.server", () => ({ updateMerchant: vi.fn() }));
 vi.mock("../services/ink-api.server", () => ({ patchMerchant: vi.fn(), mintMagicToken: vi.fn() }));
+vi.mock("../services/buyer-door-choice.server", () => ({ readBuyerDoor: vi.fn(), saveBuyerDoor: vi.fn() }));
 
 const { default: InkHome, loader: loadInkHome } = await import("../routes/app.ink.$section");
 const { default: InkSettings, action: saveInkSettings } = await import("../routes/app.ink.settings");
@@ -323,12 +324,43 @@ describe('ink screens: facts, working controls and Polaris', () => {
     expect(t).not.toMatch(/promised|expected|within|Yes/);
   });
 
-  it('removes destination choices without claiming automatic forwarding is already live', () => {
+  it('keeps the retired 09-23 destination form gone', () => {
     const html = render(InkSettings, {flashForward:'carrier',canSave:true,ritualistUrl:'https://apps.shopify.com/example-listing',privacy:[]});
     for (const part of ['Tracking link destination','Shopify order page','Carrier tracking page','Save destination','Destination saved','original destination']) expect(text(html)).not.toContain(part);
     expect(text(html)).toContain('View The Ritualist');
     expect(html).not.toContain('name="flash_forward"');
     expect(html).not.toContain('disabled=""');
+  });
+
+  // Sam, 2026-09-25: "If he just uses ink, no control of this for me." The
+  // control comes back as one card over the shared dial, drawn from the
+  // backend's own record (services/buyer-door-choice.server.ts).
+  it('draws where the tracking link goes from the backend record: now, where it came from, ink\'s two choices', () => {
+    const buyerDoor = { ok: true, view: { plan: 'ink', choice: 'ask_order_status', face: 'white', forward: 'order_status', source: 'default', choices: ['ask_order_status', 'ask_carrier'] } };
+    const html = render(InkSettings, {ritualistUrl:'',privacy:[],buyerDoor});
+    const t = text(html);
+    expect(t).toContain('When a buyer opens the tracking link');
+    expect(t).toContain("Now: ink's blank page asks for their location, then goes on to Shopify's order status page.");
+    expect(t).toContain("ink's default.");
+    expect(t).toContain('Ask, then the carrier');
+    expect(t).not.toContain('Ritualist page');
+    expect(html.match(/name="buyer_door_choice"/g)?.length).toBe(2);
+    expect(html).not.toContain('name="flash_forward"');
+  });
+
+  it('the card says why when the record cannot be read, and offers nothing to save', () => {
+    const html = render(InkSettings, {ritualistUrl:'',privacy:[],buyerDoor:{ok:false,error:'This store is still being set up. Try again in a moment.'}});
+    expect(text(html)).toContain('This store is still being set up.');
+    expect(html).not.toContain('name="buyer_door_choice"');
+  });
+
+  it('saves a choice through the named intent only: the session\'s shop and one word', async () => {
+    const { authenticate } = await import('../shopify.server');
+    const { saveBuyerDoor } = await import('../services/buyer-door-choice.server');
+    vi.mocked(saveBuyerDoor).mockResolvedValueOnce({ ok: true, view: {} } as never);
+    vi.mocked(authenticate.admin).mockResolvedValueOnce({ session: { shop: 'sample.myshopify.com' } } as never);
+    await saveInkSettings({ request: new Request('https://app.test/app/ink/settings', {method:'POST',body:new URLSearchParams({intent:'buyer_door',choice:'ask_carrier'})}) } as never);
+    expect(saveBuyerDoor).toHaveBeenCalledWith('sample.myshopify.com', 'ask_carrier');
   });
 
   it('shows no dead upgrade button and no invented default destination', () => {
