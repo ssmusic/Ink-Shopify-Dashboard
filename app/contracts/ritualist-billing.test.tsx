@@ -127,13 +127,14 @@ describe("what Billing draws", () => {
   });
 
   it("builds Shopify's plan page only from a real handle and store, never a guess", () => {
-    vi.stubEnv("SHOPIFY_APP_HANDLE", "");
-    expect(route.planPageUrl("example.myshopify.com")).toBeNull();
-    vi.stubEnv("SHOPIFY_APP_HANDLE", "the-app");
-    expect(route.planPageUrl("example.myshopify.com")).toBe("https://admin.shopify.com/store/example/charges/the-app/pricing_plans");
-    expect(route.planPageUrl(null)).toBeNull();
-    vi.stubEnv("SHOPIFY_APP_HANDLE", "bad handle/..");
-    expect(route.planPageUrl("example.myshopify.com")).toBeNull();
-    vi.unstubAllEnvs();
+    expect(route.planPageUrl("example.myshopify.com", "the-app")).toBe("https://admin.shopify.com/store/example/charges/the-app/pricing_plans");
+    expect(route.planPageUrl("example.myshopify.com", null)).toBeNull();
+    expect(route.planPageUrl(null, "the-app")).toBeNull();
+    expect(route.planPageUrl("example.myshopify.com", "bad handle/..")).toBeNull();
+  });
+
+  it("reads the app's handle from Shopify, and a failed read is null", async () => {
+    expect(await route.readAppHandle({ graphql: async () => ({ json: async () => ({ data: { currentAppInstallation: { app: { handle: "the-app" } } } }) }) })).toBe("the-app");
+    expect(await route.readAppHandle({ graphql: async () => { throw new Error("down"); } })).toBeNull();
   });
 });
