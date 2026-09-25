@@ -48,21 +48,17 @@ export const PAID_PLAN_QUERY = `#graphql
   }
 `;
 
-/** Shopify's answer → true (a paid plan is active), false (none), or null
- *  when the body is not Shopify's answer (the read failed: decide nothing). */
+/** Shopify's answer → true (a Ritualist plan is active), false (none), or
+ *  null when the body is not Shopify's answer (the read failed: decide
+ *  nothing). Any ACTIVE subscription counts, whatever its price: the
+ *  Ritualist's plans are all paid (Shopify App Pricing, 2026-09-25), and on a
+ *  development store Shopify prices a chosen plan at $0 to test — which is
+ *  where Shopify's reviewer tests. A $0 plan is never offered to a live store. */
 export function paidPlanActive(body: unknown): boolean | null {
   const subs = (body as { data?: { currentAppInstallation?: { activeSubscriptions?: unknown } } } | null)
     ?.data?.currentAppInstallation?.activeSubscriptions;
   if (!Array.isArray(subs)) return null;
-  return subs.some((s) => {
-    const sub = s as { status?: unknown; lineItems?: unknown };
-    if (sub?.status !== "ACTIVE") return false;
-    return (Array.isArray(sub.lineItems) ? sub.lineItems : []).some((item) => {
-      const p = (item as { plan?: { pricingDetails?: Record<string, any> } })?.plan?.pricingDetails;
-      const amount = Number(p?.__typename === "AppUsagePricing" ? p?.cappedAmount?.amount : p?.price?.amount);
-      return Number.isFinite(amount) && amount > 0;
-    });
-  });
+  return subs.some((s) => (s as { status?: unknown })?.status === "ACTIVE");
 }
 
 type AdminGraphql = { graphql: (query: string, options?: any) => Promise<{ json: () => Promise<unknown> }> };
