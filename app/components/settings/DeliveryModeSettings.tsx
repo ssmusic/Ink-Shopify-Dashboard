@@ -10,6 +10,14 @@ import {
 } from "@shopify/polaris";
 import { toast } from "../../hooks/use-toast";
 
+// ⚠️ PLACEHOLDER — Sam's words replace it.
+export const TRACKING_LINK_WHERE =
+  "This changes the tracking link on the order page in your admin and on your customer’s " +
+  "order-status page. Shopify sends its shipping email a few seconds before the link changes, " +
+  "so that email keeps Shopify’s link unless you add the one line under Notifications. Orders " +
+  "shipped with a carrier we can’t follow keep Shopify’s own tracking link, so no customer is " +
+  "ever sent to a page that can’t tell them anything.";
+
 const DeliveryModeSettings = () => {
   const [loading, setLoading] = useState(true);
   // The branded tracking link. ON for every merchant unless they turn it off
@@ -161,11 +169,15 @@ const DeliveryModeSettings = () => {
               disabled={trackingLinkSaving}
               onChange={saveTrackingLink}
             />
+            {/* WHERE THE LINK CHANGES, AS MEASURED (audit 2026-09-25; four real
+                orders on the rig, 2026-09-24): Shopify sends its shipping email
+                0–1 s after the fulfilment and the rewrite lands about 3 s later,
+                so the email keeps Shopify's link. Only the pasted line reaches the
+                email (Notifications tab, #181). The admin's order page and the
+                order-status page read the link later and carry it. This card
+                never says the email changes. */}
             <Text as="p" tone="subdued" variant="bodySm">
-              This applies to the tracking link on the order page in your admin, in the
-              shipping-confirmation email, and on your customer’s order-status page. Orders shipped
-              with a carrier we can’t follow keep Shopify’s own tracking link, so no customer is
-              ever sent to a page that can’t tell them anything.
+              <span data-testid="tracking-link-where">{TRACKING_LINK_WHERE}</span>
             </Text>
           </BlockStack>
         </Card>
