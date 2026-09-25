@@ -90,7 +90,10 @@ function OlderPage({
 }) {
   const fetcher = useFetcher<{ older?: OlderRows }>();
   const { load } = fetcher;
-  const href = `${ORDERS_PATH}?older=${encodeURIComponent(cursor)}`;
+  // `?index`: Orders is the INDEX route under a layout with no loader. A
+  // fetcher's GET without it asks the layout, gets no older rows, and "Load
+  // more" spins forever (corvara, 2026-09-25).
+  const href = `${ORDERS_PATH}?index&older=${encodeURIComponent(cursor)}`;
   const asked = useRef<string | null>(null);
   useEffect(() => {
     if (asked.current === href) return;
