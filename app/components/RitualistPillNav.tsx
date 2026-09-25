@@ -36,11 +36,17 @@ export default function RitualistPillNav() {
   return (
     <div className="rt-pillbar">
       {/* A phone stacks the wordmark over the pills: one line does not fit. */}
-      <style>{`.rt-pillbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}.rt-pillbar>.rt-studio{justify-self:start}@media (max-width:640px){.rt-pillbar{grid-template-columns:minmax(0,1fr)}.rt-pillbar>.rt-studio{justify-self:center}.rt-pillbar>.rt-spacer{display:none}.rt-pillbar>*{min-width:0;max-width:100%}}`}</style>
+      {/* No ">" "&" or quotes in here: the server writes them as entities
+          (&gt;), the CSS breaks on first paint, the page fails to hydrate
+          and the Orders rows' streamed activity never arrives (corvara,
+          2026-09-25). Class selectors only. */}
+      <style>{`.rt-pillbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}.rt-studio{justify-self:start}@media (max-width:640px){.rt-pillbar{grid-template-columns:minmax(0,1fr)}.rt-studio{justify-self:center;min-width:0;max-width:100%}.rt-spacer{display:none}.rt-pills{min-width:0;max-width:100%}}`}</style>
       <span className="rt-studio">
         <StudioLink />
       </span>
-      <PillNav pills={RITUALIST_PILLS} active={ritualistPillFor(pathname)} label="The Ritualist" />
+      <span className="rt-pills">
+        <PillNav pills={RITUALIST_PILLS} active={ritualistPillFor(pathname)} label="The Ritualist" />
+      </span>
       <span className="rt-spacer" />
     </div>
   );
