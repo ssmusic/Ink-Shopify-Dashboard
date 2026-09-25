@@ -162,7 +162,7 @@ describe("what the Dashboard reads", () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("backend down"); }));
     graphql.mockRejectedValue(new Error("Shopify down"));
     const data = await load();
-    expect(data).toEqual({ kpis: null, delivery: null, recentOrders: null });
+    expect(data).toEqual({ kpis: null, delivery: null, recentOrders: null, settingUp: false });
   });
 
   it("re-reads on Refresh, not on the studio door's press or a record's file", () => {

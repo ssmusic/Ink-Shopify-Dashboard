@@ -275,7 +275,7 @@ describe("under ink, the enrol and tracking queries select nothing outside INK_S
       FULFILLMENTS_UPDATE: ["read_fulfillments", "write_fulfillments"],
     };
     const atLoad = [...read("app/shopify.server.ts").matchAll(/^\s{4}([A-Z_]+): \{\s*\n\s*deliveryMethod/gm)].map((m) => m[1]);
-    expect(atLoad.sort()).toEqual(["FULFILLMENTS_CREATE", "FULFILLMENTS_UPDATE", "ORDERS_CREATE", "ORDERS_FULFILLED"]);
+    expect(atLoad.sort()).toEqual(["FULFILLMENTS_CREATE", "FULFILLMENTS_UPDATE"]);
     const inToml = [...read("shopify.app.ink.toml").matchAll(/^\s*topics = \[ "([^"]+)" \]/gm)]
       .map((m) => m[1].toUpperCase().replace("/", "_"))
       .filter((t) => !t.startsWith("APP_"));

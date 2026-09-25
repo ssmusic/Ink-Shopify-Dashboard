@@ -40,7 +40,7 @@ export default function VerifiableRecordCard({ verifyUrl, qrSrc, recordExportHre
               <BlockStack gap="200">
                 {!locked && (
                   <Text as="p" variant="bodySm" tone="subdued">
-                    Anyone can scan this or open the link and re-check the order&apos;s signed record in their own browser — every signature verifies against ink&apos;s published key. The buyer&apos;s location is sealed there; only your copies carry it.
+                    Anyone can open the link to review the order&apos;s record. A shared location appears only if the customer chose to provide it.
                   </Text>
                 )}
                 <Text as="p" variant="bodySm" breakWord><code style={{ fontFamily: "monospace", fontSize: "12px" }}>{verifyUrl}</code></Text>

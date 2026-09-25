@@ -229,7 +229,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
       {/* ── The one merchant action that isn't automatic ───────────────── */}
       <Layout.AnnotatedSection
         title="Your page in Shopify's emails"
-        description="Shopify sends its shipping email before ink can change the link in it, and apps cannot edit Shopify's emails. This line puts your page on the email's main button."
+        description="Shopify sends its shipping email before The Ritualist can update the tracking link, and apps cannot edit Shopify's emails. This line puts your page on the email's main button."
       >
         <Card>
           <BlockStack gap="400">
@@ -262,7 +262,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
                       display: "block",
                     }}
                   >
-                    {snippet ?? "The email line is unavailable until this store's link loads."}
+                    {snippet ?? (loaded ? "No page link is available for this store yet. Check the store connection in Settings, then refresh this page." : "Loading this store's email line…")}
                   </code>
                 </div>
                 <InlineStack gap="200">

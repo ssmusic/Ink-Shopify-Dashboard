@@ -69,14 +69,20 @@ export function kpisWithSharedCount(kpis: Kpis | null, delivery: DeliveryDashboa
 export default function DeliveryDashboard({
   kpis: read,
   delivery,
+  settingUp = false,
 }: {
   kpis: Kpis | null;
   delivery: DeliveryDashboardData | null;
+  settingUp?: boolean;
 }) {
   const kpis = kpisWithSharedCount(read, delivery);
   if (!kpis && !delivery)
     return (
-      <Banner tone="info">Dashboard unavailable. Refresh to try again.</Banner>
+      <Banner tone="info">
+        {settingUp
+          ? "Setting up your store… Refresh to check for your orders."
+          : "Dashboard unavailable. Refresh to try again."}
+      </Banner>
     );
   if (kpis?.recorded === 0 && delivery?.orders === 0)
     return (

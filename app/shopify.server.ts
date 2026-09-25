@@ -39,12 +39,10 @@ const shopify = shopifyApp({
   sessionStorage: new FirestoreSessionStorage(),
   distribution: AppDistribution.AppStore,
   
-  // ✅ Webhook definitions with proper DeliveryMethod enum
+  // App-specific orders/create and orders/fulfilled subscriptions live in
+  // both TOML files. Registering them again per shop could duplicate delivery.
+  // Only these fulfillment topics are registered per shop here.
   webhooks: {
-    ORDERS_CREATE: {
-      deliveryMethod: DeliveryMethod.Http,
-      callbackUrl: "/webhooks/orders_create",
-    },
     FULFILLMENTS_CREATE: {
       deliveryMethod: DeliveryMethod.Http,
       callbackUrl: "/webhooks/fulfillments_create",
@@ -52,10 +50,6 @@ const shopify = shopifyApp({
     FULFILLMENTS_UPDATE: {
       deliveryMethod: DeliveryMethod.Http,
       callbackUrl: "/webhooks/fulfillments_update",
-    },
-    ORDERS_FULFILLED: {
-      deliveryMethod: DeliveryMethod.Http,
-      callbackUrl: "/webhooks/orders_fulfilled",
     },
   },
 
