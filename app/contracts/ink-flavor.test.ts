@@ -35,7 +35,7 @@ describe("shopify.app.ink.toml", () => {
   const field = (src: string, key: string) => src.match(new RegExp(`^${key}\\s*=\\s*"([^"]*)"`, "m"))?.[1];
 
   it("is the dormant record, renamed ink, at install.in.ink", () => {
-    expect(field(toml, "client_id")).toBe("45cc130ef59cbeaf9133acea201981ed");
+    expect(field(toml, "client_id")).toBe("7a9bebe0ac296c4eb80328805af4f2da");
     expect(field(toml, "name")).toBe("ink."); // "ink always has a period after it" (Sam, 2026-09-23)
     expect(field(toml, "application_url")).toBe("https://install.in.ink");
     expect(toml).toMatch(/^embedded = true$/m);
