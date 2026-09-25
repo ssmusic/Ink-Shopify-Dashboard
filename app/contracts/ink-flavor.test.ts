@@ -157,8 +157,10 @@ describe("the Ritualist's queries, byte for byte", () => {
     expect(src).toContain("query ShopIdentity { shop { name email contactEmail } }`);");
     expect(src).toContain("const inkData = await createMerchant(session.shop, shopName, ownerEmail);");
     expect(src).toContain("notification_settings: DEFAULT_NOTIFICATION_SETTINGS,");
-    // The carrier service and the ink install are the two branches on the flavor.
-    expect(src).toContain("if (appUrl && !ink) {");
+    // The plan gate and the ink install are the two branches on the flavor;
+    // the carrier service is registered by neither (audit 2026-09-25).
+    expect(src).toContain("if (!ink) {\n    const planPage = await planGateUrl(");
+    expect(src).not.toContain("ensureCarrierServiceRegistered");
     expect(src).toContain("provisionInkMerchant({ admin, shop: session.shop })");
   });
 
@@ -298,8 +300,8 @@ describe("under ink, the enrol and tracking queries select nothing outside INK_S
     expect(INK_SCOPES).toContain("write_orders"); // tagsAdd, metafieldsSet on the order
   });
 
-  it("ink's install registers no carrier service (write_shipping) and its embed sends no buyer email", () => {
-    expect(read("app/routes/app.tsx")).toContain("if (appUrl && !ink) {");
+  it("neither app registers a carrier service (write_shipping) and its embed sends no buyer email", () => {
+    expect(read("app/routes/app.tsx")).not.toContain("ensureCarrierServiceRegistered");
     expect(read("app/services/state-email.server.ts")).toMatch(/if \(isInk\(\)\) \{\s*console\.log\(`📧 SKIP/);
     expect(read("app/services/notifications.server.ts")).toMatch(/if \(isInk\(\)\) \{\s*console\.log\(`\[NotificationService\] Skipped/);
     expect(read("app/routes/webhooks.fulfillments_create.tsx")).toContain("if (!ink) {\n    try {\n      const { sendStateEmailOnce }");

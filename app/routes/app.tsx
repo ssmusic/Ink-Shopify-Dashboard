@@ -8,7 +8,7 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
 import { authenticate, registerWebhooks } from "../shopify.server";
 import { ShopProvider } from "../contexts/ShopContext";
-import { ensureCarrierServiceRegistered } from "../services/carrier-service.server";
+import { planGateUrl } from "../services/ritualist-plan-gate.server";
 import { createMerchant } from "../services/ink-api.server";
 import { getMerchant, updateMerchant } from "../services/merchant.server";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "../services/notification-settings";
@@ -34,7 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // the library's App Bridge bounce, which renders "200" outside the admin
   // (direct-visit.server.ts). ink's /app answers exactly as it did.
   if (!isInk() && isDirectVisitWithoutAStore(request)) throw redirect("/");
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, redirect: appRedirect } = await authenticate.admin(request);
 
   // WHICH APP THIS PROCESS IS (app/services/app-flavor.server.ts). Unset is
   // the Ritualist, and every branch below on `ink` is additive: with the env
@@ -46,14 +46,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // by INK's internal merchant provisioning. This loader may create the
   // operational merchant record needed for orders/pages, but it must not mark
   // a merchant as subscribed or paid.
-  const appUrl = process.env.SHOPIFY_APP_URL || "";
-  // The carrier service is the Ritualist's checkout lane (write_shipping);
-  // ink holds no such scope and registers none.
-  if (appUrl && !ink) {
-    ensureCarrierServiceRegistered(admin, appUrl).catch((err) =>
-      console.error("[App] Carrier service registration error (non-blocking):", err)
-    );
+  // The Ritualist with no plan goes to Shopify's plan page (App Store 1.2.2).
+  if (!ink) {
+    const planPage = await planGateUrl(admin, session.shop, new URL(request.url).pathname);
+    if (planPage) throw appRedirect(planPage, { target: "_top" });
   }
+
+  // The carrier service ("ink.", inactive, no rates) is no longer registered:
+  // write_shipping left the Ritualist's scopes (audit 2026-09-25). Its file
+  // stays, tabled, never deleted.
   registerWebhooks({ session }).catch((err) =>
     console.error("[App] Webhook registration error (non-blocking):", err)
   );

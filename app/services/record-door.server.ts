@@ -36,6 +36,22 @@ export function recordPurchaseIsTest(): boolean {
   return process.env.RECORD_PURCHASE_TEST === "true";
 }
 
+/** A development store's charge is always a test charge; a live store's is
+ *  real unless RECORD_PURCHASE_TEST forces test everywhere (audit
+ *  2026-09-25: the env alone made every live charge a test). A failed read
+ *  answers the env alone — Shopify refuses a real charge on a dev store. */
+export async function recordChargeIsTest(admin: AdminGraphql): Promise<boolean> {
+  if (recordPurchaseIsTest()) return true;
+  try {
+    const res = await admin.graphql(`#graphql
+      query RecordChargeStore { shop { plan { partnerDevelopment } } }`);
+    const body = (await res.json()) as { data?: { shop?: { plan?: { partnerDevelopment?: unknown } } } };
+    return body?.data?.shop?.plan?.partnerDevelopment === true;
+  } catch {
+    return false;
+  }
+}
+
 /** The price a buyer of this record is offered: the backend's resolved
  *  price, only with the switch on. */
 export function recordOffer(price: RecordPrice | null): RecordPrice | null {
@@ -201,14 +217,14 @@ export async function recordChargeGone(admin: AdminGraphql, gid: string): Promis
  *  Shopify's screen) and answers where to send them. Throws on refusal. */
 export async function createRecordCharge(
   admin: AdminGraphql,
-  input: { orderName: string; price: RecordPrice; returnUrl: string },
+  input: { orderName: string; price: RecordPrice; returnUrl: string; test?: boolean },
 ): Promise<{ confirmationUrl: string; chargeId: string }> {
   const res = await admin.graphql(RECORD_CHARGE_MUTATION, {
     variables: {
       name: recordChargeName(input.orderName),
       price: { amount: (input.price.price_cents / 100).toFixed(2), currencyCode: input.price.currency },
       returnUrl: input.returnUrl,
-      test: recordPurchaseIsTest(),
+      test: input.test ?? recordPurchaseIsTest(),
     },
   });
   const body = (await res.json()) as {
