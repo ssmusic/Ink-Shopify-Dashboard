@@ -123,7 +123,7 @@ export default function InkOrderSearch({
       {onDates && range === "custom" && (
         // Its own form: Enter in From or To applies the dates, as it searches above.
         <Form onSubmit={apply}>
-          <InlineGrid columns={{ xs: 1, sm: "200px 200px max-content" }} gap="200" alignItems="end">
+          <InlineGrid columns={{ xs: 1, md: "minmax(0, 1fr) minmax(0, 1fr) max-content" }} gap="200" alignItems="end">
             <TextField
               label="From"
               type="date"

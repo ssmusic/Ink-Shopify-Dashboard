@@ -2,6 +2,7 @@ import sendgrid from "@sendgrid/mail";
 import twilio from "twilio";
 import { EmailService } from "./email.server";
 import { isInk } from "./app-flavor.server";
+import { FEATURE_NOTIFICATIONS } from "../flags";
 
 const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN;
@@ -72,6 +73,7 @@ export const NotificationService = {
 
     // ink dispatches nothing — no email, no SMS — whatever toggles a merchant
     // doc shared with the Ritualist may carry (app-flavor.server.ts).
+    if (!FEATURE_NOTIFICATIONS) return false;
     if (isInk()) {
       console.log(`[NotificationService] Skipped ${type} — ink sends no notifications of its own.`);
       return false;

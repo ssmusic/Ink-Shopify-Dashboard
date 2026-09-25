@@ -4,6 +4,7 @@ import { NotificationService, type NotificationType } from "../services/notifica
 import { findMerchantDoc } from "../services/merchant-doc.server";
 import { INK_NAMESPACE } from "../utils/metafields.server";
 import { isDistanceRecorded } from "../lib/order-marks";
+import { FEATURE_NOTIFICATIONS } from "../flags";
 
 /**
  * Background Polling Job: Notifications Worker
@@ -43,6 +44,9 @@ function isAuthorized(request: Request) {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (!FEATURE_NOTIFICATIONS) {
+    return new Response("Not found", { status: 404 });
+  }
   if (!isAuthorized(request)) {
     return new Response("Unauthorized", { status: 401 });
   }

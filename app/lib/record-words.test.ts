@@ -45,7 +45,7 @@ describe("the level words (2026-09-23, Codex's screens restored)", () => {
     expect(LEVEL_WORDS).toEqual({
       verified: "Recorded and signed",
       attested: "Recorded and signed",
-      asserted: "Not verified by ink",
+      asserted: "Reported without an ink observation",
       missing: "Missing",
     });
     for (const w of Object.values(LEVEL_WORDS)) expect(w).not.toMatch(/unsigned/i);

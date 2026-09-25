@@ -633,7 +633,7 @@ export default function InkHome() {
                   </Box>
                 ) : (
                   <InkRecentOrders
-                    key={listKey}
+                    key={`recent:${listKey}`}
                     orders={data.recentOrders}
                     returnTo="/app/ink/orders"
                     detailed
@@ -684,7 +684,7 @@ export default function InkHome() {
                     records (OlderOrders). */}
                 {wholeList &&
                   ((data.sort || "newest") === "newest" && !settingUp ? (
-                    <OlderOrders key={listKey} shown={data.recentOrders} mapsKey={data.mapsKey} />
+                    <OlderOrders key={`older:${listKey}`} shown={data.recentOrders} mapsKey={data.mapsKey} />
                   ) : data.recentOrders.length > 0 ? (
                     <>
                       <Divider />

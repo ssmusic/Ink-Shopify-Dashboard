@@ -96,8 +96,8 @@ describe("ink's accordion reads the merchant's WHOLE record with the shop's own 
     ]);
     expect(r.checks).toEqual({
       sound: true,
-      headline: "Checked against the published key: 3 of 3 signatures verified · every link intact.",
-      lines: ["Signatures: 3 of 3 verified against key_001", "Hash links: 3 of 3 intact · sequence complete · matches the ledger's head"],
+      headline: "Checked against the published key: 3 of 3 signatures checked · every link intact.",
+      lines: ["Signatures: 3 of 3 checked against key_001", "Hash links: 3 of 3 intact · sequence complete · matches the ledger's head"],
     });
     // Read with the shop's own key, from the merchant door; the key read once
     // for the whole screen, from its own door; the public door never asked.

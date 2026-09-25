@@ -98,9 +98,9 @@ export default function AdvancedAnalytics() {
         </Text>
         <InlineStack gap="800" wrap>
           <Stat
-            label="Payload integrity"
+            label="Records with a payload hash"
             value={`${ig.payload_integrity_pct}%`}
-            sub="signed records intact"
+            sub="Hash present; signature not checked here"
           />
         </InlineStack>
         <BlockStack gap="100">

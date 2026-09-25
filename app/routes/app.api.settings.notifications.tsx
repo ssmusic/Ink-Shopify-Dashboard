@@ -131,7 +131,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     return json({
       settings,
-      snippet: notificationSnippet(brandSlug),
+      snippet: brandSlug ? notificationSnippet(brandSlug) : null,
       snippetTemplates: SNIPPET_TEMPLATES,
       emailDoor,
       returnsOn,

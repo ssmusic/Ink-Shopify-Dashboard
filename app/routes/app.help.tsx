@@ -80,7 +80,7 @@ const faqSections = [
       {
         question: "Will I be charged later?",
         answer:
-          "Not without your say-so. If we introduce paid plans later, Shopify offers them, you approve one inside Shopify, and it appears on your regular Shopify invoice. Nothing starts on its own, and there is no card on file.",
+          "Plans are chosen and approved in Shopify. Your active plan and billing period appear on the Billing page, and charges appear on your Shopify invoice. A plan does not start without your approval.",
       },
     ],
   },

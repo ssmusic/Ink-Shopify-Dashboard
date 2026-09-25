@@ -204,10 +204,13 @@ describe("ink privacy requests", () => {
     otherAppHoldsSession.mockResolvedValue(true);
     bucket("merchants").set(shop, { key: "private" });
     bucket("ink_record_charges").set("own", { shop });
+    await handleInkPrivacy("data_request", shop, payload);
+    const receiptId = [...bucket(PRIVACY_COLLECTION).keys()][0];
     expect((await handleInkPrivacy("shop", shop, {})).status).toBe(200);
     expect(purgeShopInInk).not.toHaveBeenCalled();
     expect(bucket("merchants").has(shop)).toBe(true);
     expect(bucket("ink_record_charges").size).toBe(0);
+    expect(bucket(PRIVACY_COLLECTION).has(receiptId)).toBe(true);
   });
   it.each([
     "webhooks.customers.data_request",
