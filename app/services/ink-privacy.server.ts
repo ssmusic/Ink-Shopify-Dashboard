@@ -4,6 +4,7 @@ import { isInk } from "./app-flavor.server";
 import {
   otherAppHoldsSession,
   SESSION_COLLECTION,
+  thisAppHoldsSession,
 } from "../firestore-session-storage.server";
 import { exportCustomerFromInk, purgeShopInInk, redactCustomerInInk } from "./ink-api.server";
 
@@ -252,6 +253,14 @@ async function executeDeletion(ref: FirebaseFirestore.DocumentReference, v: Fire
         }
       }
     }
+    return;
+  }
+  // shop/redact arrives 48 hours after an uninstall, and Shopify's docs do
+  // not say a reinstall cancels it. A store that reinstalled is a customer
+  // again: its data stays, and its live session is never erased (audit
+  // 2026-09-25 — both review stores were uninstalled and reinstalled).
+  if (await thisAppHoldsSession(shop)) {
+    await ref.update({ state: "skipped_reinstalled", completedAt: new Date().toISOString() });
     return;
   }
   const shared = await otherAppHoldsSession(shop);

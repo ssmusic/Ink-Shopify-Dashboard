@@ -50,6 +50,7 @@ const firestore = {
   }),
 };
 const otherAppHoldsSession = vi.fn();
+const thisAppHoldsSession = vi.fn();
 const purgeShopInInk = vi.fn();
 const redactCustomerInInk = vi.fn();
 const exportCustomerFromInk = vi.fn();
@@ -57,6 +58,7 @@ const webhook = vi.fn();
 vi.mock("../firestore.server", () => ({ default: firestore }));
 vi.mock("../firestore-session-storage.server", () => ({
   otherAppHoldsSession,
+  thisAppHoldsSession,
   SESSION_COLLECTION: "shopify_sessions_ink",
 }));
 vi.mock("./ink-api.server", () => ({ purgeShopInInk, redactCustomerInInk, exportCustomerFromInk }));
@@ -77,6 +79,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("APP_FLAVOR", "ink");
   otherAppHoldsSession.mockResolvedValue(false);
+  thisAppHoldsSession.mockResolvedValue(false);
   purgeShopInInk.mockResolvedValue({ ok: true });
   redactCustomerInInk.mockResolvedValue({ ok: true });
   exportCustomerFromInk.mockResolvedValue({
@@ -210,6 +213,18 @@ describe("ink privacy requests", () => {
     expect(bucket("merchants").has(shop)).toBe(false);
     expect(bucket(PRIVACY_COLLECTION).size).toBe(0);
   });
+  it("keeps a reinstalled store whole: no purge, no session erased, the receipt says why", async () => {
+    thisAppHoldsSession.mockResolvedValue(true);
+    bucket("shopify_sessions_ink").set("own", { shop });
+    bucket("merchants").set(shop, { key: "private" });
+    expect((await handleInkPrivacy("shop", shop, {})).status).toBe(200);
+    expect((await processPendingPrivacy()).processed).toBe(1);
+    expect(purgeShopInInk).not.toHaveBeenCalled();
+    expect(bucket("shopify_sessions_ink").has("own")).toBe(true);
+    expect(bucket("merchants").has(shop)).toBe(true);
+    expect([...bucket(PRIVACY_COLLECTION).values()].map((v) => v.state)).toEqual(["skipped_reinstalled"]);
+  });
+
   it("preserves the active other app while deleting ink-owned data", async () => {
     otherAppHoldsSession.mockResolvedValue(true);
     bucket("merchants").set(shop, { key: "private" });
