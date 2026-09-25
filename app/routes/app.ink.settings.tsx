@@ -13,6 +13,7 @@ import { readInkMerchant } from "../services/ink-merchant.server";
 import { exportPrivacyRequest, readPrivacyRequests } from "../services/ink-privacy.server";
 import { readInkConnection } from "../services/ink-connection.server";
 import { readEmailLine } from "../services/email-line.server";
+import { readBuyerDoor, saveBuyerDoor } from "../services/buyer-door-choice.server";
 
 function listingUrl(raw: string | undefined) {
   try {
@@ -30,10 +31,11 @@ function listingUrl(raw: string | undefined) {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const view = await readInkMerchant(session.shop);
-  const [privacy, connection, emailLine] = await Promise.all([
+  const [privacy, connection, emailLine, buyerDoor] = await Promise.all([
     readPrivacyRequests(session.shop).catch(() => null),
     readInkConnection({ admin, shop: session.shop, apiKey: view.doc?.ink_api_key, shopId: view.shopId }),
     readEmailLine(session.shop, view.shopId).catch(() => null),
+    readBuyerDoor(session.shop),
   ]);
   return routeData(
     {
@@ -41,6 +43,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       privacy,
       connection,
       emailLine,
+      buyerDoor,
     },
     { headers: { "Cache-Control": "private, no-store" } },
   );
@@ -48,15 +51,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const form = await request.formData();
-  // The one thing Settings does: hand the merchant a customer's data for a
-  // customers/data_request (services/ink-privacy.server.ts). Nothing here
-  // changes a setting — retired forms must not keep changing a shared
-  // backend destination dial.
+  // Two things Settings does: hand the merchant a customer's data for a
+  // customers/data_request (services/ink-privacy.server.ts), and — Sam,
+  // 2026-09-25, "if he just uses ink, no control of this for me" — save where
+  // the tracking link goes (services/buyer-door-choice.server.ts), one word,
+  // through the backend's admin door. The retired 09-23 form (a bare
+  // `flash_forward` field) is still refused below: only the named intent
+  // writes the shared dial.
   if (form.get("intent") === "privacy_export") {
     const result = await exportPrivacyRequest(session.shop, String(form.get("id") || "")).catch(() => ({
       ok: false as const,
       note: "The data could not be prepared. Try again.", // PLACEHOLDER
     }));
+    return routeData(result, { headers: { "Cache-Control": "private, no-store" } });
+  }
+  if (form.get("intent") === "buyer_door") {
+    const result = await saveBuyerDoor(session.shop, form.get("choice"));
     return routeData(result, { headers: { "Cache-Control": "private, no-store" } });
   }
   return new Response("Settings are read-only.", {

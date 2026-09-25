@@ -57,6 +57,28 @@ import { resolveInkShopId } from "./ink-install.server";
 import { InkApiError, patchMerchant } from "./ink-api.server";
 import { getMerchant, updateMerchant, type MerchantData } from "./merchant.server";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "./notification-settings";
+import firestore from "../firestore.server";
+
+/** THE RITUALIST PAGE LEAVES WITH THE RITUALIST (2026-09-25). A merchant may
+ *  choose the Ritualist page as where the tracking link goes (Settings, in
+ *  both apps and the dashboard: page_mode "page", or flash_forward "page"
+ *  after the ask). A written choice wins over the plan, so without this the
+ *  paid page would outlive the paid app. The hand-back clears exactly those
+ *  two words and nothing else: an ask to the order page or the carrier is
+ *  still the merchant's, and stays. */
+export async function ritualistPageChoicesToClear(shopId: string): Promise<Record<string, null>> {
+  try {
+    const snap = await firestore.collection("merchants").doc(shopId).get();
+    const d = (snap.exists ? snap.data() : null) ?? {};
+    return {
+      ...(d.page_mode === "page" ? { page_mode: null } : {}),
+      ...(d.flash_forward === "page" ? { flash_forward: null } : {}),
+    };
+  } catch (e: any) {
+    console.error(`[plan] ${shopId}: the buyer's door could not be read before the hand-back (${e?.message ?? e}); a Ritualist-page choice, if any, stays.`);
+    return {};
+  }
+}
 
 export type PlanClaimOutcome = "not_an_ink_merchant" | "already_claimed" | "claimed" | "failed";
 
@@ -129,7 +151,8 @@ export async function restoreInkPlanOnRitualistUninstall(shop: string): Promise<
   try {
     // The plan leaves with the app: ink-backend #154 includes the record only
     // while the Ritualist is installed AND its paid plan is active.
-    await patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null });
+    const clearPage = await ritualistPageChoicesToClear(shopId);
+    await patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null, ...clearPage });
   } catch (e: any) {
     const status = e instanceof InkApiError ? e.status : 0;
     if (status >= 400 && status < 500) {

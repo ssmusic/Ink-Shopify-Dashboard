@@ -9,6 +9,7 @@ import {
   Checkbox,
 } from "@shopify/polaris";
 import { toast } from "../../hooks/use-toast";
+import BuyerDoorSettings from "./BuyerDoorSettings";
 
 const DeliveryModeSettings = () => {
   const [loading, setLoading] = useState(true);
@@ -170,6 +171,10 @@ const DeliveryModeSettings = () => {
           </BlockStack>
         </Card>
       </Layout.AnnotatedSection>
+
+      {/* WHERE THE TRACKING LINK GOES (2026-09-25) — what the buyer sees when
+          they open it; the same control as ink's Settings and the dashboard's. */}
+      <BuyerDoorSettings />
     </Layout>
   );
 };

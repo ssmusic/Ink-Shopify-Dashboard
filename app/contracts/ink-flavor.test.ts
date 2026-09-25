@@ -198,7 +198,10 @@ describe("the Ritualist's queries, byte for byte", () => {
     // plan and the page must not appear before the merchant has one.
     const precedence = read("app/services/plan-precedence.server.ts");
     expect(precedence).not.toContain('plan: "ritualist"');
-    expect(precedence).toContain('patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null })');
+    expect(precedence).toContain('patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null, ...clearPage })');
+    // …and the Ritualist page leaves with it: only a Ritualist-page choice is cleared (2026-09-25).
+    expect(precedence).toContain('d.page_mode === "page" ? { page_mode: null }');
+    expect(precedence).toContain('d.flash_forward === "page" ? { flash_forward: null }');
     // The arrival records the ENTITLEMENT, never the plan (ink-backend #121).
     expect(precedence).toContain("ritualist_installed_at: new Date().toISOString()");
     const uninstall = read("app/routes/webhooks.app.uninstalled.tsx");
