@@ -36,9 +36,6 @@ const DeliveryModeSettings = () => {
     } catch (e) {
       console.warn("Could not retrieve Shopify session token", e);
     }
-    if (!token && localStorage.getItem("token")) {
-      token = localStorage.getItem("token") || "";
-    }
 
     const headers = new Headers(options.headers);
     if (token) headers.set("Authorization", `Bearer ${token}`);

@@ -38,9 +38,6 @@ async function secureFetch(path: string, options: RequestInit = {}) {
   } catch (e) {
     console.warn("Could not retrieve Shopify session token", e);
   }
-  if (!token && typeof window !== "undefined") {
-    token = localStorage.getItem("token") || "";
-  }
   if (!token) return { error: { message: "Not authenticated" } };
 
   const headers = new Headers(options.headers);
