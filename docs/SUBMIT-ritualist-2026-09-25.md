@@ -1,5 +1,7 @@
 # The Ritualist: resubmission, 2026-09-25
 
+> **September 25 round-two note:** This document records earlier audit stages. The current code and live-release status are tracked in `RELEASE-PREP-both-apps-2026-09-25.md`. In particular, §8 and §10 contain superseded config and pricing instructions; use the newer checklist before any release or submission.
+
 The Ritualist's review (ref 104187) paused on 5.6.1, the order-status block. The block is gone (`the-ritualist-17`, released 2026-09-24 16:49Z). The app has changed a great deal since, so this is a fresh submission on the same app record (client `8da1…`, app.in.ink, Cloud Run `shopify-app`). **Every line marked PLACEHOLDER is Sam's to replace.** Nothing here was typed into the Partner Dashboard.
 
 ## 1. What the audit found and what was done (2026-09-25)
@@ -120,7 +122,7 @@ rm -rf /tmp/ritualist-release && mkdir /tmp/ritualist-release && cd ~/Desktop/IN
 1. **Strong passwords (question 14).** While it is No, Shopify will likely hold the protected-data request, which is ink's experience on 09-25. It becomes Yes when you turn on 2-step sign-in for Google, GitHub, Shopify Partners, Cloudflare and Supabase, and inkadmin's one shared password is replaced. Then flip 14 to Yes on both apps.
 2. **Pricing, "paid but not for pilots".** Set up the plans in Partner Dashboard, then The Ritualist, then Pricing (Managed Pricing), and send the app's plan-page handle, so a session can set `SHOPIFY_APP_HANDLE`. How pilots stay free is yours to choose: a private free plan, or the record left included for them.
 3. **Listing:** the name "The Ritualist"; the §5 drafts in your words; no SMS or returns; privacy URL https://www.in.ink/ritualist-privacy.html.
-4. **Testing notes:** "Open The Ritualist Studio", "Orders", no "Open dashboard" step, corvara's login.
+4. **Testing notes:** No separate app login or credentials are needed. Use the `corvara-cicli` development store in Shopify Admin, open The Ritualist from Apps, and use an existing order in Orders. If the store has no orders, create a test order in Shopify Admin first. See the current wording in `RELEASE-PREP-both-apps-2026-09-25.md`.
 5. **Screenshots and screencast** per §6.
 6. **Warm server on:**
    ```bash
