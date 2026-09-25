@@ -102,6 +102,19 @@ export function lifecycle(p: LifecycleFields): LifecycleStep[] {
   ];
 }
 
+/** Shipped, when no carrier has scanned yet but Shopify fulfilled the order:
+ *  the fulfillment's time, said as Shopify's and never ticked (a reviewer who
+ *  fulfils an order saw "Shipped · Not recorded", 2026-09-25). A carrier's
+ *  shipped scan always wins. */
+export function withShopifyShipped(steps: LifecycleStep[], fulfilledAt: string | null | undefined): LifecycleStep[] {
+  if (time(fulfilledAt ?? null) == null) return steps;
+  return steps.map((s) =>
+    s.key === "shipped" && s.state === "not_recorded"
+      ? { key: "shipped", label: "Shipped", state: "reported" as const, at: fulfilledAt as string, note: SOURCE_WORDS.shopify }
+      : s,
+  );
+}
+
 export type OpenResult =
   | "measured"
   | "not_shared"

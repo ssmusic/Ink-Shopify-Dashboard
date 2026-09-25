@@ -61,6 +61,7 @@ export const RECENT_ORDERS_DETAIL_QUERY = `#graphql
           pageInfo { hasNextPage }
           nodes { title quantity sku originalUnitPriceSet { shopMoney { amount } } }
         }
+        fulfillments(first: 5) { createdAt }
 
         proof: metafield(namespace: "ink", key: "proof_reference") { value }
       }
@@ -96,6 +97,8 @@ export type InkOrderDetail = {
     zip: string;
   };
   date: string;
+  /** Shopify's first fulfillment of the order (ISO), when there is one. */
+  fulfilledAt?: string | null;
   total: string;
   subtotal: string;
   currency: string;
@@ -120,6 +123,7 @@ type Money = {
   shopMoney?: { amount?: unknown; currencyCode?: unknown };
 } | null;
 type OrderNode = {
+  fulfillments?: Array<{ createdAt?: unknown }> | null;
   id?: unknown;
   name?: unknown;
   createdAt?: unknown;
@@ -165,6 +169,16 @@ type AdminGraphql = {
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** One order node as the Ritualist's Shipments loader would have built it. */
+/** When Shopify first fulfilled the order (the earliest fulfillment's
+ *  createdAt), or null — the rail's Shipped when no carrier has scanned yet. */
+export function firstFulfilledAt(list: OrderNode["fulfillments"]): string | null {
+  const times = (Array.isArray(list) ? list : [])
+    .map((f) => (typeof f?.createdAt === "string" ? f.createdAt : ""))
+    .filter((t) => Number.isFinite(Date.parse(t)))
+    .sort();
+  return times[0] ?? null;
+}
+
 export function orderDetailFrom(n: OrderNode, shopTz: string): InkOrderDetail {
   const metafields: Record<string, string> = {};
   const items = (n.lineItems?.nodes ?? [])
@@ -212,6 +226,7 @@ export function orderDetailFrom(n: OrderNode, shopTz: string): InkOrderDetail {
         }
       : undefined,
     date,
+    fulfilledAt: firstFulfilledAt(n.fulfillments),
     total: str(n.totalPriceSet?.shopMoney?.amount),
     subtotal: subtotal.toFixed(2),
     currency: str(n.totalPriceSet?.shopMoney?.currencyCode),

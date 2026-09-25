@@ -251,3 +251,17 @@ describe("one order's timeline", () => {
     ).toBeNull();
   });
 });
+
+import { withShopifyShipped, lifecycle as lifecycleOf } from "./order-timeline";
+describe("Shipped from Shopify's fulfillment (2026-09-25)", () => {
+  it("fills a not-recorded Shipped with the fulfillment's time, said as Shopify's and never ticked", () => {
+    const steps = withShopifyShipped(lifecycleOf({ enrolled_at: "2026-09-25T07:17:00Z" }), "2026-09-25T07:18:15Z");
+    const shipped = steps.find((s) => s.key === "shipped")!;
+    expect(shipped).toEqual({ key: "shipped", label: "Shipped", state: "reported", at: "2026-09-25T07:18:15Z", note: "From Shopify's fulfillment" });
+  });
+  it("never replaces a carrier's shipped scan, and does nothing without a fulfillment", () => {
+    const scanned = lifecycleOf({ carrier_journey: { events: [{ at: "2026-09-25T09:00:00Z", stage: "shipped" }] } });
+    expect(withShopifyShipped(scanned, "2026-09-25T07:18:15Z").find((s) => s.key === "shipped")!.state).toBe("carrier");
+    expect(withShopifyShipped(scanned, null)).toBe(scanned);
+  });
+});

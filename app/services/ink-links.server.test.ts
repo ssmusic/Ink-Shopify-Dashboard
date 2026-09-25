@@ -133,7 +133,8 @@ describe("readRecentOrderRecords", () => {
         provinceCode: "NY",
         zip: "11201",
       },
-      date: "Sep 21, 2026", // the store's timezone, as the Ritualist's list does
+      date: "Sep 21, 2026",
+      fulfilledAt: null, // the store's timezone, as the Ritualist's list does
       total: "58.00",
       subtotal: "58.00",
       currency: "USD",
