@@ -15,13 +15,9 @@ import InkConnectionCard from "./InkConnectionCard";
 import EmailLineCard from "./EmailLineCard";
 import type { EmailLineView } from "../services/email-line.server";
 import type { InkConnection } from "../services/ink-connection.server";
-import BuyerDoorCard from "./BuyerDoorCard";
-import type { BuyerDoorAnswer, BuyerDoorChoice } from "../lib/buyer-door-choice";
 export type SettingsData = {
   connection?: InkConnection;
   emailLine?: EmailLineView | null;
-  /** Where the tracking link goes (services/buyer-door-choice.server.ts). */
-  buyerDoor?: BuyerDoorAnswer | null;
   ritualistUrl: string;
   privacy:
     | {
@@ -107,25 +103,6 @@ function DataRequestRow({ row }: { row: PrivacyRow }) {
     </BlockStack>
   );
 }
-// WHERE THE TRACKING LINK GOES (2026-09-25): the card, posting one word to
-// this route's action (intent=buyer_door). The screen shows what the save
-// answered — the backend's record after the write — never a guess.
-function BuyerDoorSection({ answer }: { answer: BuyerDoorAnswer | null | undefined }) {
-  const fetcher = useFetcher<BuyerDoorAnswer>();
-  const saved = fetcher.data;
-  const shown = saved?.ok ? saved : answer;
-  return (
-    <BuyerDoorCard
-      answer={shown}
-      result={fetcher.state === "idle" ? saved : null}
-      saving={fetcher.state !== "idle"}
-      onSave={(choice: BuyerDoorChoice) =>
-        fetcher.submit({ intent: "buyer_door", choice }, { method: "post", action: "/app/ink/settings" })
-      }
-    />
-  );
-}
-
 export default function InkSettingsView({ data }: { data: SettingsData }) {
   const revalidator = useRevalidator();
   return (
@@ -147,7 +124,6 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
           <BlockStack gap="400">
             <InkPillNav active="settings" />
             <InkConnectionCard connection={data.connection} checking={revalidator.state !== "idle"} onCheck={() => revalidator.revalidate()} />
-            {data.buyerDoor !== undefined && <BuyerDoorSection answer={data.buyerDoor} />}
             <EmailLineCard line={data.emailLine} />
             {data.ritualistUrl && (
               <Card>

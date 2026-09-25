@@ -34,16 +34,11 @@ vi.mock("./ink-api.server", () => ({ patchMerchant, InkApiError }));
 vi.mock("./merchant.server", () => ({ getMerchant, updateMerchant }));
 vi.mock("../firestore-session-storage.server", () => ({ otherAppHoldsSession }));
 vi.mock("./ink-install.server", () => ({ resolveInkShopId }));
-const backendDoc = vi.fn();
-vi.mock("../firestore.server", () => ({
-  default: { collection: () => ({ doc: () => ({ get: async () => backendDoc() }) }) },
-}));
 
 const SHOP = "made-up-shop.myshopify.com";
 
 beforeEach(() => {
   vi.resetAllMocks();
-  backendDoc.mockReturnValue({ exists: false, data: () => undefined });
   updateMerchant.mockResolvedValue(undefined);
   patchMerchant.mockResolvedValue({ plan: "ritualist" });
   vi.spyOn(console, "log").mockImplementation(() => {});
@@ -142,25 +137,6 @@ describe("order 3 — the Ritualist uninstalls", () => {
     expect(patchMerchant).toHaveBeenCalledWith("shop_abc123", { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null });
     expect(updateMerchant).toHaveBeenCalledWith(SHOP, { ritualist_plan_claimed_at: null, ritualist_plan_active_at: null });
     expect(updateMerchant.mock.calls[0][1]).not.toHaveProperty("ink_api_key");
-  });
-
-  it("THE RITUALIST PAGE LEAVES WITH THE RITUALIST: a Ritualist-page choice is cleared, an ask to the carrier stays", async () => {
-    otherAppHoldsSession.mockResolvedValue(true);
-    getMerchant.mockResolvedValue({ ink_api_key: "ink_live_k", ink_shop_id: "shop_abc123" });
-    resolveInkShopId.mockResolvedValue("shop_abc123");
-    const { restoreInkPlanOnRitualistUninstall } = await import("./plan-precedence.server");
-
-    backendDoc.mockReturnValue({ exists: true, data: () => ({ page_mode: "page" }) });
-    expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("restored");
-    expect(patchMerchant).toHaveBeenLastCalledWith("shop_abc123", { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null, page_mode: null });
-
-    backendDoc.mockReturnValue({ exists: true, data: () => ({ page_mode: "flash", flash_face: "white", flash_forward: "page" }) });
-    await restoreInkPlanOnRitualistUninstall(SHOP);
-    expect(patchMerchant).toHaveBeenLastCalledWith("shop_abc123", { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null, flash_forward: null });
-
-    backendDoc.mockReturnValue({ exists: true, data: () => ({ page_mode: "flash", flash_face: "white", flash_forward: "carrier" }) });
-    await restoreInkPlanOnRitualistUninstall(SHOP);
-    expect(patchMerchant).toHaveBeenLastCalledWith("shop_abc123", { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null });
   });
 
   it("leaves the plan alone when ink is not installed — the store is leaving", async () => {
