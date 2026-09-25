@@ -7,7 +7,7 @@ vi.mock("../shopify.server", () => ({
 }));
 vi.mock("../session-utils.server", () => ({ getOfflineSession: vi.fn() }));
 
-import { loader } from "./app.api.dashboard.metrics";
+import { loader } from "../routes/app.api.dashboard.metrics";
 
 describe("dashboard metrics authentication", () => {
   it("does not return a successful response or disclose exception details without Shopify auth", async () => {
