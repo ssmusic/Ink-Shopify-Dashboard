@@ -147,7 +147,11 @@ export const getMerchantPlan = async (shopId: string): Promise<"ink" | "ritualis
   if (!Array.isArray(body?.merchants)) throw new Error("Invalid merchant list response");
   const merchant = body.merchants.find((row: any) => row?.shop_id === shopId || row?.id === shopId);
   if (!merchant) throw new Error(`Merchant ${shopId} was not found`);
-  return merchant.plan === "ink" || merchant.plan === "ritualist" ? merchant.plan : null;
+  if (merchant.plan === "ink" || merchant.plan === "ritualist") return merchant.plan;
+  // The backend's buyerDoor rule defines an absent legacy plan as Ritualist;
+  // this is a read of its effective plan, not an inference after a failed GET.
+  if (merchant.plan == null) return "ritualist";
+  return null;
 };
 
 export const getShopIdByDomain = async (shopDomain: string): Promise<string> => {
