@@ -77,14 +77,26 @@ export async function claimRitualistPlan({
   shop: string;
   existing: MerchantData;
 }): Promise<PlanClaimOutcome> {
-  // Only ink's install writes ink_shop_id. A doc without it is the
-  // Ritualist's own (every merchant today) and there is nothing to claim.
-  if (!existing.ink_shop_id) return "not_an_ink_merchant";
   const restorePreviousPlan = existing.ritualist_plan_at_uninstall === "ritualist";
+  // A Ritualist-first store can later add ink without getting ink_shop_id:
+  // ink's install preserves the existing key and returns early. Its saved
+  // paid-plan marker still must win on reinstall; resolve the backend id then.
+  if (!existing.ink_shop_id && !restorePreviousPlan) return "not_an_ink_merchant";
   if (existing.ritualist_plan_claimed_at && !restorePreviousPlan) return "already_claimed";
 
+  let shopId = existing.ink_shop_id;
+  if (!shopId) {
+    try {
+      shopId = await resolveInkShopId(shop, existing);
+    } catch (e: any) {
+      console.error(`[plan] The Ritualist could not resolve its previous merchant on ${shop}: ${e?.message ?? e}`);
+      return "failed";
+    }
+    if (!shopId) return "failed";
+  }
+
   try {
-    await patchMerchant(existing.ink_shop_id, {
+    await patchMerchant(shopId, {
       ritualist_installed_at: new Date().toISOString(),
       ...(restorePreviousPlan ? { plan: "ritualist" } : {}),
     });
@@ -92,7 +104,7 @@ export async function claimRitualistPlan({
     // Logged, not stamped: the next app load asks again. Until the backend
     // deploy that knows the field (ink-backend #121) this is a 400 each load
     // — one line apiece, and the merchant keeps ink's experience meanwhile.
-    console.error(`[plan] The Ritualist could not record its arrival on ${shop} (${existing.ink_shop_id}): ${e?.message ?? e}`);
+    console.error(`[plan] The Ritualist could not record its arrival on ${shop} (${shopId}): ${e?.message ?? e}`);
     return "failed";
   }
 
@@ -106,7 +118,7 @@ export async function claimRitualistPlan({
   if (restorePreviousPlan) {
     console.log(`[plan] ${shop}: the Ritualist came back — plan restored to ritualist`);
   } else {
-    console.log(`[plan] The Ritualist arrived on ${shop} (${existing.ink_shop_id}): entitled; plan left as ink until the page publishes`);
+    console.log(`[plan] The Ritualist arrived on ${shop} (${shopId}): entitled; plan left as ink until the page publishes`);
   }
   return "claimed";
 }

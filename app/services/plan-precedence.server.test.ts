@@ -100,6 +100,17 @@ describe("order 2 — the Ritualist installs on a merchant ink made", () => {
     expect(patchMerchant.mock.invocationCallOrder[0]).toBeLessThan(updateMerchant.mock.invocationCallOrder[0]);
   });
 
+  it("restores a Ritualist-first store that added ink without an ink_shop_id", async () => {
+    const { claimRitualistPlan } = await import("./plan-precedence.server");
+    const existing = { ink_api_key: "k", ritualist_plan_at_uninstall: "ritualist" } as any;
+    resolveInkShopId.mockResolvedValue("shop_legacy");
+
+    expect(await claimRitualistPlan({ shop: SHOP, existing })).toBe("claimed");
+    expect(resolveInkShopId).toHaveBeenCalledWith(SHOP, existing);
+    expect(patchMerchant).toHaveBeenCalledWith("shop_legacy", { plan: "ritualist", ritualist_installed_at: expect.any(String) });
+    expect(updateMerchant).toHaveBeenCalledWith(SHOP, expect.objectContaining({ ritualist_plan_at_uninstall: null }));
+  });
+
   it("keeps a merchant's existing toggles when it has them", async () => {
     const { claimRitualistPlan } = await import("./plan-precedence.server");
     const existing = { ink_api_key: "k", ink_shop_id: "shop_abc123", notification_settings: { channels: { email: false } } } as any;
