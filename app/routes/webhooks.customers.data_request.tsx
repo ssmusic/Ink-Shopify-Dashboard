@@ -1,20 +1,14 @@
-import { isInk } from "../services/app-flavor.server";
-import { handleInkPrivacy } from "../services/ink-privacy.server";
 import { type ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import { handleInkPrivacy } from "../services/ink-privacy.server";
 
+// BOTH APPS, ONE PATH (2026-09-25, Sam: "what we did for ink needs to be done
+// for the ritualist"). The request is persisted before Shopify is answered;
+// a backend that fails answers 503 so Shopify retries (never 200 for work not
+// done); a data request is answered from Settings with the customer's file.
+// Which app's sessions and records are touched is decided by the flavor inside
+// services/ink-privacy.server.ts and firestore-session-storage.server.ts.
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { topic, shop, payload } = await authenticate.webhook(request);
-  if (isInk()) return handleInkPrivacy("data_request", shop, payload);
-
-  console.log(`Received ${topic} webhook for ${shop}`);
-
-  // CUSTOMERS/DATA_REQUEST
-  // This app's own DB stores merchant config only. Customer data lives on the
-  // proof in the ink-backend; the merchant can already read it there. The
-  // 30-day obligation is on the merchant; we acknowledge receipt and log.
-  // TODO(Phase 5 — PCD): surface a proof-data export keyed on
-  // payload.customer.id so merchants can answer these requests in one click.
-
-  return new Response("OK", { status: 200 });
+  const { shop, payload } = await authenticate.webhook(request);
+  return handleInkPrivacy("data_request", shop, payload);
 };

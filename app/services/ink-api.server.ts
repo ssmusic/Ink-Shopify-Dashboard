@@ -722,7 +722,7 @@ export const redactCustomerInInk = async (params: {
         customer_email: params.customerEmail ?? null,
         order_ids: Array.isArray(params.orderIds) ? params.orderIds : [],
         source: "shopify_customers_redact",
-        ...(isInk() ? { include_custody: true } : {}),
+        include_custody: true,
       }),
     });
     const body = await response.json().catch(() => null);
