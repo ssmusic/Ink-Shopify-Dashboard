@@ -29,15 +29,19 @@ export function ritualistPillFor(pathname: string): string | null {
 
 export default function RitualistPillNav() {
   const { pathname } = useLocation();
-  // The pills centred, the studio's wordmark at the right of the same line,
-  // on every page (components/StudioLink.tsx).
+  // The studio's wordmark at the LEFT of the line, under Shopify's own app
+  // logo (which an app cannot make a link), the pills centred, nothing at the
+  // right (Sam, 2026-09-25: "make the logo on the top left the link ... and
+  // lose the one on the top right"). components/StudioLink.tsx.
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: "12px" }}>
-      <span />
-      <PillNav pills={RITUALIST_PILLS} active={ritualistPillFor(pathname)} label="The Ritualist" />
-      <span style={{ justifySelf: "end" }}>
+    <div className="rt-pillbar">
+      {/* A phone stacks the wordmark over the pills: one line does not fit. */}
+      <style>{`.rt-pillbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}.rt-pillbar>.rt-studio{justify-self:start}@media (max-width:640px){.rt-pillbar{grid-template-columns:minmax(0,1fr)}.rt-pillbar>.rt-studio{justify-self:center}.rt-pillbar>.rt-spacer{display:none}.rt-pillbar>*{min-width:0;max-width:100%}}`}</style>
+      <span className="rt-studio">
         <StudioLink />
       </span>
+      <PillNav pills={RITUALIST_PILLS} active={ritualistPillFor(pathname)} label="The Ritualist" />
+      <span className="rt-spacer" />
     </div>
   );
 }
