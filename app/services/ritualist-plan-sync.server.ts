@@ -48,17 +48,21 @@ export const PAID_PLAN_QUERY = `#graphql
   }
 `;
 
-/** Shopify's answer → true (a Ritualist plan is active), false (none), or
- *  null when the body is not Shopify's answer (the read failed: decide
- *  nothing). PILOTS ARE FREE (Sam, 2026-09-25): a pilot store is offered a
- *  private $0 "Pilot" plan in Shopify's Managed Pricing, so an ACTIVE plan
- *  counts whatever its price — the whole product, record included. Only
- *  pilot stores can see that plan; everyone else chooses a paid one. */
+/** Shopify's answer → true (a paid plan is active), false (none), or null
+ *  when the body is not Shopify's answer (the read failed: decide nothing). */
 export function paidPlanActive(body: unknown): boolean | null {
   const subs = (body as { data?: { currentAppInstallation?: { activeSubscriptions?: unknown } } } | null)
     ?.data?.currentAppInstallation?.activeSubscriptions;
   if (!Array.isArray(subs)) return null;
-  return subs.some((s) => (s as { status?: unknown })?.status === "ACTIVE");
+  return subs.some((s) => {
+    const sub = s as { status?: unknown; lineItems?: unknown };
+    if (sub?.status !== "ACTIVE") return false;
+    return (Array.isArray(sub.lineItems) ? sub.lineItems : []).some((item) => {
+      const p = (item as { plan?: { pricingDetails?: Record<string, any> } })?.plan?.pricingDetails;
+      const amount = Number(p?.__typename === "AppUsagePricing" ? p?.cappedAmount?.amount : p?.price?.amount);
+      return Number.isFinite(amount) && amount > 0;
+    });
+  });
 }
 
 type AdminGraphql = { graphql: (query: string, options?: any) => Promise<{ json: () => Promise<unknown> }> };
