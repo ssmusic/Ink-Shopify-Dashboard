@@ -30,6 +30,18 @@ export const OTHER_APP = isInk()
  *  it still installed there? Throws when Firestore cannot answer: the caller
  *  is deciding whether to erase a merchant, and "unknown" must not read as
  *  "no". */
+/** This app holds an offline session for the shop: installed now. The
+ *  uninstall webhook erases them, so one here means it was reinstalled. */
+export async function thisAppHoldsSession(shop: string): Promise<boolean> {
+  const snap = await firestore
+    .collection(COLLECTION)
+    .where("shop", "==", shop)
+    .where("isOnline", "==", false)
+    .limit(1)
+    .get();
+  return !snap.empty;
+}
+
 export async function otherAppHoldsSession(shop: string): Promise<boolean> {
   const snap = await firestore
     .collection(OTHER_APP.collection)
