@@ -57,6 +57,13 @@ const load = (graphql: ReturnType<typeof vi.fn>) => {
   return route.loader({ request: new Request("https://example.test/app/billing"), params: {}, context: {} } as never) as Promise<any>;
 };
 
+function renderHtml(loaderData: Record<string, unknown>) {
+  const Stub = createRoutesStub([
+    { id: "screen", path: "/", Component: () => <AppProvider i18n={translations}><Billing /></AppProvider> },
+  ]);
+  return renderToString(<Stub initialEntries={["/"]} hydrationData={{ loaderData: { screen: loaderData } }} />);
+}
+
 function render(loaderData: Record<string, unknown>) {
   const Stub = createRoutesStub([
     { id: "screen", path: "/", Component: () => <AppProvider i18n={translations}><Billing /></AppProvider> },
@@ -105,5 +112,28 @@ describe("what Billing draws", () => {
       expect(t).not.toMatch(/\bFree\b/);
       expect(t).not.toContain("Billing stays in Shopify");
     }
+  });
+
+  // THE PLAN DEAD END (audit 2026-09-25): an order whose record needs a plan
+  // links here, so "no plan" must never be the end of the page.
+  it("with no plan, offers the way to start one: Shopify's plan page when the app names it, else support", () => {
+    const withPage = render({ plans: [], planPageUrl: "https://admin.shopify.com/store/example/charges/the-app/pricing_plans" });
+    expect(withPage).toContain("Choose a plan");
+    expect(renderHtml({ plans: [], planPageUrl: "https://admin.shopify.com/store/example/charges/the-app/pricing_plans" })).toContain('href="https://admin.shopify.com/store/example/charges/the-app/pricing_plans"');
+    const withoutPage = render({ plans: [], planPageUrl: null });
+    expect(withoutPage).not.toContain("Choose a plan");
+    expect(renderHtml({ plans: [], planPageUrl: null })).toContain('href="mailto:support@in.ink"');
+    expect(withoutPage).toContain("Email support@in.ink");
+  });
+
+  it("builds Shopify's plan page only from a real handle and store, never a guess", () => {
+    vi.stubEnv("SHOPIFY_APP_HANDLE", "");
+    expect(route.planPageUrl("example.myshopify.com")).toBeNull();
+    vi.stubEnv("SHOPIFY_APP_HANDLE", "the-app");
+    expect(route.planPageUrl("example.myshopify.com")).toBe("https://admin.shopify.com/store/example/charges/the-app/pricing_plans");
+    expect(route.planPageUrl(null)).toBeNull();
+    vi.stubEnv("SHOPIFY_APP_HANDLE", "bad handle/..");
+    expect(route.planPageUrl("example.myshopify.com")).toBeNull();
+    vi.unstubAllEnvs();
   });
 });

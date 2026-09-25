@@ -2,7 +2,7 @@ import { authenticate } from "../shopify.server";
 import type { LoaderFunctionArgs, HeadersFunction } from "react-router";
 import { useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { Page, BlockStack, Box, Card, Text } from "@shopify/polaris";
+import { Page, BlockStack, Box, Button, Card, InlineStack, Text } from "@shopify/polaris";
 import PolarisAppLayout from "../components/PolarisAppLayout";
 import RitualistPillNav from "../components/RitualistPillNav";
 import { readRitualistPlans } from "../services/ritualist-plan.server";
@@ -20,12 +20,30 @@ import { readRitualistPlans } from "../services/ritualist-plan.server";
 // components/billing/. ⚠️ PLACEHOLDER COPY — every sentence is Sam's to word.
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   // Never re-thrown (app.tagged-shipments._index.tsx tells why): a failed
   // read costs the plan's lines, said as one, never the page.
   const plans = await readRitualistPlans(admin);
-  return { plans };
+  return { plans, planPageUrl: planPageUrl(session?.shop) };
 }
+
+// WHERE A PLAN IS CHOSEN. The Ritualist creates no charge of its own: a plan
+// is chosen on Shopify's own plan page for the app (Managed Pricing), which
+// exists only once the plans are set up in the Partner Dashboard. Until
+// SHOPIFY_APP_HANDLE names the app there, this page offers no button that
+// would open a Shopify 404, and says instead how a plan is started. An
+// order whose record needs a plan links here, so "no plan" is never the end
+// of the page (audit 2026-09-25).
+export function planPageUrl(shop: string | null | undefined): string | null {
+  const handle = (process.env.SHOPIFY_APP_HANDLE || "").trim();
+  const store = typeof shop === "string" ? shop.replace(/\.myshopify\.com$/, "") : "";
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(handle) || !/^[a-z0-9][a-z0-9-]*$/.test(store)) return null;
+  return `https://admin.shopify.com/store/${store}/charges/${handle}/pricing_plans`;
+}
+
+// ⚠️ PLACEHOLDER — Sam's words replace these two lines.
+export const NO_PLAN_LINE = "No plan is active for this store.";
+export const NO_PLAN_PAGE_LINE = "Plans can't be chosen inside the app yet. Email support@in.ink to start one.";
 
 const date = (iso: string) => {
   const d = new Date(iso);
@@ -34,7 +52,7 @@ const date = (iso: string) => {
 };
 
 export default function BillingPage() {
-  const { plans } = useLoaderData<typeof loader>();
+  const { plans, planPageUrl: choose } = useLoaderData<typeof loader>();
   return (
     <PolarisAppLayout>
       <Page fullWidth title="Billing">
@@ -51,7 +69,25 @@ export default function BillingPage() {
                 Your plan could not be read from Shopify. Refresh to try again.
               </Text>
             ) : plans.length === 0 ? (
-              <Text as="p">No plan is active for this store.</Text>
+              <BlockStack gap="300">
+                <Text as="p">{NO_PLAN_LINE}</Text>
+                {choose ? (
+                  <InlineStack>
+                    <Button variant="primary" url={choose} target="_top">
+                      Choose a plan
+                    </Button>
+                  </InlineStack>
+                ) : (
+                  <BlockStack gap="200">
+                    <Text as="p" tone="subdued">{NO_PLAN_PAGE_LINE}</Text>
+                    <InlineStack>
+                      <Button url="mailto:support@in.ink" external>
+                        Email support@in.ink
+                      </Button>
+                    </InlineStack>
+                  </BlockStack>
+                )}
+              </BlockStack>
             ) : (
               plans.map((plan, i) => (
                 <BlockStack key={`${plan.name}-${i}`} gap="100">
