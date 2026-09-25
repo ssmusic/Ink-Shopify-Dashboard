@@ -26,7 +26,7 @@ This is a review packet, not a release record. PR #226 is code-only and has not 
 
 ## Draft reviewer testing notes — The Ritualist
 
-No separate login or credentials are needed. In the `corvara-cicli` development store, open **The Ritualist** from Shopify Admin › Apps. The store has a test Starter plan. Open Dashboard, then Orders, open an order, inspect its activity and Advanced record, and download the offered files. Settings has Account, Delivery, and Notifications tabs; Billing shows the Shopify plan and its change-plan link. If testing on an empty development store, create a test order in Shopify Admin, fulfill it with tracking, and then return to Orders. The app's customer-facing page is reached from that order's tracking link. Shopify may prompt to approve the app's reduced permissions after the config release.
+No separate login or credentials are needed. In the `corvara-cicli` development store, open **The Ritualist** from Shopify Admin › Apps. The store has a test Starter plan. Open Dashboard, then Orders, open an order, inspect its activity and Advanced record, and download the offered files. Settings has Account, Delivery, and Notifications tabs; Billing shows the Shopify plan and its change-plan link. If testing on an empty development store, create a test order in Shopify Admin, fulfill it with a USPS or UPS-style tracking number with that carrier selected (not “Other”), and then return to Orders. The app's customer-facing page is reached from that order's tracking link. Test order #1015 verified the `corvara-cicli.in.ink` page and Settings › Notifications `/o/` link on September 25. Shopify may prompt to approve the app's reduced permissions after the config release.
 
 ## Draft reviewer testing notes — Ink.
 
