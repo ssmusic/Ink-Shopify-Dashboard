@@ -127,6 +127,7 @@ describe("the route contract between the two apps", () => {
         "routes/webhooks.customers.data_request",
         "routes/webhooks.customers.redact",
         "routes/webhooks.shop.redact",
+        "routes/api.jobs.privacy",
         "routes/app.record",
       ].sort(),
     );

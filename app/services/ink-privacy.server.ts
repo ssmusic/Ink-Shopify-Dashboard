@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import firestore from "../firestore.server";
 import { isInk } from "./app-flavor.server";
 import {
@@ -8,6 +8,9 @@ import {
 import { exportCustomerFromInk, purgeShopInInk, redactCustomerInInk } from "./ink-api.server";
 
 export const PRIVACY_COLLECTION = "ink_privacy_requests";
+type DeletionTopic = "customers/redact" | "shop/redact";
+type PrivacyFlavor = "ink" | "ritualist";
+const currentFlavor = (): PrivacyFlavor => (isInk() ? "ink" : "ritualist");
 const id = (v: unknown) =>
   typeof v === "string" || typeof v === "number"
     ? String(v).slice(0, 100)
@@ -36,17 +39,22 @@ export async function retainPrivacyRequest(
       .filter(Boolean),
   };
   const key = createHash("sha256")
-    .update(JSON.stringify([shop, topic, request.requestId ?? request]))
+    // The two apps can be installed on the same shop. Their deletion jobs
+    // must not collide or let one app acknowledge the other's work.
+    .update(JSON.stringify([currentFlavor(), shop, topic, request.requestId ?? request]))
     .digest("hex");
   const ref = firestore.collection(PRIVACY_COLLECTION).doc(key);
   try {
     await ref.create({
       shop,
+      appFlavor: currentFlavor(),
       topic,
       ...request,
       receivedAt: new Date().toISOString(),
       dueAt: new Date(Date.now() + 30 * 86400000).toISOString(),
       state: "pending",
+      attempts: 0,
+      nextAttemptAt: new Date().toISOString(),
     });
   } catch (e) {
     if ((e as { code?: number }).code !== 6) throw e;
@@ -157,6 +165,17 @@ async function eraseWhere(collection: string, shop: string) {
   }
 }
 
+async function eraseOtherPrivacyReceipts(shop: string, keepId: string) {
+  for (;;) {
+    const snap = await firestore.collection(PRIVACY_COLLECTION).where("shop", "==", shop).limit(400).get();
+    const others = snap.docs.filter((d) => d.id !== keepId);
+    if (!others.length) return;
+    const batch = firestore.batch();
+    for (const d of others) batch.delete(d.ref);
+    await batch.commit();
+  }
+}
+
 export async function handleInkPrivacy(
   topic: "data_request" | "redact" | "shop",
   shop: string,
@@ -172,75 +191,135 @@ export async function handleInkPrivacy(
       return new Response("Request received", { status: 200 });
     }
     if (topic === "redact") {
-      const { ref, request } = await retainPrivacyRequest(
-        shop,
-        "customers/redact",
-        payload,
-      );
+      const p = payload as { customer?: { id?: unknown; email?: unknown }; orders_to_redact?: unknown } | null;
+      const hasReference = Boolean(id(p?.customer?.id) ||
+        typeof p?.customer?.email === "string" && p.customer.email ||
+        Array.isArray(p?.orders_to_redact) && p.orders_to_redact.some((value) => id(value)));
+      if (!hasReference) return new Response("Missing customer reference", { status: 400 });
+      const { request } = await retainPrivacyRequest(shop, "customers/redact", payload);
       if (!request.customerId && !request.email && !request.orderIds.length)
         return new Response("Missing customer reference", { status: 400 });
-      const result = await redactCustomerInInk({
-        shopDomain: shop,
-        customerId: request.customerId,
-        customerEmail: request.email,
-        orderIds: request.orderIds,
-      });
-      if (!result.ok) return new Response("Redaction pending", { status: 503 });
-      // Erase identifiers but retain the outstanding access-request receipt.
-      // Redaction is not evidence that the requested export was delivered.
-      const requests = await firestore
-        .collection(PRIVACY_COLLECTION)
-        .where("shop", "==", shop)
-        .get();
-      for (const d of requests.docs) {
-        const v = d.data();
-        if (
-          (request.customerId && v.customerId === request.customerId) ||
-          (request.email && v.email === request.email) ||
-          (Array.isArray(v.orderIds) &&
-            v.orderIds.some((orderId: string) =>
-              request.orderIds.includes(orderId),
-            )) ||
-          d.id === ref.id
-        ) {
-          if (v.topic === "customers/data_request")
-            await d.ref.update({
-              customerId: null,
-              email: null,
-              orderIds: [],
-              // A copy already downloaded stays downloaded; one never
-              // downloaded now answers that the customer was erased first.
-              state:
-                v.state === "downloaded"
-                  ? "downloaded"
-                  : "response_required_after_redaction",
-            });
-          else await d.ref.delete();
-        }
-      }
-      return new Response("OK");
+      return new Response("Deletion queued", { status: 200 });
     }
     await retainPrivacyRequest(shop, "shop/redact", {});
-    const shared = await otherAppHoldsSession(shop);
-    await eraseWhere(SESSION_COLLECTION, shop);
-    if (!shared) {
-      const result = await purgeShopInInk(shop);
-      if (!result.ok)
-        return new Response("Shop redaction pending", { status: 503 });
-      await eraseWhere("record_charges", shop);
-      await eraseWhere("ink_record_charges", shop);
-      await firestore.collection("merchants").doc(shop).delete();
-    } else {
-      // The other app still holds this store: erase only THIS app's own
-      // charge bindings (the Ritualist's must never clear ink's, 2026-09-25).
-      await eraseWhere(isInk() ? "ink_record_charges" : "record_charges", shop);
-    }
-    // The receipts are shared by both app identities. Keep them until the
-    // last installation is gone, so the other app can still answer requests.
-    if (!shared) await eraseWhere(PRIVACY_COLLECTION, shop);
-    return new Response("OK");
+    return new Response("Deletion queued", { status: 200 });
   } catch {
     console.error("[ink privacy] processing failed");
     return new Response("Privacy request pending", { status: 503 });
   }
+}
+
+/** Run outside the Shopify webhook request. Both backend operations are
+ * idempotent; a timed-out partial purge is retried from its saved receipt. */
+async function executeDeletion(ref: FirebaseFirestore.DocumentReference, v: FirebaseFirestore.DocumentData) {
+  const shop = String(v.shop);
+  if (v.topic === "customers/redact") {
+    const request = {
+      customerId: typeof v.customerId === "string" ? v.customerId : null,
+      email: typeof v.email === "string" ? v.email : null,
+      orderIds: Array.isArray(v.orderIds) ? v.orderIds.map(String) : [] as string[],
+    };
+    if (!request.customerId && !request.email && !request.orderIds.length)
+      throw new Error("Customer deletion has no identifier");
+    const result = await redactCustomerInInk({
+      shopDomain: shop,
+      customerId: request.customerId,
+      customerEmail: request.email,
+      orderIds: request.orderIds,
+    });
+    if (!result.ok) throw new Error(`Customer deletion failed (${result.status})`);
+    // Retain access-request metadata, but erase buyer identifiers only after
+    // the backend confirms the deletion. Never mark an export delivered here.
+    const requests = await firestore.collection(PRIVACY_COLLECTION).where("shop", "==", shop).get();
+    for (const d of requests.docs) {
+      const item = d.data();
+      if (
+        (request.customerId && item.customerId === request.customerId) ||
+        (request.email && item.email === request.email) ||
+        (Array.isArray(item.orderIds) && item.orderIds.some((orderId: string) => request.orderIds.includes(orderId))) ||
+        d.id === ref.id
+      ) {
+        if (item.topic === "customers/data_request")
+          await d.ref.update({
+            customerId: null, email: null, orderIds: [],
+            state: item.state === "downloaded" ? "downloaded" : "response_required_after_redaction",
+          });
+        else if (item.topic === "customers/redact" && d.id !== ref.id) {
+          await d.ref.update({
+            customerId: null, email: null, orderIds: [],
+            state: "completed", completedAt: new Date().toISOString(),
+          });
+        }
+      }
+    }
+    return;
+  }
+  const shared = await otherAppHoldsSession(shop);
+  await eraseWhere(SESSION_COLLECTION, shop);
+  if (!shared) {
+    const result = await purgeShopInInk(shop);
+    if (!result.ok) throw new Error(`Shop deletion failed (${result.status})`);
+    await eraseWhere("record_charges", shop);
+    await eraseWhere("ink_record_charges", shop);
+    await firestore.collection("merchants").doc(shop).delete();
+    // The job receipt is deleted last. If cleanup fails midway, it survives
+    // and the worker can resume from its next attempt.
+    await eraseOtherPrivacyReceipts(shop, ref.id);
+    await ref.delete();
+  } else {
+    await eraseWhere(isInk() ? "ink_record_charges" : "record_charges", shop);
+    await ref.update({ state: "completed", completedAt: new Date().toISOString() });
+  }
+}
+
+/** Called by a private scheduled route on each app service. The transaction
+ * prevents overlapping invocations from claiming the same receipt. An
+ * expired lease is retried, so a worker crash cannot lose a deletion. */
+export async function processPendingPrivacy(flavor: PrivacyFlavor = currentFlavor()) {
+  const now = Date.now();
+  const snap = await firestore.collection(PRIVACY_COLLECTION).where("appFlavor", "==", flavor).get();
+  const candidates = snap.docs
+    .filter((d) => {
+      const v = d.data();
+      return (v.topic === "customers/redact" || v.topic === "shop/redact") &&
+        (v.state === "pending" && Date.parse(v.nextAttemptAt || "") <= now ||
+          v.state === "processing" && Date.parse(v.leaseUntil || "") <= now);
+    })
+    .sort((a, b) => String(a.data().receivedAt).localeCompare(String(b.data().receivedAt)))
+    .slice(0, 1);
+  for (const d of candidates) {
+    const claimed = await firestore.runTransaction(async (tx) => {
+      const fresh = await tx.get(d.ref);
+      if (!fresh.exists) return null;
+      const v = fresh.data()!;
+      if (!(v.state === "pending" && Date.parse(v.nextAttemptAt || "") <= Date.now() ||
+        v.state === "processing" && Date.parse(v.leaseUntil || "") <= Date.now())) return null;
+      const leaseId = randomUUID();
+      tx.update(d.ref, { state: "processing", leaseId, leaseUntil: new Date(Date.now() + 600000).toISOString() });
+      return { ...v, leaseId };
+    });
+    if (!claimed) continue;
+    try {
+      await executeDeletion(d.ref, claimed);
+      const current = await d.ref.get();
+      if (current.exists && current.data()?.state === "processing" && current.data()?.leaseId === claimed.leaseId)
+        await d.ref.update({
+          state: "completed", completedAt: new Date().toISOString(),
+          customerId: null, email: null, orderIds: [], leaseUntil: null, leaseId: null,
+        });
+      return { processed: 1, failed: 0 };
+    } catch (error) {
+      const attempts = Number((claimed as FirebaseFirestore.DocumentData).attempts || 0) + 1;
+      const current = await d.ref.get();
+      if (current.exists && current.data()?.leaseId === claimed.leaseId)
+        await d.ref.update({
+          state: "pending", attempts, leaseId: null, leaseUntil: null,
+          nextAttemptAt: new Date(Date.now() + Math.min(3600000, 30000 * 2 ** Math.min(attempts, 7))).toISOString(),
+          lastFailureAt: new Date().toISOString(),
+        });
+      console.error("[ink privacy] queued deletion failed", error);
+      return { processed: 0, failed: 1 };
+    }
+  }
+  return { processed: 0, failed: 0 };
 }

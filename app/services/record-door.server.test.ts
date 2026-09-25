@@ -139,14 +139,17 @@ describe("Shopify's one-time charge", () => {
 });
 
 describe("the wiring", () => {
-  it("the return never reads the kill switch; the press does; the screen opens Shopify at the top frame", () => {
+  it("the return honors an existing charge; only Ink can create a new one", () => {
     const route = src("../routes/app.record.tsx");
     const loader = route.slice(route.indexOf("export const loader"), route.indexOf("export const action"));
     expect(loader).not.toMatch(/recordOffer|RECORD_PURCHASES_ENABLED|recordPurchasesEnabled/);
     expect(loader).toContain("settleRecordCharges(admin, session.shop, view.shopId)");
     const action = route.slice(route.indexOf("export const action"));
-    expect(action).toContain("const offer = recordOffer(await readRecordPrice(view.shopId));");
-    expect(action).toContain("await rememberRecordCharge(session.shop, proofId, chargeId);");
+    expect(action).toContain('if (isInk() && intent !== "outcome")');
+    expect(action).toContain('if (intent === "buy")');
+    expect(action).toContain('The record is included with your plan.');
+    expect(action).not.toContain("createRecordCharge(");
+    expect(src("../services/ink-billing.server.ts")).toContain("const charge = await createRecordCharge(admin,");
     expect(src("../components/RecordDoor.tsx")).toContain('window.open(url, "_top")');
   });
 

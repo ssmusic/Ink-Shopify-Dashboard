@@ -63,15 +63,14 @@ afterEach(() => {
 describe("shop/redact on the Ritualist (APP_FLAVOR unset)", () => {
   beforeEach(() => vi.stubEnv("APP_FLAVOR", ""));
 
-  it("asks ink's session collection, and with no ink session purges exactly as before", async () => {
+  it("saves the Ritualist deletion without doing purge work in Shopify's webhook", async () => {
     sessionQuery.get.mockResolvedValue({ empty: true });
     const res = await redact();
     expect(res.status).toBe(200);
-    // The request is persisted first (ink_privacy_requests, since 2026-09-25
-    // both apps share ink's hardened path); then ink's sessions are asked.
-    expect(collections).toContain("shopify_sessions_ink");
-    expect(merchantDelete).toHaveBeenCalledTimes(1);
-    expect(purgeShopInInk).toHaveBeenCalledWith(SHOP);
+    expect(collections).toContain("ink_privacy_requests");
+    expect(collections).not.toContain("shopify_sessions_ink");
+    expect(merchantDelete).not.toHaveBeenCalled();
+    expect(purgeShopInInk).not.toHaveBeenCalled();
   });
 
   it("purges nothing while ink is still installed on the store", async () => {
@@ -82,10 +81,10 @@ describe("shop/redact on the Ritualist (APP_FLAVOR unset)", () => {
     expect(purgeShopInInk).not.toHaveBeenCalled();
   });
 
-  it("defers (503, Shopify retries) when Firestore cannot say — an unknown never purges", async () => {
+  it("does not ask the other app's session collection inside the webhook", async () => {
     sessionQuery.get.mockRejectedValue(new Error("unavailable"));
     const res = await redact();
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
     expect(merchantDelete).not.toHaveBeenCalled();
     expect(purgeShopInInk).not.toHaveBeenCalled();
   });
@@ -94,14 +93,14 @@ describe("shop/redact on the Ritualist (APP_FLAVOR unset)", () => {
 describe("shop/redact on ink (APP_FLAVOR=ink)", () => {
   beforeEach(() => vi.stubEnv("APP_FLAVOR", "ink"));
 
-  it("asks the Ritualist's session collection, and purges only when the Ritualist is gone too", async () => {
+  it("queues ink deletion separately from the Ritualist installation", async () => {
     sessionQuery.get.mockResolvedValue({ empty: false });
     expect((await redact()).status).toBe(200);
-    expect(collections).toContain("shopify_sessions");
+    expect(collections).not.toContain("shopify_sessions");
     expect(purgeShopInInk).not.toHaveBeenCalled();
 
     sessionQuery.get.mockResolvedValue({ empty: true });
     expect((await redact()).status).toBe(200);
-    expect(purgeShopInInk).toHaveBeenCalledWith(SHOP);
+    expect(purgeShopInInk).not.toHaveBeenCalled();
   });
 });

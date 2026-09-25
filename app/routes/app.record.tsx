@@ -3,12 +3,9 @@ import { inkRecordAction, settleInkCharge } from "../services/ink-billing.server
 import { data } from "react-router";
 // /app/record — THE RECORD'S DOOR, both flavors (services/record-door.server.ts).
 //
-//   POST intent=buy      the press on "Get the record — $X": re-reads the
-//                        price and the kill switch, creates Shopify's
-//                        one-time charge, answers its confirmation URL (the
-//                        screen opens it at the top frame — Shopify's
-//                        approval screen). Nothing is billed until the
-//                        merchant approves there.
+//   POST intent=buy      Only Ink can create a Shopify one-time charge. The
+//                        Ritualist includes its record in the plan and refuses
+//                        this intent even if a purchase flag is enabled.
 //   GET  ?charge_id=…    Shopify's return after the approval screen, framed
 //                        by the admin. The charge is remembered (if the press
 //                        did not already) and this shop's pending charges are
@@ -26,8 +23,8 @@ import { data } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { readInkMerchant } from "../services/ink-merchant.server";
-import { readRecordPrice, setRecordPurchaseOutcome, type RecordPurchase } from "../services/ink-api.server";
-import { createRecordCharge, recordChargeGid, recordOffer, recordReturnUrl, safeReturnTo } from "../services/record-door.server";
+import { setRecordPurchaseOutcome, type RecordPurchase } from "../services/ink-api.server";
+import { recordChargeGid, safeReturnTo } from "../services/record-door.server";
 import { rememberRecordCharge, settleRecordCharges } from "../services/record-charges.server";
 import { ritualistApiKey } from "../services/ritualist-rows.server";
 
@@ -74,11 +71,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // (components/OrderExpandedRow.tsx), whose inspection and downloads ask this
   // door. They are answered by the doors ink's Records library asks — the
   // merchant audit door for the inspection, the export door for the PDF, the
-  // CSV and the signed JSON (services/ink-billing.server.ts inkRecordAction) —
+  // signed JSON (services/ink-billing.server.ts inkRecordAction) —
   // with the merchant's own key. The backend answers a Ritualist merchant's
   // record whole and its export without a purchase, so nothing here is sold
-  // and no purchase is asked for. Only these four words take this path; a
-  // purchase and "Did you win?" keep theirs below.
+  // and no purchase is asked for. Only these three words take this path;
+  // a purchase is refused below.
   if (INCLUDED_RECORD_INTENTS.has(intent)) {
     const apiKey = await ritualistApiKey(session.shop);
     const result = await inkRecordAction(admin, session.shop, apiKey, form).catch(() => ({ ok: false, note: "The record is unavailable. Try again.", confirmationUrl: null, download: null, filename: null }));
@@ -86,27 +83,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === "buy") {
-    const proofId = String(form.get("proof_id") || "");
-    const orderName = String(form.get("order_name") || "").slice(0, 60) || proofId;
-    const returnTo = safeReturnTo(form.get("return_to"));
-    if (!PROOF_ID.test(proofId)) return { ok: false, intent, confirmationUrl: null, note: "No record for this order." }; // PLACEHOLDER
-    const view = await readInkMerchant(session.shop);
-    const offer = recordOffer(await readRecordPrice(view.shopId));
-    if (!offer) return { ok: false, intent, confirmationUrl: null, note: "The record isn't for sale here." }; // PLACEHOLDER
-    const apiKey = process.env.SHOPIFY_API_KEY;
-    if (!apiKey) return { ok: false, intent, confirmationUrl: null, note: "The app has no address to come back to." }; // PLACEHOLDER
-    try {
-      const { confirmationUrl, chargeId } = await createRecordCharge(admin, {
-        orderName,
-        price: offer,
-        returnUrl: recordReturnUrl({ shop: session.shop, apiKey, proofId, returnTo }),
-      });
-      await rememberRecordCharge(session.shop, proofId, chargeId);
-      return { ok: true, intent, confirmationUrl, note: null as string | null };
-    } catch (err) {
-      console.error("[record] charge create failed:", err);
-      return { ok: false, intent, confirmationUrl: null, note: "Shopify didn't take the charge. Try again." }; // PLACEHOLDER
-    }
+    // The Ritualist includes the record in its plan. Never create a one-time
+    // Shopify charge there, even if a purchase flag is enabled by mistake.
+    return { ok: false, intent, confirmationUrl: null, note: "The record is included with your plan." };
   }
 
   if (intent === "outcome") {

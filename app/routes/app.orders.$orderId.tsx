@@ -911,7 +911,7 @@ export default function OrderDetails() {
                     <Badge tone={statusBadgeTone(verificationStatusRaw)}>{statusLabel}</Badge>
                 }
                 subtitle={formatDate(order.createdAt)}
-                backAction={{ content: "Orders", onAction: () => navigate(-1) }}
+                backAction={{ content: "Orders", onAction: () => navigate("/app/tagged-shipments") }}
                 // The buyer's page, offered where a merchant is already looking
                 // at the order. It was resolved in the loader and then rendered
                 // nowhere — a typed field nobody shows is invisible to tsc, to
@@ -1029,7 +1029,7 @@ export default function OrderDetails() {
                                 {/* Record Tab */}
                                 {selectedTab === 0 && (
                                     <BlockStack gap="400">
-                                        {/* Proof ID; NFC metadata stays hidden with the hardware lane. */}
+                                        {/* Record ID; NFC metadata stays hidden with the hardware lane. */}
                                         <InlineStack gap="400" wrap={false}>
                                             {FEATURE_NFC && <div style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", padding: "12px", borderRadius: "8px" }}>
                                                 <Text as="p" tone="subdued" variant="bodySm">Tag UID</Text>
@@ -1038,16 +1038,16 @@ export default function OrderDetails() {
                                                 </Text>
                                             </div>}
                                             <div style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", padding: "12px", borderRadius: "8px" }}>
-                                                <Text as="p" tone="subdued" variant="bodySm">Proof ID</Text>
+                                                <Text as="p" tone="subdued" variant="bodySm">Record ID</Text>
                                                 <InlineStack gap="200" blockAlign="center">
                                                     <Text as="p" variant="bodySm" fontWeight="medium">
                                                         <code style={{ fontFamily: "monospace" }}>{order.metafields.proof_reference || "—"}</code>
                                                     </Text>
                                                     {order.metafields.proof_reference && (
                                                         <button
-                                                            onClick={() => copyToClipboard(order.metafields.proof_reference!, "Proof ID")}
+                                                            onClick={() => copyToClipboard(order.metafields.proof_reference!, "Record ID")}
                                                             style={{ background: "none", border: "none", cursor: "pointer", padding: "2px" }}
-                                                            aria-label="Copy Proof ID"
+                                                            aria-label="Copy Record ID"
                                                         >
                                                             <Copy size={14} />
                                                         </button>

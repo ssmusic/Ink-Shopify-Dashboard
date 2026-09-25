@@ -183,14 +183,19 @@ export default function ShipmentsIndex() {
     if (!data.orders.length && !data.ordersError && !data.search && !dated) {
       const timer = setTimeout(() => {
         const key = "ink_shipments_retried";
-        if (!sessionStorage.getItem(key)) {
-          sessionStorage.setItem(key, "1");
-          revalidator.revalidate();
+        try {
+          if (!sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, "1");
+            revalidator.revalidate();
+          }
+        } catch {
+          // Storage can be unavailable in a restricted admin browser. Keep
+          // the page usable without risking an unbounded retry loop.
         }
       }, 1500);
       return () => clearTimeout(timer);
     }
-    sessionStorage.removeItem("ink_shipments_retried");
+    try { sessionStorage.removeItem("ink_shipments_retried"); } catch { /* Storage unavailable. */ }
   }, [data.orders, data.ordersError, data.search, dated, revalidator]);
 
   return (

@@ -102,7 +102,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     readDeliveryDashboard(apiKey).catch(() => null),
     recentOrders().catch(() => null),
   ]);
-  return { kpis, delivery, recentOrders: recent };
+  return { kpis, delivery, recentOrders: recent, settingUp: !apiKey };
 };
 
 // A press of the studio door (this route's action) or of a record's file
@@ -211,7 +211,7 @@ const Dashboard = () => {
           </Card>
 
           {/* ink's Dashboard, whole: the merchant's own numbers. */}
-          <DeliveryDashboard kpis={data.kpis} delivery={data.delivery} />
+          <DeliveryDashboard kpis={data.kpis} delivery={data.delivery} settingUp={data.settingUp} />
 
           {/* The last six orders — the ledger, unchanged; a row opens in place. */}
           <Card padding="0">
