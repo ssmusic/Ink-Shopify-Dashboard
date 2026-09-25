@@ -17,6 +17,7 @@ import { isDirectVisitWithoutAStore } from "../services/direct-visit.server";
 import { provisionInkMerchant } from "../services/ink-install.server";
 import { claimRitualistPlan } from "../services/plan-precedence.server";
 import { syncRitualistPlan } from "../services/ritualist-plan-sync.server";
+import { syncTestStore } from "../services/test-store-sync.server";
 
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import translations from "@shopify/polaris/locales/en.json";
@@ -125,6 +126,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[App] INK self-provision error (non-blocking):", err)
   );
   }
+
+  // A TEST STORE, SAID BY SHOPIFY (test-store-sync.server.ts): both apps, on
+  // every open, at most once per ten minutes per store — a development store
+  // is stamped test on the backend, which keeps it out of every cross-store
+  // total and puts its buyers on the shorter retention line. Fire-and-forget,
+  // like the provision above: it never delays or breaks the app render.
+  (async () => {
+    const existing = await getMerchant(session.shop);
+    await syncTestStore({ admin, shop: session.shop, existing });
+  })().catch((err) =>
+    console.error("[App] test-store sync error (non-blocking):", err)
+  );
 
   // No pricingUrl: the Partner Dashboard exposes one public Free plan, so
   // there is no paid charge or approval flow to launch. The previous version built

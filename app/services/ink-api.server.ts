@@ -109,7 +109,7 @@ export class InkApiError extends Error {
 
 export const patchMerchant = async (
   shopId: string,
-  fields: Record<string, string | null>,
+  fields: Record<string, string | boolean | null>,
 ): Promise<Record<string, any>> => {
   let response: Response;
   try {
