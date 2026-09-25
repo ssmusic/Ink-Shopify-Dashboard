@@ -12,9 +12,9 @@ The audit rendered every Ritualist screen with real data, read-only, at 1280 and
 | 3 | **The tracking-link setting** said the link reaches the shipping-confirmation email. It doesn't: Shopify sends the email 0–1 s after fulfilment and the rewrite lands about 3 s later. | **#203 merged:** it names the admin order page and the order-status page, and points to the one pasted line (PLACEHOLDER). |
 | 4 | **The Notifications tab** offered no notifications, and a return window that does nothing where returns are off. | **#204 merged:** one line says the app sends no emails or texts of its own yet. The return window appears only where returns are on (PLACEHOLDER). |
 | 5 | **The Dashboard** showed two numbers each for "Open" and "Location shared". A record printed "1993799 m". | **#205 merged:** the funnel steps are named by their condition, the shared count is one count, and the distance reads 1,994 km. Both apps. |
-| 6 | **Shopify's self-review, 1.1.1:** two Settings screens fell back to a token saved in the browser. | **#206:** session token only. |
+| 6 | **Shopify's self-review, 1.1.1:** two Settings screens fell back to a token saved in the browser. | **#206 merged:** session token only. |
 | 7 | `write_themes` is unused. `write_shipping` only registers a carrier service that returns no rates. | **Sam decides.** Removing either is a scope change that makes every merchant consent again. They are left as they are for this submission. |
-| 8 | The privacy URL for The Ritualist, **www.in.ink/privacy.html**, is dated July 5, 2026. It never names The Ritualist, says texts go through Twilio, gives no 24-month retention, and does not mention the browser identifier or maps. | **Sam decides:** update that page, or point the listing at a page that is true. `/ink-privacy.html` is ink's own. |
+| 8 | The privacy URL for The Ritualist, **www.in.ink/privacy.html**, is dated July 5, 2026. It never names The Ritualist, says texts go through Twilio, gives no 24-month retention, and does not mention the browser identifier or maps. | **Fixed, #1422 live:** https://www.in.ink/ritualist-privacy.html; /privacy.html is now an index to both apps' policies. |
 
 ## 2. Shopify's self-review (the `shopify-app-store-review` skill, requirements fetched live, 2026-09-25)
 - **Result:** 30 likely passing, 0 failing, and 1 needing review, 1.2.x billing, below.
@@ -110,17 +110,20 @@ rm -rf /tmp/ritualist-release && mkdir /tmp/ritualist-release && cd ~/Desktop/IN
 - an extension;
 - a URL change.
 
-## 9. SAM'S CLICKS, in order
-1. **Decide the price shape:** Free, or plans in Managed Pricing. If plans, send the app handle, and a session sets `SHOPIFY_APP_HANDLE` on `shopify-app` by merging the whole env.
-2. **Decide the privacy URL.** Update www.in.ink/privacy.html, or pick the page the listing points to.
-3. **Enter the protected-data answers** for The Ritualist: 4, 8, 10–13, 15 and 16 Yes; 14 No. Then save.
-4. **Merge #206** if it isn't merged already. It merges on green.
-5. **Run the config release** in §8, and confirm only if it lists only the webhook.
-6. **Listing:** name "The Ritualist"; replace the §5 drafts with your words; pricing as decided in step 1; no SMS or returns.
-7. **Testing notes:** "Open The Ritualist Studio", "Orders", no "Open dashboard" step, corvara's login.
-8. **Screenshots and screencast** per §6.
-9. **Warm server on:**
+## 9. Done since (2026-09-25, on Sam's word)
+- **Config released:** `the-ritualist-18`, the `app_subscriptions/update` webhook only. The live config was pulled and compared first; the scopes are the same 20.
+- **Privacy parity with ink, embed #208 (merged):** data requests are saved and downloadable in Settings, deletions are retried until done, and custody events are erased.
+- **Privacy pages, the-ritualist #1422 (live):** www.in.ink/ritualist-privacy.html is The Ritualist's policy, and /privacy.html is an index to both apps' policies.
+- **Protected-data answers entered on both apps:** every answer Yes except 14, strong staff passwords, which is **No**.
+
+## 10. SAM'S CLICKS, in order
+1. **Strong passwords (question 14).** While it is No, Shopify will likely hold the protected-data request, which is ink's experience on 09-25. It becomes Yes when you turn on 2-step sign-in for Google, GitHub, Shopify Partners, Cloudflare and Supabase, and inkadmin's one shared password is replaced. Then flip 14 to Yes on both apps.
+2. **Pricing, "paid but not for pilots".** Set up the plans in Partner Dashboard, then The Ritualist, then Pricing (Managed Pricing), and send the app's plan-page handle, so a session can set `SHOPIFY_APP_HANDLE`. How pilots stay free is yours to choose: a private free plan, or the record left included for them.
+3. **Listing:** the name "The Ritualist"; the §5 drafts in your words; no SMS or returns; privacy URL https://www.in.ink/ritualist-privacy.html.
+4. **Testing notes:** "Open The Ritualist Studio", "Orders", no "Open dashboard" step, corvara's login.
+5. **Screenshots and screencast** per §6.
+6. **Warm server on:**
    ```bash
    gcloud run services update shopify-app --project inink-c76d3 --region us-central1 --min-instances=1
    ```
-10. **Run the automated checks**, then **Submit fixes** with the §4 note.
+7. **Run the automated checks again.** They still list the old checkout extension. Then tick "I've reviewed all the App Store Requirements", then **Submit fixes** with the §4 note.
