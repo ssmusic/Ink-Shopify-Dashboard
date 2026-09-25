@@ -23,22 +23,36 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
   // Never re-thrown (app.tagged-shipments._index.tsx tells why): a failed
   // read costs the plan's lines, said as one, never the page.
-  const plans = await readRitualistPlans(admin);
-  return { plans, planPageUrl: planPageUrl(session?.shop) };
+  const [plans, handle] = await Promise.all([readRitualistPlans(admin), readAppHandle(admin)]);
+  return { plans, planPageUrl: planPageUrl(session?.shop, handle) };
 }
 
-// WHERE A PLAN IS CHOSEN. The Ritualist creates no charge of its own: a plan
-// is chosen on Shopify's own plan page for the app (Managed Pricing), which
-// exists only once the plans are set up in the Partner Dashboard. Until
-// SHOPIFY_APP_HANDLE names the app there, this page offers no button that
-// would open a Shopify 404, and says instead how a plan is started. An
-// order whose record needs a plan links here, so "no plan" is never the end
-// of the page (audit 2026-09-25).
-export function planPageUrl(shop: string | null | undefined): string | null {
-  const handle = (process.env.SHOPIFY_APP_HANDLE || "").trim();
+/** The app's handle, as Shopify names it (currentAppInstallation.app.handle;
+ *  The Ritualist's is "ink-verified-delivery"). Read live on every open, so
+ *  the plan page's address never depends on a stored setting. null when the
+ *  read fails. */
+export async function readAppHandle(admin: { graphql: (q: string) => Promise<{ json: () => Promise<any> }> }): Promise<string | null> {
+  try {
+    const res = await admin.graphql(`#graphql
+      query RitualistAppHandle { currentAppInstallation { app { handle } } }`);
+    const handle = (await res.json())?.data?.currentAppInstallation?.app?.handle;
+    return typeof handle === "string" ? handle : null;
+  } catch {
+    return null;
+  }
+}
+
+// WHERE A PLAN IS CHOSEN (2026-09-25). The Ritualist bills through Shopify
+// App Pricing: three plans (Starter, Growth, Pro, each with a 14-day trial)
+// on Shopify's own plan page, which returns the merchant to /app/billing.
+// The page's address is built from this store and the app's handle as
+// Shopify reports it; when either is unknown, the page says how else a plan
+// is started instead of opening a Shopify 404.
+export function planPageUrl(shop: string | null | undefined, handle: string | null | undefined): string | null {
+  const h = typeof handle === "string" ? handle.trim() : "";
   const store = typeof shop === "string" ? shop.replace(/\.myshopify\.com$/, "") : "";
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(handle) || !/^[a-z0-9][a-z0-9-]*$/.test(store)) return null;
-  return `https://admin.shopify.com/store/${store}/charges/${handle}/pricing_plans`;
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(h) || !/^[a-z0-9][a-z0-9-]*$/.test(store)) return null;
+  return `https://admin.shopify.com/store/${store}/charges/${h}/pricing_plans`;
 }
 
 // ⚠️ PLACEHOLDER — Sam's words replace these two lines.
