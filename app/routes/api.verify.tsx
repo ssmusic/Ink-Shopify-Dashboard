@@ -1,3 +1,5 @@
+import { FEATURE_NFC } from "../flags";
+import { retiredDoor } from "../services/retired-door.server";
 import { type ActionFunctionArgs } from "react-router";
 import { allowRequest, clientIp, rateLimitResponse } from "../services/rate-limit.server";
 import { serialNumberToToken } from "../utils/nfc-conversion.server";
@@ -15,6 +17,10 @@ const CORS_HEADERS = {
 
 // Handle OPTIONS preflight
 export const loader = async () => {
+  // THE NFC LANE'S RETIRED DOOR (2026-09-25): unauthenticated, called by
+  // nothing for 30+ days (Cloud Run logs), and acting with a store's Shopify
+  // session. Closed unless FEATURE_NFC — tabled, never deleted.
+  if (!FEATURE_NFC) return retiredDoor();
     return new Response(null, {
         status: 204,
         headers: CORS_HEADERS,
@@ -22,6 +28,10 @@ export const loader = async () => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // THE NFC LANE'S RETIRED DOOR (2026-09-25): unauthenticated, called by
+  // nothing for 30+ days (Cloud Run logs), and acting with a store's Shopify
+  // session. Closed unless FEATURE_NFC — tabled, never deleted.
+  if (!FEATURE_NFC) return retiredDoor();
   // Public endpoint — per-IP rate limit (services/rate-limit.server.ts).
   if (!allowRequest(`verify:${clientIp(request)}`, 60)) return rateLimitResponse();
 

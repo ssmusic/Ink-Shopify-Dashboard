@@ -1,9 +1,15 @@
+import { FEATURE_NFC } from "../flags";
+import { retiredDoor } from "../services/retired-door.server";
 import { type ActionFunctionArgs } from "react-router";
 import { NFSService } from "../services/nfs.server";
 import { INK_NAMESPACE } from "../utils/metafields.server";
 import { storedStatusFor } from "../lib/order-marks";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // THE NFC LANE'S RETIRED DOOR (2026-09-25): unauthenticated, called by
+  // nothing for 30+ days (Cloud Run logs), and acting with a store's Shopify
+  // session. Closed unless FEATURE_NFC — tabled, never deleted.
+  if (!FEATURE_NFC) return retiredDoor();
   // 1. Get raw body for HMAC verification
   const rawBody = await request.text();
   const signature = request.headers.get("X-INK-Signature");
