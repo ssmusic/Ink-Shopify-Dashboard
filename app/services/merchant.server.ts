@@ -39,13 +39,15 @@ export interface MerchantData {
   ink_mark_confirmed_at?: string;
 
   // ── THE RITUALIST'S OWN FIELD on a doc ink made (plan-precedence.server.ts). ──
-  /** When the Ritualist's install claimed an ink merchant's plan (PATCH
-   *  plan: "ritualist"); cleared (null) when the Ritualist uninstalls and
-   *  hands the merchant back to ink, so a re-install claims it again. */
+  /** When the Ritualist's install recorded its entitlement on an ink
+   *  merchant; cleared when uninstall hands the store back to ink. */
   ritualist_plan_claimed_at?: string | null;
   /** The Ritualist's PAID plan is active on this store since this instant,
    *  or null (none) — the mirror of what the backend holds (ritualist-plan-sync.server.ts). */
   ritualist_plan_active_at?: string | null;
+  /** Previous paid plan, saved before a Ritualist uninstall hands a shared
+   * merchant back to ink. Reinstall restores it only after this exact marker. */
+  ritualist_plan_at_uninstall?: "ritualist" | null;
 }
 
 export const getMerchant = async (shop: string): Promise<MerchantData | null> => {

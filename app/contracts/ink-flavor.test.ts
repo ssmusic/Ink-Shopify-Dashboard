@@ -194,12 +194,11 @@ describe("the Ritualist's queries, byte for byte", () => {
 
   it("plan precedence is wired: the Ritualist's provision claims an ink doc, its uninstall hands back, ink's uninstall does neither", () => {
     expect(read("app/routes/app.tsx")).toContain("await claimRitualistPlan({ shop: session.shop, existing });");
-    // AN INSTALL IS NOT A PUBLISH: the only `plan` this app ever PATCHes is
-    // the hand-back to ink on uninstall. `plan: "ritualist"` belongs to the
-    // Worker's publish door (the-ritualist), because page_mode follows the
-    // plan and the page must not appear before the merchant has one.
+    // An initial install is not a publish. Only a recorded, previously paid
+    // Ritualist plan may be restored on reinstall; a fresh ink store waits
+    // for the Worker's publish door to change its plan.
     const precedence = read("app/services/plan-precedence.server.ts");
-    expect(precedence).not.toContain('plan: "ritualist"');
+    expect(precedence).toContain('restorePreviousPlan ? { plan: "ritualist" } : {}');
     expect(precedence).toContain('patchMerchant(shopId, { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null })');
     // The arrival records the ENTITLEMENT, never the plan (ink-backend #121).
     expect(precedence).toContain("ritualist_installed_at: new Date().toISOString()");
