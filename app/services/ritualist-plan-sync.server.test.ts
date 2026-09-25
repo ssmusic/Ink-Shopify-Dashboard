@@ -46,7 +46,8 @@ describe("what counts as an active Ritualist plan", () => {
   it("a paid, active subscription does; a free one, none, or a read that failed does not decide", async () => {
     const { paidPlanActive } = await import("./ritualist-plan-sync.server");
     expect(paidPlanActive({ data: { currentAppInstallation: { activeSubscriptions: [recurring("299.0")] } } })).toBe(true);
-    expect(paidPlanActive({ data: { currentAppInstallation: { activeSubscriptions: [recurring("0.0")] } } })).toBe(false);
+    // Pilots are free (2026-09-25): the private $0 Pilot plan counts as a plan.
+    expect(paidPlanActive({ data: { currentAppInstallation: { activeSubscriptions: [recurring("0.0")] } } })).toBe(true);
     expect(paidPlanActive({ data: { currentAppInstallation: { activeSubscriptions: [recurring("299.0", "CANCELLED")] } } })).toBe(false);
     expect(paidPlanActive({ data: { currentAppInstallation: { activeSubscriptions: [] } } })).toBe(false);
     expect(paidPlanActive({ errors: [{ message: "x" }] })).toBeNull();
