@@ -10,6 +10,7 @@ import { createReadableStreamFromReadable } from "@react-router/node";
 import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
+import { closeDocumentLast } from "./services/document-end.server";
 
 // Both apps stream each order's record — ink's Orders (routes/app.ink.$section.tsx),
 // the Ritualist's Orders and Dashboard (services/ritualist-rows.server.ts) — and
@@ -44,6 +45,10 @@ export default async function handleRequest(
       {
         [callbackName]: () => {
           const body = new PassThrough();
+          // `</body></html>` goes out last, so React Router's streamed data
+          // boundaries stay inside <body> (services/document-end.server.ts).
+          const closing = closeDocumentLast();
+          closing.pipe(body);
           const stream = createReadableStreamFromReadable(body);
 
           responseHeaders.set("Content-Type", "text/html");
@@ -53,7 +58,7 @@ export default async function handleRequest(
               status: responseStatusCode,
             })
           );
-          pipe(body);
+          pipe(closing);
         },
         onShellError(error) {
           reject(error);
