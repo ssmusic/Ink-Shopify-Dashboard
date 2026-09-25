@@ -11,7 +11,10 @@ import { EMAIL_LINE_TEST, emailDoorSentence } from "../services/notification-sni
 // buyers are arriving through it. Every sentence is PLACEHOLDER for Sam.
 export default function EmailLineCard({ line }: { line: EmailLineView | null | undefined }) {
   const [copied, setCopied] = useState(false);
-  if (!line) return null;
+  // No page address, no line: the card had nothing a merchant could do
+  // ("not set yet", with no way to set it — a store on its myshopify address
+  // alone, like a review store, never gets one). It is not drawn (2026-09-25).
+  if (!line || !line.snippet) return null;
   const status = emailDoorSentence(line.emailDoor);
   async function copy() {
     if (!line?.snippet) return;
