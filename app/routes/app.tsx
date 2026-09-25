@@ -139,8 +139,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[App] test-store sync error (non-blocking):", err)
   );
 
-  // No pricingUrl: the Partner Dashboard exposes one public Free plan, so
-  // there is no paid charge or approval flow to launch. The previous version built
+  // No pricingUrl: each app has one public plan on the Partner Dashboard (ink:
+  // Free, plus the record's one-time charge, which app.record.tsx raises
+  // through the Billing API), so there is no plan picker to launch. The
+  // previous version built
   // `…/charges/${SHOPIFY_APP_HANDLE || "ink-verified-delivery"}/pricing_plans`
   // — but SHOPIFY_APP_HANDLE is set in NO environment (verified against Cloud
   // Run 2026-08-01), so that fallback was always what shipped, and it is not

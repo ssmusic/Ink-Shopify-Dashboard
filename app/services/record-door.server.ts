@@ -163,6 +163,40 @@ export async function findRecordCharge(
   }
 }
 
+// A PENDING CHARGE SHOPIFY NO LONGER KNOWS (App Store requirement 1.2.2:
+// "request approval for charges again on reinstall"). A charge made before an
+// uninstall can stop answering to the reinstalled app: its status read comes
+// back empty for good, and the order would say "approval in progress" with no
+// Buy button forever. Only a definite answer counts — the node lookup answers
+// null AND this installation's own purchases do not list it. A failed or
+// errored read is never "gone": a charge that may still be approved is never
+// released, so it can never be billed twice.
+export const RECORD_CHARGE_GONE_QUERY = `#graphql
+  query InkRecordChargeGone($id: ID!) {
+    node(id: $id) { id }
+    currentAppInstallation {
+      oneTimePurchases(first: 25, reverse: true) { nodes { id } }
+    }
+  }`;
+
+/** True only when Shopify answered, and neither the lookup by id nor this
+ *  installation's recent purchases hold the charge. */
+export async function recordChargeGone(admin: AdminGraphql, gid: string): Promise<boolean> {
+  try {
+    const res = await admin.graphql(RECORD_CHARGE_GONE_QUERY, { variables: { id: gid } });
+    const body = (await res.json()) as {
+      errors?: unknown;
+      data?: { node?: { id?: string } | null; currentAppInstallation?: { oneTimePurchases?: { nodes?: unknown } } };
+    };
+    if (body?.errors || !body?.data || !("node" in body.data) || body.data.node !== null) return false;
+    const nodes = body.data.currentAppInstallation?.oneTimePurchases?.nodes;
+    if (!Array.isArray(nodes)) return false;
+    return !nodes.some((n: unknown) => (n as { id?: unknown } | null)?.id === gid);
+  } catch {
+    return false;
+  }
+}
+
 /** Creates the charge (nothing is billed until the merchant approves it on
  *  Shopify's screen) and answers where to send them. Throws on refusal. */
 export async function createRecordCharge(
