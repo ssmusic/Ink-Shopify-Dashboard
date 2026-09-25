@@ -193,7 +193,7 @@ const Dashboard = () => {
 
           {/* Open the merchant's ink. dashboard, auto-signed-in. */}
           <Card>
-            <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
+            <InlineStack align="space-between" blockAlign="center" gap="400" wrap>
               <BlockStack gap="100">
                 <Text as="h2" variant="headingMd">
                   The Ritualist Studio
