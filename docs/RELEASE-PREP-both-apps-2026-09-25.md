@@ -1,5 +1,7 @@
 # Release preparation: The Ritualist and Ink. — September 25, 2026
 
+> Historical pre-rollout packet. The rollout happened later on September 25; use `LIVE-RELEASE-AUDIT-both-apps-2026-09-25.md` for the current state and remaining gates. The commands and “not yet deployed” statements below are retained as the original plan, not as instructions to repeat.
+
 This is a review packet, not a release record. PR #226 is code-only and has not been merged or deployed. Do not use a green CI result as evidence of live behavior. The screenshots and videos should be captured from the final released build, after the checks below, and reviewed by Sam before any listing upload.
 
 ## Current code and live state
