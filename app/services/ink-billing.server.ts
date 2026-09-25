@@ -24,6 +24,7 @@ import {
   createRecordCharge,
   findRecordCharge,
   readRecordCharge,
+  recordChargeGone,
   RecordChargeRefused,
   recordChargeName,
   recordOffer,
@@ -76,7 +77,16 @@ export async function settleInkCharge(
   }
   if (row.state === "creating" || !row.chargeId) return;
   const charge = await readRecordCharge(admin, row.chargeId);
-  if (!charge) return;
+  if (!charge) {
+    // A charge from before an uninstall that the reinstalled app can no
+    // longer see (recordChargeGone): released, so Buy is offered again.
+    // Never a charge Shopify approved (paid_pending_record) — only one still
+    // waiting for approval, old enough that nothing is in flight.
+    const age = Date.now() - Date.parse(String(row.createdAt || ""));
+    if (row.state === "pending" && age > STUCK_AFTER_MS && (await recordChargeGone(admin, row.chargeId)))
+      await ref.update({ state: "released", releasedAt: new Date().toISOString() });
+    return;
+  }
   // Shopify's response must match the charge and amount reserved before redirect.
   if (
     charge.id !== row.chargeId ||

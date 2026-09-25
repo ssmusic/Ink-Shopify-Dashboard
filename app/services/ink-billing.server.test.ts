@@ -39,11 +39,13 @@ vi.mock("./ink-reader.server", () => ({
 }));
 vi.mock("./ink-api.server", () => ({ createRecordPurchase }));
 const findRecordCharge = vi.fn();
+const recordChargeGone = vi.fn();
 vi.mock("./record-door.server", async (importOriginal) => ({
   ...(await importOriginal<any>()),
   createRecordCharge,
   readRecordCharge,
   findRecordCharge,
+  recordChargeGone,
 }));
 const { RecordChargeRefused } = await import("./record-door.server");
 const { inkRecordAction, settleInkCharge, inkDoor } = await import(
@@ -227,6 +229,45 @@ describe("ink Shopify billing", () => {
     const adopted = await inkDoor(admin, shop, "own-key", proof);
     expect(rows.get(id)).toMatchObject({ state: "pending", chargeId: "gid://shopify/AppPurchaseOneTime/7" });
     expect(adopted.offerLine).toBeNull();
+  });
+  // REINSTALL (App Store requirement 1.2.2): a charge made before an
+  // uninstall can stop answering to the reinstalled app. Left alone, the
+  // order said "approval in progress" with no Buy button for good.
+  it("a pending charge Shopify no longer knows is released after a reinstall, and Buy is offered again", async () => {
+    const old = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    await inkRecordAction(admin, shop, "own-key", form());
+    const [id] = [...rows.keys()];
+    rows.set(id, { ...rows.get(id), createdAt: old });
+    readRecordCharge.mockResolvedValue(null);
+
+    recordChargeGone.mockResolvedValueOnce(false); // Shopify could not say
+    expect((await inkDoor(admin, shop, "own-key", proof)).pending).toBe(true);
+    expect(rows.get(id).state).toBe("pending");
+
+    recordChargeGone.mockResolvedValueOnce(true); // Shopify says: no such charge here
+    const door = await inkDoor(admin, shop, "own-key", proof);
+    expect(recordChargeGone).toHaveBeenLastCalledWith(admin, "gid://shopify/AppPurchaseOneTime/1");
+    expect(rows.get(id).state).toBe("released");
+    expect(door.pending).toBe(false);
+    expect(door.resumeUrl).toBeNull();
+    expect(door.offerLine).toMatch(/\$29/);
+    expect((await inkRecordAction(admin, shop, "own-key", form())).ok).toBe(true);
+    expect(createRecordCharge).toHaveBeenCalledTimes(2);
+  });
+  it("never releases a fresh pending charge, or one Shopify approved", async () => {
+    await inkRecordAction(admin, shop, "own-key", form());
+    const [id] = [...rows.keys()];
+    readRecordCharge.mockResolvedValue(null);
+    recordChargeGone.mockResolvedValue(true);
+    // Fresh: the merchant may be on Shopify's screen right now.
+    expect((await inkDoor(admin, shop, "own-key", proof)).pending).toBe(true);
+    expect(recordChargeGone).not.toHaveBeenCalled();
+    // Approved on Shopify, record not minted yet: never offered again.
+    const old = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    rows.set(id, { ...rows.get(id), createdAt: old, state: "paid_pending_record" });
+    const door = await inkDoor(admin, shop, "own-key", proof);
+    expect(rows.get(id).state).toBe("paid_pending_record");
+    expect(door.offerLine).toBeNull();
   });
   it("a fresh reservation with no answer is left alone — a create may still be in flight", async () => {
     createRecordCharge.mockRejectedValueOnce(new Error("timeout"));

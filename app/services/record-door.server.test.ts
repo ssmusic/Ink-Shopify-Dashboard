@@ -21,6 +21,8 @@ import {
   createRecordCharge,
   readRecordCharge,
   recordChargeGid,
+  recordChargeGone,
+  RECORD_CHARGE_GONE_QUERY,
   recordDoorRow,
   recordOffer,
   recordPriceWords,
@@ -111,6 +113,22 @@ describe("Shopify's one-time charge", () => {
     const read = await readRecordCharge(admin({ data: { node: { id: "gid://shopify/AppPurchaseOneTime/77", status: "ACTIVE", test: true, price: { amount: "15.0", currencyCode: "USD" } } } }), "gid://shopify/AppPurchaseOneTime/77");
     expect(read).toEqual({ id: "gid://shopify/AppPurchaseOneTime/77", status: "ACTIVE", test: true, price_cents: 1500, currency: "USD" });
     expect(await readRecordCharge(admin({ data: { node: null } }), "gid://shopify/AppPurchaseOneTime/77")).toBeNull();
+  });
+
+  it("calls a charge gone only on Shopify's definite answer: no node and not among this installation's purchases", async () => {
+    const id = "gid://shopify/AppPurchaseOneTime/77";
+    const list = (...ids: string[]) => ({ oneTimePurchases: { nodes: ids.map((i) => ({ id: i })) } });
+    const gone = admin({ data: { node: null, currentAppInstallation: list("gid://shopify/AppPurchaseOneTime/78") } });
+    expect(await recordChargeGone(gone, id)).toBe(true);
+    expect(gone.graphql).toHaveBeenCalledWith(RECORD_CHARGE_GONE_QUERY, { variables: { id } });
+    // Shopify still knows it, by either road: never gone.
+    expect(await recordChargeGone(admin({ data: { node: { id }, currentAppInstallation: list() } }), id)).toBe(false);
+    expect(await recordChargeGone(admin({ data: { node: null, currentAppInstallation: list(id) } }), id)).toBe(false);
+    // No definite answer: never gone.
+    expect(await recordChargeGone(admin({ errors: [{ message: "Throttled" }], data: { node: null, currentAppInstallation: list() } }), id)).toBe(false);
+    expect(await recordChargeGone(admin({ data: { currentAppInstallation: list() } }), id)).toBe(false);
+    expect(await recordChargeGone(admin({ data: { node: null } }), id)).toBe(false);
+    expect(await recordChargeGone({ graphql: vi.fn(async () => { throw new Error("network"); }) }, id)).toBe(false);
   });
 
   it("knows a charge id in either shape, and nothing else", () => {
