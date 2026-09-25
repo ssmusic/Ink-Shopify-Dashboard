@@ -77,8 +77,12 @@ export function funnel(rows: DeliveryRow[]): FunnelStep[] {
   const steps: [string, string, DeliveryRow[]][] = [
     ["orders", "Orders", orders],
     ["delivered", "Delivered", delivered],
-    ["opened", "Open", opened],
-    ["shared", "Location shared", shared],
+    // Named by their condition, so no word on the Dashboard carries two
+    // numbers: the three counts on top say "Open" and "Location shared" for
+    // every order; these steps count only orders in the step above (audit
+    // 2026-09-25: "Open 28" on top, "Open 24" here).
+    ["opened", "Delivered and opened", opened],
+    ["shared", "Delivered, opened and shared", shared],
   ];
   return steps.map(([key, label, list], i) => ({
     key,

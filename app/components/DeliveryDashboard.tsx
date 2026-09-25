@@ -56,13 +56,24 @@ function Bar({
     </BlockStack>
   );
 }
+/** ONE WORD, ONE NUMBER (audit 2026-09-25). merchant-insights' location
+ *  count is its first-open GPS source, which a share on an order with no map
+ *  point never fills (SM: 5 there, 18 orders shared). When the delivery read
+ *  covers the same orders, "Location shared" on top and its ring take the
+ *  delivery read's count, the one the funnel below is made of. */
+export function kpisWithSharedCount(kpis: Kpis | null, delivery: DeliveryDashboardData | null): Kpis | null {
+  if (!kpis || !delivery || delivery.orders !== kpis.recorded) return kpis;
+  return { ...kpis, locationShared: delivery.locationShared };
+}
+
 export default function DeliveryDashboard({
-  kpis,
+  kpis: read,
   delivery,
 }: {
   kpis: Kpis | null;
   delivery: DeliveryDashboardData | null;
 }) {
+  const kpis = kpisWithSharedCount(read, delivery);
   if (!kpis && !delivery)
     return (
       <Banner tone="info">Dashboard unavailable. Refresh to try again.</Banner>

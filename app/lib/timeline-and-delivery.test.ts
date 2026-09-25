@@ -86,8 +86,8 @@ describe("the delivery dashboard", () => {
     expect(funnel(rows)).toEqual([
       { key: "orders", label: "Orders", count: 6, ofAbovePct: null },
       { key: "delivered", label: "Delivered", count: 5, ofAbovePct: 83.3 },
-      { key: "opened", label: "Open", count: 4, ofAbovePct: 80 },
-      { key: "shared", label: "Location shared", count: 2, ofAbovePct: 50 },
+      { key: "opened", label: "Delivered and opened", count: 4, ofAbovePct: 80 },
+      { key: "shared", label: "Delivered, opened and shared", count: 2, ofAbovePct: 50 },
     ]);
     expect(funnel([]).map((s) => s.ofAbovePct)).toEqual([null, null, null, null]);
     for (const s of funnel(rows)) expect(s.label).not.toMatch(/door|confirm|verif|seen/i);

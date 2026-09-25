@@ -16,7 +16,7 @@
 
 import type { AddressState } from "./delivery-point";
 import type { CheckoutVsOpens } from "./checkout-words";
-import type { RecordOpen } from "./every-open";
+import { distanceWords, type RecordOpen } from "./every-open";
 import { deliverySource, kmOrM } from "./order-timeline";
 
 export type RecordElement = {
@@ -170,7 +170,9 @@ export function locationWords(loc: LocationLine): string {
     Number.isFinite(loc.distance_m) &&
     loc.distance_m >= 0
   )
-    return `${Math.round(loc.distance_m)} m from the delivery address`;
+    // As the app prints every distance ("1,994 km"), never raw metres
+    // ("1993799 m", audit 2026-09-25).
+    return `${distanceWords(loc.distance_m)} from the delivery address`;
   return "Distance unavailable";
 }
 
