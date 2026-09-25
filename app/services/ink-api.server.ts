@@ -711,7 +711,9 @@ export const redactCustomerInInk = async (params: {
   try {
     const response = await fetch(url, {
       method: "POST",
-      ...(isInk() ? { signal: AbortSignal.timeout(3500) } : {}),
+      // Called by the durable privacy worker, not within Shopify's webhook
+      // response window. A timed-out partial deletion is safe to retry.
+      signal: AbortSignal.timeout(60000),
       headers: {
         "Content-Type": "application/json",
         "X-Admin-Secret": INK_ADMIN_SECRET as string,
@@ -779,7 +781,7 @@ export const purgeShopInInk = async (
   try {
     const response = await fetch(url, {
       method: "POST",
-      ...(isInk() ? { signal: AbortSignal.timeout(3500) } : {}),
+      signal: AbortSignal.timeout(60000),
       headers: {
         "Content-Type": "application/json",
         "X-Admin-Secret": INK_ADMIN_SECRET as string,

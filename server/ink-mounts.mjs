@@ -34,6 +34,7 @@ export const SHARED_MOUNTS = Object.freeze([
   "routes/webhooks.customers.data_request",
   "routes/webhooks.customers.redact",
   "routes/webhooks.shop.redact",
+  "routes/api.jobs.privacy",
   // THE RECORD'S DOOR — both flavors: the charge, Shopify's return, the
   // outcome (routes/app.record.tsx). The in.ink screen and the Ritualist's
   // order page both draw it.

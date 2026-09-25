@@ -44,6 +44,10 @@ const firestore = {
       },
     };
   },
+  runTransaction: async (fn: (tx: any) => Promise<any>) => fn({
+    get: (ref: any) => ref.get(),
+    update: (ref: any, value: any) => ref.update(value),
+  }),
 };
 const otherAppHoldsSession = vi.fn();
 const purgeShopInInk = vi.fn();
@@ -60,7 +64,7 @@ vi.mock("./plan-precedence.server", () => ({
   restoreInkPlanOnRitualistUninstall: vi.fn(),
 }));
 vi.mock("../shopify.server", () => ({ authenticate: { webhook } }));
-const { handleInkPrivacy, readPrivacyRequests, exportPrivacyRequest, PRIVACY_COLLECTION } =
+const { handleInkPrivacy, processPendingPrivacy, readPrivacyRequests, exportPrivacyRequest, PRIVACY_COLLECTION } =
   await import("./ink-privacy.server");
 const shop = "demo.myshopify.com";
 const payload = {
@@ -112,13 +116,15 @@ describe("ink privacy requests", () => {
     );
   });
   it.each([404, 500, 0])(
-    "does not acknowledge a failed deletion (%s) as complete",
+    "saves a deletion before acknowledgement and retries backend failure (%s)",
     async (status) => {
       redactCustomerInInk.mockResolvedValue({ ok: false, status });
       expect((await handleInkPrivacy("redact", shop, payload)).status).toBe(
-        503,
+        200,
       );
+      expect((await processPendingPrivacy()).failed).toBe(1);
       expect(bucket(PRIVACY_COLLECTION).size).toBe(1);
+      expect([...bucket(PRIVACY_COLLECTION).values()][0]).toMatchObject({ state: "pending", attempts: 1 });
       expect(redactCustomerInInk).toHaveBeenCalledWith({
         shopDomain: shop,
         customerId: "456",
@@ -130,7 +136,8 @@ describe("ink privacy requests", () => {
   it("scrubs access-request identifiers on redaction but does not claim their export was delivered", async () => {
     await handleInkPrivacy("data_request", shop, payload);
     expect((await handleInkPrivacy("redact", shop, payload)).status).toBe(200);
-    expect([...bucket(PRIVACY_COLLECTION).values()]).toEqual([
+    expect((await processPendingPrivacy()).processed).toBe(1);
+    expect([...bucket(PRIVACY_COLLECTION).values()]).toEqual(expect.arrayContaining([
       expect.objectContaining({
         topic: "customers/data_request",
         customerId: null,
@@ -138,17 +145,18 @@ describe("ink privacy requests", () => {
         orderIds: [],
         state: "response_required_after_redaction",
       }),
-    ]);
+    ]));
   });
   it("scrubs matching order-only access requests during customer redaction", async () => {
     await handleInkPrivacy("data_request", shop, { orders_requested: [789] });
     await handleInkPrivacy("redact", shop, { orders_to_redact: [789] });
-    expect([...bucket(PRIVACY_COLLECTION).values()]).toEqual([
+    await processPendingPrivacy();
+    expect([...bucket(PRIVACY_COLLECTION).values()]).toEqual(expect.arrayContaining([
       expect.objectContaining({
         orderIds: [],
         state: "response_required_after_redaction",
       }),
-    ]);
+    ]));
   });
   it("deletes ink sessions even when uninstall arrives without a resolved session", async () => {
     bucket("shopify_sessions_ink").set("own", { shop });
@@ -173,7 +181,8 @@ describe("ink privacy requests", () => {
   it("retains a pending shop request and merchant configuration after a backend purge failure", async () => {
     bucket("merchants").set(shop, { key: "private" });
     purgeShopInInk.mockResolvedValue({ ok: false, status: 404 });
-    expect((await handleInkPrivacy("shop", shop, {})).status).toBe(503);
+    expect((await handleInkPrivacy("shop", shop, {})).status).toBe(200);
+    expect((await processPendingPrivacy()).failed).toBe(1);
     expect(bucket("merchants").has(shop)).toBe(true);
     expect([...bucket(PRIVACY_COLLECTION).values()][0]).toMatchObject({
       topic: "shop/redact",
@@ -191,6 +200,7 @@ describe("ink privacy requests", () => {
     }
     bucket("merchants").set(shop, { key: "private" });
     expect((await handleInkPrivacy("shop", shop, {})).status).toBe(200);
+    expect((await processPendingPrivacy()).processed).toBe(1);
     for (const name of [
       "shopify_sessions_ink",
       "ink_record_charges",
@@ -207,10 +217,50 @@ describe("ink privacy requests", () => {
     await handleInkPrivacy("data_request", shop, payload);
     const receiptId = [...bucket(PRIVACY_COLLECTION).keys()][0];
     expect((await handleInkPrivacy("shop", shop, {})).status).toBe(200);
+    expect((await processPendingPrivacy()).processed).toBe(1);
     expect(purgeShopInInk).not.toHaveBeenCalled();
     expect(bucket("merchants").has(shop)).toBe(true);
     expect(bucket("ink_record_charges").size).toBe(0);
     expect(bucket(PRIVACY_COLLECTION).has(receiptId)).toBe(true);
+  });
+  it("keeps the two apps' deletion receipts separate on a shared shop", async () => {
+    expect((await handleInkPrivacy("shop", shop, {})).status).toBe(200);
+    vi.stubEnv("APP_FLAVOR", "");
+    expect((await handleInkPrivacy("shop", shop, {})).status).toBe(200);
+    const values = [...bucket(PRIVACY_COLLECTION).values()];
+    expect(values).toHaveLength(2);
+    expect(values.map((v) => v.appFlavor).sort()).toEqual(["ink", "ritualist"]);
+  });
+  it("lets the Ritualist erase only its own charge bindings while Ink. remains installed", async () => {
+    vi.stubEnv("APP_FLAVOR", "");
+    otherAppHoldsSession.mockResolvedValue(true);
+    bucket("record_charges").set("ritualist", { shop });
+    bucket("ink_record_charges").set("ink", { shop });
+    await handleInkPrivacy("shop", shop, {});
+    expect((await processPendingPrivacy("ritualist")).processed).toBe(1);
+    expect(purgeShopInInk).not.toHaveBeenCalled();
+    expect(bucket("record_charges").size).toBe(0);
+    expect(bucket("ink_record_charges").size).toBe(1);
+  });
+  it("does not take a job while another worker holds an unexpired lease", async () => {
+    await handleInkPrivacy("redact", shop, payload);
+    const [key, receipt] = [...bucket(PRIVACY_COLLECTION)][0];
+    bucket(PRIVACY_COLLECTION).set(key, {
+      ...receipt, state: "processing", leaseUntil: new Date(Date.now() + 120000).toISOString(),
+    });
+    expect((await processPendingPrivacy()).processed).toBe(0);
+    expect(redactCustomerInInk).not.toHaveBeenCalled();
+  });
+  it("resumes a failed deletion from its saved receipt", async () => {
+    redactCustomerInInk.mockResolvedValueOnce({ ok: false, status: 500 }).mockResolvedValueOnce({ ok: true, status: 200 });
+    await handleInkPrivacy("redact", shop, payload);
+    expect((await processPendingPrivacy()).failed).toBe(1);
+    const [key, receipt] = [...bucket(PRIVACY_COLLECTION)][0];
+    bucket(PRIVACY_COLLECTION).set(key, { ...receipt, nextAttemptAt: new Date(0).toISOString() });
+    expect((await processPendingPrivacy()).processed).toBe(1);
+    expect(bucket(PRIVACY_COLLECTION).get(key)).toMatchObject({
+      state: "completed", customerId: null, email: null, orderIds: [], attempts: 1,
+    });
   });
   it.each([
     "webhooks.customers.data_request",
@@ -275,6 +325,7 @@ describe("a customer data request, answered", () => {
   it("says so, in the file, when the customer was erased before anyone downloaded it", async () => {
     await handleInkPrivacy("data_request", shop, payload);
     await handleInkPrivacy("redact", shop, payload);
+    await processPendingPrivacy();
     const out = await exportPrivacyRequest(shop, onlyRequest()[0]);
     if (!out.ok) throw new Error("expected the note file");
     expect(String(out.download.note)).toContain("deleted by a Shopify deletion request");
@@ -286,6 +337,7 @@ describe("a customer data request, answered", () => {
     await handleInkPrivacy("data_request", shop, payload);
     await exportPrivacyRequest(shop, onlyRequest()[0]);
     await handleInkPrivacy("redact", shop, payload);
+    await processPendingPrivacy();
     expect(onlyRequest()[1]).toMatchObject({ state: "downloaded", customerId: null, email: null, orderIds: [] });
   });
 
