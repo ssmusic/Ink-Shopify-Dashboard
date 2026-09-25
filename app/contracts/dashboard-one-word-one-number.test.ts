@@ -30,3 +30,10 @@ describe("a distance in the record's words", () => {
     expect(locationWords({ verdict: "shared", distance_m: 56.4 } as never)).toBe("56 m from the delivery address");
   });
 });
+
+import { VALUE_WORDS } from "../lib/record-words";
+describe("the carrier scan's time", () => {
+  it("says the tracking was updated, never that it was scanned", () => {
+    expect(VALUE_WORDS.last_at).toBe("Tracking updated");
+  });
+});
