@@ -127,3 +127,19 @@ rm -rf /tmp/ritualist-release && mkdir /tmp/ritualist-release && cd ~/Desktop/IN
    gcloud run services update shopify-app --project inink-c76d3 --region us-central1 --min-instances=1
    ```
 7. **Run the automated checks again.** They still list the old checkout extension. Then tick "I've reviewed all the App Store Requirements", then **Submit fixes** with the §4 note.
+
+## 11. Later on 2026-09-25 (all merged and live; for the audit)
+- **Billing.** Shopify App Pricing is on for The Ritualist: Starter $299, Growth $599 and Pro $999 a month, each with a 45-day trial. Plans are free on development stores and return to `/app/billing`. Billing opens Shopify's plan page and reads the app handle live (#214). The handle was renamed from `ink-verified-delivery` to `the-ritualist` (#215, `the-ritualist-19`). Any active subscription counts as a plan, including a development store's $0 test (#216). Pilots are the studio's pilot program, not a Shopify plan (#213 reverted #210).
+- **Review stores.** The Ritualist is reviewed on corvara: `record_included` was cleared and a test Starter plan approved. ink is reviewed on `ink-review.myshopify.com`: orders #1001 to #1004, three fulfilled with USPS numbers, two opened.
+- **Walk fixes.**
+  - Load more asks the index route (#211).
+  - Studio link moved to the left (#212); its style broke hydration and was fixed in #221.
+  - Shipped reads from Shopify's fulfillment (#217).
+  - "Scanned" became "Tracking updated" (#218, the-ritualist #1423).
+  - The empty email card is hidden (#219).
+  - Four unauthenticated NFC-era routes answer 404 unless `FEATURE_NFC` (#220).
+  - The Orders rows stuck on placeholders were fixed by #221.
+- **Schema check.** 71 of the 74 Admin GraphQL operations validate against 2025-10. `api.debug-carrier` asks for `serviceDiscoverySupport`, which doesn't exist. ink's logo query asks for `Shop.brand`, which couldn't be tested live because the stores are password-locked, and it falls back to initials.
+- **Protected data.** Every answer is Yes on both apps, and both data requests read "Completed". 2-step sign-in is on for Shopify, GitHub and Google.
+- **Not yet walked.** The Ritualist's opened order, Advanced, downloads, Settings tabs and Help on corvara. ink's Buy the record on ink-review, where Sam presses Approve. The custom-data check. A re-run of the review skill on ink.
+- **Noted, not changed.** Cloud Scheduler calls `/api/jobs/notifications` and gets 401 every time. The authenticated admin utilities (`/app/debug` and similar) are still mounted.
