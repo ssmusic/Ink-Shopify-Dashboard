@@ -1,4 +1,6 @@
 import { type ActionFunctionArgs } from "react-router";
+import { FEATURE_NFC } from "../flags";
+import { retiredDoor } from "../services/retired-door.server";
 import { authenticate } from "../shopify.server";
 import { getStagedUploadTarget, registerUploadedFile } from "../utils/shopify-files.server";
 import { generateSHA256Hash } from "../utils/hash-utils.server";
@@ -11,6 +13,7 @@ const CORS_HEADERS = {
 
 // Handle OPTIONS preflight request
 export const loader = async () => {
+  if (!FEATURE_NFC) return retiredDoor();
   return new Response(null, {
     status: 204,
     headers: CORS_HEADERS,
@@ -18,6 +21,9 @@ export const loader = async () => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // The sticker photo door: no auth, any origin, the first shop's session.
+  // Closed unless FEATURE_NFC — tabled, never deleted (audit 2026-09-25).
+  if (!FEATURE_NFC) return retiredDoor();
   try {
     console.log("📸 Photo upload request received");
     

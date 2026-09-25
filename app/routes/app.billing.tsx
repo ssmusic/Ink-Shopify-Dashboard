@@ -24,7 +24,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Never re-thrown (app.tagged-shipments._index.tsx tells why): a failed
   // read costs the plan's lines, said as one, never the page.
   const [plans, handle] = await Promise.all([readRitualistPlans(admin), readAppHandle(admin)]);
-  return { plans, planPageUrl: planPageUrl(session?.shop, handle) };
+  return { plans, planPageUrl: planPageUrl(session?.shop, handle ?? RITUALIST_HANDLE) };
 }
 
 /** The app's handle, as Shopify names it (currentAppInstallation.app.handle;
@@ -46,8 +46,10 @@ export async function readAppHandle(admin: { graphql: (q: string) => Promise<{ j
 // App Pricing: three plans (Starter, Growth, Pro, each with a 45-day trial)
 // on Shopify's own plan page, which returns the merchant to /app/billing.
 // The page's address is built from this store and the app's handle as
-// Shopify reports it; when either is unknown, the page says how else a plan
-// is started instead of opening a Shopify 404.
+// Shopify reports it, else the handle shopify.app.toml declares. Starting a
+// plan never needs support (App Store 1.2.3): with no address the page asks
+// for a refresh, never an email.
+export const RITUALIST_HANDLE = "the-ritualist";
 export function planPageUrl(shop: string | null | undefined, handle: string | null | undefined): string | null {
   const h = typeof handle === "string" ? handle.trim() : "";
   const store = typeof shop === "string" ? shop.replace(/\.myshopify\.com$/, "") : "";
@@ -57,7 +59,7 @@ export function planPageUrl(shop: string | null | undefined, handle: string | nu
 
 // ⚠️ PLACEHOLDER — Sam's words replace these two lines.
 export const NO_PLAN_LINE = "No plan is active for this store.";
-export const NO_PLAN_PAGE_LINE = "Plans can't be chosen inside the app yet. Email support@in.ink to start one.";
+export const NO_PLAN_PAGE_LINE = "Shopify's plan page could not be opened. Refresh to try again.";
 
 const date = (iso: string) => {
   const d = new Date(iso);
@@ -92,14 +94,7 @@ export default function BillingPage() {
                     </Button>
                   </InlineStack>
                 ) : (
-                  <BlockStack gap="200">
-                    <Text as="p" tone="subdued">{NO_PLAN_PAGE_LINE}</Text>
-                    <InlineStack>
-                      <Button url="mailto:support@in.ink" external>
-                        Email support@in.ink
-                      </Button>
-                    </InlineStack>
-                  </BlockStack>
+                  <Text as="p" tone="subdued">{NO_PLAN_PAGE_LINE}</Text>
                 )}
               </BlockStack>
             ) : (

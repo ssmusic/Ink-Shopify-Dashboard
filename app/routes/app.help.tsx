@@ -27,7 +27,7 @@ const faqSections = [
       {
         question: "What does the Ritualist do?",
         answer:
-          "Every order gets its own page — your brand, the order, and live delivery tracking in one place.",
+          "Every order gets its own page — your brand, the order, and the carrier's tracking in one place.",
       },
       {
         question: "What do I have to set up?",
@@ -42,7 +42,7 @@ const faqSections = [
       {
         question: "Do I need any hardware or stickers?",
         answer:
-          "No. The Ritualist is software only — every order gets its page automatically the moment it's placed.",
+          "No. The Ritualist is software only — eligible orders get their page automatically when they're placed.",
       },
     ],
   },
@@ -65,12 +65,12 @@ const faqSections = [
           // Was "The carrier's delivery confirmation, …" — the record holds the
           // carrier scan (its element's own name); ink never says a delivery
           // was confirmed (lib/order-marks.ts).
-          "The carrier scan, timestamps, and — when your customer opens their page and allows location — where the order was opened. The record is cryptographically signed when it's created.",
+          "The carrier scan, timestamps, and — when your customer opens their page and allows location — where the order was opened. The record is signed when it's created, so it can't be changed later.",
       },
       {
         question: "How does this help with disputes?",
         answer:
-          "When a customer files a chargeback or claim, you have a signed record of the delivery.",
+          "When a customer files a chargeback or claim, you have a signed record of what the carrier reported and when the page was opened.",
       },
     ],
   },

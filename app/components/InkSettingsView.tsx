@@ -170,7 +170,7 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
                     The Ritualist
                   </Text>
                   <Text as="p">
-                    Branded order pages, delivery notifications and returns.
+                    Branded order pages and returns.
                   </Text>
                   <InlineStack>
                     <Button url={data.ritualistUrl} external>
