@@ -109,6 +109,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // resolves for every brand.
     let brandSlug = "";
     let emailDoor: EmailDoor | null = null;
+    // Whether this store takes returns (the backend doc's return_enabled; the
+    // Studio switches it). The return window is inert where they are off, so
+    // the tab says so instead of offering it (audit 2026-09-25). null = the
+    // backend read failed: the tab keeps the control as before.
+    let returnsOn: boolean | null = null;
     try {
       const shopId = await getShopIdByDomain(auth.shop);
       const backend = shopId
@@ -117,6 +122,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       brandSlug = brandSlugFromDoc({ ...hit.data, ...backend }, auth.shop);
       // The line's own evidence: real taps on the order door (emailDoorOf).
       emailDoor = emailDoorOf(backend);
+      returnsOn = shopId ? backend.return_enabled === true : null;
     } catch (e: any) {
       console.warn(
         `[settings/notifications] brand slug unresolved (${e?.message}) — snippet falls back to www.in.ink`,
@@ -128,6 +134,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       snippet: notificationSnippet(brandSlug),
       snippetTemplates: SNIPPET_TEMPLATES,
       emailDoor,
+      returnsOn,
     });
   } catch (err: any) {
     console.error("[settings/notifications] GET error:", err.message);

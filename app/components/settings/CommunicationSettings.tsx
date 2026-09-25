@@ -88,6 +88,12 @@ const TEMPLATE_LABELS: Record<TemplateKey, string> = {
   delivered: "Delivered",
 };
 
+// ⚠️ PLACEHOLDER — Sam's words replace both lines.
+export const NO_OWN_NOTIFICATIONS_LINE =
+  "The Ritualist sends no emails or texts of its own yet. This tab puts your page into Shopify's own emails.";
+export const RETURNS_OFF_LINE =
+  "Returns are off for this store, so there is no return window to set. Returns are turned on in The Ritualist Studio.";
+
 const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
   const [settings, setSettings] = useState<NotificationSettings>(
     DEFAULT_NOTIFICATION_SETTINGS,
@@ -97,6 +103,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
   const [snippet, setSnippet] = useState<string>(FALLBACK_SNIPPET);
   const [emailDoor, setEmailDoor] = useState<EmailDoor | null>(null);
   const [doorRead, setDoorRead] = useState(false);
+  const [returnsOn, setReturnsOn] = useState<boolean | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -111,6 +118,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
       if (data?.snippet) setSnippet(data.snippet);
       if (data) {
         setEmailDoor(data.emailDoor ?? null);
+        setReturnsOn(typeof data.returnsOn === "boolean" ? data.returnsOn : null);
         setDoorRead(true);
       }
       setLoaded(true);
@@ -213,6 +221,16 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
 
   return (
     <Layout>
+      {/* WHAT THIS TAB IS (audit 2026-09-25): the Ritualist's own buyer emails
+          are tabled behind FEATURE_NOTIFICATIONS, so the tab says in one line
+          that it sends none and holds the line for Shopify's own emails. */}
+      {!FEATURE_NOTIFICATIONS && (
+        <Layout.Section>
+          <Text as="p" tone="subdued" variant="bodySm">
+            <span data-testid="notifications-honest-line">{NO_OWN_NOTIFICATIONS_LINE}</span>
+          </Text>
+        </Layout.Section>
+      )}
       {/* ── The one merchant action that isn't automatic ───────────────── */}
       <Layout.AnnotatedSection
         title="Your page in Shopify's emails"
@@ -363,6 +381,17 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
       </Layout.AnnotatedSection>
       </>)}
 
+      {/* The return window only where returns are on: where they are off it
+          would set a window nothing uses (audit 2026-09-25). */}
+      {returnsOn === false ? (
+        <Layout.AnnotatedSection title="Return window">
+          <Card>
+            <Text as="p" tone="subdued" variant="bodySm">
+              <span data-testid="returns-off-line">{RETURNS_OFF_LINE}</span>
+            </Text>
+          </Card>
+        </Layout.AnnotatedSection>
+      ) : (
       <Layout.AnnotatedSection
         title="Return window"
         description="How long customers have to start a return after delivery. This sets the real window."
@@ -391,6 +420,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
           />
         </Card>
       </Layout.AnnotatedSection>
+      )}
     </Layout>
   );
 };
