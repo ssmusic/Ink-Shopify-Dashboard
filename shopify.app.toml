@@ -21,6 +21,11 @@ client_id = "8da1addef3dcd4251db5057cda3c85fa"
 # Inert until the next gated `shopify app deploy`; never regenerate this
 # app's credentials.
 name = "The Ritualist"
+# THE HANDLE (2026-09-25): the app's address in the admin, the plan picker
+# and the App Store listing (apps.shopify.com/<handle>). It was
+# "ink-verified-delivery" — words ink never says. Billing reads it from
+# Shopify on every open (routes/app.billing.tsx), so it needs no code change.
+handle = "the-ritualist"
 # app.in.ink = the Worker front door (parallelreturns #359, VERIFIED live +
 # byte-identical to Cloud Run 2026-07-05). The App Store checker rejects app
 # URLs whose DOMAIN contains "shopify" — shopify-app-…run.app does. Goes live
