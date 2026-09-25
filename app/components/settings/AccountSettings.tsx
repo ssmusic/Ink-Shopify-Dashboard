@@ -1,4 +1,5 @@
 import { useShop } from "../../contexts/ShopContext";
+import { PrivacyRequestsCard } from "../InkSettingsView";
 import { useRouteLoaderData } from "react-router";
 import {
   BlockStack,
@@ -62,6 +63,13 @@ const AccountSettings = () => {
           </Card>
         </Layout.AnnotatedSection>
 
+        {/* Customers' privacy requests, as ink's Settings shows them. Drawn
+            only when there is one, or the read failed. */}
+        {(shopData?.privacy == null || shopData.privacy.length > 0) && (
+          <Layout.Section>
+            <PrivacyRequestsCard privacy={shopData?.privacy} action="/app/settings" />
+          </Layout.Section>
+        )}
       </Layout>
     </BlockStack>
   );

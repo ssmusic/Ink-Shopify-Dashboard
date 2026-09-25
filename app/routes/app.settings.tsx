@@ -4,6 +4,8 @@ import { authenticate } from "../shopify.server";
 import firestore from "../firestore.server";
 import { getInventory, getInventoryByShopDomain, getShopIdByDomain } from "../services/ink-api.server";
 import Settings from "../components/settings/Settings";
+import { data as routeData, type ActionFunctionArgs } from "react-router";
+import { exportPrivacyRequest, readPrivacyRequests } from "../services/ink-privacy.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
@@ -106,6 +108,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   };
 
   // Populate shopId if found during inventory fetch
+  // Customers' privacy requests (Shopify's customers/data_request and
+  // redact), answered from here as ink's Settings answers them (2026-09-25).
+  const privacy = await readPrivacyRequests(session.shop).catch(() => null);
+  Object.assign(payload, { privacy });
+
   try {
     payload.shopId = await getShopIdByDomain(session.shop);
   } catch (e) {
@@ -123,6 +130,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Billing page's backAction points at /app/settings, so the reviewer hit it
   // on the one navigation they were asked to make.
   return payload;
+}
+
+// The one write Settings answers itself: a customer's data, downloaded for a
+// customers/data_request (services/ink-privacy.server.ts exportPrivacyRequest).
+export async function action({ request }: ActionFunctionArgs) {
+  const { session } = await authenticate.admin(request);
+  const form = await request.formData();
+  if (form.get("intent") === "privacy_export") {
+    const result = await exportPrivacyRequest(session.shop, String(form.get("id") || "")).catch(() => ({
+      ok: false as const,
+      note: "The data could not be prepared. Try again.", // PLACEHOLDER
+    }));
+    return routeData(result, { headers: { "Cache-Control": "private, no-store" } });
+  }
+  return new Response("Unknown request.", { status: 400, headers: { "Cache-Control": "private, no-store" } });
 }
 
 export default function SettingsPage() {

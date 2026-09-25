@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import firestore from "../firestore.server";
+import { isInk } from "./app-flavor.server";
 import {
   otherAppHoldsSession,
   SESSION_COLLECTION,
@@ -230,7 +231,9 @@ export async function handleInkPrivacy(
       await eraseWhere("ink_record_charges", shop);
       await firestore.collection("merchants").doc(shop).delete();
     } else {
-      await eraseWhere("ink_record_charges", shop);
+      // The other app still holds this store: erase only THIS app's own
+      // charge bindings (the Ritualist's must never clear ink's, 2026-09-25).
+      await eraseWhere(isInk() ? "ink_record_charges" : "record_charges", shop);
     }
     await eraseWhere(PRIVACY_COLLECTION, shop);
     return new Response("OK");

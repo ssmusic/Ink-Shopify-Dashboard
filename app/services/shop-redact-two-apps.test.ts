@@ -10,7 +10,8 @@
 // only changes behaviour when an ink session exists — impossible until ink
 // is live. Both sides pinned here: no session → the purge exactly as before;
 // a session → nothing touched, 200; Firestore unable to answer → 500, so
-// Shopify retries rather than an unknown purging.
+// Shopify retries rather than an unknown purging (503 since 2026-09-25,
+// when the Ritualist took ink's hardened privacy path).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -66,7 +67,9 @@ describe("shop/redact on the Ritualist (APP_FLAVOR unset)", () => {
     sessionQuery.get.mockResolvedValue({ empty: true });
     const res = await redact();
     expect(res.status).toBe(200);
-    expect(collections[0]).toBe("shopify_sessions_ink");
+    // The request is persisted first (ink_privacy_requests, since 2026-09-25
+    // both apps share ink's hardened path); then ink's sessions are asked.
+    expect(collections).toContain("shopify_sessions_ink");
     expect(merchantDelete).toHaveBeenCalledTimes(1);
     expect(purgeShopInInk).toHaveBeenCalledWith(SHOP);
   });
@@ -79,10 +82,10 @@ describe("shop/redact on the Ritualist (APP_FLAVOR unset)", () => {
     expect(purgeShopInInk).not.toHaveBeenCalled();
   });
 
-  it("defers (500, Shopify retries) when Firestore cannot say — an unknown never purges", async () => {
+  it("defers (503, Shopify retries) when Firestore cannot say — an unknown never purges", async () => {
     sessionQuery.get.mockRejectedValue(new Error("unavailable"));
     const res = await redact();
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(503);
     expect(merchantDelete).not.toHaveBeenCalled();
     expect(purgeShopInInk).not.toHaveBeenCalled();
   });

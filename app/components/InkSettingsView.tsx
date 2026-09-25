@@ -44,7 +44,7 @@ const day = (iso: string | null | undefined) =>
 // data; this row hands them what ink holds (routes/app.ink.settings.tsx →
 // services/ink-privacy.server.ts exportPrivacyRequest). The file is saved
 // the way the record's downloads are (components/InkRecordDoor.tsx).
-function DataRequestRow({ row }: { row: PrivacyRow }) {
+function DataRequestRow({ row, action }: { row: PrivacyRow; action: string }) {
   const fetcher = useFetcher<ExportResult>();
   const revalidator = useRevalidator();
   const last = useRef<unknown>();
@@ -84,7 +84,7 @@ function DataRequestRow({ row }: { row: PrivacyRow }) {
           loading={fetcher.state !== "idle"}
           onClick={() => {
             setFailed(null);
-            fetcher.submit({ intent: "privacy_export", id: row.id }, { method: "post", action: "/app/ink/settings" });
+            fetcher.submit({ intent: "privacy_export", id: row.id }, { method: "post", action });
           }}
         >
           Download (JSON)
@@ -103,6 +103,44 @@ function DataRequestRow({ row }: { row: PrivacyRow }) {
     </BlockStack>
   );
 }
+/** Customers' privacy requests, in both apps' Settings (ink's since
+ *  2026-09-23; the Ritualist's since 2026-09-25, parity). Drawn when there is
+ *  a request or the read failed; `action` is the Settings route that answers
+ *  "privacy_export" for that app. */
+export function PrivacyRequestsCard({ privacy, action }: { privacy: PrivacyRow[] | null | undefined; action: string }) {
+  if (!(privacy == null || privacy.length > 0)) return null;
+  return (
+              <Card>
+                <BlockStack gap="300">
+                  <Text as="h2" variant="headingMd">
+                    Customer privacy requests
+                  </Text>
+                  {privacy == null ? (
+                    <Text as="p">
+                      Requests could not be loaded. Refresh to try again.
+                    </Text>
+                  ) : (
+                    <>
+                      {/* PLACEHOLDER words */}
+                      <Text as="p">
+                        When you request a customer's data in Shopify, the
+                        request appears here. Download what ink holds about that
+                        customer and send it to them.
+                      </Text>
+                      {privacy.map((r) =>
+                        r.topic === "customers/data_request" ? (
+                          <DataRequestRow key={r.id} row={r} action={action} />
+                        ) : (
+                          <Text key={r.id} as="p">{`Deletion request${r.requestId ? ` ${r.requestId}` : ""}. In progress. Due ${day(r.dueAt)}.`}</Text>
+                        ),
+                      )}
+                    </>
+                  )}
+                </BlockStack>
+              </Card>
+  );
+}
+
 export default function InkSettingsView({ data }: { data: SettingsData }) {
   const revalidator = useRevalidator();
   return (
@@ -142,36 +180,7 @@ export default function InkSettingsView({ data }: { data: SettingsData }) {
                 </BlockStack>
               </Card>
             )}
-            {(data.privacy == null || data.privacy.length > 0) && (
-              <Card>
-                <BlockStack gap="300">
-                  <Text as="h2" variant="headingMd">
-                    Customer privacy requests
-                  </Text>
-                  {data.privacy == null ? (
-                    <Text as="p">
-                      Requests could not be loaded. Refresh to try again.
-                    </Text>
-                  ) : (
-                    <>
-                      {/* PLACEHOLDER words */}
-                      <Text as="p">
-                        When you request a customer's data in Shopify, the
-                        request appears here. Download what ink holds about that
-                        customer and send it to them.
-                      </Text>
-                      {data.privacy.map((r) =>
-                        r.topic === "customers/data_request" ? (
-                          <DataRequestRow key={r.id} row={r} />
-                        ) : (
-                          <Text key={r.id} as="p">{`Deletion request${r.requestId ? ` ${r.requestId}` : ""}. In progress. Due ${day(r.dueAt)}.`}</Text>
-                        ),
-                      )}
-                    </>
-                  )}
-                </BlockStack>
-              </Card>
-            )}
+            <PrivacyRequestsCard privacy={data.privacy} action="/app/ink/settings" />
             <Text as="p">
               <Link url="/app/ink/help">Help and support</Link>
             </Text>
