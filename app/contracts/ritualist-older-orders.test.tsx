@@ -91,3 +91,14 @@ describe("Load more, at the foot of the whole list only", () => {
     expect(draw({ pageInfo: { hasNextPage: true, hasPreviousPage: false, startCursor: "a", endCursor: "b" } })).not.toContain("Load more");
   });
 });
+
+// LOAD MORE ASKS THE ORDERS PAGE, NOT ITS LAYOUT (corvara, 2026-09-25): the
+// Orders screen is an index route under a layout with no loader; a fetcher
+// GET without ?index went to the layout and "Load more" spun forever.
+import { readFileSync as readSource } from "node:fs";
+describe("the Load more request", () => {
+  it("names the index route", () => {
+    const src = readSource(new URL("../components/RitualistOlderOrders.tsx", import.meta.url), "utf8");
+    expect(src).toContain("`${ORDERS_PATH}?index&older=${encodeURIComponent(cursor)}`");
+  });
+});
