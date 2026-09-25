@@ -196,6 +196,18 @@ describe("order 3 — the Ritualist uninstalls", () => {
     expect(updateMerchant.mock.calls[0][1]).not.toHaveProperty("ritualist_plan_at_uninstall");
   });
 
+  it("does not downgrade a paid plan if its restore marker cannot be saved", async () => {
+    otherAppHoldsSession.mockResolvedValue(true);
+    getMerchant.mockResolvedValue({ ink_shop_id: "shop_abc123" });
+    resolveInkShopId.mockResolvedValue("shop_abc123");
+    getMerchantPlan.mockResolvedValue("ritualist");
+    updateMerchant.mockRejectedValue(new Error("Firestore unavailable"));
+    const { restoreInkPlanOnRitualistUninstall } = await import("./plan-precedence.server");
+
+    expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("transient_failure");
+    expect(patchMerchant).not.toHaveBeenCalled();
+  });
+
   it("leaves the plan alone when ink is not installed — the store is leaving", async () => {
     otherAppHoldsSession.mockResolvedValue(false);
     const { restoreInkPlanOnRitualistUninstall } = await import("./plan-precedence.server");

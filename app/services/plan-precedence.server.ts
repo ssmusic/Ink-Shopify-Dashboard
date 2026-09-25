@@ -135,15 +135,21 @@ export async function restoreInkPlanOnRitualistUninstall(shop: string): Promise<
     return "no_shop_id";
   }
 
+  let currentPlan: "ink" | "ritualist" | null = null;
   try {
-    const currentPlan = await getMerchantPlan(shopId);
-    if (currentPlan === "ritualist") {
-      // Save before the backend downgrade so a crash or retry cannot forget
-      // which paid plan a later reinstall must restore.
-      await updateMerchant(shop, { ritualist_plan_at_uninstall: "ritualist" });
-    }
+    currentPlan = await getMerchantPlan(shopId);
   } catch (e: any) {
-    console.error(`[plan] ${shop}: could not read/save the current plan before uninstall (${e?.message ?? e}); handing back to ink without a restore marker.`);
+    console.error(`[plan] ${shop}: could not read the current plan before uninstall (${e?.message ?? e}); handing back to ink without a restore marker.`);
+  }
+  if (currentPlan === "ritualist") {
+    // A failed marker write must not downgrade a paid plan without a way to
+    // restore it. Return 500 via the webhook caller so Shopify can retry.
+    try {
+      await updateMerchant(shop, { ritualist_plan_at_uninstall: "ritualist" });
+    } catch (e: any) {
+      console.error(`[plan] ${shop}: could not save the Ritualist restore marker (${e?.message ?? e}) — will retry.`);
+      return "transient_failure";
+    }
   }
 
   try {
