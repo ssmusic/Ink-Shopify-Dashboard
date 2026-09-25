@@ -121,7 +121,10 @@ export const VALUE_WORDS: Record<string, string> = {
   // ⚠️ PLACEHOLDER COPY — the label is Sam's to replace.
   verified_at_door: "Nearest open",
   last_status: "Last scan",
-  last_at: "Scanned",
+  // The backend's last_tracking_updated_at: when the tracking last changed —
+  // the number added at fulfilment, or a later scan. "Scanned" claimed a scan
+  // that had not happened (ink review store, 2026-09-25). ⚠️ PLACEHOLDER.
+  last_at: "Tracking updated",
   carrier: "Carrier",
   signed_delivered_at: "Delivered (signed)",
   first_open_at: "First opened",
