@@ -78,10 +78,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     
     if (clientType === "PWA" && authHeader?.startsWith("Bearer ")) {
       // 1. Authenticate user from PWA JWT token
+      // Verified, never decoded raw (audit 2026-09-25): a forged token named
+      // any shop and read its 30-day sales, as orders/fetch once did.
       const token = authHeader.slice(7);
-      const payloadBase64 = token.split(".")[1];
-      const decoded = JSON.parse(Buffer.from(payloadBase64, "base64url").toString("utf8"));
-      const shopDomain = decoded.shop || decoded.shop_id || decoded.merchant_id;
+      const { verifyProxyToken } = await import("../services/token-verify.server");
+      const decoded = await verifyProxyToken(token);
+      if (!decoded) {
+        return new Response(JSON.stringify({ error: "Invalid or expired token" }), { status: 401, headers: CORS_HEADERS });
+      }
+      const shopDomain = (decoded.shop || decoded.shop_id || decoded.merchant_id || "") as string;
 
       if (!shopDomain) {
         return new Response(JSON.stringify({ error: "Store context missing from token" }), { status: 401, headers: CORS_HEADERS });

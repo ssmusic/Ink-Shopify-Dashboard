@@ -13,6 +13,7 @@ const DOORS: Array<[string, string[]]> = [
   ["api.verify.tsx", ["loader", "action"]],
   ["api.retrieve.$proofId.tsx", ["loader", "action"]],
   ["webhooks.nfs.verify.tsx", ["action"]],
+  ["api.photos.upload.tsx", ["loader", "action"]],
 ];
 
 describe("the retired NFC doors", () => {

@@ -116,14 +116,15 @@ describe("what Billing draws", () => {
 
   // THE PLAN DEAD END (audit 2026-09-25): an order whose record needs a plan
   // links here, so "no plan" must never be the end of the page.
-  it("with no plan, offers the way to start one: Shopify's plan page when the app names it, else support", () => {
+  it("with no plan, offers the way to start one: Shopify's plan page when the app names it, else a refresh, never support", () => {
     const withPage = render({ plans: [], planPageUrl: "https://admin.shopify.com/store/example/charges/the-app/pricing_plans" });
     expect(withPage).toContain("Choose a plan");
     expect(renderHtml({ plans: [], planPageUrl: "https://admin.shopify.com/store/example/charges/the-app/pricing_plans" })).toContain('href="https://admin.shopify.com/store/example/charges/the-app/pricing_plans"');
     const withoutPage = render({ plans: [], planPageUrl: null });
     expect(withoutPage).not.toContain("Choose a plan");
-    expect(renderHtml({ plans: [], planPageUrl: null })).toContain('href="mailto:support@in.ink"');
-    expect(withoutPage).toContain("Email support@in.ink");
+    expect(renderHtml({ plans: [], planPageUrl: null })).not.toContain("mailto:");
+    expect(withoutPage).not.toContain("support@in.ink");
+    expect(withoutPage).toContain("Refresh to try again.");
   });
 
   it("builds Shopify's plan page only from a real handle and store, never a guess", () => {
