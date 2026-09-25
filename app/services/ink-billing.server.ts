@@ -27,6 +27,7 @@ import {
   recordChargeGone,
   RecordChargeRefused,
   recordChargeName,
+  recordChargeIsTest,
   recordOffer,
   recordPriceWords,
   recordReturnUrl,
@@ -318,6 +319,7 @@ export async function inkRecordAction(
   if (!offer) return no("This record is not available to purchase.");
   const appKey = process.env.SHOPIFY_API_KEY;
   if (!appKey) return no("Billing is unavailable. Try again later.");
+  const test = await recordChargeIsTest(admin);
   const reserved = await firestore.runTransaction(async (tx) => {
     const previous = await tx.get(ref);
     const state = previous.exists ? previous.data()?.state : null;
@@ -328,7 +330,7 @@ export async function inkRecordAction(
       orderName: record!.summary.order_number || null,
       state: "creating",
       ...offer,
-      test: process.env.RECORD_PURCHASE_TEST === "true",
+      test,
       createdAt: new Date().toISOString(),
     });
     return true;
@@ -340,6 +342,7 @@ export async function inkRecordAction(
     const charge = await createRecordCharge(admin, {
       orderName: record!.summary.order_number || proofId,
       price: offer,
+      test,
       returnUrl: recordReturnUrl({
         shop,
         apiKey: appKey,

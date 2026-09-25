@@ -127,7 +127,7 @@ api_version = "2025-10"
 # separately and fail open (webhooks.orders_create.ts, PRODUCT_URLS_QUERY), so
 # a store that has not re-consented still enrolls normally and simply carries
 # no product link. This scope is what turns that link on.
-scopes = "read_assigned_fulfillment_orders,write_assigned_fulfillment_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders,read_customers,read_files,write_files,read_fulfillments,write_fulfillments,read_metaobjects,write_metaobjects,read_online_store_pages,write_online_store_pages,read_orders,write_orders,read_products,write_shipping,write_themes"
+scopes = "read_customers,read_fulfillments,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders,read_orders,write_orders,read_products"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

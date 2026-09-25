@@ -14,21 +14,15 @@ import { INK_SCOPES } from "./services/ink-scopes.server";
 // it is documentation with teeth only for the ink flavor, whose list must
 // match shopify.app.ink.toml (ink-scopes.server.ts pins it).
 const RITUALIST_SCOPES = [
-    "read_assigned_fulfillment_orders",
-    "write_assigned_fulfillment_orders",
     "read_customers",
-    "read_files",
-    "write_files",
     "read_fulfillments",
-    "write_fulfillments",
-    "read_metaobjects",
-    "write_metaobjects",
-    "read_online_store_pages",
-    "write_online_store_pages",
+    "read_merchant_managed_fulfillment_orders",
+    "write_merchant_managed_fulfillment_orders",
+    "read_third_party_fulfillment_orders",
+    "write_third_party_fulfillment_orders",
     "read_orders",
     "write_orders",
-    "write_shipping",
-    "write_themes",
+    "read_products",
   ];
 
 const shopify = shopifyApp({
