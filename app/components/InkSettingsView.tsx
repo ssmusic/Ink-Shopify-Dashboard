@@ -121,17 +121,16 @@ export function PrivacyRequestsCard({ privacy, action }: { privacy: PrivacyRow[]
                     </Text>
                   ) : (
                     <>
-                      {/* PLACEHOLDER words */}
                       <Text as="p">
                         When you request a customer's data in Shopify, the
-                        request appears here. Download what ink holds about that
+                        request appears here. Download what this app holds about that
                         customer and send it to them.
                       </Text>
                       {privacy.map((r) =>
                         r.topic === "customers/data_request" ? (
                           <DataRequestRow key={r.id} row={r} action={action} />
                         ) : (
-                          <Text key={r.id} as="p">{`Deletion request${r.requestId ? ` ${r.requestId}` : ""}. In progress. Due ${day(r.dueAt)}.`}</Text>
+                          <Text key={r.id} as="p">{`Deletion request${r.requestId ? ` ${r.requestId}` : ""}. ${r.state === "completed" ? "Completed." : `In progress. Due ${day(r.dueAt)}.`}`}</Text>
                         ),
                       )}
                     </>
