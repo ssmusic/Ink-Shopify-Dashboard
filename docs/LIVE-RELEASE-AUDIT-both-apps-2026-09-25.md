@@ -7,7 +7,7 @@ This is the current handoff for Claude and Sam. It records what was observed aft
 | Area | The Ritualist / `corvara-cicli` | Ink. / `ink-review` |
 | --- | --- | --- |
 | Code | [PR #226](https://github.com/ssmusic/Ink-Shopify-Dashboard/pull/226) merged as `c62383e`; GitHub Actions run `36169982919` deployed both Cloud Run services successfully | Same code and deploy |
-| Shopify config | `the-ritualist-20` released and observed Active in Dev Dashboard; nine intended scopes; no extension listed in the active version | `ink-4` remains active; no config change needed |
+| Shopify config | `the-ritualist-20` released and observed Active in Dev Dashboard; nine intended scopes; no extension listed in the active version. Admin GraphQL on corvara also returned exactly those nine granted scopes, with no old grants | `ink-4` remains active; no config change needed |
 | App load | Fresh Shopify Admin tab showed Dashboard, Orders, Settings (Account, Delivery, Notifications), Billing and Help ready; opened order #1010 and Advanced | Dashboard, Orders, Records, Settings and Help loaded |
 | Billing | Corvara had a previously approved Starter test plan; the active plan is mirrored in the app's Firestore record | Live `RECORD_PURCHASE_TEST=false`; `RECORD_PURCHASES_ENABLED=true`. Code uses Shopify `shop.plan.partnerDevelopment` to keep development-store purchases test-only; an actual new charge after the flag change has not been approved in this pass |
 | Record files | Order #1010 exported a valid one-page PDF and parseable JSON; an existing customer data request exported parseable JSON | Purchased #1001 exported a valid one-page PDF and parseable JSON; an existing customer data request exported parseable JSON |
