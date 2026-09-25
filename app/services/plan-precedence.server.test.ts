@@ -17,6 +17,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const patchMerchant = vi.fn();
+const getMerchantPlan = vi.fn();
 const getMerchant = vi.fn();
 const updateMerchant = vi.fn();
 const otherAppHoldsSession = vi.fn();
@@ -30,7 +31,7 @@ class InkApiError extends Error {
   }
 }
 
-vi.mock("./ink-api.server", () => ({ patchMerchant, InkApiError }));
+vi.mock("./ink-api.server", () => ({ patchMerchant, getMerchantPlan, InkApiError }));
 vi.mock("./merchant.server", () => ({ getMerchant, updateMerchant }));
 vi.mock("../firestore-session-storage.server", () => ({ otherAppHoldsSession }));
 vi.mock("./ink-install.server", () => ({ resolveInkShopId }));
@@ -41,6 +42,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   updateMerchant.mockResolvedValue(undefined);
   patchMerchant.mockResolvedValue({ plan: "ritualist" });
+  getMerchantPlan.mockResolvedValue("ink");
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -78,6 +80,24 @@ describe("order 2 — the Ritualist installs on a merchant ink made", () => {
     expect(await claimRitualistPlan({ shop: SHOP, existing })).toBe("already_claimed");
     expect(patchMerchant).not.toHaveBeenCalled();
     expect(updateMerchant).not.toHaveBeenCalled();
+  });
+
+  it("restores a previously active Ritualist plan on reinstall, then clears the marker", async () => {
+    const { claimRitualistPlan } = await import("./plan-precedence.server");
+    const existing = {
+      ink_shop_id: "shop_abc123",
+      ritualist_plan_at_uninstall: "ritualist",
+      ritualist_plan_claimed_at: "2026-09-22T00:00:00Z",
+    } as any;
+
+    expect(await claimRitualistPlan({ shop: SHOP, existing })).toBe("claimed");
+    expect(patchMerchant).toHaveBeenCalledWith("shop_abc123", { plan: "ritualist", ritualist_installed_at: expect.any(String) });
+    expect(updateMerchant).toHaveBeenCalledWith(SHOP, {
+      ritualist_plan_claimed_at: expect.any(String),
+      ritualist_plan_at_uninstall: null,
+      notification_settings: expect.anything(),
+    });
+    expect(patchMerchant.mock.invocationCallOrder[0]).toBeLessThan(updateMerchant.mock.invocationCallOrder[0]);
   });
 
   it("keeps a merchant's existing toggles when it has them", async () => {
@@ -139,12 +159,50 @@ describe("order 3 — the Ritualist uninstalls", () => {
     expect(updateMerchant.mock.calls[0][1]).not.toHaveProperty("ink_api_key");
   });
 
+  it("saves an active Ritualist plan before handing the store to ink", async () => {
+    otherAppHoldsSession.mockResolvedValue(true);
+    getMerchant.mockResolvedValue({ ink_shop_id: "shop_abc123" });
+    resolveInkShopId.mockResolvedValue("shop_abc123");
+    getMerchantPlan.mockResolvedValue("ritualist");
+    const { restoreInkPlanOnRitualistUninstall } = await import("./plan-precedence.server");
+
+    expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("restored");
+    expect(updateMerchant).toHaveBeenNthCalledWith(1, SHOP, { ritualist_plan_at_uninstall: "ritualist" });
+    expect(updateMerchant.mock.invocationCallOrder[0]).toBeLessThan(patchMerchant.mock.invocationCallOrder[0]);
+    expect(updateMerchant).toHaveBeenNthCalledWith(2, SHOP, { ritualist_plan_claimed_at: null, ritualist_plan_active_at: null });
+  });
+
+  it("does not save a restore marker when the plan was already ink", async () => {
+    otherAppHoldsSession.mockResolvedValue(true);
+    getMerchant.mockResolvedValue({ ink_shop_id: "shop_abc123" });
+    resolveInkShopId.mockResolvedValue("shop_abc123");
+    const { restoreInkPlanOnRitualistUninstall } = await import("./plan-precedence.server");
+
+    expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("restored");
+    expect(updateMerchant).toHaveBeenCalledTimes(1);
+    expect(updateMerchant.mock.calls[0][1]).not.toHaveProperty("ritualist_plan_at_uninstall");
+  });
+
+  it("keeps today's handback when the plan read fails, without guessing a marker", async () => {
+    otherAppHoldsSession.mockResolvedValue(true);
+    getMerchant.mockResolvedValue({ ink_shop_id: "shop_abc123" });
+    resolveInkShopId.mockResolvedValue("shop_abc123");
+    getMerchantPlan.mockRejectedValue(new Error("read unavailable"));
+    const { restoreInkPlanOnRitualistUninstall } = await import("./plan-precedence.server");
+
+    expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("restored");
+    expect(patchMerchant).toHaveBeenCalledWith("shop_abc123", { plan: "ink", ritualist_installed_at: null, ritualist_plan_active_at: null });
+    expect(updateMerchant).toHaveBeenCalledTimes(1);
+    expect(updateMerchant.mock.calls[0][1]).not.toHaveProperty("ritualist_plan_at_uninstall");
+  });
+
   it("leaves the plan alone when ink is not installed — the store is leaving", async () => {
     otherAppHoldsSession.mockResolvedValue(false);
     const { restoreInkPlanOnRitualistUninstall } = await import("./plan-precedence.server");
 
     expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("ink_not_installed");
     expect(getMerchant).not.toHaveBeenCalled();
+    expect(getMerchantPlan).not.toHaveBeenCalled();
     expect(patchMerchant).not.toHaveBeenCalled();
     expect(updateMerchant).not.toHaveBeenCalled();
   });

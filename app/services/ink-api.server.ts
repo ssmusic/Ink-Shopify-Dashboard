@@ -140,6 +140,16 @@ export const getMerchants = async () => {
     return await response.json();
 };
 
+/** Read the exact backend merchant before an uninstall changes its plan.
+ * A missing row or malformed response is an unknown, never a plan guess. */
+export const getMerchantPlan = async (shopId: string): Promise<"ink" | "ritualist" | null> => {
+  const body = await getMerchants();
+  if (!Array.isArray(body?.merchants)) throw new Error("Invalid merchant list response");
+  const merchant = body.merchants.find((row: any) => row?.shop_id === shopId || row?.id === shopId);
+  if (!merchant) throw new Error(`Merchant ${shopId} was not found`);
+  return merchant.plan === "ink" || merchant.plan === "ritualist" ? merchant.plan : null;
+};
+
 export const getShopIdByDomain = async (shopDomain: string): Promise<string> => {
     const listRes = await fetch(getAlanUrl("/admin/merchants?limit=200"), {
         headers: { "X-Admin-Secret": INK_ADMIN_SECRET },

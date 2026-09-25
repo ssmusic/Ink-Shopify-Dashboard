@@ -54,7 +54,7 @@
 
 import { otherAppHoldsSession } from "../firestore-session-storage.server";
 import { resolveInkShopId } from "./ink-install.server";
-import { InkApiError, patchMerchant } from "./ink-api.server";
+import { getMerchantPlan, InkApiError, patchMerchant } from "./ink-api.server";
 import { getMerchant, updateMerchant, type MerchantData } from "./merchant.server";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "./notification-settings";
 
@@ -80,10 +80,14 @@ export async function claimRitualistPlan({
   // Only ink's install writes ink_shop_id. A doc without it is the
   // Ritualist's own (every merchant today) and there is nothing to claim.
   if (!existing.ink_shop_id) return "not_an_ink_merchant";
-  if (existing.ritualist_plan_claimed_at) return "already_claimed";
+  const restorePreviousPlan = existing.ritualist_plan_at_uninstall === "ritualist";
+  if (existing.ritualist_plan_claimed_at && !restorePreviousPlan) return "already_claimed";
 
   try {
-    await patchMerchant(existing.ink_shop_id, { ritualist_installed_at: new Date().toISOString() });
+    await patchMerchant(existing.ink_shop_id, {
+      ritualist_installed_at: new Date().toISOString(),
+      ...(restorePreviousPlan ? { plan: "ritualist" } : {}),
+    });
   } catch (e: any) {
     // Logged, not stamped: the next app load asks again. Until the backend
     // deploy that knows the field (ink-backend #121) this is a 400 each load
@@ -94,11 +98,16 @@ export async function claimRitualistPlan({
 
   await updateMerchant(shop, {
     ritualist_plan_claimed_at: new Date().toISOString(),
+    ...(restorePreviousPlan ? { ritualist_plan_at_uninstall: null } : {}),
     // The Ritualist's install seeds the notification toggles (every sender
     // treats a missing block as "send nothing"); an ink doc never had them.
     ...(existing.notification_settings ? {} : { notification_settings: DEFAULT_NOTIFICATION_SETTINGS }),
   });
-  console.log(`[plan] The Ritualist arrived on ${shop} (${existing.ink_shop_id}): entitled; plan left as ink until the page publishes`);
+  if (restorePreviousPlan) {
+    console.log(`[plan] ${shop}: the Ritualist came back — plan restored to ritualist`);
+  } else {
+    console.log(`[plan] The Ritualist arrived on ${shop} (${existing.ink_shop_id}): entitled; plan left as ink until the page publishes`);
+  }
   return "claimed";
 }
 
@@ -124,6 +133,17 @@ export async function restoreInkPlanOnRitualistUninstall(shop: string): Promise<
   if (!shopId) {
     console.error(`[plan] ${shop}: ink is installed but no backend shop_id is known — cannot hand the plan back.`);
     return "no_shop_id";
+  }
+
+  try {
+    const currentPlan = await getMerchantPlan(shopId);
+    if (currentPlan === "ritualist") {
+      // Save before the backend downgrade so a crash or retry cannot forget
+      // which paid plan a later reinstall must restore.
+      await updateMerchant(shop, { ritualist_plan_at_uninstall: "ritualist" });
+    }
+  } catch (e: any) {
+    console.error(`[plan] ${shop}: could not read/save the current plan before uninstall (${e?.message ?? e}); handing back to ink without a restore marker.`);
   }
 
   try {
