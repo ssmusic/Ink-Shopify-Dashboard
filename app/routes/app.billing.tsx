@@ -43,7 +43,7 @@ export async function readAppHandle(admin: { graphql: (q: string) => Promise<{ j
 }
 
 // WHERE A PLAN IS CHOSEN (2026-09-25). The Ritualist bills through Shopify
-// App Pricing: three plans (Starter, Growth, Pro, each with a 14-day trial)
+// App Pricing: three plans (Starter, Growth, Pro, each with a 45-day trial)
 // on Shopify's own plan page, which returns the merchant to /app/billing.
 // The page's address is built from this store and the app's handle as
 // Shopify reports it; when either is unknown, the page says how else a plan
@@ -103,25 +103,32 @@ export default function BillingPage() {
                 )}
               </BlockStack>
             ) : (
-              plans.map((plan, i) => (
-                <BlockStack key={`${plan.name}-${i}`} gap="100">
-                  {plan.name ? (
-                    <Text as="p" fontWeight="semibold">
-                      {plan.name}
-                    </Text>
-                  ) : null}
-                  {plan.lines.map((line) => (
-                    <Text as="p" key={line}>
-                      {line}
-                    </Text>
-                  ))}
-                  {plan.periodEnd && date(plan.periodEnd) ? (
-                    <Text as="p" tone="subdued">
-                      {`This period ends ${date(plan.periodEnd)}.`}
-                    </Text>
-                  ) : null}
-                </BlockStack>
-              ))
+              <BlockStack gap="300">
+                {plans.map((plan, i) => (
+                  <BlockStack key={`${plan.name}-${i}`} gap="100">
+                    {plan.name ? (
+                      <Text as="p" fontWeight="semibold">
+                        {plan.name}
+                      </Text>
+                    ) : null}
+                    {plan.lines.map((line) => (
+                      <Text as="p" key={line}>
+                        {line}
+                      </Text>
+                    ))}
+                    {plan.periodEnd && date(plan.periodEnd) ? (
+                      <Text as="p" tone="subdued">
+                        {`This period ends ${date(plan.periodEnd)}.`}
+                      </Text>
+                    ) : null}
+                  </BlockStack>
+                ))}
+                {choose ? (
+                  <InlineStack>
+                    <Button url={choose} target="_top">Change plan</Button>
+                  </InlineStack>
+                ) : null}
+              </BlockStack>
             )}
             <Text as="p" tone="subdued">
               Plans are chosen and approved in Shopify, and charges appear on

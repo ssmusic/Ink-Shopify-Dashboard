@@ -1,7 +1,9 @@
 import { type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import { assertDevRoutesEnabled } from "../flags.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  assertDevRoutesEnabled();
   const { admin } = await authenticate.admin(request);
 
   try {
@@ -14,7 +16,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               name
               active
               callbackUrl
-              serviceDiscoverySupport
             }
           }
         }

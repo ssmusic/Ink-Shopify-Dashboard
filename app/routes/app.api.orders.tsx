@@ -46,13 +46,9 @@ async function fetchShopifyOrders(shopDomain: string, search: string): Promise<a
 
 async function queryShopifyOrders(shopDomain: string, accessToken: string, search: string): Promise<any[]> {
   // Fetch unfulfilled orders, optionally filtered by search term
-  const queryFilter = search
-    ? `query: "fulfillment_status:unfulfilled name:*${search}*"`
-    : `query: "fulfillment_status:unfulfilled"`;
-
   const gqlQuery = `
-    query GetUnfulfilledOrders {
-      orders(first: 250, ${queryFilter}, sortKey: CREATED_AT, reverse: true) {
+    query GetUnfulfilledOrders($filter: String!) {
+      orders(first: 250, query: $filter, sortKey: CREATED_AT, reverse: true) {
         edges {
           node {
             id
@@ -106,7 +102,10 @@ async function queryShopifyOrders(shopDomain: string, accessToken: string, searc
       "Content-Type": "application/json",
       "X-Shopify-Access-Token": accessToken,
     },
-    body: JSON.stringify({ query: gqlQuery }),
+    body: JSON.stringify({
+      query: gqlQuery,
+      variables: { filter: search ? `fulfillment_status:unfulfilled name:*${search}*` : "fulfillment_status:unfulfilled" },
+    }),
   });
 
   if (!response.ok) {

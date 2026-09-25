@@ -75,8 +75,6 @@ import {
 } from "../../services/notification-snippet";
 import { DISTANCE_RECORDED_LABEL } from "../../lib/order-marks";
 
-const FALLBACK_SNIPPET = notificationSnippet(null);
-
 const TEMPLATE_LABELS: Record<TemplateKey, string> = {
   order_confirmation: "Order confirmation",
   shipping_confirmation: "Shipping confirmation",
@@ -95,9 +93,8 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
   const [settings, setSettings] = useState<NotificationSettings>(
     DEFAULT_NOTIFICATION_SETTINGS,
   );
-  // The brand-specific line, built server-side. Starts on the neutral www
-  // fallback so the card is never blank and never shows a guessed host.
-  const [snippet, setSnippet] = useState<string>(FALLBACK_SNIPPET);
+  // Never offer a line to copy before the merchant host is known.
+  const [snippet, setSnippet] = useState<string | null>(null);
   const [emailDoor, setEmailDoor] = useState<EmailDoor | null>(null);
   const [doorRead, setDoorRead] = useState(false);
   const [returnsOn, setReturnsOn] = useState<boolean | null>(null);
@@ -172,6 +169,7 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
   };
 
   const copySnippet = async () => {
+    if (!snippet) return;
     try {
       await navigator.clipboard.writeText(snippet);
       toast({ description: "Copied. Paste it as a new first line.", duration: 2500 });
@@ -264,11 +262,11 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
                       display: "block",
                     }}
                   >
-                    {snippet}
+                    {snippet ?? "The email line is unavailable until this store's link loads."}
                   </code>
                 </div>
                 <InlineStack gap="200">
-                  <Button onClick={copySnippet}>Copy the line</Button>
+                  <Button onClick={copySnippet} disabled={!snippet}>Copy the line</Button>
                   <Button url={notificationsUrl} target="_blank" variant="plain">
                     Open Shopify notifications
                   </Button>

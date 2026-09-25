@@ -105,7 +105,7 @@ export const LEVEL_WORDS: Record<string, string> = {
   // Was "Verified by ink": on the delivery place it meant the door.
   verified: "Recorded and signed",
   attested: "Recorded and signed",
-  asserted: "Not verified by ink",
+  asserted: "Reported without an ink observation",
   missing: "Missing",
 };
 
@@ -333,10 +333,10 @@ export function checkWords(check: CheckCounts): RecordChecks {
   else if (!check.sound) headline = "This record does not check out.";
   else {
     const parts: string[] = [];
-    if (chained) parts.push(`${s.verified} of ${s.checkable} signatures verified`);
+    if (chained) parts.push(`${s.verified} of ${s.checkable} signatures checked`);
     if (check.links.verified) parts.push("every link intact");
     if (s.withheld) parts.push(`${s.withheld} withheld`);
-    if (l.verified) parts.push(`${l.verified} of ${l.verified + l.failed} pre-chain signatures verified`);
+    if (l.verified) parts.push(`${l.verified} of ${l.verified + l.failed} pre-chain signatures checked`);
     if (l.withheld) parts.push(`${l.withheld} pre-chain withheld`);
     if (l.unverifiable) parts.push(`${l.unverifiable} pre-chain not re-verifiable`);
     headline = !s.checkable && !l.verified
@@ -346,7 +346,7 @@ export function checkWords(check: CheckCounts): RecordChecks {
   const lines: string[] = [];
   if (chained) {
     const against = check.keys_used.length ? check.keys_used.join(", ") : "no published key";
-    lines.push(`Signatures: ${s.verified} of ${s.checkable} verified against ${against}${s.withheld ? ` · ${s.withheld} withheld` : ""}${s.failed ? ` · ${s.failed} failed` : ""}${s.no_key ? ` · ${s.no_key} with no published key` : ""}`);
+    lines.push(`Signatures: ${s.verified} of ${s.checkable} checked against ${against}${s.withheld ? ` · ${s.withheld} withheld` : ""}${s.failed ? ` · ${s.failed} failed` : ""}${s.no_key ? ` · ${s.no_key} with no published key` : ""}`);
     lines.push(`Hash links: ${check.links.verified} of ${check.links.verified + check.links.failed} intact${check.sequence_dense ? " · sequence complete" : " · sequence has a gap"}${check.head === "matches" ? " · matches the ledger's head" : check.head === "cut" ? " · SHORTER than the ledger's head" : ""}`);
   } else if (legacy) {
     lines.push("Signatures: no chained signatures yet — the pre-chain events are checked one by one");

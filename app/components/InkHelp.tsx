@@ -75,7 +75,7 @@ export default function InkHelp() {
           </Text>
           <Text as="p">
             If an approval is still pending, use Check payment status. If
-            payment is confirmed, use Check record access. Contact support if
+            Shopify shows the charge as active, use Check record access. Contact support if
             the record remains unavailable.
           </Text>
           <Text as="p" tone="subdued">

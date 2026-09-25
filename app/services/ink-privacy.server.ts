@@ -235,7 +235,9 @@ export async function handleInkPrivacy(
       // charge bindings (the Ritualist's must never clear ink's, 2026-09-25).
       await eraseWhere(isInk() ? "ink_record_charges" : "record_charges", shop);
     }
-    await eraseWhere(PRIVACY_COLLECTION, shop);
+    // The receipts are shared by both app identities. Keep them until the
+    // last installation is gone, so the other app can still answer requests.
+    if (!shared) await eraseWhere(PRIVACY_COLLECTION, shop);
     return new Response("OK");
   } catch {
     console.error("[ink privacy] processing failed");
