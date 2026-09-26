@@ -10,9 +10,13 @@
 
 export const PLAN_QUERY = `#graphql
   query RitualistPlan {
+    shop { plan { partnerDevelopment } }
     currentAppInstallation {
       activeSubscriptions {
         name
+        test
+        createdAt
+        trialDays
         currentPeriodEnd
         lineItems {
           plan {
@@ -38,6 +42,10 @@ export type RitualistPlan = {
   name: string;
   /** Each price line, as Shopify prices it. ⚠️ PLACEHOLDER wording. */
   lines: string[];
+  /** Shopify's test flag, or its explicit development-store designation. */
+  test: boolean;
+  /** A trial still in progress, calculated from Shopify's creation date and trial days. */
+  trialEnd: string | null;
   /** When the current period ends (ISO), if Shopify says. */
   periodEnd: string | null;
 };
@@ -62,12 +70,20 @@ const INTERVAL: Record<string, string> = {
 
 /** The active subscriptions, from the query's body; null when the body is not
  *  Shopify's answer (the read failed). */
-export function plansFromBody(body: unknown): RitualistPlan[] | null {
+export function plansFromBody(body: unknown, now = Date.now()): RitualistPlan[] | null {
   const subs = (body as { data?: { currentAppInstallation?: { activeSubscriptions?: unknown } } } | null)
     ?.data?.currentAppInstallation?.activeSubscriptions;
   if (!Array.isArray(subs)) return null;
+  const developmentStore = (body as { data?: { shop?: { plan?: { partnerDevelopment?: unknown } } } } | null)
+    ?.data?.shop?.plan?.partnerDevelopment === true;
   return subs.map((s) => {
-    const sub = s as { name?: unknown; currentPeriodEnd?: unknown; lineItems?: unknown };
+    const sub = s as { name?: unknown; test?: unknown; createdAt?: unknown; trialDays?: unknown; currentPeriodEnd?: unknown; lineItems?: unknown };
+    // Shopify defines trialDays from createdAt. currentPeriodEnd is a billing
+    // period, so it must never be guessed to be a trial's end instead.
+    const createdAt = typeof sub.createdAt === "string" ? Date.parse(sub.createdAt) : NaN;
+    const trialEnd = typeof sub.trialDays === "number" && Number.isInteger(sub.trialDays) && sub.trialDays > 0
+      ? createdAt + sub.trialDays * 86_400_000
+      : NaN;
     const lines: string[] = [];
     for (const item of Array.isArray(sub.lineItems) ? sub.lineItems : []) {
       const p = (item as { plan?: { pricingDetails?: Record<string, unknown> } })?.plan?.pricingDetails;
@@ -87,6 +103,10 @@ export function plansFromBody(body: unknown): RitualistPlan[] | null {
       // No stand-in name ("Your plan"): a name Shopify did not send is left out.
       name: typeof sub.name === "string" ? sub.name.trim() : "",
       lines,
+      test: sub.test === true || developmentStore,
+      trialEnd: Number.isFinite(trialEnd) && trialEnd > now && trialEnd <= 8.64e15
+        ? new Date(trialEnd).toISOString()
+        : null,
       periodEnd: typeof sub.currentPeriodEnd === "string" ? sub.currentPeriodEnd : null,
     };
   });

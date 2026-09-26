@@ -173,7 +173,7 @@ describe("where Load more is offered", () => {
   });
   const text = (html: string) =>
     html.replace(/<style[\s\S]*?<\/style>/g, " ").replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ");
-  const LINK = "Load more";
+  const LINK = "Load older records";
   const LINE = "That is every order from the past 60 days.";
   const lastPage = { hasNextPage: false, hasPreviousPage: false, startCursor: "c1", endCursor: "c1" };
   const SHOPIFY_ROW = { id: "gid://shopify/Order/1042", name: "#1042", proofId: null, createdAt: "2026-09-10T12:00:00Z", detail: null, more: new Promise(() => {}) };

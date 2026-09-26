@@ -413,7 +413,8 @@ function LoadMoreFoot({ onPress, reading = false, children }: { onPress?: () => 
         <BlockStack gap="200" inlineAlign="center">
           {children ?? (
             <Button variant="plain" onClick={onPress} loading={reading} disabled={reading}>
-              Load more
+              {/* PLACEHOLDER: distinguish saved records from Shopify pagination. */}
+              Load older records
             </Button>
           )}
         </BlockStack>

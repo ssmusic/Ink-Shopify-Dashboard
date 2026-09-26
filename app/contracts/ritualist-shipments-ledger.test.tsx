@@ -89,7 +89,7 @@ describe("Shipments, as ink's Orders ledger", () => {
     // Changed on purpose (Sam, 2026-09-24: "Orders" for both apps): this pin said "Shipments".
     expect(html).toMatch(/<h1[^>]*>(?:<[^>]+>)*Orders(?:<\/[^>]+>)*<\/h1>/);
     expect(t).not.toContain("Shipments");
-    for (const part of ["Recent orders", "Orders from the past 60 days.", "Refresh", "Order", "Recipient", "Activity", "Total", "Date"]) expect(t).toContain(part);
+    for (const part of ["Recent orders", "Open an order to review its delivery and opens.", "Refresh", "Order", "Recipient", "Activity", "Total", "Date"]) expect(t).toContain(part);
     expect(html).toContain('placeholder="Order number, name or email"');
   });
 

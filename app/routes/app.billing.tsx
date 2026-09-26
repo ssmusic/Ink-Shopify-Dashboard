@@ -106,12 +106,25 @@ export default function BillingPage() {
                         {plan.name}
                       </Text>
                     ) : null}
-                    {plan.lines.map((line) => (
+                    {/* PLACEHOLDER copy: make Shopify's test subscription and
+                        actual trial explicit; never substitute a live price. */}
+                    {plan.test ? (
+                      <Text as="p">Test subscription. No real charge.</Text>
+                    ) : null}
+                    {plan.trialEnd && date(plan.trialEnd) ? (
+                      <Text as="p" tone="subdued">
+                        {`Trial ends ${date(plan.trialEnd)}.`}
+                      </Text>
+                    ) : null}
+                    {!plan.test && plan.trialEnd ? (
+                      <Text as="p" tone="subdued">After the trial:</Text>
+                    ) : null}
+                    {!plan.test && plan.lines.map((line) => (
                       <Text as="p" key={line}>
                         {line}
                       </Text>
                     ))}
-                    {plan.periodEnd && date(plan.periodEnd) ? (
+                    {!plan.trialEnd && plan.periodEnd && date(plan.periodEnd) ? (
                       <Text as="p" tone="subdued">
                         {`This period ends ${date(plan.periodEnd)}.`}
                       </Text>
@@ -126,8 +139,9 @@ export default function BillingPage() {
               </BlockStack>
             )}
             <Text as="p" tone="subdued">
-              Plans are chosen and approved in Shopify, and charges appear on
-              your Shopify invoice.
+              {plans?.length && plans.every((plan) => plan.test)
+                ? "Plans are chosen and approved in Shopify. Live-store pricing is shown on Shopify's plan page."
+                : "Plans are chosen and approved in Shopify, and charges appear on your Shopify invoice."}
             </Text>
           </BlockStack>
         </Card>

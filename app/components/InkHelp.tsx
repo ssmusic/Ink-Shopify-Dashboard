@@ -93,7 +93,7 @@ export default function InkHelp() {
             ink data access.
           </Text>
           <Text as="p">
-            Orders shows Shopify orders from the past 60 days, and Load more
+            Orders shows Shopify orders from the past 60 days, and Load older records
             adds older ones from ink&apos;s own records. A missing location
             means no usable shared location is available for that open.
           </Text>
