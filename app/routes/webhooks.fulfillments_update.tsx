@@ -297,8 +297,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
   } catch (error: any) {
+    // A Response is the library's own answer (401 on a bad signature): both
+    // flavors pass it on instead of answering 200 (review pass 2026-09-26).
+    if (error instanceof Response) throw error;
     if (appFlavor() === "ink") {
-      if (error instanceof Response) throw error;
       return new Response("Fulfillment update pending", { status: 503 });
     }
     console.error("❌ Error processing FULFILLMENTS_UPDATE webhook:", error.message);

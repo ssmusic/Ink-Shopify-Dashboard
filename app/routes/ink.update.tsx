@@ -45,7 +45,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     // 1. Read raw body for HMAC verification
     const rawBody = await request.text();
-    console.log("📥 Raw webhook body:", rawBody);
+    // The body is never logged: it is unverified here, and it carries GPS
+    // and device data once verified (review pass 2026-09-26).
 
     // 2. Verify HMAC signature
     const signature = request.headers.get("X-INK-Signature");

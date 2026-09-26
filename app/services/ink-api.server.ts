@@ -256,15 +256,21 @@ export const adminCreateUser = async (merchantId: string, name: string, email: s
 };
 
 export const getMerchantUsers = async (merchantId: string) => {
-    const response = await fetch(getAlanUrl(`/admin/users?merchant_id=${merchantId}`), {
+    const response = await fetch(getAlanUrl(`/admin/users?merchant_id=${encodeURIComponent(merchantId)}`), {
         headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
     });
     if (!response.ok) throw new Error("Failed to get merchant users");
     return await response.json();
 };
 
+/** A user id may name exactly one user: letters, digits, "_" and "-".
+ *  Anything else ("../", "%2e") could walk the admin path elsewhere. */
+export const isPlainUserId = (id: unknown): id is string =>
+    typeof id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(id);
+
 export const deleteMerchantUser = async (userId: string) => {
-    const response = await fetch(getAlanUrl(`/admin/users/${userId}`), {
+    if (!isPlainUserId(userId)) throw new Error("Invalid user id");
+    const response = await fetch(getAlanUrl(`/admin/users/${encodeURIComponent(userId)}`), {
         method: "DELETE",
         headers: { "X-Admin-Secret": INK_ADMIN_SECRET },
     });
