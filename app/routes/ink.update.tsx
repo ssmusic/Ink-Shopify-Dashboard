@@ -1,5 +1,13 @@
 import { type ActionFunctionArgs } from "react-router";
 import crypto from "crypto";
+
+/** Constant-time comparison of two hex signatures of any length. */
+export function signaturesMatch(received: unknown, expected: string): boolean {
+  if (typeof received !== "string") return false;
+  const a = Buffer.from(received, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 import { INK_NAMESPACE } from "../utils/metafields.server";
 import { OPEN_DISTANCE_KEY, openDistanceOf, storedStatusFor } from "../lib/order-marks";
 
@@ -65,10 +73,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       .update(rawBody)
       .digest("hex");
 
-    if (signature !== expectedSignature) {
+    if (!signaturesMatch(signature, expectedSignature)) {
+      // Never log the expected value: it is a valid signature for this body.
       console.error("❌ Invalid HMAC signature");
-      console.error("Expected:", expectedSignature);
-      console.error("Received:", signature);
       return new Response(
         JSON.stringify({ error: "Invalid signature" }),
         { status: 403, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -136,7 +143,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log(`🔍 Attempting to locate order (Raw ID: ${rawOrderId}, Proof ID: ${proof_ref || 'None'})`);
 
     const adminGraphqlForSession = async (session: any, query: string, variables?: any) => {
-      const response = await fetch(`https://${session.shop}/admin/api/2025-10/graphql.json`, {
+      const response = await fetch(`https://${session.shop}/admin/api/2026-07/graphql.json`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -167,55 +174,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
-    // PASS 2: Check by proof_reference (Deterministic, but could conflict in test environments)
-    if (!foundOrderGid && proof_ref) {
-      const proofQuery = `#graphql
-        query SearchOrderByProof($query: String!) {
-          orders(first: 1, query: $query) {
-            edges { node { id } }
-          }
-        }
-      `;
-      for (const session of offlineSessions) {
-        if (!session.accessToken) continue;
-        const proofResult = await adminGraphqlForSession(session, proofQuery, { query: `metafield.ink.proof_reference:${proof_ref}` });
-        if (proofResult?.data?.orders?.edges?.length > 0) {
-          foundOrderGid = proofResult.data.orders.edges[0].node.id;
-          targetSession = session;
-          console.log(`✅ Found order ${foundOrderGid} via proof_reference in store ${session.shop}`);
-          break;
-        }
-      }
-    }
+    // NO GUESSING (review pass 2026-09-26). Two fallbacks used to follow the
+    // direct ID. One searched orders by the proof-reference metafield, a
+    // filter Shopify's order search silently ignores, so it "found" the first
+    // order of the first store: from 2026-09-18 to 09-21 every such event
+    // wrote its metafields onto one unrelated corvara order. The other
+    // searched order names across every connected store, so #1001 of one
+    // store could take another store's event. Only an exact order ID is
+    // written now, as api.verify already does; anything else answers 404 and
+    // writes nothing.
 
-    // PASS 3: Fallback search by name if it resembles a name
-    if (!foundOrderGid && order_id && order_id.length <= 10) {
-      const numericPart = order_id.replace(/\D/g, '');
-      const nameQuery = `#graphql
-        query FindOrderByName($query: String!) {
-          orders(first: 2, query: $query) {
-            edges { node { id } }
-          }
-        }
-      `;
-      for (const session of offlineSessions) {
-        if (!session.accessToken) continue;
-        const searchResult = await adminGraphqlForSession(session, nameQuery, { query: `name:${numericPart}` });
-        if (searchResult?.data?.orders?.edges?.length > 0) {
-          foundOrderGid = searchResult.data.orders.edges[0].node.id;
-          targetSession = session;
-          console.log(`✅ Found order via name search '${numericPart}' in store ${session.shop}`);
-          break;
-        }
-        const searchResult2 = await adminGraphqlForSession(session, nameQuery, { query: `name:#${numericPart}` });
-        if (searchResult2?.data?.orders?.edges?.length > 0) {
-          foundOrderGid = searchResult2.data.orders.edges[0].node.id;
-          targetSession = session;
-          console.log(`✅ Found order via name search '#${numericPart}' in store ${session.shop}`);
-          break;
-        }
-      }
-    }
       if (!foundOrderGid || !targetSession) {
          console.error(`❌ Could not find order ${order_id} in ANY connected Shopify store.`);
          return new Response(
@@ -228,7 +196,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       // Re-create the adminGraphql wrapper for the correct target session so the rest of the code works
       const adminGraphql = async (query: string, variables?: any) => {
-        const response = await fetch(`https://${targetSession.shop}/admin/api/2025-10/graphql.json`, {
+        const response = await fetch(`https://${targetSession.shop}/admin/api/2026-07/graphql.json`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
