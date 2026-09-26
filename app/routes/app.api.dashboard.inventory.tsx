@@ -20,6 +20,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       success: true
     });
   } catch (err: any) {
+    // The library's auth answer (redirect / 401) passes through, not a 500.
+    if (err instanceof Response) throw err;
     console.error("Dashboard Inventory API Error:", err);
     return json({ error: "Failed to fetch inventory", success: false }, { status: 500 });
   }

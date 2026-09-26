@@ -1,6 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { adminCreateUser, getShopIdByDomain, getMerchantUsers, deleteMerchantUser } from "../services/ink-api.server";
+import { adminCreateUser, getShopIdByDomain, getMerchantUsers, deleteMerchantUser, isPlainUserId } from "../services/ink-api.server";
 import { verifyProxyToken } from "../services/token-verify.server";
 import sgMail from "@sendgrid/mail";
 
@@ -86,11 +86,16 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     let shopDomain = "";
+    // Only a merchant signed in through Shopify Admin may add or remove
+    // users. A warehouse login (Bearer token) may list its own store's
+    // users (the loader) but never change them (review pass 2026-09-26).
+    let viaShopifyAdmin = false;
 
     // 1. Try Shopify session (Admin UI)
     try {
       const { session } = await authenticate.admin(request);
       shopDomain = session.shop;
+      viaShopifyAdmin = true;
     } catch (e) {
       // 2. Fallback to Bearer Token (External App)
       const authHeader = request.headers.get("Authorization");
@@ -107,6 +112,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const body = await request.json();
     const { intent } = body;
+
+    if ((intent === "create" || intent === "delete") && !viaShopifyAdmin) {
+      return json({ error: "Only the store's admin can change users." }, { status: 403 });
+    }
 
   // ── Create ──
   if (intent === "create") {
@@ -184,7 +193,17 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: "userId is required" }, { status: 400 });
     }
 
+    // The user must belong to THIS store: a delete never reaches another
+    // store's user (review pass 2026-09-26).
+    if (!isPlainUserId(userId)) {
+      return json({ error: "Invalid userId" }, { status: 400 });
+    }
     try {
+        const own = await getMerchantUsers(shopDomain);
+        const ids = new Set((own?.users || []).map((u: any) => String(u.user_id)));
+        if (!ids.has(userId)) {
+          return json({ error: "User not found for this store" }, { status: 404 });
+        }
         await deleteMerchantUser(userId);
         return json({ success: true });
     } catch (e: any) {

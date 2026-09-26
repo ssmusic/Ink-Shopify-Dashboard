@@ -1,4 +1,5 @@
 import { type ActionFunctionArgs } from "react-router";
+import crypto from "node:crypto";
 
 // POST /api/return-status — the "back" half of returns back-and-forth.
 //
@@ -70,14 +71,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ error: "Method not allowed" }, 405);
   }
 
-  // Server-to-server auth — Alan's backend calls this with a shared secret.
-  // Prefer a dedicated secret; fall back to the existing admin secret.
-  const secret =
-    process.env.INK_RETURN_WEBHOOK_SECRET || process.env.INK_ADMIN_SECRET;
+  // Server-to-server auth — the backend calls this with its dedicated
+  // shared secret only; the admin key is never accepted here, and the
+  // comparison is constant-time (review pass 2026-09-26).
+  const secret = process.env.INK_RETURN_WEBHOOK_SECRET || "";
   const provided =
     request.headers.get("X-Ink-Secret") ||
-    request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
-  if (!secret || provided !== secret) {
+    request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ||
+    "";
+  const a = Buffer.from(provided);
+  const b = Buffer.from(secret);
+  if (!secret || a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     return json({ error: "Unauthorized" }, 401);
   }
 
