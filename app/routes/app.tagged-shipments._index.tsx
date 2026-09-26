@@ -1,4 +1,5 @@
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { useStalledRowsRetry } from "../hooks/use-stalled-rows-retry";
 import { useEffect } from "react";
 import {
   useLoaderData,
@@ -166,6 +167,10 @@ export default function ShipmentsIndex() {
   const navigation = useNavigation();
   const [params, setParams] = useSearchParams();
   const idle = navigation.state === "idle";
+  // A row that never lands is asked for again, once (hooks/use-stalled-rows-retry.ts).
+  useStalledRowsRetry(data.orders, () => {
+    if (revalidator.state === "idle") revalidator.revalidate();
+  });
   const dates = data.dates ?? ALL_ORDER_DATES;
   const dated = dates.range !== ALL_ORDER_DATES.range;
   const go = (key: "after" | "before", cursor: string | null) => {

@@ -377,7 +377,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     console.warn("⚠️ No offline sessions found for fallback metafield update");
                     return;
                 }
-                const offlineSessions = sessionSnapshot.docs.map(doc => doc.data());
+                const { withFreshTokens } = await import("../session-utils.server");
+                const offlineSessions = await withFreshTokens(sessionSnapshot.docs.map(doc => doc.data()) as any[]);
 
                 let foundOrderGid: string | null = null;
                 let foundSession: any = null;

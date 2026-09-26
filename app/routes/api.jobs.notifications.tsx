@@ -1,5 +1,6 @@
 import { type LoaderFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
+import { withFreshToken } from "../session-utils.server";
 import { NotificationService, type NotificationType } from "../services/notifications.server";
 import { findMerchantDoc } from "../services/merchant-doc.server";
 import { INK_NAMESPACE } from "../utils/metafields.server";
@@ -62,7 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let totalDispatched = 0;
 
   for (const sessionDoc of sessionSnapshot.docs) {
-    const session = sessionDoc.data();
+    const session = await withFreshToken(sessionDoc.data() as any);
     if (!session.accessToken) continue;
 
     console.log(`\n🏪 [Store: ${session.shop}] Checking for pending notifications...`);
