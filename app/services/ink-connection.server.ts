@@ -48,7 +48,7 @@ export async function readShopLogo(
   if (!SHOP_DOMAIN.test(shop)) return null;
   try {
     const response = await fetchImpl(
-      `https://${shop}/api/2025-10/graphql.json`,
+      `https://${shop}/api/2026-07/graphql.json`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
