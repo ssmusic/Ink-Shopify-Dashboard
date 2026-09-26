@@ -110,6 +110,7 @@ describe("what the dates control draws, on both apps' Orders", () => {
       for (const { value, label } of ORDER_DATE_OPTIONS) expect(html).toMatch(new RegExp(`<option value="${value}"[^>]*>${label}</option>`));
       expect(html).toMatch(/<option value="60d" selected="">Last 60 days<\/option>/);
       expect(html).not.toContain('type="date"');
+      expect(text(html)).toContain("Date filters apply to recent Shopify orders. Older records saved by ink can extend beyond 60 days.");
     }
   });
 

@@ -81,14 +81,14 @@ describe("Load more, at the foot of the whole list only", () => {
   };
 
   it("offers it on the whole list, newest first", () => {
-    expect(draw({})).toContain("Load more");
+    expect(draw({})).toContain("Load older records");
   });
 
   it("not under a search, another sort, a failed read, or a page with more after it", () => {
-    expect(draw({ search: "1042" }, "?q=1042")).not.toContain("Load more");
-    expect(draw({ sort: "oldest" })).not.toContain("Load more");
-    expect(draw({ ordersError: true })).not.toContain("Load more");
-    expect(draw({ pageInfo: { hasNextPage: true, hasPreviousPage: false, startCursor: "a", endCursor: "b" } })).not.toContain("Load more");
+    expect(draw({ search: "1042" }, "?q=1042")).not.toContain("Load older records");
+    expect(draw({ sort: "oldest" })).not.toContain("Load older records");
+    expect(draw({ ordersError: true })).not.toContain("Load older records");
+    expect(draw({ pageInfo: { hasNextPage: true, hasPreviousPage: false, startCursor: "a", endCursor: "b" } })).not.toContain("Load older records");
   });
 });
 

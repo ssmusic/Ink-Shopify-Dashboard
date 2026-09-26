@@ -228,7 +228,7 @@ export default function ShipmentsIndex() {
                   Recent orders
                 </Text>
                 <Text as="p" tone="subdued">
-                  Orders from the past 60 days. Open one to review its delivery and opens.
+                  Open an order to review its delivery and opens.
                 </Text>
               </BlockStack>
               <InkOrderSearch

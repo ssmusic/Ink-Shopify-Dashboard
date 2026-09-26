@@ -120,6 +120,12 @@ export default function InkOrderSearch({
           )}
         </InlineGrid>
       </Form>
+      {onDates && range === ALL_ORDER_DATES.range && !search && sort === "newest" && (
+        // PLACEHOLDER copy: older saved records are outside Shopify's date filter.
+        <Text as="p" variant="bodySm" tone="subdued">
+          Date filters apply to recent Shopify orders. Older records saved by ink can extend beyond 60 days.
+        </Text>
+      )}
       {onDates && range === "custom" && (
         // Its own form: Enter in From or To applies the dates, as it searches above.
         <Form onSubmit={apply}>

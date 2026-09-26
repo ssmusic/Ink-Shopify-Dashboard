@@ -77,7 +77,7 @@ describe("what Billing reads", () => {
     const data = await load(graphql);
     expect(graphql).toHaveBeenCalledWith(PLAN_QUERY);
     expect(data.plans).toEqual([
-      { name: "Studio", lines: ["$49.00 every 30 days", "$0.10 per recorded order", "Usage up to $100.00"], periodEnd: "2026-10-24T00:00:00Z" },
+      { name: "Studio", lines: ["$49.00 every 30 days", "$0.10 per recorded order", "Usage up to $100.00"], test: false, trialEnd: null, periodEnd: "2026-10-24T00:00:00Z" },
     ]);
   });
 
@@ -95,12 +95,66 @@ describe("what Billing reads", () => {
     const [plan] = plansFromBody({ data: { currentAppInstallation: { activeSubscriptions: [{ lineItems: [] }] } } })!;
     expect(plan.name).toBe("");
   });
+
+  const now = Date.parse("2026-09-26T12:00:00Z");
+  const subscription = (fields: Record<string, unknown>, developmentStore = false) => ({
+    data: {
+      shop: { plan: { partnerDevelopment: developmentStore } },
+      currentAppInstallation: { activeSubscriptions: [{
+        ...BODY.data.currentAppInstallation.activeSubscriptions[0],
+        ...fields,
+      }] },
+    },
+  });
+
+  it("uses Shopify's test flag or explicit development-store designation, never a zero-price guess", () => {
+    expect(plansFromBody(subscription({ test: true }), now)?.[0].test).toBe(true);
+    expect(plansFromBody(subscription({ test: false }, true), now)?.[0].test).toBe(true);
+    const zeroPrice = { lineItems: [{ plan: { pricingDetails: { __typename: "AppRecurringPricing", interval: "EVERY_30_DAYS", price: { amount: "0", currencyCode: "USD" } } } }] };
+    expect(plansFromBody(subscription({ ...zeroPrice, test: false }), now)?.[0].test).toBe(false);
+  });
+
+  it("calculates the actual trial end from creation and trial days, independently of the billing period", () => {
+    const [plan] = plansFromBody(subscription({
+      createdAt: "2026-09-25T15:13:00Z", trialDays: 45, currentPeriodEnd: "2026-12-09T15:13:00Z",
+    }), now)!;
+    expect(plan.trialEnd).toBe("2026-11-09T15:13:00.000Z");
+    expect(plan.periodEnd).toBe("2026-12-09T15:13:00Z");
+  });
+
+  it("does not label expired, missing, or malformed trial data as an active trial", () => {
+    for (const fields of [
+      { createdAt: "2026-07-01T00:00:00Z", trialDays: 45 },
+      { createdAt: "2026-09-25T00:00:00Z", trialDays: 0 },
+      { createdAt: "not-a-date", trialDays: 45 },
+      { trialDays: 45 },
+      { createdAt: "2026-09-25T00:00:00Z", trialDays: "45" },
+    ]) expect(plansFromBody(subscription(fields), now)?.[0].trialEnd).toBeNull();
+  });
 });
 
 describe("what Billing draws", () => {
   it("the plan, its prices and its period, and where charges live", () => {
     const t = render({ plans: [{ name: "Studio", lines: ["$49.00 every 30 days"], periodEnd: "2026-10-24T00:00:00Z" }] });
     for (const part of ["Billing", "Your plan", "Studio", "$49.00 every 30 days", "This period ends Oct 24, 2026.", "Plans are chosen and approved in Shopify"]) expect(t).toContain(part);
+  });
+
+  it("identifies a test subscription without presenting its zero price as the live plan price", () => {
+    const t = render({ plans: [{ name: "Starter", test: true, lines: ["$0.00 every 30 days"], trialEnd: "2026-11-09T15:13:00.000Z", periodEnd: "2026-11-09T15:13:00Z" }] });
+    expect(t).toContain("Test subscription. No real charge.");
+    expect(t).toContain("Trial ends Nov 9, 2026.");
+    expect(t).toContain("Live-store pricing is shown on Shopify's plan page.");
+    expect(t).not.toContain("$0.00");
+    expect(t).not.toContain("This period ends");
+    expect(t).not.toContain("charges appear on your Shopify invoice");
+  });
+
+  it("keeps Shopify's live plan price and distinguishes its trial from a billing period", () => {
+    const t = render({ plans: [{ name: "Starter", test: false, lines: ["$299.00 every 30 days"], trialEnd: "2026-11-09T15:13:00.000Z", periodEnd: "2026-12-09T15:13:00Z" }] });
+    expect(t).toContain("Trial ends Nov 9, 2026.");
+    expect(t).toContain("After the trial: $299.00 every 30 days");
+    expect(t).not.toContain("Test subscription");
+    expect(t).not.toContain("This period ends");
   });
 
   it("never says Free — not for no plan, not for a failed read", () => {
