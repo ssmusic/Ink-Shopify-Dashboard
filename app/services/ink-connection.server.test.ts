@@ -27,7 +27,7 @@ describe("store logo", () => {
     const f = vi.fn(async () => Response.json(logoBody()));
     expect(await readShopLogo(shop, f)).toBe(logo);
     expect(f).toHaveBeenCalledWith(
-      `https://${shop}/api/2025-10/graphql.json`,
+      `https://${shop}/api/2026-07/graphql.json`,
       expect.objectContaining({
         method: "POST",
         headers: { "Content-Type": "application/json" },
