@@ -449,7 +449,7 @@ export function distanceFact(v: TheOpenReading): string {
 }
 
 export const CORROBORATING =
-  "A corroborating signal, not what confirms the open. The signed open proves the page was opened; the location shows where the device said it was, only when the buyer allowed it, and can be declined.";
+  "The record contains a browser-reported page open. Its signature lets you check whether the signed data has changed. Location is optional and shows where the device reported being; neither confirms delivery.";
 
 // ── The rings diagram ──────────────────────────────────────────────────────
 

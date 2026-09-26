@@ -30,6 +30,7 @@ import { readDeliveryDashboard } from "../services/ink-delivery.server";
 import { readRecentOrderPage } from "../services/ink-links.server";
 import { readJwks } from "../services/ink-record.server";
 import { ritualistApiKey, ritualistRowRecord } from "../services/ritualist-rows.server";
+import { ritualistActionPlanError } from "../services/ritualist-action-plan.server";
 import PolarisAppLayout from "../components/PolarisAppLayout";
 import RitualistPillNav from "../components/RitualistPillNav";
 import DeliveryDashboard from "../components/DeliveryDashboard";
@@ -119,7 +120,9 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
 export const action = async ({
   request,
 }: ActionFunctionArgs): Promise<{ url: string | null; error: string | null }> => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const planError = await ritualistActionPlanError(admin);
+  if (planError) return { url: null, error: planError };
   try {
     const { token } = await mintMagicToken(session.shop);
     const base = process.env.PARALLEL_APP_URL || "https://www.in.ink";

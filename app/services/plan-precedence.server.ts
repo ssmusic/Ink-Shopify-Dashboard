@@ -46,8 +46,8 @@
 //      `plan: "ink"` so the link keeps working as ink and
 //      `ritualist_installed_at: null` so the page doors close again, and
 //      clear the local stamp so a later re-install claims again. If ink is not there, leave the
-//      plan alone — the store is leaving, and shop/redact will do its work
-//      in 48 hours. Nothing here touches the shared doc's key.
+//      buyer-page plan alone but clear both entitlement stamps immediately;
+//      shop/redact will do its work in 48 hours. Nothing touches the shared key.
 //
 // Every per-app field these write carries its app's name (`ink_shop_id`,
 // `ritualist_plan_claimed_at`): the doc is shared, the columns are not.
@@ -124,7 +124,7 @@ export async function claimRitualistPlan({
 }
 
 export type PlanRestoreOutcome =
-  | "ink_not_installed"
+  | "entitlement_cleared"
   | "restored"
   | "refused"
   | "transient_failure"
@@ -135,16 +135,25 @@ export type PlanRestoreOutcome =
  *  an unknown must not decide a plan). */
 export async function restoreInkPlanOnRitualistUninstall(shop: string): Promise<PlanRestoreOutcome> {
   const inkInstalled = await otherAppHoldsSession(shop);
-  if (!inkInstalled) {
-    console.log(`[plan] ${shop}: ink is not installed here — plan left as it is.`);
-    return "ink_not_installed";
-  }
-
   const doc = await getMerchant(shop);
   const shopId = await resolveInkShopId(shop, doc);
   if (!shopId) {
-    console.error(`[plan] ${shop}: ink is installed but no backend shop_id is known — cannot hand the plan back.`);
+    console.error(`[plan] ${shop}: no backend shop_id is known — cannot clear the Ritualist's entitlement.`);
     return "no_shop_id";
+  }
+
+  if (!inkInstalled) {
+    // Published buyer pages keep their mode until normal privacy cleanup.
+    // Paid access ends immediately, including on an external Studio session
+    // that still carries a valid JWT. Retain the shared API key for reinstall.
+    try {
+      await patchMerchant(shopId, { ritualist_installed_at: null, ritualist_plan_active_at: null });
+      await updateMerchant(shop, { ritualist_plan_claimed_at: null, ritualist_plan_active_at: null });
+    } catch (e: any) {
+      console.error(`[plan] ${shop}: could not clear the Ritualist's entitlement (${e?.message ?? e}) — will retry.`);
+      return "transient_failure";
+    }
+    return "entitlement_cleared";
   }
 
   let currentPlan: "ink" | "ritualist" | null = null;

@@ -89,15 +89,15 @@ describe("shopify.app.ink.toml", () => {
 });
 
 // ── 2. byte-identical with the env unset ─────────────────────────────────
-describe("the Ritualist's queries, byte for byte", () => {
-  it("orders/create still sends the enrol-critical query it always has", () => {
+describe("the Ritualist's enrol-critical queries", () => {
+  it("orders/create preserves order fields and gates phone behind its inactive features", () => {
     const src = read("app/routes/webhooks.orders_create.ts");
     expect(templateLiteral(src, "ORDER_DETAIL_QUERY")).toBe(`
   query AutoEnrollOrder($id: ID!) {
     order(id: $id) {
       id
       name
-      customer { email phone firstName lastName }
+      customer { email \${FEATURE_NFC || FEATURE_NOTIFICATIONS ? "phone" : ""} firstName lastName }
       shippingAddress { name address1 address2 city province zip country }
       totalPriceSet { shopMoney { amount currencyCode } }
       lineItems(first: 20) {

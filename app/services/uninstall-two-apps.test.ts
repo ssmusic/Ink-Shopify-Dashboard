@@ -5,8 +5,8 @@
 //     sessions gone, the key intact, plan → ink;
 //   · ink uninstalls alone (the Ritualist still there) → ink's sessions
 //     gone, the key intact, plan unchanged;
-//   · the last app uninstalls → today's cleanup (sessions), nothing else —
-//     the merchant is shop/redact's, 48 hours on.
+//   · the last app uninstalls → sessions cleared, Ritualist paid access cleared;
+//     the merchant's remaining data is shop/redact's, 48 hours on.
 //
 // Uninstalling one app must never blank the other's key: the backend's
 // create door rotates the key on every call, and the only thing standing
@@ -176,13 +176,26 @@ describe("ink uninstalls alone (the Ritualist still installed)", () => {
 });
 
 describe("the last app uninstalls", () => {
-  it("the Ritualist alone: today's cleanup — its sessions, nothing else", async () => {
+  it("the Ritualist alone: clears its sessions and paid access, keeping the buyer page and shared key", async () => {
     sessions.shopify_sessions = [{ id: `offline_${SHOP}`, shop: SHOP, isOnline: false }];
     const res = await uninstall("");
     expect(res.status).toBe(200);
     expect(deleted).toEqual([`shopify_sessions/offline_${SHOP}`]);
-    expect(patchCalls()).toEqual([]);
+    expect(patchCalls()).toEqual([{ url: "https://api.test/admin/merchants/shop_abc123", body: { ritualist_installed_at: null, ritualist_plan_active_at: null } }]);
+    expect(merchantWrites).toHaveLength(1);
+    const written = JSON.parse(merchantWrites[0].slice(4));
+    expect(written).toMatchObject({ ritualist_plan_claimed_at: null, ritualist_plan_active_at: null });
+    expect(written).not.toHaveProperty("ink_api_key");
+  });
+
+  it("the Ritualist alone retries failed revocation even after its sessions were deleted", async () => {
+    sessions.shopify_sessions = [{ id: `offline_${SHOP}`, shop: SHOP, isOnline: false }];
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 503, statusText: "Service Unavailable", json: async () => null });
+    expect((await uninstall("")).status).toBe(500);
+    expect(sessions.shopify_sessions).toEqual([]);
     expect(merchantWrites).toEqual([]);
+    expect((await uninstall("")).status).toBe(200);
+    expect(patchCalls()).toHaveLength(2);
   });
 
   it("ink alone: its sessions, nothing else", async () => {

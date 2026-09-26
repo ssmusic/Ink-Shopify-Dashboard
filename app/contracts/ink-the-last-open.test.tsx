@@ -95,7 +95,7 @@ describe("THE LAST OPEN — the tap's address leads, the delivery address small"
       "Delivery address",
       ADDRESS,
       "The first open: Location not shared.",
-      "A corroborating signal, not what confirms the open.",
+      "The record contains a browser-reported page open.",
     ])
       expect(t).toContain(part);
   });

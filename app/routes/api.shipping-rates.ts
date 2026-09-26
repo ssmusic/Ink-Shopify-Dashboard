@@ -31,7 +31,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     const rates: any[] = [];
-    console.log(`[ShippingRates] Background mode: returning no INK rates for ${rate.destination?.city || "unknown"}, ${rate.destination?.province || ""}`);
+    // No custom rates are offered. Do not log buyer address fields.
 
     return new Response(JSON.stringify({ rates }), {
       status: 200,

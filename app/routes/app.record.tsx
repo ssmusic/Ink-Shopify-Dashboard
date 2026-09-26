@@ -27,6 +27,7 @@ import { setRecordPurchaseOutcome, type RecordPurchase } from "../services/ink-a
 import { recordChargeGid, safeReturnTo } from "../services/record-door.server";
 import { rememberRecordCharge, settleRecordCharges } from "../services/record-charges.server";
 import { ritualistApiKey } from "../services/ritualist-rows.server";
+import { ritualistActionPlanError } from "../services/ritualist-action-plan.server";
 
 const PROOF_ID = /^proof_[0-9a-f]{24}$/;
 const OUTCOMES: RecordPurchase["outcome"][] = ["open", "won", "lost", "unknown"];
@@ -77,6 +78,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // and no purchase is asked for. Only these three words take this path;
   // a purchase is refused below.
   if (INCLUDED_RECORD_INTENTS.has(intent)) {
+    const planError = await ritualistActionPlanError(admin);
+    if (planError) return data({ ok: false, note: planError, confirmationUrl: null, download: null, filename: null }, { headers: { "Cache-Control": "private, no-store" } });
     const apiKey = await ritualistApiKey(session.shop);
     const result = await inkRecordAction(admin, session.shop, apiKey, form).catch(() => ({ ok: false, note: "The record is unavailable. Try again.", confirmationUrl: null, download: null, filename: null }));
     return data(result, { headers: { "Cache-Control": "private, no-store" } });

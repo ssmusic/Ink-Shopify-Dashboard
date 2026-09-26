@@ -119,7 +119,7 @@ describe("THE OPEN — the buyer's device against the delivery address", () => {
       ADDRESS,
       "Distance",
       "2.6 km · the record's word",
-      "A corroborating signal, not what confirms the open.",
+      "The record contains a browser-reported page open.",
     ])
       expect(t).toContain(part);
   });

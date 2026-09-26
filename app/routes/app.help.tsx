@@ -65,7 +65,7 @@ const faqSections = [
           // Was "The carrier's delivery confirmation, …" — the record holds the
           // carrier scan (its element's own name); ink never says a delivery
           // was confirmed (lib/order-marks.ts).
-          "The carrier scan, timestamps, and — when your customer opens their page and allows location — where the order was opened. The record is signed when it's created, so it can't be changed later.",
+          "Available carrier events, timestamps, and browser-reported page opens. If the customer shares location, the record includes where their device reported being. Signatures let you check whether signed data has changed; they do not verify delivery.",
       },
       {
         question: "How does this help with disputes?",

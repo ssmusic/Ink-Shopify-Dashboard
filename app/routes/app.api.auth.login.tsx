@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs } from "react-router";
 import firestore from "../firestore.server";
-import { createMerchant, loginUser } from "../services/ink-api.server";
+import { loginUser } from "../services/ink-api.server";
+import { allowRequest, clientIp, rateLimitResponse } from "../services/rate-limit.server";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -60,66 +61,47 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  let body: { email?: string; password?: string };
+  // This route does not inherit the Shopify app loader's authentication.
+  // Bound attempts before either credential backend or bcrypt can run. The
+  // shared limiter is per Cloud Run instance; the account key also prevents
+  // changing a forwarded-IP header from bypassing this instance's limit.
+  const cors = { "Access-Control-Allow-Origin": "*" };
+  if (!allowRequest(`warehouse-login-ip:${clientIp(request)}`, 30)) {
+    return rateLimitResponse(cors);
+  }
+
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return json({ error: "Invalid request body" }, { status: 400 });
   }
-
-  const { email, password } = body;
-
-  if (!email || !password) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
     return json({ error: "Email and password are required" }, { status: 400 });
+  }
+  const credentials = body as Record<string, unknown>;
+  if (typeof credentials.email !== "string" || typeof credentials.password !== "string" ||
+      !credentials.email.trim() || !credentials.password ||
+      credentials.email.length > 320 || credentials.password.length > 1024) {
+    return json({ error: "Email and password are required" }, { status: 400 });
+  }
+  const email = credentials.email.trim().toLowerCase();
+  const password = credentials.password;
+  const accountKey = crypto.createHash("sha256").update(email).digest("hex");
+  if (!allowRequest(`warehouse-login-account:${accountKey}`, 10)) {
+    return rateLimitResponse(cors);
   }
 
   // ==========================================
   // 1. INK v1.3.0 Primary Authentication Path
   // ==========================================
   try {
-    console.log(`[Auth] Attempting INK v1.3.0 login for ${email}...`);
     const inkResponse = await loginUser(email, password);
     const inkUser = inkResponse.user;
-    const merchantId = inkUser.merchant_id; // This is the shop_domain from Alan
 
-    console.log(`[Auth] INK Login successful for ${email}, merchant: ${merchantId}`);
-
-    // Proactively cache/refresh the merchant's ink_api_key in Firestore.
-    // This ensures the warehouse proxies can always look it up without failing.
-    if (merchantId) {
-      try {
-        // Try to get or create the merchant on Alan's side (handles both new + reinstall)
-        const inkMerchantRes = await createMerchant(merchantId, merchantId, email);
-        const freshApiKey = inkMerchantRes.api_key;
-
-        if (freshApiKey) {
-          // Upsert into Firestore: first try by document ID, then by shopDomain field
-          const existingDoc = await firestore.collection("merchants").doc(merchantId).get();
-          if (existingDoc.exists) {
-            await existingDoc.ref.update({ ink_api_key: freshApiKey, updatedAt: new Date() });
-          } else {
-            // Also check by shopDomain field  
-            const snapshot = await firestore.collection("merchants").where("shopDomain", "==", merchantId).limit(1).get();
-            if (!snapshot.empty) {
-              await snapshot.docs[0].ref.update({ ink_api_key: freshApiKey, updatedAt: new Date() });
-            } else {
-              // Create new doc with document ID = merchantId for easy future lookups
-              await firestore.collection("merchants").doc(merchantId).set({
-                shopDomain: merchantId,
-                ink_api_key: freshApiKey,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              });
-            }
-          }
-          console.log(`[Auth] Cached ink_api_key for merchant ${merchantId}`);
-        }
-      } catch (cacheErr: any) {
-        // Non-fatal: if caching fails, the proxy self-heal will handle it
-        console.warn(`[Auth] Could not cache ink_api_key for ${merchantId}:`, cacheErr.message);
-      }
-    }
-
+    // Login authenticates an existing identity. Merchant provisioning belongs
+    // to Shopify installation: createMerchant rotates an existing API key,
+    // so calling it here can invalidate the other app's cached credentials.
     return json({
       token: inkResponse.token,
       userId: inkUser.user_id,
@@ -128,8 +110,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       role: inkUser.role || 'merchant',
       user: inkUser,
     });
-  } catch (error: any) {
-    console.warn(`[Auth] INK login failed: ${error.message}. Falling back to legacy Firestore auth...`);
+  } catch {
+    // Keep legacy warehouse accounts compatible without logging credentials,
+    // email addresses, or backend response bodies.
     // If the error is definitively "wrong password" for an INK user, we might want to fail hard here.
     // But for a smooth rollout, we gracefully fall back to checking the legacy db.
   }
@@ -158,39 +141,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ error: "Invalid email or password" }, { status: 401 });
   }
 
-  // Ensure the merchant configuration document exists and has a real INK API key (heal from sk_test_fallback)
-  const merchantSnapshot = await firestore
-    .collection("merchants")
-    .where("shopDomain", "==", userData.shopDomain)
-    .limit(1)
-    .get();
-
-  let apiKey = merchantSnapshot.empty ? null : merchantSnapshot.docs[0].data().ink_api_key;
-  let docId = merchantSnapshot.empty ? null : merchantSnapshot.docs[0].id;
-
-  if (!apiKey || apiKey === "sk_test_fallback") {
-    console.log(`[Auth] Key missing or fallback for ${userData.shopDomain}. Calling INK Admin API...`);
-    try {
-      const inkRes = await createMerchant(userData.shopDomain, userData.shopDomain, userData.email || email);
-      apiKey = inkRes.api_key;
-      
-      if (docId) {
-        await firestore.collection("merchants").doc(docId).update({
-          ink_api_key: apiKey,
-          updatedAt: new Date(),
-        });
-      } else {
-        await firestore.collection("merchants").add({
-          shopDomain: userData.shopDomain,
-          ink_api_key: apiKey,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-    } catch (e: any) {
-      console.error("[Auth] Failed to auto-create merchant:", e.message);
-    }
-  }
+  // Do not create, rotate, or cache merchant credentials during legacy login
+  // either. The installed app owns provisioning and recovery.
 
   // Issue a token valid for 8 hours
   const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 8;

@@ -18,6 +18,8 @@ import { spendFromCap } from "../services/activation-counter.server";
 import { isInk, appFlavor, type AppFlavor } from "../services/app-flavor.server";
 import { ORDER_TAG } from "../lib/order-marks";
 import { checkoutClientFromWebhook, checkoutDetailsEnabled } from "../services/checkout-client.server";
+import { FEATURE_NFC, FEATURE_NOTIFICATIONS } from "../flags";
+import { collectsCustomerPhone } from "../services/customer-phone.server";
 
 /**
  * Look up the merchant's verified-delivery mode preference.
@@ -166,7 +168,7 @@ export const ORDER_DETAIL_QUERY = `
     order(id: $id) {
       id
       name
-      customer { email phone firstName lastName }
+      customer { email ${FEATURE_NFC || FEATURE_NOTIFICATIONS ? "phone" : ""} firstName lastName }
       shippingAddress { name address1 address2 city province zip country }
       totalPriceSet { shopMoney { amount currencyCode } }
       lineItems(first: 20) {
@@ -217,9 +219,8 @@ export const PRODUCT_URLS_QUERY = `
 // which was already the first choice above. ink reads NO phone: it sends no
 // message and shows no number, so a phone would be protected data held for
 // nothing (App Store review, 2026-09-23 — the minimum-data rule).
-// Nothing else differs; the Ritualist's string above is untouched and a test
-// pins it byte-for-byte, and pins that this one selects nothing outside
-// ink's list.
+// The Ritualist also omits phone while its hardware and notifications are off.
+// Both queries select only the fields their active features need.
 export const ORDER_DETAIL_QUERY_INK = `
   query AutoEnrollOrder($id: ID!) {
     order(id: $id) {
@@ -311,12 +312,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // 2026-09-23 — B11).
   // ink reads none of them (see ORDER_DETAIL_QUERY_INK): no phone reaches
   // its record or its metafields.
-  const readsPhone = appFlavor() !== "ink";
+  const readsPhone = collectsCustomerPhone();
   const shippingPhone = readsPhone ? data?.shipping_address?.phone : undefined;
   const orderPhone = readsPhone ? data?.phone : undefined;
   const customerPhone = readsPhone ? data?.customer?.phone : undefined;
   const finalPhone = shippingPhone || orderPhone || customerPhone || "";
-  const phoneSource = !readsPhone ? "not read (ink)" : shippingPhone ? "shipping" : orderPhone ? "order" : customerPhone ? "customer" : "none";
+  const phoneSource = !readsPhone ? "not read (feature disabled)" : shippingPhone ? "shipping" : orderPhone ? "order" : customerPhone ? "customer" : "none";
   console.log(`📱 Phone source: ${phoneSource}`);
 
   const shippingLines = data?.shipping_lines || [];
@@ -572,7 +573,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               undefined, // photo_hashes
               carrier_name,
               tracking_number,
-              isInk() ? null : finalPhone || order.customer?.phone || order.phone || null,
+              readsPhone ? finalPhone || order.customer?.phone || order.phone || null : null,
               // The buyer's own order-status page on the merchant's site.
               // Shopify has always sent it in this body; we never read it.
               {

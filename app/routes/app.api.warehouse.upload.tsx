@@ -76,14 +76,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const tokenPayload = await verifyProxyToken(authHeader.slice(7));
-  console.log("[UPLOAD] Token decoded:", tokenPayload ? JSON.stringify(tokenPayload) : "NULL");
   if (!tokenPayload) {
     console.log("[UPLOAD] ❌ Token rejected");
     return json({ error: "Invalid or expired token" }, { status: 401 });
   }
 
   const { shop: shopDomain, merchant_id: merchantId } = tokenPayload;
-  console.log("[UPLOAD] shopDomain:", shopDomain, "| merchantId:", merchantId);
 
   // --- Merchant API Key ---
   console.log("[UPLOAD] Looking up ink_api_key in Firestore...");
@@ -92,7 +90,6 @@ export async function action({ request }: ActionFunctionArgs) {
     console.log("[UPLOAD] ❌ No ink_api_key found for merchant");
     return json({ error: "Merchant not found or not linked to the Ritualist" }, { status: 404 });
   }
-  console.log("[UPLOAD] ✅ ink_api_key found, prefix:", apiKey.slice(0, 12) + "...");
 
   // --- Forward multipart to INK API ---
   const formData = await request.formData();
@@ -114,7 +111,6 @@ export async function action({ request }: ActionFunctionArgs) {
     const uploadStart = Date.now();
     const result = await uploadMedia(apiKey, formData);
     console.log(`[UPLOAD] ✅ Alan upload responded in ${Date.now() - uploadStart}ms`);
-    console.log("[UPLOAD] Alan response:", JSON.stringify(result));
 
     // Alan's backend automatically deducts inventory during the /api/enroll call.
     // We previously attempted to deduct it here manually, but it caused redundancy 

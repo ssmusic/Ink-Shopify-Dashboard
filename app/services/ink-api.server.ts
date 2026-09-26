@@ -1,5 +1,6 @@
 import { merchantRead, flavorFetch as fetch } from "./ink-reader.server";
 import { isInk } from "./app-flavor.server";
+import { collectsCustomerPhone } from "./customer-phone.server";
 import { flavorLogger } from "./ink-log.server";
 const console = flavorLogger("ink-api.server");
 import { authenticate } from "../shopify.server";
@@ -350,6 +351,16 @@ export const enrollOrder = async (
     // 2026-04-26). Nesting works around it without waiting on Alan to either
     // revert or update docs. Top-level operational fields (order_id,
     // nfc_token, photos, GPS, carrier) stay where they are.
+    const readsPhone = collectsCustomerPhone();
+    // Legacy warehouse callers can supply a phone inside the address as well
+    // as the separate argument. Keep it out of the record while unused, and
+    // do not mutate the caller's address object.
+    const addressForRecord = !readsPhone && shippingAddress && typeof shippingAddress === "object" && !Array.isArray(shippingAddress)
+        ? { ...shippingAddress }
+        : shippingAddress;
+    if (!readsPhone && addressForRecord && typeof addressForRecord === "object" && !Array.isArray(addressForRecord)) {
+        delete addressForRecord.phone;
+    }
     const payload: any = {
         order_id: orderId, // numeric ID string
         nfc_token: nfcToken,
@@ -363,8 +374,8 @@ export const enrollOrder = async (
                     ? shippingAddress.name
                     : "") || "",
             customer_email: customerEmail || "",
-            ...(!isInk() ? { customer_phone: customerPhone || "" } : {}),
-            shipping_address: shippingAddress,
+            ...(readsPhone && customerPhone ? { customer_phone: customerPhone } : {}),
+            shipping_address: addressForRecord,
             product_details: productDetails,
         },
     };

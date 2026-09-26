@@ -205,10 +205,10 @@ describe("orders/create under APP_FLAVOR=ink", () => {
   });
 });
 
-describe("orders/create with APP_FLAVOR unset — the Ritualist, byte-identical", () => {
+describe("orders/create with APP_FLAVOR unset — the Ritualist", () => {
   beforeEach(() => vi.stubEnv("APP_FLAVOR", ""));
 
-  it("sends the enrol-critical query it has always sent, reads the customer off the Customer object, and asks for the product URLs on their own wire", async () => {
+  it("enrols without phone access, reads the customer, and asks for product URLs separately", async () => {
     const { ORDER_DETAIL_QUERY, PRODUCT_URLS_QUERY } = await import("../routes/webhooks.orders_create");
     // The Ritualist holds read_customers; read_products is what its live
     // install lacks — the enrichment must fail open exactly as before.
@@ -218,11 +218,28 @@ describe("orders/create with APP_FLAVOR unset — the Ritualist, byte-identical"
 
     expect(res.status).toBe(200);
     expect(admin.sent[0]).toBe(ORDER_DETAIL_QUERY);
+    expect(ORDER_DETAIL_QUERY).not.toMatch(/\bphone\b/);
     expect(admin.sent).toContain(PRODUCT_URLS_QUERY);
     const payload = enrollPayload();
     expect(payload.order_details.customer_email).toBe("dana@example.test");
+    expect(payload.order_details).not.toHaveProperty("customer_phone");
+    expect(JSON.stringify(payload)).not.toMatch(/555000(1111|2222)/);
+    const metafieldsCall = admin.graphql.mock.calls.find(([q]) => /mutation SetInkMetafields\b/.test(q));
+    expect(JSON.stringify(metafieldsCall)).not.toContain("customer_phone");
     const [line] = payload.order_details.product_details;
     expect("product_url" in line).toBe(false);
+  });
+
+  it.each(["ink", "ritualist"])("strips separate and address phones supplied by a legacy %s caller while unused", async (flavor) => {
+    vi.stubEnv("APP_FLAVOR", flavor);
+    const { enrollOrder } = await import("./ink-api.server");
+    const address = { ...orderRecord.shippingAddress, phone: "+15550001111" };
+    await enrollOrder("ink_live_test_key", "1001", "nfc_test", "#1001", "dana@example.test", address, [], undefined, undefined, undefined, undefined, undefined, undefined, "+15550002222");
+    const details = enrollPayload().order_details;
+    expect(details).not.toHaveProperty("customer_phone");
+    expect(details.shipping_address).toEqual(orderRecord.shippingAddress);
+    expect(JSON.stringify(details)).not.toMatch(/555000(1111|2222)/);
+    expect(address.phone).toBe("+15550001111");
   });
 
   it("carries the product link when read_products is held", async () => {

@@ -49,7 +49,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.error(`[${topic}] ${shop}: could not check whether ink is still installed — will retry:`, error);
       return new Response("plan hand-back deferred — will retry", { status: 500 });
     }
-    if (outcome === "transient_failure") {
+    if (outcome === "transient_failure" || outcome === "no_shop_id") {
       return new Response("plan hand-back failed — will retry", { status: 500 });
     }
   }

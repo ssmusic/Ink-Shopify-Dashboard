@@ -54,6 +54,8 @@ vi.mock("../services/ritualist-rows.server", async (importOriginal) => {
 });
 
 const { authenticate } = await import("../shopify.server");
+const { mintMagicToken } = await import("../services/ink-api.server");
+const { ACTION_PLAN_REQUIRED, ACTION_PLAN_UNAVAILABLE, RITUALIST_ACTION_PLAN_QUERY } = await import("../services/ritualist-action-plan.server");
 const { ritualistRowRecord } = await import("../services/ritualist-rows.server");
 const { RECENT_ORDERS_DETAIL_QUERY } = await import("../services/ink-links.server");
 const { kpisFromBody } = await import("../services/ink-kpis.server");
@@ -112,6 +114,45 @@ const PAGE = {
 };
 const load = () =>
   route.loader({ request: new Request("https://example.test/app/dashboard"), params: {}, context: {} } as never) as Promise<any>;
+
+describe("Studio sign-in checks the current subscription at the action", () => {
+  const openStudio = () => route.action({ request: new Request("https://example.test/app/dashboard", { method: "POST" }), params: {}, context: {} } as never);
+  const planBody = (subscriptions: unknown[]) => ({ data: { currentAppInstallation: { activeSubscriptions: subscriptions } } });
+  beforeEach(() => {
+    vi.mocked(mintMagicToken).mockReset();
+    vi.mocked(mintMagicToken).mockResolvedValue({ token: "example-token", shop_id: "shop_example", expires_at: "2026-09-26T21:00:00Z" });
+  });
+
+  it("does not mint a token for a previously provisioned merchant without an active plan", async () => {
+    const graphql = vi.fn(async () => ({ json: async () => planBody([]) }));
+    vi.mocked(authenticate.admin).mockResolvedValue({ admin: { graphql }, session: { shop: SHOP } } as never);
+    expect(await openStudio()).toEqual({ url: null, error: ACTION_PLAN_REQUIRED });
+    expect(graphql).toHaveBeenCalledWith(RITUALIST_ACTION_PLAN_QUERY);
+    expect(mintMagicToken).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { errors: [{ message: "Unavailable" }] },
+    { errors: [{ message: "Partial response" }], ...planBody([{ status: "ACTIVE" }]) },
+    { data: { currentAppInstallation: null } },
+  ])("refuses an unknown Shopify answer without calling it an inactive plan", async (body) => {
+    vi.mocked(authenticate.admin).mockResolvedValue({ admin: { graphql: async () => ({ json: async () => body }) }, session: { shop: SHOP } } as never);
+    expect(await openStudio()).toEqual({ url: null, error: ACTION_PLAN_UNAVAILABLE });
+    expect(mintMagicToken).not.toHaveBeenCalled();
+  });
+
+  it("permits an approved trial or test plan and checks again on the next press", async () => {
+    const graphql = vi.fn()
+      .mockResolvedValueOnce({ json: async () => planBody([{ status: "ACTIVE", test: true, trialDays: 45 }]) })
+      .mockResolvedValueOnce({ json: async () => planBody([]) });
+    vi.mocked(authenticate.admin).mockResolvedValue({ admin: { graphql }, session: { shop: SHOP } } as never);
+    expect(await openStudio()).toMatchObject({ url: expect.stringContaining("/welcome?token=example-token"), error: null });
+    expect(mintMagicToken).toHaveBeenCalledWith(SHOP);
+    expect(await openStudio()).toEqual({ url: null, error: ACTION_PLAN_REQUIRED });
+    expect(mintMagicToken).toHaveBeenCalledTimes(1);
+    expect(graphql).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe("what the Dashboard reads", () => {
   let graphql: ReturnType<typeof vi.fn>;
