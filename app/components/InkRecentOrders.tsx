@@ -69,6 +69,10 @@ export type InkRecentOrderRow = InkOrderBase & InkRowRecord;
 export type InkStreamedOrderRow = InkOrderBase & { more: Promise<InkRowRecord> };
 export type InkOrderRow = InkRecentOrderRow | InkStreamedOrderRow;
 
+/** What an order that loaded says when it carries no ship-to name or email. */
+export const NO_SHIP_TO_NAME = "No ship-to name";
+export const NO_ORDER_EMAIL = "No email on this order";
+
 const UNREAD: InkRowRecord = {
   record: null,
   door: { offerLine: null, pending: false, paidPendingRecord: false, resumeUrl: null, downloadable: false, inHistory: false, purchase: null },
@@ -355,10 +359,15 @@ function OrderRow({
   const place = detailed ? shipsTo(d) : null;
   const units = detailed && d?.items.length ? d.items.reduce((n, i) => n + (Number.isFinite(i.quantity) ? i.quantity : 0), 0) : 0;
   const product = d?.items[0]?.title ?? null;
+  // "Unavailable" is for an order whose details did not load. An order that
+  // loaded and simply carries no ship-to name or email says so, so a
+  // reviewer's own test order never reads like a data-access failure.
   const recipient =
     d?.customerName && d.customerName !== "Name unavailable"
       ? d.customerName
-      : "Recipient unavailable";
+      : d
+        ? NO_SHIP_TO_NAME
+        : "Recipient unavailable";
   return (
     <InlineGrid columns={ROW} gap={{ xs: "200", md: "400" }} alignItems="start">
       <InlineGrid columns={LEFT} gap={{ xs: "100", md: "400" }} alignItems="start">
@@ -398,7 +407,7 @@ function OrderRow({
               {recipient}
             </Text>
             <Text as="p" variant="bodySm" tone="subdued" truncate>
-              {d?.customerEmail || "Email unavailable"}
+              {d?.customerEmail || (d ? NO_ORDER_EMAIL : "Email unavailable")}
             </Text>
             {place ? (
               <Text as="p" variant="bodySm" tone="subdued" truncate>
@@ -567,7 +576,7 @@ export function OrderPanel({
                   {d.customerName}
                 </Text>
                 <Text as="p" breakWord>
-                  {`Order email: ${d.customerEmail || "Unavailable"}`}
+                  {`Order email: ${d.customerEmail || "none on this order"}`}
                 </Text>
                 <Text as="p" breakWord tone="subdued">
                   {addressLabel}

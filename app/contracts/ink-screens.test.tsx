@@ -128,8 +128,11 @@ describe('ink screens: facts, working controls and Polaris', () => {
 
   it('does not call the shipping recipient the buyer or invent missing contact and product details', () => {
     const t = text(openRow(ROWS[1].id));
-    expect(t).toContain('Recipient unavailable');
-    expect(t).toContain('Order email: Unavailable');
+    // The order loaded and carries no ship-to name or email: it says so,
+    // rather than reading like a failed read (review pass 2026-09-26).
+    expect(t).toContain('No ship-to name');
+    expect(t).toContain('Order email: none on this order');
+    expect(t).not.toContain('Recipient unavailable');
     expect(t).toContain('Product details are unavailable');
     expect(t).not.toContain('Customer');
   });
