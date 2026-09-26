@@ -141,9 +141,9 @@ const DeliveryModeSettings = () => {
             </Text>
             <Banner tone="info">
               <Text as="p" variant="bodySm">
-                The Ritualist does not add a customer-paid checkout delivery option. Any
-                legacy carrier-service callback returns no rates while the app
-                runs in background mode.
+                The Ritualist adds nothing to your checkout: no delivery option,
+                no shipping rate and no fee. Your shipping settings stay as they
+                are.
               </Text>
             </Banner>
           </BlockStack>

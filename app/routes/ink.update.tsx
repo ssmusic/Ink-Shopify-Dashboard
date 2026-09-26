@@ -125,7 +125,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         );
       }
 
-      const offlineSessions = sessionSnapshot.docs.map(doc => doc.data());
+      const { withFreshTokens } = await import("../session-utils.server");
+      const offlineSessions = await withFreshTokens(sessionSnapshot.docs.map(doc => doc.data()) as any[]);
       
     // 5. Look for the order in Shopify across ALL merchants' stores
     let foundOrderGid: string | null = null;

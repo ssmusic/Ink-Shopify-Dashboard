@@ -1,5 +1,4 @@
 import { type LoaderFunctionArgs } from "react-router";
-import firestore from "../firestore.server";
 import { verifyProxyToken } from "../services/token-verify.server";
 import { isDistanceRecorded } from "../lib/order-marks";
 
@@ -19,29 +18,15 @@ const json = (data: any, init?: ResponseInit) =>
 
 // ─── Shopify GraphQL helper ────────────────────────────────────────────────────
 async function fetchShopifyOrders(shopDomain: string, search: string): Promise<any[]> {
-  // Get the shop's active session from Firestore to find the access token
-  const sessionSnapshot = await firestore
-    .collection("shopify_sessions")
-    .where("shop", "==", shopDomain)
-    .where("isOnline", "==", false)
-    .limit(1)
-    .get();
-
-  if (sessionSnapshot.empty) {
-    // Try without isOnline filter (fallback)
-    const fallback = await firestore
-      .collection("shopify_sessions")
-      .where("shop", "==", shopDomain)
-      .limit(1)
-      .get();
-
-    if (fallback.empty) {
-      throw new Error(`No active Shopify session found for ${shopDomain}`);
-    }
-    return queryShopifyOrders(shopDomain, fallback.docs[0].data().accessToken, search);
+  // The shop's offline session, with its token refreshed when it is about to
+  // expire (session-utils.server.ts withFreshToken). Online sessions are never
+  // used: they belong to one staff member and expire with their login.
+  const { getOfflineSession } = await import("../session-utils.server");
+  const session = await getOfflineSession(shopDomain);
+  if (!session?.accessToken) {
+    throw new Error(`No active Shopify session found for ${shopDomain}`);
   }
-
-  return queryShopifyOrders(shopDomain, sessionSnapshot.docs[0].data().accessToken, search);
+  return queryShopifyOrders(shopDomain, session.accessToken, search);
 }
 
 async function queryShopifyOrders(shopDomain: string, accessToken: string, search: string): Promise<any[]> {

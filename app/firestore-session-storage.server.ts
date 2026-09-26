@@ -107,6 +107,11 @@ export class FirestoreSessionStorage implements SessionStorage {
       if (data.expires && typeof data.expires === "string") {
         data.expires = new Date(data.expires);
       }
+      // The refresh token's expiry is a Date too: stored as an ISO string, and
+      // Session.toPropertyArray calls getTime() on it.
+      if (data.refreshTokenExpires && typeof data.refreshTokenExpires === "string") {
+        data.refreshTokenExpires = new Date(data.refreshTokenExpires);
+      }
 
       console.log(`[FirestoreSessionStorage] Session ${id} loaded successfully (shop: ${data.shop}, hasAccessToken: ${!!data.accessToken}, scope: ${data.scope}, isOnline: ${data.isOnline})`);
       return new Session(data as any);
@@ -161,6 +166,11 @@ export class FirestoreSessionStorage implements SessionStorage {
         const data = doc.data();
         if (data.expires && typeof data.expires === "string") {
           data.expires = new Date(data.expires);
+        }
+        // The refresh token's expiry is a Date too: stored as an ISO string, and
+        // Session.toPropertyArray calls getTime() on it.
+        if (data.refreshTokenExpires && typeof data.refreshTokenExpires === "string") {
+          data.refreshTokenExpires = new Date(data.refreshTokenExpires);
         }
         return new Session(data as any);
       });

@@ -21,7 +21,7 @@ describe("Settings › Notifications, while the Ritualist sends none", () => {
     expect(FEATURE_NOTIFICATIONS).toBe(false);
   });
 
-  it("offers Shopify's own emails and the return window, and no send of its own", () => {
+  it("offers Shopify's own emails, and no send or returns of its own before the store says returns are on", () => {
     const t = text(
       renderToString(
         <AppProvider i18n={translations}>
@@ -29,7 +29,9 @@ describe("Settings › Notifications, while the Ritualist sends none", () => {
         </AppProvider>,
       ),
     );
-    for (const part of ["Your page in Shopify's emails", "Copy the line", "Return window"]) expect(t).toContain(part);
+    for (const part of ["Your page in Shopify's emails", "Copy the line"]) expect(t).toContain(part);
+    // The return window waits for the backend's answer (returnsOn === true).
+    expect(t).not.toContain("Return window");
     for (const gone of [
       "Notification channel",
       "Send notifications by email.",

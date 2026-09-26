@@ -1,4 +1,5 @@
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { useStalledRowsRetry } from "../hooks/use-stalled-rows-retry";
 import { useEffect, useRef, useState } from "react";
 import {
   useFetcher,
@@ -138,6 +139,10 @@ export const action = async ({
 const Dashboard = () => {
   const data = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
+  // A row that never lands is asked for again, once (hooks/use-stalled-rows-retry.ts).
+  useStalledRowsRetry(data.recentOrders, () => {
+    if (revalidator.state === "idle") revalidator.revalidate();
+  });
   // The operational analytics ink's Dashboard does not show — the signed
   // records' integrity and the delivery outcomes — stay behind an Advanced
   // disclosure, collapsed by default.
@@ -199,8 +204,8 @@ const Dashboard = () => {
                   The Ritualist Studio
                 </Text>
                 <Text as="p" tone="subdued">
-                  Open The Ritualist Studio — where your enrolled orders, pages,
-                  and returns live. You'll be signed in automatically — no
+                  Open The Ritualist Studio to design your order page and see
+                  every order it covers. You'll be signed in automatically, no
                   password needed.
                 </Text>
               </BlockStack>

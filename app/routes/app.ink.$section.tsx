@@ -1,4 +1,5 @@
 import { inkDoor } from "../services/ink-billing.server";
+import { useStalledRowsRetry } from "../hooks/use-stalled-rows-retry";
 import { readRecordDoors, recordDoorFor } from "../services/record-charges.server";
 import { readJwks } from "../services/ink-record.server";
 import { readDisputePacket } from "../services/ink-packet.server";
@@ -508,6 +509,10 @@ export default function InkHome() {
   const revalidator = useRevalidator();
   const navigation = useNavigation();
   const [params, setParams] = useSearchParams();
+  // A row that never lands is asked for again, once (hooks/use-stalled-rows-retry.ts).
+  useStalledRowsRetry("recentOrders" in data ? (data.recentOrders as unknown[] | null) : null, () => {
+    if (revalidator.state === "idle") revalidator.revalidate();
+  });
   // The ledger's dates; a section without them reads as the whole window.
   const dates = ("dates" in data && data.dates) || ALL_ORDER_DATES;
   // One list: a new search, sort, dates or page starts it (and its older orders) afresh.

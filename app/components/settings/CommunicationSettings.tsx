@@ -86,8 +86,6 @@ const TEMPLATE_LABELS: Record<TemplateKey, string> = {
 // ⚠️ PLACEHOLDER — Sam's words replace both lines.
 export const NO_OWN_NOTIFICATIONS_LINE =
   "The Ritualist sends no emails or texts of its own yet. This tab puts your page into Shopify's own emails.";
-export const RETURNS_OFF_LINE =
-  "Returns are off for this store, so there is no return window to set. Returns are turned on in The Ritualist Studio.";
 
 const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
   const [settings, setSettings] = useState<NotificationSettings>(
@@ -376,17 +374,13 @@ const CommunicationSettings = ({ shopDomain }: { shopDomain?: string }) => {
       </Layout.AnnotatedSection>
       </>)}
 
-      {/* The return window only where returns are on: where they are off it
-          would set a window nothing uses (audit 2026-09-25). */}
-      {returnsOn === false ? (
-        <Layout.AnnotatedSection title="Return window">
-          <Card>
-            <Text as="p" tone="subdued" variant="bodySm">
-              <span data-testid="returns-off-line">{RETURNS_OFF_LINE}</span>
-            </Text>
-          </Card>
-        </Layout.AnnotatedSection>
-      ) : (
+      {/* The return window only where the backend says returns are on (audit
+          2026-09-25). Where they are off, or not yet known, the tab says
+          nothing about returns: a section about a feature the store does not
+          use is noise, drawing it before the answer arrives made it flash in
+          and out, and The Ritualist's listing makes no returns claim (review
+          pass 2026-09-26). */}
+      {returnsOn !== true ? null : (
       <Layout.AnnotatedSection
         title="Return window"
         description="How long customers have to start a return after delivery. This sets the real window."

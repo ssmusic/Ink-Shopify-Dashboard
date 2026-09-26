@@ -1,7 +1,7 @@
 // THE NOTIFICATIONS TAB SAYS WHAT EXISTS (audit 2026-09-25). The Ritualist's
 // own buyer emails are tabled (FEATURE_NOTIFICATIONS off), so the tab says in
 // one line that it sends none; the return window shows only where returns are
-// on, and says why it is absent where they are off.
+// on, and where they are off the tab says nothing about returns at all.
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
@@ -17,9 +17,10 @@ describe("the Ritualist's Notifications tab", () => {
     expect(tab.NO_OWN_NOTIFICATIONS_LINE).toMatch(/sends no emails or texts of its own/);
     expect(src).toMatch(/!FEATURE_NOTIFICATIONS && \(/);
   });
-  it("hides the return window where returns are off and says so", () => {
-    expect(src).toMatch(/returnsOn === false \?/);
-    expect(tab.RETURNS_OFF_LINE).toMatch(/Returns are off for this store/);
+  it("shows the return window only where returns are on, without a word about returns elsewhere", () => {
+    expect(src).toMatch(/returnsOn !== true \? null :/);
+    expect(src).not.toMatch(/Returns are off/);
+    expect("RETURNS_OFF_LINE" in tab).toBe(false);
     expect(api).toMatch(/returnsOn = shopId \? backend\.return_enabled === true : null/);
   });
 });
