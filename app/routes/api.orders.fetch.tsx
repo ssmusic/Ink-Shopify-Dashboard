@@ -1,6 +1,7 @@
 import { type LoaderFunctionArgs } from "react-router";
 import { allowRequest, clientIp, rateLimitResponse } from "../services/rate-limit.server";
 import { carriesInkTag, isDistanceRecorded } from "../lib/order-marks";
+import { FEATURE_NFC } from "../flags";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -129,7 +130,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 firstName
                 lastName
                 email
-                phone
+                ${FEATURE_NFC ? "phone" : ""}
               }
               shippingAddress {
                 address1
@@ -138,7 +139,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 province
                 zip
                 country
-                phone
+                ${FEATURE_NFC ? "phone" : ""}
               }
               tags
               metafields(namespace: "ink", first: 10) {
@@ -301,7 +302,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         state: order.shippingAddress.province || "",
         zip: order.shippingAddress.zip || "",
         country: order.shippingAddress.country || "",
-        phone: order.shippingAddress.phone || "",
+        ...(FEATURE_NFC ? { phone: order.shippingAddress.phone || "" } : {}),
       } : null;
 
       return {
@@ -319,7 +320,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           ? `${order.customer.firstName} ${order.customer.lastName}`
           : "Guest",
         customerEmail: order.customer?.email || "",
-        customerPhone: order.customer?.phone || order.shippingAddress?.phone || "",
+        ...(FEATURE_NFC ? { customerPhone: order.customer?.phone || order.shippingAddress?.phone || "" } : {}),
         shippingAddress,
         verificationStatus,
         isEligible,

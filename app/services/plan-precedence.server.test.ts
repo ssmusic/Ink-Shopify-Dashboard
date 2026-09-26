@@ -11,7 +11,7 @@
 //      (the-ritualist), not here. The entitlement is what opens the door
 //      they publish FROM;
 //   3. the Ritualist uninstalls while ink is installed → plan: ink and the
-//      entitlement cleared; without ink → nothing; a backend refusal is
+//      entitlement cleared; without ink → only entitlement cleared; a backend refusal is
 //      acked, a blip is retried, an unknown is thrown.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -219,15 +219,29 @@ describe("order 3 — the Ritualist uninstalls", () => {
     expect(patchMerchant).not.toHaveBeenCalled();
   });
 
-  it("leaves the plan alone when ink is not installed — the store is leaving", async () => {
+  it("clears paid access but keeps the buyer-page plan and key when ink is not installed", async () => {
     otherAppHoldsSession.mockResolvedValue(false);
+    getMerchant.mockResolvedValue({ ink_api_key: "k", ritualist_plan_active_at: "2026-09-22T00:00:00Z" });
+    resolveInkShopId.mockResolvedValue("shop_abc123");
     const { restoreInkPlanOnRitualistUninstall } = await import("./plan-precedence.server");
 
-    expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("ink_not_installed");
-    expect(getMerchant).not.toHaveBeenCalled();
+    expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("entitlement_cleared");
     expect(getMerchantPlan).not.toHaveBeenCalled();
-    expect(patchMerchant).not.toHaveBeenCalled();
+    expect(patchMerchant).toHaveBeenCalledWith("shop_abc123", { ritualist_installed_at: null, ritualist_plan_active_at: null });
+    expect(updateMerchant).toHaveBeenCalledWith(SHOP, { ritualist_plan_claimed_at: null, ritualist_plan_active_at: null });
+  });
+
+  it("retries either failed entitlement write when the Ritualist was the only app", async () => {
+    otherAppHoldsSession.mockResolvedValue(false);
+    getMerchant.mockResolvedValue({ ink_api_key: "k" });
+    resolveInkShopId.mockResolvedValue("shop_abc123");
+    const { restoreInkPlanOnRitualistUninstall } = await import("./plan-precedence.server");
+    patchMerchant.mockRejectedValueOnce(new Error("backend unavailable"));
+    expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("transient_failure");
     expect(updateMerchant).not.toHaveBeenCalled();
+    updateMerchant.mockRejectedValueOnce(new Error("Firestore unavailable"));
+    expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("transient_failure");
+    expect(await restoreInkPlanOnRitualistUninstall(SHOP)).toBe("entitlement_cleared");
   });
 
   it("acks a refusal (4xx — a door that does not know `plan` yet) and says how to hand back by hand", async () => {

@@ -10,6 +10,8 @@ export function signaturesMatch(received: unknown, expected: string): boolean {
 }
 import { INK_NAMESPACE } from "../utils/metafields.server";
 import { OPEN_DISTANCE_KEY, openDistanceOf, storedStatusFor } from "../lib/order-marks";
+import { FEATURE_NOTIFICATIONS } from "../flags";
+import { isInk } from "../services/app-flavor.server";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -365,7 +367,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // --- SEND NOTIFICATIONS (delivered / the door) ---
       // "verified" below is the WIRE's word for the door notification, read,
       // never shown; the messages themselves say no such thing.
-      if ((status === "verified" && verify_url) || status === "delivered") {
+      // Gate the read as well as dispatch: an inactive sender must not fetch
+      // a customer's phone/email or put those fields in application logs.
+      if (FEATURE_NOTIFICATIONS && !isInk() && ((status === "verified" && verify_url) || status === "delivered")) {
         console.log("\n📨 ================================================");
         console.log(`📨 STARTING IMMEDIATE NOTIFICATION PROCESS [${status.toUpperCase()}]`);
         console.log("📨 Order GID:", orderGid);
@@ -393,19 +397,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           
           const orderData = await adminGraphql(orderQuery, { id: orderGid });
           
-          console.log("📨 Shopify Response:", JSON.stringify(orderData, null, 2));
-          
           if (orderData?.data?.order?.customer) {
             const customerEmail = orderData.data.order.customer.email;
             const customerPhone = orderData.data.order.customer.phone;
             const customerName = orderData.data.order.customer.firstName || "Customer";
             const orderName = orderData.data.order.name;
             
-            console.log("✅ Order context found:");
-            console.log("   - Order Name:", orderName);
-            console.log("   - Customer Name:", customerName);
-            console.log("   - Phone:", customerPhone);
-            console.log("   - Email:", customerEmail);
+            console.log("✅ Notification order context found");
 
             // Fetch Merchant Settings from Firestore.
             //
@@ -449,7 +447,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }
           } else {
             console.warn("⚠️ Order found but no customer context available");
-            console.warn("⚠️ Order data:", JSON.stringify(orderData, null, 2));
           }
         } catch (notifError: any) {
           console.error("❌ Failed to send notification:", notifError.message);

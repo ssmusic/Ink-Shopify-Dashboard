@@ -87,10 +87,12 @@ describe("what the Ritualist's own screens say", () => {
     expect(settings).toMatch(/description="Sent when a carrier scan shows the package is delivered\./);
   });
 
-  it("Help says the record holds the carrier scan, not a delivery confirmation", () => {
+  it("Help distinguishes available events and signature integrity from delivery confirmation", () => {
     const help = code("app/routes/app.help.tsx");
     expect(help).not.toMatch(/delivery confirmation/i);
-    expect(help).toMatch(/"The carrier scan, timestamps, and/);
+    expect(help).toContain("Available carrier events, timestamps, and browser-reported page opens.");
+    expect(help).toContain("Signatures let you check whether signed data has changed; they do not verify delivery.");
+    expect(help).not.toMatch(/can.t be changed later/);
   });
 
   it("the order page draws no status green and claims no email it cannot see", () => {

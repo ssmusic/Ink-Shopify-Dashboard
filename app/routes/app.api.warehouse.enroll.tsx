@@ -96,14 +96,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
   const tokenPayload = await verifyProxyToken(authHeader.slice(7));
-  console.log("[ENROLL] Token payload decoded:", tokenPayload ? JSON.stringify(tokenPayload) : "NULL (invalid/expired)");
   if (!tokenPayload) {
     console.log("[ENROLL] ❌ Token rejected");
     return json({ error: "Invalid or expired token" }, { status: 401 });
   }
 
   const { shop: shopDomain, merchant_id: merchantId } = tokenPayload;
-  console.log("[ENROLL] shopDomain:", shopDomain, "| merchantId:", merchantId);
 
   // 2. Get merchant's INK api_key
   console.log("[ENROLL] Looking up ink_api_key in Firestore...");
@@ -112,7 +110,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log("[ENROLL] ❌ No ink_api_key found for merchant");
     return json({ error: "Merchant not found or not linked to the Ritualist" }, { status: 404 });
   }
-  console.log("[ENROLL] ✅ ink_api_key found, prefix:", apiKey.slice(0, 12) + "...");
 
   // 3. Parse request body
   let body: any;
@@ -189,7 +186,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   console.log("[ENROLL] product_details count:", Array.isArray(product_details) ? product_details.length : "NOT array");
-  console.log("[ENROLL] warehouse_location:", warehouse_location);
 
   // 4. Build enrollment payload and fetch tracking info from Shopify
   let carrier_name: string | null = frontend_carrier_name || null;
@@ -258,7 +254,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         if (orderNode) {
           foundOrderGid = orderNode.id;
           const fulfillments = orderNode.fulfillments || [];
-          console.log(`[ENROLL] Raw Fulfillments from Shopify API:`, JSON.stringify(fulfillments, null, 2));
           for (const fulfillment of fulfillments) {
             const trackingInfo = fulfillment?.trackingInfo;
             if (trackingInfo && trackingInfo.length > 0) {
@@ -274,7 +269,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
-  console.log(`[ENROLL] Extracted Carrier: ${carrier_name}, Tracking: ${tracking_number}`);
 
   // 5. Call INK API enroll endpoint using the shared service
   let inkData;
@@ -298,7 +292,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       customer_phone
     );
     console.log(`[ENROLL] ✅ Alan enroll responded in ${Date.now() - enrollStart}ms`);
-    console.log("[ENROLL] Alan response:", JSON.stringify(inkData));
   } catch (error: any) {
     console.error("[ENROLL] ❌ Alan enroll failed:", error.message);
 

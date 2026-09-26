@@ -175,7 +175,6 @@ interface OrderDetail {
     currency: string;
     customerName: string;
     customerEmail: string;
-    customerPhone: string;
     shippingAddress:
     | {
         address1: string;
@@ -262,7 +261,6 @@ export const loader = async ({
           firstName
           lastName
           email
-          phone
         }
         shippingAddress {
           address1
@@ -464,7 +462,6 @@ export const loader = async ({
                 ? `${orderData.customer.firstName} ${orderData.customer.lastName}`
                 : "Guest",
             customerEmail: orderData.customer?.email || "",
-            customerPhone: orderData.customer?.phone || "",
             shippingAddress: orderData.shippingAddress || null,
             products,
             metafields,

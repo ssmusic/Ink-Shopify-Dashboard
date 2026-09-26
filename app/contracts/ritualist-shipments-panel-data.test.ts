@@ -55,7 +55,8 @@ vi.mock("../services/ink-record.server", async (importOriginal) => ({
 
 const { authenticate } = await import("../shopify.server");
 const { inkRecordAction } = await import("../services/ink-billing.server");
-const { ritualistRowRecord } = await import("../services/ritualist-rows.server");
+const { ritualistRowRecord, ritualistApiKey } = await import("../services/ritualist-rows.server");
+const { ACTION_PLAN_REQUIRED, ACTION_PLAN_UNAVAILABLE, RITUALIST_ACTION_PLAN_QUERY } = await import("../services/ritualist-action-plan.server");
 const { RECENT_ORDERS_DETAIL_QUERY } = await import("../services/ink-links.server");
 const { loader: shipmentsLoader } = await import("../routes/app.tagged-shipments._index");
 const { action: recordAction } = await import("../routes/app.record");
@@ -142,11 +143,14 @@ describe("the Shipments ledger reads its page the way ink's Orders does", () => 
 });
 
 describe("/app/record: the included record's inspection and files", () => {
+  let graphql: ReturnType<typeof vi.fn>;
   const post = (fields: Record<string, string>) =>
     recordAction({ request: new Request("https://app.test/app/record", { method: "POST", body: new URLSearchParams(fields) }), params: {}, context: {} } as never);
   beforeEach(() => {
-    vi.mocked(authenticate.admin).mockResolvedValue({ admin: {}, session: { shop: SHOP } } as never);
+    graphql = vi.fn(async () => ({ json: async () => ({ data: { currentAppInstallation: { activeSubscriptions: [{ status: "ACTIVE" }] } } }) }));
+    vi.mocked(authenticate.admin).mockResolvedValue({ admin: { graphql }, session: { shop: SHOP } } as never);
     vi.mocked(inkRecordAction).mockClear();
+    vi.mocked(ritualistApiKey).mockClear();
   });
 
   it("on the Ritualist, the inspection and the three files come through ink's reader with the Ritualist's key", async () => {
@@ -157,6 +161,25 @@ describe("/app/record: the included record's inspection and files", () => {
       expect(inkRecordAction, intent).toHaveBeenCalledTimes(1);
       expect(vi.mocked(inkRecordAction).mock.calls[0][2], intent).toBe("ink_key_example");
     }
+    expect(graphql).toHaveBeenCalledWith(RITUALIST_ACTION_PLAN_QUERY);
+    expect(graphql).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(["inspect", "pdf", "download"])("refuses %s without a plan even when the old backend key still exists", async (intent) => {
+    vi.stubEnv("APP_FLAVOR", "");
+    graphql.mockResolvedValue({ json: async () => ({ data: { currentAppInstallation: { activeSubscriptions: [] } } }) });
+    const out = await post({ intent, proof_id: PROOF }) as any;
+    expect(out.data).toMatchObject({ ok: false, note: ACTION_PLAN_REQUIRED, download: null });
+    expect(ritualistApiKey).not.toHaveBeenCalled();
+    expect(inkRecordAction).not.toHaveBeenCalled();
+  });
+
+  it("refuses an export while Shopify is unavailable without declaring the plan inactive", async () => {
+    vi.stubEnv("APP_FLAVOR", "");
+    graphql.mockRejectedValue(new Error("Shopify unavailable"));
+    const out = await post({ intent: "download", proof_id: PROOF }) as any;
+    expect(out.data).toMatchObject({ ok: false, note: ACTION_PLAN_UNAVAILABLE, download: null });
+    expect(inkRecordAction).not.toHaveBeenCalled();
   });
 
   it("on the Ritualist, a purchase never takes that path", async () => {
@@ -168,11 +191,13 @@ describe("/app/record: the included record's inspection and files", () => {
 
   it("ink's door is as it was: every word but the outcome, with ink's own key", async () => {
     vi.stubEnv("APP_FLAVOR", "ink");
+    graphql.mockRejectedValue(new Error("Ink must not read a Ritualist subscription"));
     for (const intent of ["inspect", "download", "buy"]) {
       vi.mocked(inkRecordAction).mockClear();
       await post({ intent, proof_id: PROOF });
       expect(inkRecordAction, intent).toHaveBeenCalledTimes(1);
       expect(vi.mocked(inkRecordAction).mock.calls[0][2], intent).toBe("ink_key_of_ink");
     }
+    expect(graphql).not.toHaveBeenCalled();
   });
 });
